@@ -345,7 +345,7 @@
       此「軸 code、純量 paper」混合是有意設計, 避免重新跑模擬.
     - W_mean 目前在 fileIO.h L1700-1717 未實作; Level 1 標記僅為設計意圖.
     - 過去 fileIO.h 曾以 W_mean 寫法向 (舊版), 已遷移為 V_mean (新版).
-      Re*/MRT*/plot_yplus_vs_xH.py 仍讀 W_mean, 在新 VTK 上會 KeyError.
+      Re*, MRT* 目錄底下的 plot_yplus_vs_xH.py 仍讀 W_mean, 在新 VTK 上會 KeyError.
 
 鬆弛時間 (GTS):
   omega_global = 3*niu/dt_global + 0.5   (__constant__ GILBM_omega_global)
