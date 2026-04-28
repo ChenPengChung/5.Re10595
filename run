@@ -1,0 +1,116 @@
+#!/bin/bash
+# ==============================================================================
+# run — GILBM Periodic Hill 統一入口 (方案 A)
+# ==============================================================================
+# 根目錄唯一的 shell 入口, 取代過去 10 個 root-level symlink.
+# 所有實作檔案都在 chain_code/ 裡, 本 wrapper 只做 subcommand 路由.
+#
+# 用法:
+#   ./run                        自動偵測情境 + 叢集並投遞 (等同舊 ./run.sh)
+#   ./run --status               只看狀態不投遞  (傳給 chain_code/run.sh)
+#   ./run --rebuild              強制重編 a.out 再投
+#   ./run --h200 | --gb200       強制選 cluster
+#   ./run --force-cold           清空所有 state 從頭跑 (須確認)
+#   ./run --no-queue-check       關掉 partition 擁塞檢查
+#
+#   ./run status                 chain 狀態快照 (詳細版, 等同舊 ./chain_status.sh)
+#
+#   ./run dispatcher start       啟動跨 partition 自動 daemon
+#   ./run dispatcher stop        優雅停 daemon
+#   ./run dispatcher stop --kill-now   立刻 kill
+#   ./run dispatcher status      看 daemon 狀態
+#
+#   ./run build H200             編譯 H200 版 a.out + 投遞
+#   ./run build GB200            編譯 GB200 版 a.out + 投遞
+#   ./run build H200 --build-only    只編譯不投
+#   ./run build GB200 --no-clean     保留 restart/ 續跑
+#   ./run build <h|gb>200 --no-build 跳過編譯只投
+#
+#   ./run help                   顯示本說明
+# ==============================================================================
+
+set -euo pipefail
+
+# ── 自我定位: wrapper 與 chain_code/ 的相對位置 ──
+_SELF="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
+PROJECT_ROOT="$(cd "$(dirname "$_SELF")" && pwd)"
+CHAIN_DIR="$PROJECT_ROOT/chain_code"
+
+# 確保 subcommand 執行時 cwd 為 project root (restart/, a.out, result/ 等相對路徑依賴)
+cd "$PROJECT_ROOT"
+
+if [ ! -d "$CHAIN_DIR" ]; then
+    echo "[run] FATAL: chain_code/ 不存在於 $PROJECT_ROOT" >&2
+    exit 1
+fi
+
+usage() {
+    sed -n '2,30p' "$_SELF" | sed 's/^# //;s/^#$//'
+}
+
+case "${1:-}" in
+    ""|--*)
+        # Default / 帶 flag 的傳統用法 → 直接轉給 chain_code/run.sh
+        exec bash "$CHAIN_DIR/run.sh" "$@"
+        ;;
+    status)
+        shift
+        exec bash "$CHAIN_DIR/chain_status.sh" "$@"
+        ;;
+    dispatcher)
+        shift
+        sub="${1:-}"
+        shift || true
+        case "$sub" in
+            start)  exec bash "$CHAIN_DIR/dispatcher_start.sh"  "$@" ;;
+            stop)   exec bash "$CHAIN_DIR/dispatcher_stop.sh"   "$@" ;;
+            status) exec bash "$CHAIN_DIR/dispatcher_status.sh" "$@" ;;
+            ""|help|--help|-h)
+                cat <<EOF
+用法:
+  ./run dispatcher start       啟動跨 partition 自動 daemon
+  ./run dispatcher stop        優雅停 daemon
+  ./run dispatcher stop --kill-now    立刻 kill
+  ./run dispatcher status      看 daemon 狀態
+EOF
+                exit 0 ;;
+            *)
+                echo "[run] unknown dispatcher subcommand: $sub" >&2
+                echo "       請用: start | stop | status" >&2
+                exit 2 ;;
+        esac
+        ;;
+    build)
+        shift
+        cluster="${1:-}"
+        shift || true
+        case "$cluster" in
+            H200|h200)   exec bash "$CHAIN_DIR/build_and_submit.sh.H200"  "$@" ;;
+            GB200|gb200) exec bash "$CHAIN_DIR/build_and_submit.sh.GB200" "$@" ;;
+            ""|help|--help|-h)
+                cat <<EOF
+用法:
+  ./run build H200             編譯 H200 版 a.out + 投遞
+  ./run build GB200            編譯 GB200 版 a.out + 投遞
+  旗標 (直接傳給 build_and_submit):
+    --build-only               只編譯不投遞
+    --no-clean                 保留 restart/ 續跑
+    --no-build                 不編譯, 只用現有 a.out 投遞
+EOF
+                exit 0 ;;
+            *)
+                echo "[run] unknown build target: $cluster" >&2
+                echo "       請用: H200 | GB200" >&2
+                exit 2 ;;
+        esac
+        ;;
+    help|-h|--help)
+        usage
+        exit 0
+        ;;
+    *)
+        echo "[run] unknown subcommand: $1" >&2
+        usage
+        exit 2
+        ;;
+esac
