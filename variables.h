@@ -109,7 +109,7 @@
 //   GAMMA: Vinokur tanh 拉伸參數 (越大壁面越密, →0 趨近均勻)
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距
-#define     GAMMA               3.0 //此版本直接透過指定一個拉伸參數，來反求 minSIze 
+#define     GAMMA               3.2 //此版本直接透過指定一個拉伸參數，來反求 minSIze 
 #define     ALPHA               0.5
 #define     CFL                 0.5
 #define     minSize             (                                              \

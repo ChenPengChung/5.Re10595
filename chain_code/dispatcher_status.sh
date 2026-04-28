@@ -82,7 +82,7 @@ echo ""
 #   (無寬度) 有正確 substitute.
 #   修法: 去掉 '-' dash, 改用 Slurm 官方認的 %<num><letter>, 在所有版本都相容.
 echo "> Partition status:"
-for p in gb200-dev dev; do
+for p in gb200-dev gb200-rack2 gb200-full dev; do
     LINE="$(sinfo -h -p "$p" -o '  %12P  avail=%4a  nodes=%4D  state=%12t  reason=%E' 2>/dev/null)"
     if [ -n "$LINE" ]; then
         echo "$LINE"

@@ -12,6 +12,10 @@
 #        bash build_and_submit.sh.GB200 --build-only && cp a.out a.out.GB200
 #        bash build_and_submit.sh.H200  --build-only && cp a.out a.out.H200
 #
+#      ※ dispatcher 支援 4 個 cluster: H200 / GB200 / GB200_RACK2 / GB200_FULL,
+#         其中 GB200/RACK2/FULL 共用同一份 a.out.GB200 binary (aarch64 sm_100),
+#         所以只要 build 兩種 arch 就涵蓋全部 partition.
+#
 #   2. restart/ 目錄存在 (若無, submit_dispatcher.sh 會自動建立)
 #
 #   3. 若要啟動新 chain, 先 ./run.sh 投首輪 (cold start)

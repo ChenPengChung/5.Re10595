@@ -4,7 +4,15 @@
 # ==============================================================================
 # 功能:
 #   每次 chain round 結束後 (jobscript 因 DISPATCHER_ACTIVE 存在而不 self-resubmit),
-#   由本 daemon 查 sinfo, 選擇 gb200-dev / dev 中較閒的 partition, 投下一 round.
+#   由本 daemon 用 sbatch --test-only 查 ETA, 選最快可開跑的 partition 投下一 round.
+#
+# 支援的 cluster (4 個):
+#   H200          dev          x86_64 sm_90  1h   220 nodes × 8 GPU
+#   GB200         gb200-dev    aarch64 sm_100 2h   10 nodes  × 4 GPU
+#   GB200_RACK2   gb200-rack2  aarch64 sm_100 4h   18 nodes  × 4 GPU
+#   GB200_FULL    gb200-full   aarch64 sm_100 12h  36 nodes  × 4 GPU
+#   (GB200 系列三者共用 a.out.GB200 binary 與 jobscript_chain.slurm.GB200,
+#    sbatch 命令列用 --partition / --time 覆寫 #SBATCH directives.)
 #
 # 啟動方式 (不要直接呼叫本腳本, 請用 dispatcher_start.sh):
 #   ./dispatcher_start.sh   # 背景啟動 + 寫 DISPATCHER_ACTIVE sentinel
@@ -17,13 +25,16 @@
 #   3. STOP_DISPATCHER 存在           (dispatcher_stop.sh 觸發)
 #   4. 無法查到有效 partition 且 chain 無 active job (fail-safe)
 #
-# 跨 partition 的 binary 管理:
-#   GB200 (aarch64/sm_100) 與 H200 (x86_64/sm_90) 的 a.out 不能互換.
-#   本 daemon 會在 submit 前做:  cp a.out.<CLUSTER>  a.out
-#   所以使用者必須事先產生 a.out.GB200 + a.out.H200:
+# 跨 arch 的 binary 管理:
+#   GB200* (aarch64/sm_100) 與 H200 (x86_64/sm_90) 的 a.out 不能互換.
+#   本 daemon 會在 submit 前做:  cp a.out.<ARCH>  a.out  (ARCH = GB200 或 H200)
+#   所以使用者只要產生 a.out.GB200 + a.out.H200 兩個 binary, 4 個 cluster 都能用:
 #     bash build_and_submit.sh.GB200 --build-only && cp a.out a.out.GB200
 #     bash build_and_submit.sh.H200  --build-only && cp a.out a.out.H200
-#   若只有一個 arch 的 binary 存在, dispatcher 只投對應那個 partition.
+#   若某 arch binary 不存在, dispatcher 只投擁有對應 arch 的 cluster.
+#
+# 進階: 排序 cluster (env)
+#   PREFERRED_ORDER_ENV="GB200_FULL GB200_RACK2 GB200 H200" ./dispatcher_start.sh
 # ==============================================================================
 
 set -uo pipefail
@@ -71,9 +82,20 @@ ACCOUNT="${ACCOUNT:-MST114348}"
 NOCAPACITY_LIMIT="${NOCAPACITY_LIMIT:-60}"
 NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 
-# Partition 偏好順序: 僅作為 ETA 完全相等時的 tie-break
-# (Option C 後: pick_cluster 永遠用 sbatch --test-only 比兩邊 ETA, 最早可開跑勝)
-PREFERRED_ORDER=("GB200" "H200")
+# Partition 偏好順序: 作為 ETA 平手 (差距 ≤ TIE_TOLERANCE_SEC) 時的 tie-break
+# (Option C 後: pick_cluster 永遠用 sbatch --test-only 比 ETA, 最早可開跑勝)
+#
+# 順序依「池大小 × 計畫維護壓力」估算 GB200 端最閒的 partition 排第一.
+# GB200/GB200_RACK2/GB200_FULL 三者共用 a.out.GB200 binary 與 jobscript,
+# 切換零成本; sbatch 時用 --partition / --time 覆寫 jobscript 內 #SBATCH.
+# 使用者要重排可用 env: PREFERRED_ORDER_ENV="GB200_FULL GB200 H200"
+if [ -n "${PREFERRED_ORDER_ENV:-}" ]; then
+    # 從空白分隔字串轉 bash array
+    # shellcheck disable=SC2206
+    PREFERRED_ORDER=( ${PREFERRED_ORDER_ENV} )
+else
+    PREFERRED_ORDER=("GB200_RACK2" "GB200_FULL" "GB200" "H200")
+fi
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
 # 平手時依 PREFERRED_ORDER 先到先選, 避免兩邊都 idle 時因秒級抖動反覆切換 cluster.
@@ -122,28 +144,65 @@ log "case 目錄: $(pwd)"
 log "═════════════════════════════════════════════════════════════════════════"
 
 # ─────────────────────────────────────────────────────────────────────────
-# Helper: partition → jobscript / build_script 映射
+# Helper: cluster → jobscript / partition / arch / walltime 映射
 # ─────────────────────────────────────────────────────────────────────────
+# Cluster 命名約定:
+#   H200          = dev        (x86_64 sm_90, 1h, PriorityTier=10, 220 nodes/8GPU)
+#   GB200         = gb200-dev  (aarch64 sm_100, 2h, 10 nodes/4GPU)
+#   GB200_RACK2   = gb200-rack2 (aarch64 sm_100, 4h, 18 nodes/4GPU; 池更大)
+#   GB200_FULL    = gb200-full (aarch64 sm_100, 12h, 36 nodes/4GPU; 池最大)
+#
+# 設計重點:
+#   GB200* 三個 cluster 共用同一 jobscript / a.out binary, 只在 sbatch 時
+#   用 --partition=<part> --time=<walltime> 覆寫 jobscript 內 #SBATCH 設定.
+#   jobscript 不必新增變體; 維護面只動 dispatcher 與 status 腳本.
 cluster_jobscript() {
     # 回傳 jobscript 絕對路徑 (以 CHAIN_DIR 為基準) — 不依賴 cwd 或 root-level symlink
     case "$1" in
-        GB200) echo "$CHAIN_DIR/jobscript_chain.slurm.GB200" ;;
-        H200)  echo "$CHAIN_DIR/jobscript_chain.slurm.H200" ;;
+        GB200|GB200_RACK2|GB200_FULL)
+            echo "$CHAIN_DIR/jobscript_chain.slurm.GB200" ;;
+        H200)
+            echo "$CHAIN_DIR/jobscript_chain.slurm.H200" ;;
         *) return 1 ;;
     esac
 }
 
 cluster_partition() {
     case "$1" in
-        GB200) echo "gb200-dev" ;;
-        H200)  echo "dev" ;;
+        GB200)        echo "gb200-dev"   ;;
+        GB200_RACK2)  echo "gb200-rack2" ;;
+        GB200_FULL)   echo "gb200-full"  ;;
+        H200)         echo "dev"         ;;
         *) return 1 ;;
     esac
 }
 
-# 檢查 arch-specific binary 是否存在
+# cluster → arch (binary 共用): GB200 系列共用 a.out.GB200
+cluster_arch() {
+    case "$1" in
+        GB200|GB200_RACK2|GB200_FULL) echo "GB200" ;;
+        H200)                          echo "H200"  ;;
+        *) return 1 ;;
+    esac
+}
+
+# cluster → walltime (符合該 partition MaxTime 上限)
+# chain mode 會用 SIGUSR1@120 + scontrol 自動偵測, walltime 越長 round 越少.
+cluster_walltime() {
+    case "$1" in
+        GB200)        echo "2:00:00"  ;;   # gb200-dev MaxTime=2h
+        GB200_RACK2)  echo "4:00:00"  ;;   # gb200-rack MaxTime=4h
+        GB200_FULL)   echo "12:00:00" ;;   # gb200-full MaxTime=12h
+        H200)         echo "1:00:00"  ;;   # dev MaxTime=1h
+        *) return 1 ;;
+    esac
+}
+
+# 檢查 arch-specific binary 是否存在 (GB200 系列共用 a.out.GB200)
 cluster_binary_ready() {
-    [ -s "a.out.$1" ]
+    local arch
+    arch="$(cluster_arch "$1")" || return 1
+    [ -s "a.out.$arch" ]
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -230,10 +289,11 @@ pick_cluster() {
     local c
     local best_cluster="" best_epoch=0 best_set=0
 
-    log "  pick_cluster: ETA-compare (tolerance=${TIE_TOLERANCE_SEC}s)" >&2
+    log "  pick_cluster: ETA-compare (tolerance=${TIE_TOLERANCE_SEC}s, order=${PREFERRED_ORDER[*]})" >&2
     for c in "${PREFERRED_ORDER[@]}"; do
         if ! cluster_binary_ready "$c"; then
-            log "    [$c] 略過: a.out.$c 不存在" >&2
+            local _arch; _arch="$(cluster_arch "$c" 2>/dev/null || echo "$c")"
+            log "    [$c] 略過: a.out.$_arch 不存在" >&2
             continue
         fi
         local js; js="$(cluster_jobscript "$c")" || continue
@@ -241,15 +301,17 @@ pick_cluster() {
             log "    [$c] 略過: jobscript $js 不存在" >&2
             continue
         fi
-        local eta; eta="$(_pick_cluster_eta_epoch "$js")"
+        local part; part="$(cluster_partition "$c")" || continue
+        local wt;   wt="$(cluster_walltime "$c")"   || continue
+        local eta;  eta="$(_pick_cluster_eta_epoch "$js" "$part" "$wt")"
         if [ "$eta" -lt 0 ]; then
-            log "    [$c] ETA 查詢失敗 (sbatch --test-only 無解析結果)" >&2
+            log "    [$c] ETA 查詢失敗 (sbatch --test-only --partition=$part 無解析結果)" >&2
             continue
         fi
         local now; now="$(date +%s)"
         local wait_s=$((eta - now))
         [ "$wait_s" -lt 0 ] && wait_s=0
-        log "    [$c] ETA wait ≈ $(_pick_cluster_fmt_wait "$wait_s")" >&2
+        log "    [$c] partition=$part time=$wt ETA wait ≈ $(_pick_cluster_fmt_wait "$wait_s")" >&2
 
         if [ "$best_set" -eq 0 ]; then
             best_cluster="$c"; best_epoch="$eta"; best_set=1
@@ -274,12 +336,17 @@ pick_cluster() {
     return 1
 }
 
-# 用 sbatch --test-only 查單一 jobscript 的預期開始 epoch.
+# 用 sbatch --test-only 查 jobscript 在指定 partition / walltime 下的預期開始 epoch.
+# Args: $1=jobscript path, $2=partition (override jobscript 內 #SBATCH), $3=walltime
 # 輸出: >=0 epoch (成功), -1 (失敗/無解析)
 _pick_cluster_eta_epoch() {
-    local js="$1" out eta_str
+    local js="$1" part="${2:-}" wt="${3:-}"
+    local out eta_str
     command -v sbatch >/dev/null 2>&1 || { echo -1; return; }
-    out="$(sbatch --test-only "$js" 2>&1 || true)"
+    local args=()
+    [ -n "$part" ] && args+=("--partition=$part")
+    [ -n "$wt"   ] && args+=("--time=$wt")
+    out="$(sbatch --test-only "${args[@]}" "$js" 2>&1 || true)"
     if   echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
         eta_str="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -n1)"
         date -d "$eta_str" +%s 2>/dev/null || echo -1
@@ -373,23 +440,33 @@ submit_round() {
     fi
     log "[SINGLE-HEAD] ✓ 取得 HEAD.lockdir, state=SUBMITTING, 準備 sbatch"
 
-    log "▷ 切換到 $cluster: cp a.out.$cluster -> a.out"
-    if ! cp -f "a.out.$cluster" "a.out"; then
-        log "ERROR: cp a.out.$cluster 失敗, 釋放 HEAD.lockdir"
+    # GB200 系列共用 a.out.GB200 binary; cluster_arch() 解析正確 arch 名
+    local arch
+    arch="$(cluster_arch "$cluster")" || {
+        log "ERROR: cluster_arch '$cluster' 失敗, 釋放 HEAD.lockdir"
+        release_head_lock
+        return 2
+    }
+    log "▷ 切換到 $cluster (arch=$arch): cp a.out.$arch -> a.out"
+    if ! cp -f "a.out.$arch" "a.out"; then
+        log "ERROR: cp a.out.$arch 失敗, 釋放 HEAD.lockdir"
         release_head_lock
         return 2
     fi
 
     # [BLACKLIST-LIB] 黑名單統一走 bl_effective_exclude (TTL + NCHC sync + 50% cap)
-    local part ex_list exclude_arg=""
+    local part wt ex_list exclude_arg=""
     part="$(cluster_partition "$cluster")"
+    wt="$(cluster_walltime "$cluster")"
     ex_list="$(bl_effective_exclude "$part" 2>>"$LOG_FILE")"
     [ -n "$ex_list" ] && exclude_arg="--exclude=$ex_list"
     log "▷ effective exclude (partition=$part): ${ex_list:-(empty)}"
 
-    log "▷ sbatch --parsable $exclude_arg $jobscript"
+    # --partition 與 --time 命令列覆寫 jobscript 內 #SBATCH directives
+    # (jobscript 寫死 dev/gb200-dev, 命令列 priority > #SBATCH)
+    log "▷ sbatch --parsable --partition=$part --time=$wt $exclude_arg $jobscript"
     local next_id
-    next_id="$(sbatch --parsable $exclude_arg "$jobscript" 2>&1)"
+    next_id="$(sbatch --parsable --partition="$part" --time="$wt" $exclude_arg "$jobscript" 2>&1)"
     local rc=$?
 
     if [ $rc -eq 0 ] && [[ "$next_id" =~ ^[0-9]+$ ]]; then
@@ -420,14 +497,23 @@ submit_round() {
 # Main loop
 # ─────────────────────────────────────────────────────────────────────────
 
-# 初次啟動檢查: 至少一個 binary 必須存在
+# 初次啟動檢查: 至少一個 binary 必須存在.
+# GB200 系列 cluster (GB200/RACK2/FULL) 共用 a.out.GB200, 為避免重複 log 同一檔案,
+# 用 declare -A 去重後再印.
 _init_ok=0
+declare -A _ARCH_SEEN=()
 for c in "${PREFERRED_ORDER[@]}"; do
+    _arch="$(cluster_arch "$c" 2>/dev/null || echo "$c")"
     if cluster_binary_ready "$c"; then
-        log "OK 偵測到 a.out.$c (${c} ready)"
+        if [ -z "${_ARCH_SEEN[$_arch]:-}" ]; then
+            log "OK 偵測到 a.out.$_arch (適用 cluster: $c)"
+            _ARCH_SEEN[$_arch]="$c"
+        else
+            log "    └─ $c 共用 a.out.$_arch (已驗證)"
+        fi
         _init_ok=1
     else
-        log "WARN a.out.$c 不存在, 將不投 $c partition"
+        log "WARN a.out.$_arch 不存在, 將不投 $c partition"
     fi
 done
 if [ "$_init_ok" -eq 0 ]; then
@@ -550,8 +636,8 @@ while true; do
         _CLUSTER_BAD=1
     else
         case "$NEXT_CLUSTER" in
-            *[!A-Z0-9]*) _CLUSTER_BAD=1 ;;   # 只要含非 A-Z / 0-9 就判不合法
-            [A-Z]*) : ;;                      # 首字必為大寫
+            *[!A-Z0-9_]*) _CLUSTER_BAD=1 ;;  # 只要含非 A-Z / 0-9 / _ 就判不合法
+            [A-Z]*) : ;;                      # 首字必為大寫 (排除 _START)
             *) _CLUSTER_BAD=1 ;;
         esac
     fi
