@@ -142,16 +142,16 @@ log "[SINGLE-HEAD] ✓ verify_am_head 通過, HEAD.lockdir state 升級為 RUNNI
 
 # ===== 1. Chain ID =====
 if [ -f restart/chain_jobid ] && [ ! -f restart/chain_count ]; then
-    log "FATAL [REVIEW-FIX #7]: restart/chain_jobid 存在但 restart/chain_count 不見"
-    log "                       chain state 半損毀,拒絕續跑以防誤觸冷啟動"
+    log "FATAL [REVIEW-FIX #7][POLICY-C1]: restart/chain_jobid 存在但 restart/chain_count 不見"
+    log "                       chain state 半損毀,拒絕續跑以防誤觸冷啟動 (unavoidable → exit 42)"
     log "                       修法: ./run.sh  (會偵測情境 2 自動重建 state)"
     log "                       或確定從頭: ./run.sh --force-cold"
-    exit 1
+    exit 42
 fi
 if [ ! -f restart/chain_jobid ] && [ -f restart/chain_count ]; then
-    log "FATAL [REVIEW-FIX #7]: restart/chain_count 存在但 restart/chain_jobid 不見"
-    log "                       chain state 半損毀,拒絕續跑"
-    exit 1
+    log "FATAL [REVIEW-FIX #7][POLICY-C1]: restart/chain_count 存在但 restart/chain_jobid 不見"
+    log "                       chain state 半損毀,拒絕續跑 (unavoidable → exit 42)"
+    exit 42
 fi
 if [ ! -f restart/chain_jobid ]; then
     echo "$SLURM_JOB_ID" > restart/chain_jobid
@@ -161,8 +161,8 @@ CHAIN_JOB_ID=$(cat restart/chain_jobid)
 CHAIN_COUNT=$(cat restart/chain_count 2>/dev/null || echo 1)
 
 if ! [[ "$CHAIN_COUNT" =~ ^[1-9][0-9]*$ ]]; then
-    log "FATAL [REVIEW-FIX #11]: restart/chain_count 非正整數: \"$CHAIN_COUNT\""
-    exit 1
+    log "FATAL [REVIEW-FIX #11][POLICY-C1]: restart/chain_count 非正整數: \"$CHAIN_COUNT\" (unavoidable → exit 42)"
+    exit 42
 fi
 
 log "=== Chain $CHAIN_JOB_ID round $CHAIN_COUNT on $SLURM_NODELIST ==="
@@ -201,8 +201,9 @@ fi
 
 # ===== 3. Pre-flight =====
 if [ ! -x ./a.out ]; then
-    log "FATAL: ./a.out not found/executable. Chain stops."
-    exit 1
+    log "FATAL [POLICY-C1]: ./a.out not found/executable. Chain stops."
+    log "       環境問題 (unavoidable → exit 42 stop dispatcher)"
+    exit 42
 fi
 
 # ===== 3.5 節點健康預檢 (走 blacklist_lib: TTL + NCHC sync) =====
@@ -332,12 +333,12 @@ if [ "$CHAIN_COUNT" -eq 1 ]; then
                      [ -s "$d/metadata.dat" ] && echo "$d" && break
                  done)
     if [ -n "$HAS_CKPT" ] && [ "${LBM_ALLOW_COLD_START:-0}" != "1" ]; then
-        log "FATAL: chain_count=1 但 restart/checkpoint/ 已有資料 ($HAS_CKPT)"
-        log "       拒絕冷啟動以防 checkrho.dat / Ustar_Force_record.dat 被覆寫"
+        log "FATAL [POLICY-C1]: chain_count=1 但 restart/checkpoint/ 已有資料 ($HAS_CKPT)"
+        log "       拒絕冷啟動以防 checkrho.dat / Ustar_Force_record.dat 被覆寫 (unavoidable → exit 42)"
         log "       -> 續跑: ./run.sh  (會自動偵測並接 Round 2)"
         log "       -> 確定從頭跑: ./run.sh --force-cold"
         log "       -> 或強制: export LBM_ALLOW_COLD_START=1; ./run --gb200"
-        exit 1
+        exit 42
     fi
     ARGS="--cold"
     log "Round 1 -> ARGS=\"$ARGS\""
@@ -368,9 +369,13 @@ else
     fi
 
     if [ -z "$LATEST" ]; then
-        log "FATAL: No valid checkpoint among $N_CAND candidates. Chain stops."
-        log "       To force cold start: ./run.sh --force-cold"
-        exit 1
+        log "FATAL [POLICY-C1]: No valid checkpoint among $N_CAND candidates. Chain stops."
+        log "       原因: chain_count=$CHAIN_COUNT 但找不到任何有效 checkpoint."
+        log "       這是 unavoidable error (再續投也不會找到 ckpt) → RC=42 停 dispatcher."
+        log "       通常意味首輪 cold start 失敗無 ckpt 寫出. 修法:"
+        log "       (1) 看 chain.log 找首輪失敗根因"
+        log "       (2) 修好後 ./run.sh --force-cold 重置 + 重啟"
+        exit 42
     fi
 
     STALE_PART=$(ls "$LATEST"/*.part 2>/dev/null | wc -l)
