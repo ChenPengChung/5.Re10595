@@ -2,7 +2,7 @@
 #define VARIABLES_FILE
 
 // ╔════════════════════════════════════════════════════════════════════╗
-// ║     GILBM Periodic Hill — Edit11 Configuration                    ║
+// ║     GILBM Periodic Hill — Edit3_Re5600newmesh Configuration        ║
 // ║     (Fröhlich curvilinear grid, D3Q19, Algorithm1 GTS-only)       ║
 // ║                                                                    ║
 // ║  架構 (Architecture):                                              ║
@@ -106,7 +106,7 @@
 #endif
 
 //本專案為新輸入網格測試穩定性
-//透過新上傳德
+//透過新上傳的網格進行讀取與測試
 /*
 // ── 非均勻網格拉伸 ──
 //   GAMMA: Vinokur tanh 拉伸參數 (越大壁面越密, →0 趨近均勻)
@@ -276,7 +276,7 @@
 // ── 計時 ──
 // USE_TIMING=1 啟用, TIMING_DETAIL=1 輸出 per-kernel 分解
 //
-// 計時區間對應 (Edit11 新流程):
+// 計時區間對應 (Edit3_Re5600newmesh 流程):
 //   ev_step1:  Step1+1.5 (interpolation + macro + feq)
 //   ev_step2:  Step2 (collision, 逐點 MRT/BGK)
 //   ev_mpi:    MPI(f_post) + periodicSW_fpost
@@ -291,13 +291,13 @@
 // ================================================================
 
 // ── WENO 診斷已一體化至 USE_WENO7 (§1b) ──
-// Edit11: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
+// Edit3_Re5600newmesh: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
 //         全部由 USE_WENO7 統一控制（診斷 log + VTK contour + 啟用統計）。
 //         USE_WENO7=1 時自動啟用所有 WENO 診斷功能。
 
 // ── 效能診斷 ──
 // SKIP_MIDSTEP_MASSCORR: 跳過 even/odd sub-step 間的 mid-step mass correction
-//   0 = 保留 (與 Edit8 相同), 1 = 跳過 (減少 MPI barrier)
+//   0 = 保留, 1 = 跳過 (減少 MPI barrier)
 #define     SKIP_MIDSTEP_MASSCORR    0
 
 
@@ -356,7 +356,7 @@
   s_visc       = 1/omega_global           (__constant__ GILBM_s_visc_global)
   dt_global    = CFL * min(1/|e^eta|, 1/|e^xi|, 1/|e^zeta|)  (__constant__ GILBM_dt)
 
-Removed items (Edit9 -> Edit11):
+Removed items (prior versions):
   KERNEL_ALG      - Algorithm1 only, removed Algorithm2/3
   USE_LTS         - GTS only, removed LTS path
   USE_TWO_PASS    - Algorithm2/3 only, removed

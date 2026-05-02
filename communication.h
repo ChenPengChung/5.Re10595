@@ -560,7 +560,7 @@ void SendMacroCPU() {
     CHECK_MPI( MPI_Barrier(MPI_COMM_WORLD) );
 }
 
-// [LEGACY] SendDataToCPU: kept for backward compatibility (used in Edit8 path).
+// [LEGACY] SendDataToCPU: kept for backward compatibility.
 // In the new direct-copy path, call Launch_UnpackFPost_Direct + SendMacroCPU instead.
 void SendDataToCPU(double *f_new[19]) {
     const size_t nBytes = NX6 * NYD6 * NZ6 * sizeof(double);

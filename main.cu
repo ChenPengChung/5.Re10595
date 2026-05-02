@@ -1188,7 +1188,7 @@ int main(int argc, char *argv[])
 
         // ===== Mid-step mass correction (between even and odd) =====
         // 由 SKIP_MIDSTEP_MASSCORR 開關控制 (variables.h)
-        // Edit8 也有此區塊 (main.cu line 1034-1057)
+        // Mid-step mass correction 區塊
         // 包含: ReduceRhoSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
         // ★ 這是全域 MPI barrier, MPI_Wtime 計時可測量其實際開銷
 #if !SKIP_MIDSTEP_MASSCORR
