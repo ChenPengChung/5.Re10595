@@ -255,9 +255,21 @@ else
     echo "[submit] FATAL: $CHAIN_DIR/tools/blacklist_lib.sh 不存在, 拒絕提交以免誤用舊邏輯" >&2
     exit 9
 fi
+
+# [PARTITION-LIB] partition 切換 (restart/gb200_partition → sbatch --partition= --time=)
+PART_ARGS=""
+SUBMIT_PARTITION=""
+if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+    . "$CHAIN_DIR/tools/partition_lib.sh"
+    PART_ARGS="$(gb200_sbatch_partition_args)"
+    SUBMIT_PARTITION="$(gb200_active_partition)"
+    [ -n "$SUBMIT_PARTITION" ] && echo "[partition] override: $SUBMIT_PARTITION (walltime=$(gb200_partition_walltime "$SUBMIT_PARTITION"))"
+fi
+
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
-MERGED_BAD=$(bl_effective_exclude "gb200-dev" 2> >(tee -a "$_BL_LOG" >&2))
+_SUBMIT_PART="${SUBMIT_PARTITION:-$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.GB200")}"
+MERGED_BAD=$(bl_effective_exclude "${_SUBMIT_PART:-gb200}" 2> >(tee -a "$_BL_LOG" >&2))
 EXCLUDE_ARG=""
 if [ -n "$MERGED_BAD" ]; then
     EXCLUDE_ARG="--exclude=$MERGED_BAD"
@@ -276,7 +288,7 @@ if [ -f "$CHAIN_DIR/tools/head_lock_lib.sh" ]; then
     . "$CHAIN_DIR/tools/head_lock_lib.sh"
 fi
 
-SBATCH_OUT="$(sbatch --parsable $EXCLUDE_ARG "$CHAIN_DIR/jobscript_chain.slurm.GB200" 2>&1)"
+SBATCH_OUT="$(sbatch --parsable $PART_ARGS $EXCLUDE_ARG "$CHAIN_DIR/jobscript_chain.slurm.GB200" 2>&1)"
 SBATCH_RC=$?
 if [ $SBATCH_RC -eq 0 ] && [[ "$SBATCH_OUT" =~ ^[0-9]+$ ]]; then
     echo "[submit] OK sbatch jobid=$SBATCH_OUT"

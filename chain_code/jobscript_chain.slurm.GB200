@@ -122,6 +122,12 @@ fi
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
 
+# [PARTITION-LIB] partition 切換函式庫 (支援 restart/gb200_partition override)
+if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CHAIN_DIR/tools/partition_lib.sh"
+fi
+
 if ! verify_am_head "$SLURM_JOB_ID" "GB200"; then
     _rc=$?
     HEAD_OWNER="$(grep '^jobid=' "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo none)"
@@ -224,11 +230,13 @@ if [ -n "$MATCHED_BAD" ]; then
         bl_add "$node" "pre-flight matched" "jobscript-preflight" \
             2> >(tee -a "$_BL_LOG" >&2) || true
     done
-    EX_LIST=$(bl_effective_exclude "gb200-dev" 2> >(tee -a "$_BL_LOG" >&2))
+    _RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
+    _RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
+    EX_LIST=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Pre-flight requeue exclude: ${EX_LIST:-(empty)}"
-    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    log "Pre-flight requeue exclude: ${EX_LIST:-(empty)}  partition: ${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}"
+    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     if [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "GB200"
         log "Pre-flight requeued: job=$NEXT_ID (HEAD.lockdir jobid->$NEXT_ID state=PENDING)"
@@ -625,7 +633,10 @@ fi
 MAX_SBATCH_RETRY=5
 SBATCH_RETRY_DELAY=30
 
-EX_LIST=$(bl_effective_exclude "gb200-dev" 2> >(tee -a "$_BL_LOG" >&2))
+_RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
+_RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
+
+EX_LIST=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
 EXCLUDE_ARG=""
 if [ -n "$EX_LIST" ]; then
     EXCLUDE_ARG="--exclude=$EX_LIST"
@@ -633,9 +644,10 @@ if [ -n "$EX_LIST" ]; then
 else
     log "Resubmit exclude: (empty — cluster healthy)"
 fi
+[ -n "$_RESUB_PARTITION" ] && log "Resubmit partition override: $_RESUB_PARTITION (walltime=$(gb200_partition_walltime "$_RESUB_PARTITION" 2>/dev/null))"
 
 for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
-    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     SBATCH_RC=$?
     if [ $SBATCH_RC -eq 0 ] && [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "GB200"

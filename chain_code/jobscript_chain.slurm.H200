@@ -230,7 +230,7 @@ if [ -n "$MATCHED_BAD" ]; then
         bl_add "$node" "pre-flight matched" "jobscript-preflight" \
             2> >(tee -a "$_BL_LOG" >&2) || true
     done
-    EX_LIST=$(bl_effective_exclude "dev" 2> >(tee -a "$_BL_LOG" >&2))
+    EX_LIST=$(bl_effective_exclude "$SLURM_JOB_PARTITION" 2> >(tee -a "$_BL_LOG" >&2))
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
     log "Pre-flight requeue exclude: ${EX_LIST:-(empty)}"
@@ -634,7 +634,7 @@ fi
 MAX_SBATCH_RETRY=5
 SBATCH_RETRY_DELAY=30
 
-EX_LIST=$(bl_effective_exclude "dev" 2> >(tee -a "$_BL_LOG" >&2))
+EX_LIST=$(bl_effective_exclude "$SLURM_JOB_PARTITION" 2> >(tee -a "$_BL_LOG" >&2))
 EXCLUDE_ARG=""
 if [ -n "$EX_LIST" ]; then
     EXCLUDE_ARG="--exclude=$EX_LIST"

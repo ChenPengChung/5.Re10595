@@ -261,7 +261,8 @@ fi
 # stderr 重定向到 log 便於除錯, 同時保留 tty 回顯
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
-MERGED_BAD=$(bl_effective_exclude "dev" 2> >(tee -a "$_BL_LOG" >&2))
+_SUBMIT_PART="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.H200")"
+MERGED_BAD=$(bl_effective_exclude "${_SUBMIT_PART:-dev}" 2> >(tee -a "$_BL_LOG" >&2))
 EXCLUDE_ARG=""
 if [ -n "$MERGED_BAD" ]; then
     EXCLUDE_ARG="--exclude=$MERGED_BAD"

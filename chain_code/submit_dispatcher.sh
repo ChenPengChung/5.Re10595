@@ -4,7 +4,7 @@
 # ==============================================================================
 # 功能:
 #   每次 chain round 結束後 (jobscript 因 DISPATCHER_ACTIVE 存在而不 self-resubmit),
-#   由本 daemon 查 sinfo, 選擇 gb200-dev / dev 中較閒的 partition, 投下一 round.
+#   由本 daemon 用 sbatch --test-only 比較可用 partition ETA, 投下一 round.
 #
 # 啟動方式 (不要直接呼叫本腳本, 請用 dispatcher_start.sh):
 #   ./dispatcher_start.sh   # 背景啟動 + 寫 DISPATCHER_ACTIVE sentinel
@@ -23,7 +23,7 @@
 #   所以使用者必須事先產生 a.out.GB200 + a.out.H200:
 #     bash build_and_submit.sh.GB200 --build-only && cp a.out a.out.GB200
 #     bash build_and_submit.sh.H200  --build-only && cp a.out a.out.H200
-#   若只有一個 arch 的 binary 存在, dispatcher 只投對應那個 partition.
+#   若只有一個 arch 的 binary 存在, dispatcher 只投對應 arch 的 partition.
 # ==============================================================================
 
 set -uo pipefail
@@ -71,12 +71,15 @@ ACCOUNT="${ACCOUNT:-MST114348}"
 NOCAPACITY_LIMIT="${NOCAPACITY_LIMIT:-60}"
 NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 
-# Partition 偏好順序: 僅作為 ETA 完全相等時的 tie-break
-# (Option C 後: pick_cluster 永遠用 sbatch --test-only 比兩邊 ETA, 最早可開跑勝)
-PREFERRED_ORDER=("GB200" "H200")
+# Partition 候選清單: <ARCH>:<partition>
+# - GB200 partitions 共用 a.out.GB200 / jobscript_chain.slurm.GB200
+# - H200 dev 共用 a.out.H200 / jobscript_chain.slurm.H200
+# - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev}"
+read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
-# 平手時依 PREFERRED_ORDER 先到先選, 避免兩邊都 idle 時因秒級抖動反覆切換 cluster.
+# 平手時依 PARTITION_CANDIDATES 先到先選, 避免多邊都 idle 時因秒級抖動反覆切換.
 TIE_TOLERANCE_SEC="${TIE_TOLERANCE_SEC:-30}"
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -117,7 +120,7 @@ trap on_exit EXIT INT TERM
 echo "$$" > "$SENTINEL"
 log "═════════════════════════════════════════════════════════════════════════"
 log "dispatcher 啟動 (PID=$$)"
-log "POLL_INTERVAL=$POLL_INTERVAL s, 偏好順序: ${PREFERRED_ORDER[*]}"
+log "POLL_INTERVAL=$POLL_INTERVAL s, partition candidates: ${PARTITION_CANDIDATES[*]}"
 log "case 目錄: $(pwd)"
 log "═════════════════════════════════════════════════════════════════════════"
 
@@ -134,11 +137,26 @@ cluster_jobscript() {
 }
 
 cluster_partition() {
+    local js
+    js="$(cluster_jobscript "$1")" || return 1
+    awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$js"
+}
+
+target_cluster() {
     case "$1" in
-        GB200) echo "gb200-dev" ;;
-        H200)  echo "dev" ;;
-        *) return 1 ;;
+        *@*) printf '%s\n' "${1%%@*}" ;;
+        *)   printf '%s\n' "$1" ;;
     esac
+}
+
+target_partition() {
+    local target="$1" cluster part
+    cluster="$(target_cluster "$target")"
+    case "$target" in
+        *@*) part="${target#*@}" ;;
+        *)   part="$(cluster_partition "$cluster")" || return 1 ;;
+    esac
+    printf '%s\n' "$part"
 }
 
 # 檢查 arch-specific binary 是否存在
@@ -218,33 +236,39 @@ chain_last_exit_code() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
-# Helper: 選下一個要投的 cluster (Option C: pure ETA-compare, 2026-04-25)
+# Helper: 選下一個要投的 target (Option D: partition ETA-compare)
 #   設計原則:
-#     - 永遠對「binary 存在」的兩邊都呼叫 sbatch --test-only 取 ETA
-#     - ETA 較早的 cluster 勝出 (idle 兩邊 ≈ now, 忙碌兩邊 ≈ 未來時間)
-#     - 差距 ≤ TIE_TOLERANCE_SEC 視為平手 → 用 PREFERRED_ORDER 先到先選
-#     - 兩邊都查不到 ETA 或都缺 binary → 回 "" 走 no-capacity 路徑
-#   [DEFENSIVE] log 全部走 stderr (>&2); 唯一 stdout 輸出 = cluster 名稱.
+#     - 永遠對「binary 存在」的候選 partition 呼叫 sbatch --test-only 取 ETA
+#     - ETA 較早的 target 勝出 (idle ≈ now, 忙碌 ≈ 未來時間)
+#     - 差距 ≤ TIE_TOLERANCE_SEC 視為平手 → 用 PARTITION_CANDIDATES 先到先選
+#     - 全部查不到 ETA 或都缺 binary → 回 "" 走 no-capacity 路徑
+#   [DEFENSIVE] log 全部走 stderr (>&2); 唯一 stdout 輸出 = ARCH@partition.
 # ─────────────────────────────────────────────────────────────────────────
 pick_cluster() {
-    local c
-    local best_cluster="" best_epoch=0 best_set=0
+    local entry c part target
+    local best_target="" best_epoch=0 best_set=0
 
-    log "  pick_cluster: ETA-compare (tolerance=${TIE_TOLERANCE_SEC}s)" >&2
-    for c in "${PREFERRED_ORDER[@]}"; do
+    log "  pick_cluster: partition ETA-compare (tolerance=${TIE_TOLERANCE_SEC}s)" >&2
+    for entry in "${PARTITION_CANDIDATES[@]}"; do
+        c="${entry%%:*}"
+        part="${entry#*:}"
+        if [ -z "$c" ] || [ -z "$part" ] || [ "$c" = "$part" ]; then
+            log "    [$entry] 略過: 候選格式需為 ARCH:partition" >&2
+            continue
+        fi
+        target="${c}@${part}"
         if ! cluster_binary_ready "$c"; then
-            log "    [$c] 略過: a.out.$c 不存在" >&2
+            log "    [$target] 略過: a.out.$c 不存在" >&2
             continue
         fi
         local js; js="$(cluster_jobscript "$c")" || continue
         if [ ! -f "$js" ]; then
-            log "    [$c] 略過: jobscript $js 不存在" >&2
+            log "    [$target] 略過: jobscript $js 不存在" >&2
             continue
         fi
         # ─── [POLICY-D1] partition-level cooldown 檢查 ───
         # jobscript GUARD 觸發後會寫 restart/cooldown_<partition>.sentinel
         # TTL 內 dispatcher 跳過此 partition, 改投其他, 讓 chain 持續跑
-        local part; part="$(cluster_partition "$c")" || continue
         local cd_file="restart/cooldown_${part}.sentinel"
         if [ -f "$cd_file" ]; then
             local cd_epoch cd_ttl now_epoch age left
@@ -254,43 +278,43 @@ pick_cluster() {
             age=$(( now_epoch - ${cd_epoch:-0} ))
             if [ "$age" -lt "${cd_ttl:-3600}" ]; then
                 left=$(( ${cd_ttl:-3600} - age ))
-                log "    [$c] 略過 (cooldown): partition=$part 冷卻中, 剩 $((left/60))min" >&2
+                log "    [$target] 略過 (cooldown): partition=$part 冷卻中, 剩 $((left/60))min" >&2
                 continue
             else
-                log "    [$c] cooldown TTL 已過 (age=$((age/60))min ≥ ttl=$((cd_ttl/60))min), 解除 sentinel" >&2
+                log "    [$target] cooldown TTL 已過 (age=$((age/60))min >= ttl=$((cd_ttl/60))min), 解除 sentinel" >&2
                 rm -f "$cd_file"
             fi
         fi
 
-        local eta; eta="$(_pick_cluster_eta_epoch "$js")"
+        local eta; eta="$(_pick_cluster_eta_epoch "$js" "$part")"
         if [ "$eta" -lt 0 ]; then
-            log "    [$c] ETA 查詢失敗 (sbatch --test-only 無解析結果)" >&2
+            log "    [$target] ETA 查詢失敗 (sbatch --test-only 無解析結果)" >&2
             continue
         fi
         local now; now="$(date +%s)"
         local wait_s=$((eta - now))
         [ "$wait_s" -lt 0 ] && wait_s=0
-        log "    [$c] ETA wait ≈ $(_pick_cluster_fmt_wait "$wait_s")" >&2
+        log "    [$target] ETA wait ~= $(_pick_cluster_fmt_wait "$wait_s")" >&2
 
         if [ "$best_set" -eq 0 ]; then
-            best_cluster="$c"; best_epoch="$eta"; best_set=1
+            best_target="$target"; best_epoch="$eta"; best_set=1
         else
             # 只有「比目前最佳早 TIE_TOLERANCE_SEC 以上」才覆蓋
-            # → 平手範圍內維持 PREFERRED_ORDER 先到先選, 避免抖動
+            # → 平手範圍內維持 PARTITION_CANDIDATES 先到先選, 避免抖動
             local delta=$((best_epoch - eta))
             if [ "$delta" -gt "$TIE_TOLERANCE_SEC" ]; then
-                best_cluster="$c"; best_epoch="$eta"
+                best_target="$target"; best_epoch="$eta"
             fi
         fi
     done
 
-    if [ "$best_set" -eq 1 ] && [ -n "$best_cluster" ]; then
-        log "  pick_cluster: 選中 $best_cluster (ETA-compare 結果)" >&2
-        echo "$best_cluster"
+    if [ "$best_set" -eq 1 ] && [ -n "$best_target" ]; then
+        log "  pick_cluster: 選中 $best_target (ETA-compare 結果)" >&2
+        echo "$best_target"
         return 0
     fi
 
-    log "  pick_cluster: 兩邊都不可投 (binary 缺 / sbatch --test-only 全部失敗) → no-capacity" >&2
+    log "  pick_cluster: 全部候選都不可投 (binary 缺 / sbatch --test-only 全部失敗) -> no-capacity" >&2
     echo ""
     return 1
 }
@@ -298,9 +322,13 @@ pick_cluster() {
 # 用 sbatch --test-only 查單一 jobscript 的預期開始 epoch.
 # 輸出: >=0 epoch (成功), -1 (失敗/無解析)
 _pick_cluster_eta_epoch() {
-    local js="$1" out eta_str
+    local js="$1" part="${2:-}" out eta_str
     command -v sbatch >/dev/null 2>&1 || { echo -1; return; }
-    out="$(sbatch --test-only "$js" 2>&1 || true)"
+    if [ -n "$part" ]; then
+        out="$(sbatch --test-only --partition="$part" "$js" 2>&1 || true)"
+    else
+        out="$(sbatch --test-only "$js" 2>&1 || true)"
+    fi
     if   echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
         eta_str="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -n1)"
         date -d "$eta_str" +%s 2>/dev/null || echo -1
@@ -324,7 +352,10 @@ _pick_cluster_fmt_wait() {
 # Helper: 對選定的 cluster 做一次 sbatch
 # ─────────────────────────────────────────────────────────────────────────
 submit_round() {
-    local cluster="$1"
+    local target="$1"
+    local cluster part
+    cluster="$(target_cluster "$target")"
+    part="$(target_partition "$target")" || return 1
     local jobscript
     jobscript="$(cluster_jobscript "$cluster")" || return 1
 
@@ -394,7 +425,7 @@ submit_round() {
     fi
     log "[SINGLE-HEAD] ✓ 取得 HEAD.lockdir, state=SUBMITTING, 準備 sbatch"
 
-    log "▷ 切換到 $cluster: cp a.out.$cluster -> a.out"
+    log "▷ 切換到 $target: cp a.out.$cluster -> a.out"
     if ! cp -f "a.out.$cluster" "a.out"; then
         log "ERROR: cp a.out.$cluster 失敗, 釋放 HEAD.lockdir"
         release_head_lock
@@ -402,19 +433,18 @@ submit_round() {
     fi
 
     # [BLACKLIST-LIB] 黑名單統一走 bl_effective_exclude (TTL + NCHC sync + 50% cap)
-    local part ex_list exclude_arg=""
-    part="$(cluster_partition "$cluster")"
+    local ex_list exclude_arg=""
     ex_list="$(bl_effective_exclude "$part" 2>>"$LOG_FILE")"
     [ -n "$ex_list" ] && exclude_arg="--exclude=$ex_list"
     log "▷ effective exclude (partition=$part): ${ex_list:-(empty)}"
 
-    log "▷ sbatch --parsable $exclude_arg $jobscript"
+    log "▷ sbatch --parsable --partition=$part $exclude_arg $jobscript"
     local next_id
-    next_id="$(sbatch --parsable $exclude_arg "$jobscript" 2>&1)"
+    next_id="$(sbatch --parsable --partition="$part" $exclude_arg "$jobscript" 2>&1)"
     local rc=$?
 
     if [ $rc -eq 0 ] && [[ "$next_id" =~ ^[0-9]+$ ]]; then
-        log "SUBMIT-OK 已投 $cluster round: jobid=$next_id"
+        log "SUBMIT-OK 已投 $target round: jobid=$next_id"
         echo "$next_id" > restart/chain_jobid
         # [COLD-START-INIT] 冷啟動情境下 chain_count 還不存在, 一併初始化以免 jobscript
         # 誤觸 "[REVIEW-FIX #7] chain state 半損毀" FATAL tripwire 形成無限迴圈.
@@ -443,12 +473,16 @@ submit_round() {
 
 # 初次啟動檢查: 至少一個 binary 必須存在
 _init_ok=0
-for c in "${PREFERRED_ORDER[@]}"; do
+_seen_arch=""
+for entry in "${PARTITION_CANDIDATES[@]}"; do
+    c="${entry%%:*}"
+    case " $_seen_arch " in *" $c "*) continue ;; esac
+    _seen_arch="$_seen_arch $c"
     if cluster_binary_ready "$c"; then
         log "OK 偵測到 a.out.$c (${c} ready)"
         _init_ok=1
     else
-        log "WARN a.out.$c 不存在, 將不投 $c partition"
+        log "WARN a.out.$c 不存在, 將不投 $c 相關 partition"
     fi
 done
 if [ "$_init_ok" -eq 0 ]; then
@@ -562,7 +596,7 @@ while true; do
     # 選 cluster
     log "----- 準備投下一輪, 查詢 partition 狀態 -----"
     NEXT_CLUSTER="$(pick_cluster)"
-    # [DEFENSIVE 2026-04-22] 除了 empty, 還驗證回傳值只能是純 A-Z/0-9 的 cluster 名.
+    # [DEFENSIVE 2026-04-22] 除了 empty, 還驗證回傳值只能是安全的 target 名.
     # 用 case 避開 [[ =~ regex ]] 避免某些 linter 在 regex 的 $ 錨點觸發截斷.
     # 即使 pick_cluster 未來因 log() 漏出而被污染, 也不會把 log 文字誤當 cluster
     # 進到 submit_round, 避免 "選中: [timestamp] ..." 這類畸形輸出 + 無效 sbatch.
@@ -571,7 +605,7 @@ while true; do
         _CLUSTER_BAD=1
     else
         case "$NEXT_CLUSTER" in
-            *[!A-Z0-9]*) _CLUSTER_BAD=1 ;;   # 只要含非 A-Z / 0-9 就判不合法
+            *[!A-Za-z0-9@._-]*) _CLUSTER_BAD=1 ;;
             [A-Z]*) : ;;                      # 首字必為大寫
             *) _CLUSTER_BAD=1 ;;
         esac
@@ -581,12 +615,12 @@ while true; do
         # pick_cluster 回傳畸形值 (BUG-GUARD 情境) 不算, 避免雜訊把我們推向誤停.
         if [ -z "$NEXT_CLUSTER" ]; then
             _nocapacity_count=$((_nocapacity_count + 1))
-            log "pick_cluster ETA-compare 失敗 (兩邊 binary 缺 或 sbatch --test-only 都無解析), ${POLL_INTERVAL}s 後重試 (no-capacity ${_nocapacity_count}/${NOCAPACITY_LIMIT})"
+            log "pick_cluster ETA-compare 失敗 (全部候選 binary 缺 或 sbatch --test-only 都無解析), ${POLL_INTERVAL}s 後重試 (no-capacity ${_nocapacity_count}/${NOCAPACITY_LIMIT})"
             if [ "$_nocapacity_count" -ge "$NOCAPACITY_LIMIT" ]; then
                 _total_wait_min=$(( _nocapacity_count * POLL_INTERVAL / 60 ))
                 log "============================================================================="
-                log "[P0 TRAP #2] 連續 ${_nocapacity_count} 輪兩邊都拿不到 ETA (累積 ${_total_wait_min} 分鐘)"
-                log "             可能原因: (a) Slurm controller 暫停 (b) QoS 超額被 reject (c) 兩個 a.out.<ARCH> binary 都不存在"
+                log "[P0 TRAP #2] 連續 ${_nocapacity_count} 輪全部候選都拿不到 ETA (累積 ${_total_wait_min} 分鐘)"
+                log "             可能原因: (a) Slurm controller 暫停 (b) QoS 超額被 reject (c) a.out.<ARCH> binary 不存在 (d) partition 名稱無效"
                 log "             注意: 正常情況下 Stage 2 ETA 挑選會讓 chain 即使兩邊忙也能進 PENDING, 不會走到這裡."
                 log "             觸發明確停機: 寫入 $NOCAPACITY_SENTINEL 後退出."
                 log "             -- 恢復方法 (擇一) --"
@@ -613,7 +647,7 @@ while true; do
         continue
     fi
 
-    log "選中: $NEXT_CLUSTER (partition=$(cluster_partition "$NEXT_CLUSTER"))"
+    log "選中: $NEXT_CLUSTER (partition=$(target_partition "$NEXT_CLUSTER"))"
     submit_round "$NEXT_CLUSTER"
     SUBMIT_RC=$?
     case $SUBMIT_RC in

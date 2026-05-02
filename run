@@ -25,6 +25,11 @@
 #   ./run job-guard scancel <id> 只允許取消本專案 job
 #   ./run job-guard stop-chain   僅對本專案建立 restart/STOP_CHAIN
 #
+#   ./run partition              顯示所有 GB200 partition 狀態
+#   ./run partition <name>       切換到指定 partition (下次投遞生效)
+#   ./run partition set <name>   同上
+#   ./run partition reset        回復 jobscript 預設 partition
+#
 #   ./run build H200             編譯 H200 版 a.out + 投遞
 #   ./run build GB200            編譯 GB200 版 a.out + 投遞
 #   ./run build H200 --build-only    只編譯不投
@@ -88,6 +93,10 @@ EOF
     job-guard)
         shift
         exec bash "$CHAIN_DIR/tools/project_job_guard.sh" "$@"
+        ;;
+    partition)
+        shift
+        exec bash "$CHAIN_DIR/partition_ctl.sh" "$@"
         ;;
     build)
         shift
