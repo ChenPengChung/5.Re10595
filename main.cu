@@ -1035,9 +1035,9 @@ int main(int argc, char *argv[])
         // 輸出初始 VTK (驗證重啟載入正確 + 使用修正後的 stride mapping)
         fileIO_velocity_vtk_merged(restart_step);
     }
-    // VTK step 為奇數 (step%1000==1), for-loop 須從偶數開始
-    // 以確保 step+=1 後 monitoring 在奇數步 (step%N==1) 正確觸發
-    int loop_start = (restart_step > 0) ? restart_step + 1 : 0;
+    // GTS 雙步進: loop_start 必須為偶數, 確保 step+=1 後在奇數步觸發 step%N==1
+    // (restart_step+1)&~1: 奇數→+1=偶數, 偶數→+1=奇數→&~1=偶數(重算被中斷的 even sub-step)
+    int loop_start = (restart_step > 0) ? ((restart_step + 1) & ~1) : 0;
 
 #if USE_TIMING
     Timing_Init(loop_start, g_restored_gpu_ms);

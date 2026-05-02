@@ -1094,8 +1094,6 @@ def build_ma_panel(ax, data):
     ma  = data['Ma_max']
 
     ax.plot(ftt, ma, color=COLOR_MA, lw=0.8, label=r'$Ma_{\max}$')
-    ax.axhline(0.3, color='0.5', ls='--', lw=0.5, alpha=0.6,
-               label=r'$Ma = 0.3$')
     ax.set_ylabel(r"$Ma_{\max}$")
     ax.grid(False)
 
@@ -1104,7 +1102,12 @@ def build_ma_panel(ax, data):
     if len(finite) > 0:
         ma_min = float(finite.min())
         ma_max = float(finite.max())
-        y_top = max(ma_max, 0.3)
+        if ma_max > 0.23:
+            ax.axhline(0.3, color='0.5', ls='--', lw=0.5, alpha=0.6,
+                       label=r'$Ma = 0.3$')
+            y_top = max(ma_max, 0.3)
+        else:
+            y_top = ma_max
         pad = max((y_top - ma_min) * 0.05, 0.005)
         ax.set_ylim(max(0.0, ma_min - pad), y_top + pad)
 

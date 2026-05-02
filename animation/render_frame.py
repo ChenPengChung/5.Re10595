@@ -504,11 +504,46 @@ def add_mean_streamlines(reader, ren, bounds):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# §3  讀取 VTK
+# §3  讀取 VTK (ASCII → Binary 自動轉換加速)
 # ═══════════════════════════════════════════════════════════════════
-log("Loading: " + VTK_FILE)
-reader = LegacyVTKReader(FileNames=[VTK_FILE])
+import time as _time
+
+def _convert_ascii_to_binary(ascii_path):
+    """ASCII VTK → Binary VTK, 回傳 binary 路徑。已存在且較新則跳過。"""
+    base, ext = os.path.splitext(ascii_path)
+    bin_path = base + "_bin" + ext  # e.g. velocity_merged_062001_bin.vtk
+    if os.path.isfile(bin_path) and os.path.getmtime(bin_path) >= os.path.getmtime(ascii_path):
+        log("Binary cache exists: %s" % bin_path)
+        return bin_path
+    log("Converting ASCII → Binary: %s" % os.path.basename(bin_path))
+    t0 = _time.time()
+    _r = LegacyVTKReader(FileNames=[ascii_path])
+    _r.UpdatePipeline()
+    _w = SaveData(bin_path, proxy=_r, FileType='Binary')
+    Delete(_r)
+    elapsed = _time.time() - t0
+    sz_mb = os.path.getsize(bin_path) / 1048576.0
+    log("Converted in %.1fs → %s (%.0f MB)" % (elapsed, os.path.basename(bin_path), sz_mb))
+    return bin_path
+
+# ── 判斷是否為 ASCII VTK, 若是則轉 binary 加速後續讀取 ──
+_use_file = VTK_FILE
+with open(VTK_FILE, 'r') as _fh:
+    for _ln, _line in enumerate(_fh):
+        _s = _line.strip().upper()
+        if _s == "ASCII":
+            _use_file = _convert_ascii_to_binary(VTK_FILE)
+            break
+        if _s == "BINARY":
+            break
+        if _ln >= 5:
+            break
+
+log("Loading: " + _use_file)
+t_load = _time.time()
+reader = LegacyVTKReader(FileNames=[_use_file])
 reader.UpdatePipeline()
+log("Loaded in %.1fs" % (_time.time() - t_load))
 
 bounds = reader.GetDataInformation().GetBounds()
 xmin, xmax = bounds[0], bounds[1]
