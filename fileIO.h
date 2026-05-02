@@ -1696,7 +1696,6 @@ void fileIO_velocity_vtk_merged(int step) {
             VTK_WRITE_SCALAR_SCALED("v_inst", w_global, inv_Uref)  // wall-normal = code w
             VTK_WRITE_SCALAR_SCALED("w_inst", u_global, inv_Uref)  // spanwise = code u
             #undef VTK_WRITE_SCALAR_SCALED
-            }}}
         }
 
         // [B] 瞬時渦度 (3 SCALARS): ERCOFTAC frame (omega_u=流向, omega_v=法向, omega_w=展向)
