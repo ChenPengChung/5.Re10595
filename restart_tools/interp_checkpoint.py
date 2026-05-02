@@ -7,16 +7,17 @@ Pipeline:
   2. Build old grid coordinates from variables and old Frohlich grid file
   3. Read 8 ranks x (19 f_q + 1 rho), stitch global, compute (rho, ux, uy, uz)
   4. Build new grid coordinates (new GAMMA, new dims)
-  5. Interpolate macros (rho, ux, uy, uz) old -> new in physical (x, y, z) space
+  5. Interpolate macros (rho, ux, uy, uz) old -> new in computational (j, k, i) space
   6. Fill new ghost zones (X periodic, Y periodic, Z constant copy from wall)
-  7. Reconstruct f_q^new = f_eq(rho, u, v, w) for q = 0..18
+  7. Interpolate non-equilibrium f_neq = f - f_eq and reconstruct
+     f_q^new = f_eq(rho, u, v, w) + scale * interp(f_neq_q) for q = 0..18
   8. Split into 16 ranks, write per-rank binary files + new metadata.dat
 
 Output written atomically: write to <new_dir>.WRITING/, then rename.
 
 Usage:
   python3 restart_tools/interp_checkpoint.py \\
-      --old-dir restart/step_12550001 \\
+      --old-dir restart/step_12550001_origin129 \\
       --new-dir restart/checkpoint/step_1
 """
 
@@ -246,6 +247,56 @@ def split_y(global_arr, cfg):
 
 
 # ---------------------------------------------------------------
+# 3D trilinear interpolation in computational coordinates
+# ---------------------------------------------------------------
+def _interp_axis_linear(arr, old_n, new_n, axis):
+    """Linearly interpolate arr along one computational axis."""
+    if old_n == new_n:
+        return arr.copy()
+
+    coord = np.arange(new_n, dtype=np.float64) * (old_n - 1.0) / (new_n - 1.0)
+    lo = np.floor(coord).astype(np.int64)
+    lo = np.clip(lo, 0, old_n - 2)
+    hi = lo + 1
+    w = coord - lo
+
+    a0 = np.take(arr, lo, axis=axis)
+    a1 = np.take(arr, hi, axis=axis)
+    shape = [1] * arr.ndim
+    shape[axis] = new_n
+    w = w.reshape(shape)
+    return (1.0 - w) * a0 + w * a1
+
+
+def interpolate_comp_3d(field_old, cfg_old, cfg_new):
+    """Interpolate physical nodes in computational (j, k, i) space.
+
+    The periodic-hill mesh is curvilinear: y(j,k) is not separable in j and k.
+    The previous physical-space shortcut used the bottom-wall y(j,k=BFR) to
+    bracket every wall-normal column, which misplaces data near the hill.
+    For this refinement restart we preserve topology and map old/new nodes by
+    normalized computational coordinates instead.
+    """
+    old_int = field_old[
+        BFR:BFR + cfg_old.NY,
+        BFR:BFR + cfg_old.NZ,
+        BFR:BFR + cfg_old.NX,
+    ]
+
+    tmp = _interp_axis_linear(old_int, cfg_old.NY, cfg_new.NY, axis=0)
+    tmp = _interp_axis_linear(tmp,     cfg_old.NZ, cfg_new.NZ, axis=1)
+    tmp = _interp_axis_linear(tmp,     cfg_old.NX, cfg_new.NX, axis=2)
+
+    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
+    field_new[
+        BFR:BFR + cfg_new.NY,
+        BFR:BFR + cfg_new.NZ,
+        BFR:BFR + cfg_new.NX,
+    ] = tmp
+    return field_new
+
+
+# ---------------------------------------------------------------
 # 3D structured bilinear interpolation: OLD -> NEW
 # ---------------------------------------------------------------
 def interpolate_3d(field_old, y2d_old, z2d_old, cfg_old, y2d_new, z2d_new, cfg_new):
@@ -403,12 +454,14 @@ def compute_minsize(cfg):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--old-dir', default='restart/step_12550001',
+    p.add_argument('--old-dir', default='restart/step_12550001_origin129',
                    help='old checkpoint directory (default: %(default)s)')
     p.add_argument('--new-dir', default='restart/checkpoint/step_1',
                    help='output checkpoint directory (default: %(default)s)')
     p.add_argument('--step', type=int, default=1,
                    help='new checkpoint step number written into metadata (default: 1)')
+    p.add_argument('--fneq-scale', type=float, default=1.0,
+                   help='scale factor applied to interpolated f_neq (default: %(default)s)')
     args = p.parse_args()
 
     t0 = time.time()
@@ -420,6 +473,12 @@ def main():
     print('NEW: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
     print()
+
+    writing_dir = args.new_dir + '.WRITING'
+    if os.path.exists(args.new_dir):
+        sys.exit('FATAL: {} already exists; refusing to overwrite'.format(args.new_dir))
+    if os.path.exists(writing_dir):
+        sys.exit('FATAL: {} already exists; remove it after verifying it is stale'.format(writing_dir))
 
     # ---- Step 1: parse old metadata ----
     print('[1/8] Reading old metadata: {}/metadata.dat'.format(args.old_dir))
@@ -450,7 +509,7 @@ def main():
         z_int.min(), z_int.max(), LZ))
 
     # ---- Step 3: read checkpoint, compute macros ----
-    print('[3/8] Reading {} f-files + rho ({} ranks x 19 directions)'.format(OLD.JP*19, OLD.JP))
+    print('[3/8] Reading {} f-files ({} ranks x 19 directions)'.format(OLD.JP*19, OLD.JP))
     rho_g = np.zeros((OLD.NY6, OLD.NZ6, OLD.NX6), dtype=np.float64)
     momx_g = np.zeros_like(rho_g)
     momy_g = np.zeros_like(rho_g)
@@ -486,6 +545,23 @@ def main():
         np.abs(uy_g[interior_slice]).max(),
         np.abs(uz_g[interior_slice]).max()))
 
+    # Cross-check stored rho against sum(f).  In a running LBM with mass
+    # correction (checkrho.dat), rho is adjusted independently of f each step,
+    # so rho_file != sum(f) by O(1e-4) is normal.  We use sum(f) as the
+    # authoritative rho for feq/fneq computation (it's self-consistent with f).
+    rho_file_g = stitch_y([
+        read_rank_bin(os.path.join(args.old_dir, 'rho_{}.bin'.format(r)), OLD)
+        for r in range(OLD.JP)
+    ], OLD)
+    rho_src_diff = float(np.max(np.abs(rho_file_g - rho_g)))
+    print('      OLD max |rho_file - sum(f)| = {:.3e}'.format(rho_src_diff))
+    if rho_src_diff > 1e-2:
+        sys.exit('FATAL: source checkpoint rho vs sum(f) diff {:.3e} > 1e-2 (data corruption?)'.format(rho_src_diff))
+    elif rho_src_diff > 1e-6:
+        print('      WARN: rho_file != sum(f) by {:.3e} (expected from LBM mass correction)'.format(rho_src_diff))
+        print('            Using sum(f) as authoritative rho for feq/fneq computation')
+    del rho_file_g
+
     # ---- Step 4: build NEW grid ----
     print('[4/8] Building NEW grid coordinates')
     _, y2d_new, z2d_new = build_grid_xyz(NEW)
@@ -495,22 +571,19 @@ def main():
     print('      Z interior range [{:.4f}, {:.4f}]'.format(z_int_new.min(), z_int_new.max()))
 
     # ---- Step 5: interpolate macros ----
-    print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid')
+    print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in computational space')
     t = time.time()
-    rho_new = interpolate_3d(rho_g, y2d_old, z2d_old, OLD, y2d_new, z2d_new, NEW)
+    rho_new = interpolate_comp_3d(rho_g, OLD, NEW)
     print('      rho:  {:.1f}s'.format(time.time() - t))
     t = time.time()
-    ux_new = interpolate_3d(ux_g, y2d_old, z2d_old, OLD, y2d_new, z2d_new, NEW)
+    ux_new = interpolate_comp_3d(ux_g, OLD, NEW)
     print('      ux:   {:.1f}s'.format(time.time() - t))
     t = time.time()
-    uy_new = interpolate_3d(uy_g, y2d_old, z2d_old, OLD, y2d_new, z2d_new, NEW)
+    uy_new = interpolate_comp_3d(uy_g, OLD, NEW)
     print('      uy:   {:.1f}s'.format(time.time() - t))
     t = time.time()
-    uz_new = interpolate_3d(uz_g, y2d_old, z2d_old, OLD, y2d_new, z2d_new, NEW)
+    uz_new = interpolate_comp_3d(uz_g, OLD, NEW)
     print('      uz:   {:.1f}s'.format(time.time() - t))
-
-    # Free old arrays before allocating more
-    del rho_g, ux_g, uy_g, uz_g
 
     print('      Filling ghost cells')
     fill_ghost(rho_new, NEW)
@@ -528,8 +601,7 @@ def main():
 
     # ---- Step 6 & 7: f_eq + per-rank write ----
     print('[6/8] Reconstructing f_eq and writing per-rank files')
-    writing_dir = args.new_dir + '.WRITING'
-    os.makedirs(writing_dir, exist_ok=True)
+    os.makedirs(writing_dir)
 
     # Write rho per rank
     rho_pr = split_y(rho_new, NEW)
@@ -537,14 +609,51 @@ def main():
         rho_pr[r].tofile(os.path.join(writing_dir, 'rho_{}.bin'.format(r)))
     print('      wrote rho_0..rho_{}.bin'.format(NEW.JP - 1))
 
-    # Per-q: build f_eq, split, write
+    # Per-q: interpolate f_neq, rebuild f = f_eq_new + scale*f_neq_new, split, write.
+    # This preserves the old checkpoint's viscous/non-equilibrium content while
+    # keeping the new-grid macroscopic field controlled by rho_new/u_new.
+    rho_check = np.zeros_like(rho_new)
+    min_f = float('inf')
+    max_f = -float('inf')
     for q in range(19):
+        per_rank = []
+        for r in range(OLD.JP):
+            path = os.path.join(args.old_dir, 'f{:02d}_{}.bin'.format(q, r))
+            per_rank.append(read_rank_bin(path, OLD))
+        f_old = stitch_y(per_rank, OLD)
+        feq_old = compute_feq_q(rho_g, ux_g, uy_g, uz_g, q)
+        fneq_old = f_old - feq_old
+        del f_old, feq_old, per_rank
+
+        fneq_new = interpolate_comp_3d(fneq_old, OLD, NEW)
+        del fneq_old
+        fill_ghost(fneq_new, NEW)
+
         feq = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
-        pr = split_y(feq, NEW)
+        f_new = feq + args.fneq_scale * fneq_new
+        del feq, fneq_new
+
+        rho_check += f_new
+        min_f = min(min_f, float(np.nanmin(f_new)))
+        max_f = max(max_f, float(np.nanmax(f_new)))
+
+        pr = split_y(f_new, NEW)
         for r in range(NEW.JP):
             pr[r].tofile(os.path.join(writing_dir, 'f{:02d}_{}.bin'.format(q, r)))
-        print('      wrote f{:02d}_0..f{:02d}_{}.bin'.format(q, q, NEW.JP - 1), flush=True)
-        del feq, pr
+        print('      wrote f{:02d}_0..f{:02d}_{} with f_neq scale {:.3f}'.format(
+            q, q, NEW.JP - 1, args.fneq_scale), flush=True)
+        del f_new, pr
+
+    rho_diff = float(np.max(np.abs(rho_check - rho_new)))
+    print('      f range after reconstruction = [{:.15e}, {:.15e}]'.format(min_f, max_f))
+    print('      max |sum(f_new)-rho_new| = {:.3e}'.format(rho_diff))
+    if not np.isfinite(min_f) or not np.isfinite(max_f) or min_f <= 0.0:
+        sys.exit('FATAL: reconstructed f contains non-finite or non-positive values')
+    if rho_diff > 1e-10:
+        sys.exit('FATAL: reconstructed f is not conservative enough: max |sum(f)-rho| = {:.3e}'.format(rho_diff))
+
+    # Free old arrays after f_neq reconstruction is complete.
+    del rho_g, ux_g, uy_g, uz_g, rho_check
 
     # ---- Step 8: metadata + atomic rename ----
     print('[7/8] Writing new metadata.dat')
@@ -584,8 +693,6 @@ def main():
     print('      (naive minSize for reference: {:.6e}; runtime Imamura dt typically ~0.4-0.5x of this)'.format(naive_minsize))
 
     print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, args.new_dir))
-    if os.path.exists(args.new_dir):
-        sys.exit('FATAL: {} already exists; refusing to overwrite'.format(args.new_dir))
     os.rename(writing_dir, args.new_dir)
 
     elapsed = time.time() - t0

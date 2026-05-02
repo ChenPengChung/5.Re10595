@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=Re10595_257
+#SBATCH --job-name=Edit2_restart
 #SBATCH --account=MST114348
 #SBATCH --partition=dev
-#SBATCH --nodes=1
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
@@ -22,12 +22,12 @@
 # jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
-#   (1) partition/nodes/gres — dev / 1 node / 8 GPU  (GB200: gb200-dev / 2 / 4)
+#   (1) partition/nodes/gres — dev / 2 nodes / 8 GPU  (GB200: gb200-dev / 4 / 4)
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
 #                              (GB200: /usr/local/cuda-13.0 on compute node)
-#   (4) mpirun 對映          — -np 8 --map-by ppr:8:node (1 node 8 GPU)
-#                              (GB200: -np 8 --map-by ppr:4:node on 2 nodes)
+#   (4) mpirun 對映          — -np 16 --map-by ppr:8:node (2 nodes 8 GPU)
+#                              (GB200: -np 16 --map-by ppr:4:node on 4 nodes)
 #   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
 #
 # 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.
@@ -246,7 +246,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-8}
+NP=${SLURM_NTASKS:-16}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -509,9 +509,9 @@ START_TS=$(date +%s)
 #   僅用 -mca orte_forward_job_control 1 (OMPI 4.x ORTE 相容旗標) 就足以轉發 SIGUSR1/SIGTERM.
 #   若未來 cluster 升級到 OMPI 5.x+, 可加回: --forward-signals SIGUSR1,SIGTERM
 MPIRUN_SIG_FLAGS="-mca orte_forward_job_control 1"
-# [H200] 單節點 8 GPU: -np 8 --map-by ppr:8:node
+# [H200] 雙節點 16 GPU: -np 16 --map-by ppr:8:node
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 8 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np 16 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS
 RC=$?
 END_TS=$(date +%s)
@@ -565,11 +565,31 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
     FF=$((FF + 1))
     echo "$FF" > restart/fast_fail_count
     if [ "$FF" -ge 5 ]; then
-        log "FAST-FAIL GUARD: 連續 $FF 次 fast-fail. Chain 暫停等人檢查."
-        log "   若 NCHC 都說節點健康 (SKIPPED_HEALTHY>0), 八成是本地程式 bug"
-        log "   恢復: rm restart/fast_fail_count; ./run --h200"
-        touch restart/STOP_CHAIN
-        exit 1
+        # ─────────────────────────────────────────────────────────────────
+        # [POLICY-D1] partition-level cooldown (取代 global STOP_CHAIN)
+        # 設計: 連續 5 次 fast-fail 代表「此 partition 暫時不可用」(MPI 環境
+        # 問題 / GPU lib 不對等), 不該停整個 chain. 改成標記該 partition 冷卻
+        # TTL 內 dispatcher 跳過它, 改投其他 partition.
+        # ─────────────────────────────────────────────────────────────────
+        PART_NAME="${SLURM_JOB_PARTITION:-unknown}"
+        COOLDOWN_TTL="${COOLDOWN_TTL_SEC:-3600}"
+        COOLDOWN_FILE="restart/cooldown_${PART_NAME}.sentinel"
+        log "FAST-FAIL GUARD: partition=$PART_NAME 連續 $FF 次 fast-fail (10s 內死)."
+        log "   標記 partition 進冷卻 TTL=${COOLDOWN_TTL}s, dispatcher 將自動跳到他 partition."
+        log "   恢復方式: rm $COOLDOWN_FILE  (或等 TTL 過)"
+        {
+            echo "partition=$PART_NAME"
+            echo "trigger_jobid=$SLURM_JOB_ID"
+            echo "trigger_at=$(date -Iseconds)"
+            echo "trigger_at_epoch=$(date +%s)"
+            echo "fast_fail_count=$FF"
+            echo "ttl_sec=$COOLDOWN_TTL"
+            echo "last_rc=$RC"
+        } > "$COOLDOWN_FILE"
+        rm -f restart/fast_fail_count   # 重置計數, 給其他 partition 重新計
+        log "   COOLDOWN sentinel 已建: $COOLDOWN_FILE"
+        log "   exit 16 (transient) - dispatcher 接手投其他 partition"
+        exit 16   # 不是 STOP_CHAIN, 不是 unavoidable 42, 是 transient 讓 chain 繼續
     fi
 else
     rm -f restart/fast_fail_count
