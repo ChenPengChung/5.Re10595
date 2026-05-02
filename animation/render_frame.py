@@ -528,15 +528,16 @@ def _convert_ascii_to_binary(ascii_path):
 
 # ── 判斷是否為 ASCII VTK, 若是則轉 binary 加速後續讀取 ──
 _use_file = VTK_FILE
-with open(VTK_FILE, 'r') as _fh:
-    for _ln, _line in enumerate(_fh):
-        _s = _line.strip().upper()
-        if _s == "ASCII":
+with open(VTK_FILE, 'rb') as _fh:
+    for _ln in range(6):
+        _raw = _fh.readline()
+        if not _raw:
+            break
+        _s = _raw.strip().upper()
+        if _s == b"ASCII":
             _use_file = _convert_ascii_to_binary(VTK_FILE)
             break
-        if _s == "BINARY":
-            break
-        if _ln >= 5:
+        if _s == b"BINARY":
             break
 
 log("Loading: " + _use_file)
