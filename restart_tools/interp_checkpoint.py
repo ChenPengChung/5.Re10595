@@ -1,24 +1,44 @@
 #!/usr/bin/env python3
 """
-LBM checkpoint interpolation: 129x257x129 (jp=8, GAMMA=2.0) -> 257x513x257 (jp=16, GAMMA=3.0)
+LBM checkpoint interpolation with dual-mode configuration.
+
+Modes:
+  Project mode:    auto-reads NX/NY/NZ/jp/GAMMA/ALPHA from variables.h
+  Standalone mode: interactive prompts when variables.h is not found
 
 Pipeline:
-  1. Parse old metadata (Force, etc.)
-  2. Build old grid coordinates from variables and old Frohlich grid file
-  3. Read 8 ranks x (19 f_q + 1 rho), stitch global, compute (rho, ux, uy, uz)
-  4. Build new grid coordinates (new GAMMA, new dims)
-  5. Interpolate macros (rho, ux, uy, uz) old -> new in computational (j, k, i) space
-  6. Fill new ghost zones (X periodic, Y periodic, Z constant copy from wall)
-  7. Interpolate non-equilibrium f_neq = f - f_eq and reconstruct
-     f_q^new = f_eq(rho, u, v, w) + scale * interp(f_neq_q) for q = 0..18
-  8. Split into 16 ranks, write per-rank binary files + new metadata.dat
+  1. Build OLD/NEW grid configs (auto-detect from metadata + variables.h, or interactive)
+  2. Cross-validate grid .dat headers against NX/NY/NZ
+  3. Read old checkpoint, compute macros (rho, ux, uy, uz)
+  4. Interpolate macros old -> new in computational (j, k, i) space
+  5. Reconstruct f_q = f_eq(new) + scale * interp(f_neq_old) for q = 0..18
+  6. Split into new ranks, write per-rank binary files + metadata.dat
 
 Output written atomically: write to <new_dir>.WRITING/, then rename.
 
 Usage:
-  python3 restart_tools/interp_checkpoint.py \\
-      --old-dir restart/step_12550001_origin129 \\
-      --new-dir restart/checkpoint/step_1
+  # Project mode (inside project, variables.h auto-detected):
+  python3 restart_tools/interp_checkpoint.py --old-dir restart/step_12550001_origin129
+
+  # Standalone mode (interactive prompts for grid params):
+  python3 interp_checkpoint.py --old-dir ./old_checkpoint --new-dir ./new_checkpoint
+
+  # CLI override (skip prompts):
+  python3 interp_checkpoint.py --old-dir ./old_ckpt \\
+      --old-gamma 2.0 --old-grid-dat old_grid.dat \\
+      --new-nx 257 --new-ny 513 --new-nz 257 --new-jp 16 \\
+      --new-gamma 3.0 --new-grid-dat new_grid.dat
+
+Standalone folder structure:
+  workspace/
+  +-- interp_checkpoint.py
+  +-- J_Frohlich/                    (or any directory)
+  |   +-- old_grid_I{NY}_J{NZ}_g{G}_a{A}.dat
+  |   +-- new_grid_I{NY}_J{NZ}_g{G}_a{A}.dat
+  +-- old_checkpoint/                (source checkpoint)
+      +-- metadata.dat
+      +-- f00_0.bin ... f18_{jp-1}.bin
+      +-- rho_0.bin ... rho_{jp-1}.bin
 """
 
 import os
@@ -56,16 +76,311 @@ class GridConfig:
         self.CHUNK = self.NYD6 - 7  # = (NY-1)/jp
 
 
-OLD = GridConfig(
-    nx=129, ny=257, nz=129, jp=8,
-    gamma=2.0, alpha=0.5,
-    grid_dat='J_Frohlich/adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat',
-)
-NEW = GridConfig(
-    nx=257, ny=513, nz=257, jp=16,
-    gamma=3.0, alpha=0.5,
-    grid_dat='J_Frohlich/adaptive_3.fine grid_I513_J257_g3.0_a0.5.dat',
-)
+OLD = None  # set dynamically in main()
+NEW = None
+
+# ---------------------------------------------------------------
+# Configuration helpers (dual-mode: project / standalone)
+# ---------------------------------------------------------------
+def parse_variables_h(path):
+    """Parse #define NX/NY/NZ/jp/GAMMA/ALPHA/LX/LY/LZ/H_HILL from variables.h."""
+    targets = {'NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'LX', 'LY', 'LZ', 'H_HILL'}
+    int_keys = {'NX', 'NY', 'NZ', 'jp'}
+    defines = {}
+    with open(path) as f:
+        for line in f:
+            stripped = line.strip()
+            if not stripped.startswith('#define'):
+                continue
+            parts = stripped.split(None, 2)
+            if len(parts) < 3:
+                continue
+            key = parts[1]
+            if key not in targets:
+                continue
+            val_str = parts[2].split('//')[0].strip().strip('()')
+            try:
+                defines[key] = int(val_str) if key in int_keys else float(val_str)
+            except ValueError:
+                pass
+    return defines
+
+
+def parse_grid_dat_header(path):
+    """Extract I=, J= from Tecplot .dat file header for cross-validation."""
+    dims = {}
+    with open(path) as f:
+        for line in f:
+            for token in line.replace(',', ' ').split():
+                if token.startswith('I='):
+                    try:
+                        dims['I'] = int(token[2:])
+                    except ValueError:
+                        pass
+                elif token.startswith('J='):
+                    try:
+                        dims['J'] = int(token[2:])
+                    except ValueError:
+                        pass
+            if 'I' in dims and 'J' in dims:
+                break
+    return dims
+
+
+def find_variables_h():
+    """Search for variables.h in standard project locations."""
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        'variables.h',
+        '../variables.h',
+        os.path.join(script_dir, '..', 'variables.h'),
+    ]
+    seen = set()
+    for c in candidates:
+        p = os.path.abspath(c)
+        if p not in seen and os.path.isfile(p):
+            return p
+        seen.add(p)
+    return None
+
+
+def auto_detect_from_metadata(meta_path):
+    """Extract NX/NY/NZ/JP from checkpoint metadata.dat grid_dims field."""
+    meta = parse_metadata(meta_path)
+    jp = int(meta.get('mpi_rank_count', 0))
+    grid_dims = meta.get('grid_dims', '')
+    parts = grid_dims.split(',')
+    if len(parts) != 3 or jp == 0:
+        return None
+    nx6, nyd6, nz6 = int(parts[0]), int(parts[1]), int(parts[2])
+    nx = nx6 - 6
+    nz = nz6 - 6
+    chunk = nyd6 - 7  # = (NY-1)/jp
+    ny = chunk * jp + 1
+    return {'NX': nx, 'NY': ny, 'NZ': nz, 'jp': jp}
+
+
+def _grid_dat_search_dirs():
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    return [
+        'J_Frohlich',
+        os.path.join(script_dir, '..', 'J_Frohlich'),
+        '../J_Frohlich',
+        '.',
+    ]
+
+
+def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
+    """Try to find grid .dat file by naming convention I{NY}_J{NZ}_g{G}_a{A}."""
+    if search_dirs is None:
+        search_dirs = _grid_dat_search_dirs()
+    candidates = set()
+    for fmt in (str, lambda x: '{:g}'.format(x)):
+        g_str = fmt(gamma)
+        a_str = fmt(alpha)
+        candidates.add('I{}_J{}_g{}_a{}'.format(ny, nz, g_str, a_str))
+    for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
+        for fname in os.listdir(d):
+            if not fname.endswith('.dat'):
+                continue
+            for pat in candidates:
+                if pat in fname:
+                    return os.path.join(d, fname)
+    return None
+
+
+def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
+    """Find grid .dat by I{NY}_J{NZ} pattern only; extract gamma/alpha from filename."""
+    import re
+    if search_dirs is None:
+        search_dirs = _grid_dat_search_dirs()
+    pattern = 'I{}_J{}'.format(ny, nz)
+    ga_re = re.compile(r'_g([\d.]+)_a([\d.]+)\.dat$')
+    for d in search_dirs:
+        if not os.path.isdir(d):
+            continue
+        for fname in os.listdir(d):
+            if not fname.endswith('.dat'):
+                continue
+            if pattern in fname:
+                path = os.path.join(d, fname)
+                m = ga_re.search(fname)
+                gamma = float(m.group(1)) if m else None
+                alpha = float(m.group(2)) if m else None
+                return path, gamma, alpha
+    return None, None, None
+
+
+def ask_value(prompt_text, cast_fn=str, default=None):
+    """Interactive prompt with optional default value."""
+    if default is not None:
+        full = '{} [{}]: '.format(prompt_text, default)
+    else:
+        full = '{}: '.format(prompt_text)
+    while True:
+        val = input(full).strip()
+        if not val and default is not None:
+            return default
+        if not val:
+            print('  (必須輸入值 / value required)')
+            continue
+        try:
+            return cast_fn(val)
+        except (ValueError, TypeError):
+            print('  (格式錯誤, 請重新輸入 / invalid format)')
+
+
+def cross_validate_grid_dat(cfg, label):
+    """Validate grid .dat header I,J match cfg.NY (流向), cfg.NZ (法向)."""
+    if not os.path.exists(cfg.GRID_DAT):
+        print('  WARNING: {} grid .dat not found: {}'.format(label, cfg.GRID_DAT))
+        return False
+    dims = parse_grid_dat_header(cfg.GRID_DAT)
+    ok = True
+    if 'I' in dims and dims['I'] != cfg.NY:
+        print('  FATAL: {} grid .dat I={} != NY={}'.format(label, dims['I'], cfg.NY))
+        ok = False
+    if 'J' in dims and dims['J'] != cfg.NZ:
+        print('  FATAL: {} grid .dat J={} != NZ={}'.format(label, dims['J'], cfg.NZ))
+        ok = False
+    if ok and 'I' in dims:
+        print('  OK: {} grid .dat validated: I={}=NY, J={}=NZ'.format(
+            label, dims['I'], dims['J']))
+    return ok
+
+
+def build_old_config(args):
+    """Build OLD GridConfig from metadata auto-detection + CLI args / interactive."""
+    print('--- Configuring OLD grid ---')
+
+    meta_path = os.path.join(args.old_dir, 'metadata.dat')
+    detected = None
+    if os.path.exists(meta_path):
+        detected = auto_detect_from_metadata(meta_path)
+        if detected:
+            print('  Auto-detected from metadata: NX={} NY={} NZ={} jp={}'.format(
+                detected['NX'], detected['NY'], detected['NZ'], detected['jp']))
+
+    nx = args.old_nx or (detected and detected['NX']) or None
+    ny = args.old_ny or (detected and detected['NY']) or None
+    nz = args.old_nz or (detected and detected['NZ']) or None
+    jp = args.old_jp or (detected and detected['jp']) or None
+    gamma = args.old_gamma
+    alpha = args.old_alpha
+    grid_dat = args.old_grid_dat
+
+    if any(v is None for v in (nx, ny, nz, jp)):
+        print('  (metadata auto-detect incomplete — entering interactive mode)')
+    if nx is None:
+        nx = ask_value('  OLD NX (展向格點 / spanwise nodes)', int)
+    if ny is None:
+        ny = ask_value('  OLD NY (流向格點 / streamwise nodes)', int)
+    if nz is None:
+        nz = ask_value('  OLD NZ (法向格點 / wall-normal nodes)', int)
+    if jp is None:
+        jp = ask_value('  OLD jp (GPU/rank count)', int)
+
+    if grid_dat is None and ny is not None and nz is not None:
+        if gamma is not None and alpha is not None:
+            grid_dat = try_find_grid_dat(ny, nz, gamma, alpha)
+        if grid_dat is None:
+            dat_path, dat_gamma, dat_alpha = try_find_grid_dat_by_dims(ny, nz)
+            if dat_path:
+                grid_dat = dat_path
+                if gamma is None and dat_gamma is not None:
+                    gamma = dat_gamma
+                if alpha is None and dat_alpha is not None:
+                    alpha = dat_alpha
+                print('  Auto-found OLD grid .dat: {} (GAMMA={}, ALPHA={})'.format(
+                    grid_dat, gamma, alpha))
+
+    if gamma is None:
+        gamma = ask_value('  OLD GAMMA (tanh stretching param)', float, 2.0)
+    if alpha is None:
+        alpha = ask_value('  OLD ALPHA (stretching center)', float, 0.5)
+
+    if grid_dat is None:
+        grid_dat = try_find_grid_dat(ny, nz, gamma, alpha)
+        if grid_dat:
+            print('  Auto-found OLD grid .dat: {}'.format(grid_dat))
+        else:
+            grid_dat = ask_value('  OLD grid .dat 路徑 (path to Tecplot grid file)', str)
+
+    cfg = GridConfig(nx=nx, ny=ny, nz=nz, jp=jp,
+                     gamma=gamma, alpha=alpha, grid_dat=grid_dat)
+    if not cross_validate_grid_dat(cfg, 'OLD'):
+        sys.exit('FATAL: OLD grid .dat cross-validation failed')
+    print()
+    return cfg
+
+
+def build_new_config(args):
+    """Build NEW GridConfig from variables.h (project mode) or interactive prompts."""
+    print('--- Configuring NEW grid ---')
+
+    vh_path = args.variables_h or find_variables_h()
+    vh_defs = {}
+    if vh_path and os.path.isfile(vh_path):
+        vh_defs = parse_variables_h(vh_path)
+        if vh_defs:
+            print('  Project mode: reading from {}'.format(vh_path))
+            for k in ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'):
+                if k in vh_defs:
+                    print('    {} = {}'.format(k, vh_defs[k]))
+            global LX, LY, LZ, H_HILL
+            if 'LX' in vh_defs:
+                LX = vh_defs['LX']
+            if 'LY' in vh_defs:
+                LY = vh_defs['LY']
+            if 'LZ' in vh_defs:
+                LZ = vh_defs['LZ']
+            if 'H_HILL' in vh_defs:
+                H_HILL = vh_defs['H_HILL']
+    else:
+        print('  Standalone mode: variables.h not found')
+        print('  Enter NEW grid parameters interactively.')
+
+    nx = args.new_nx or vh_defs.get('NX')
+    ny = args.new_ny or vh_defs.get('NY')
+    nz = args.new_nz or vh_defs.get('NZ')
+    jp = args.new_jp or vh_defs.get('jp')
+    gamma = args.new_gamma or vh_defs.get('GAMMA')
+    alpha = args.new_alpha or vh_defs.get('ALPHA')
+    grid_dat = args.new_grid_dat
+
+    if nx is None:
+        nx = ask_value('  NEW NX (展向格點 / spanwise nodes)', int)
+    if ny is None:
+        ny = ask_value('  NEW NY (流向格點 / streamwise nodes)', int)
+    if nz is None:
+        nz = ask_value('  NEW NZ (法向格點 / wall-normal nodes)', int)
+    if jp is None:
+        jp = ask_value('  NEW jp (GPU/rank count)', int)
+    if gamma is None:
+        gamma = ask_value('  NEW GAMMA (tanh stretching param)', float)
+    if alpha is None:
+        alpha = ask_value('  NEW ALPHA (stretching center)', float, 0.5)
+
+    if (ny - 1) % jp != 0:
+        sys.exit('FATAL: (NY-1)={} 不能被 jp={} 整除 — 無法平均分割 MPI 子域'.format(
+            ny - 1, jp))
+
+    if grid_dat is None:
+        grid_dat = try_find_grid_dat(ny, nz, gamma, alpha)
+        if grid_dat:
+            print('  Auto-found NEW grid .dat: {}'.format(grid_dat))
+        else:
+            grid_dat = ask_value('  NEW grid .dat 路徑 (path to Tecplot grid file)', str)
+
+    cfg = GridConfig(nx=nx, ny=ny, nz=nz, jp=jp,
+                     gamma=gamma, alpha=alpha, grid_dat=grid_dat)
+    if not cross_validate_grid_dat(cfg, 'NEW'):
+        sys.exit('FATAL: NEW grid .dat cross-validation failed')
+    print()
+    return cfg
+
 
 # ---------------------------------------------------------------
 # D3Q19 lattice (initialization.h:7-12)
@@ -462,16 +777,61 @@ def main():
                    help='new checkpoint step number written into metadata (default: 1)')
     p.add_argument('--fneq-scale', type=float, default=1.0,
                    help='scale factor applied to interpolated f_neq (default: %(default)s)')
+
+    g_old = p.add_argument_group('OLD grid (auto-detected from metadata when possible)')
+    g_old.add_argument('--old-nx', type=int, default=None)
+    g_old.add_argument('--old-ny', type=int, default=None)
+    g_old.add_argument('--old-nz', type=int, default=None)
+    g_old.add_argument('--old-jp', type=int, default=None)
+    g_old.add_argument('--old-gamma', type=float, default=None)
+    g_old.add_argument('--old-alpha', type=float, default=None)
+    g_old.add_argument('--old-grid-dat', default=None,
+                       help='path to old Tecplot grid .dat file')
+
+    g_new = p.add_argument_group('NEW grid (auto-read from variables.h in project mode)')
+    g_new.add_argument('--new-nx', type=int, default=None)
+    g_new.add_argument('--new-ny', type=int, default=None)
+    g_new.add_argument('--new-nz', type=int, default=None)
+    g_new.add_argument('--new-jp', type=int, default=None)
+    g_new.add_argument('--new-gamma', type=float, default=None)
+    g_new.add_argument('--new-alpha', type=float, default=None)
+    g_new.add_argument('--new-grid-dat', default=None,
+                       help='path to new Tecplot grid .dat file')
+    g_new.add_argument('--variables-h', default=None,
+                       help='path to variables.h (auto-detected if not specified)')
+
+    g_dom = p.add_argument_group('Domain constants (defaults: Frohlich periodic hill)')
+    g_dom.add_argument('--lx', type=float, default=None, help='spanwise length (4.5)')
+    g_dom.add_argument('--ly', type=float, default=None, help='streamwise length (9.0)')
+    g_dom.add_argument('--lz', type=float, default=None, help='wall-normal length (3.036)')
+    g_dom.add_argument('--h-hill', type=float, default=None, help='hill height (1.0)')
+
     args = p.parse_args()
+
+    global OLD, NEW, LX, LY, LZ, H_HILL
+    if args.lx is not None:
+        LX = args.lx
+    if args.ly is not None:
+        LY = args.ly
+    if args.lz is not None:
+        LZ = args.lz
+    if args.h_hill is not None:
+        H_HILL = args.h_hill
+
+    print()
+    OLD = build_old_config(args)
+    NEW = build_new_config(args)
 
     t0 = time.time()
     print('=' * 72)
-    print('LBM checkpoint interpolator: 129x257x129 (jp=8) -> 257x513x257 (jp=16)')
+    print('LBM checkpoint interpolator: {}x{}x{} (jp={}) -> {}x{}x{} (jp={})'.format(
+        OLD.NX, OLD.NY, OLD.NZ, OLD.JP, NEW.NX, NEW.NY, NEW.NZ, NEW.JP))
     print('=' * 72)
     print('OLD: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         OLD.NX, OLD.NY, OLD.NZ, OLD.JP, OLD.GAMMA, OLD.GRID_DAT))
     print('NEW: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
+    print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
     print()
 
     writing_dir = args.new_dir + '.WRITING'
