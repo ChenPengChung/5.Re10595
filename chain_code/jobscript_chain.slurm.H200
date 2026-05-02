@@ -529,6 +529,8 @@ if [ "$RC" -eq 42 ]; then
     log "RC=42 [POLICY-C1] UNAVOIDABLE ERROR -> chain stops (by policy)."
     log "          觸發來源通常是: 無效 argv / grid mismatch / restart 損毀 / init tripwire."
     log "          請查 slurm_${SLURM_JOB_ID}.err 的 [FATAL][POLICY-*] 訊息."
+    touch restart/STOP_CHAIN
+    log "          touch restart/STOP_CHAIN  (RC=42 物化停鏈意圖, 防 dispatcher 無限重投)"
     exit 0
 fi
 

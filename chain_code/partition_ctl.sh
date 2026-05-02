@@ -68,6 +68,9 @@ case "${1:-list}" in
         echo "$part" > "$GB200_PARTITION_FILE"
         echo "已設定: partition=$part  walltime=$wt"
         echo "下次投遞/chain 續投時生效 (sbatch --partition=$part --time=$wt)"
+        if [ -f DISPATCHER_ACTIVE ]; then
+            echo "注意: dispatcher 運行中, 它會用 ETA-compare 自動選 partition, 此設定僅在 dispatcher 停止後生效"
+        fi
         ;;
     reset|clear)
         if [ -f "$GB200_PARTITION_FILE" ]; then
@@ -87,6 +90,9 @@ case "${1:-list}" in
             echo "$1" > "$GB200_PARTITION_FILE"
             echo "已設定: partition=$1  walltime=$wt"
             echo "下次投遞/chain 續投時生效 (sbatch --partition=$1 --time=$wt)"
+            if [ -f DISPATCHER_ACTIVE ]; then
+                echo "注意: dispatcher 運行中, 它會用 ETA-compare 自動選 partition, 此設定僅在 dispatcher 停止後生效"
+            fi
         else
             echo "[ERROR] 不認識的子命令或 partition: $1"
             echo ""

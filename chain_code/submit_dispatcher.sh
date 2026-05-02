@@ -56,6 +56,11 @@ else
     exit 1
 fi
 
+# [PARTITION-LIB] partition walltime 映射 (submit_round 需要 --time= 對應 partition max)
+if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+    . "$CHAIN_DIR/tools/partition_lib.sh"
+fi
+
 # ─────────────────────────────────────────────────────────────────────────
 # 可調參數
 # ─────────────────────────────────────────────────────────────────────────
@@ -324,10 +329,16 @@ pick_cluster() {
 _pick_cluster_eta_epoch() {
     local js="$1" part="${2:-}" out eta_str
     command -v sbatch >/dev/null 2>&1 || { echo -1; return; }
+    # [WALLTIME-FIX] --test-only 也帶 --time= 讓 SLURM backfill 用正確 walltime 排程
+    local wt="" time_arg=""
+    if [ -n "$part" ] && type gb200_partition_walltime >/dev/null 2>&1; then
+        wt="$(gb200_partition_walltime "$part")"
+    fi
+    [ -n "$wt" ] && time_arg="--time=$wt"
     if [ -n "$part" ]; then
-        out="$(sbatch --test-only --partition="$part" "$js" 2>&1 || true)"
+        out="$(sbatch --test-only --partition="$part" $time_arg "$js" 2>&1 || true)"
     else
-        out="$(sbatch --test-only "$js" 2>&1 || true)"
+        out="$(sbatch --test-only $time_arg "$js" 2>&1 || true)"
     fi
     if   echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
         eta_str="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -n1)"
@@ -438,9 +449,19 @@ submit_round() {
     [ -n "$ex_list" ] && exclude_arg="--exclude=$ex_list"
     log "▷ effective exclude (partition=$part): ${ex_list:-(empty)}"
 
-    log "▷ sbatch --parsable --partition=$part $exclude_arg $jobscript"
+    # [WALLTIME-FIX] partition-specific walltime (partition_lib for GB200; jobscript fallback)
+    local wt="" time_arg=""
+    if type gb200_partition_walltime >/dev/null 2>&1; then
+        wt="$(gb200_partition_walltime "$part")"
+    fi
+    if [ -z "$wt" ]; then
+        wt="$(awk -F= '/^#SBATCH[[:space:]]+--time=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$jobscript" 2>/dev/null)"
+    fi
+    [ -n "$wt" ] && time_arg="--time=$wt"
+
+    log "▷ sbatch --parsable --partition=$part $time_arg $exclude_arg $jobscript"
     local next_id
-    next_id="$(sbatch --parsable --partition="$part" $exclude_arg "$jobscript" 2>&1)"
+    next_id="$(sbatch --parsable --partition="$part" $time_arg $exclude_arg "$jobscript" 2>&1)"
     local rc=$?
 
     if [ $rc -eq 0 ] && [[ "$next_id" =~ ^[0-9]+$ ]]; then
