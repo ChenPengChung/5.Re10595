@@ -21,3 +21,27 @@ When the user types **`claude commit`**, execute the following:
 - Remote: origin (GitHub)
 - Language: commit messages should be in Traditional Chinese (繁體中文)
 - This is a CFD (Computational Fluid Dynamics) LBM simulation project running on HPC clusters (H200/GB200).
+
+## SLURM Job Safety (MANDATORY)
+
+This user runs multiple simulation projects on the same HPC cluster.
+**Every project has its own jobs. Never touch another project's jobs.**
+
+### Absolute prohibitions
+
+1. **NEVER run bare `scancel <jobid>`** — always use `./run job-guard scancel <jobid>` which verifies the job belongs to this project before cancelling.
+2. **NEVER run `scontrol update/hold/release/requeue/suspend/resume`** on any job.
+3. **NEVER infer a jobid from `squeue` output and cancel it** — a job visible in `squeue` may belong to a different project.
+4. **NEVER run `scancel -u $USER`** or any batch-cancel command — this would kill ALL of the user's jobs across all projects.
+
+### Allowed SLURM operations
+
+- `squeue` / `sinfo` / `sacct` — read-only queries, always safe
+- `scontrol show` / `scontrol listpids` — read-only, safe
+- `./run job-guard scancel <jobid>` — project-verified cancel, safe
+- `./run job-guard stop-chain` — creates STOP_CHAIN sentinel for this project only
+- `sbatch` via `./run` or `./run build` — project submission workflow
+
+### Enforcement
+
+A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically blocks bare `scancel` and modifying `scontrol` commands. If the hook blocks you, do NOT attempt to bypass it.

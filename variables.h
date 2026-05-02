@@ -345,19 +345,19 @@
       此「軸 code、純量 paper」混合是有意設計, 避免重新跑模擬.
     - W_mean 目前在 fileIO.h L1700-1717 未實作; Level 1 標記僅為設計意圖.
     - 過去 fileIO.h 曾以 W_mean 寫法向 (舊版), 已遷移為 V_mean (新版).
-      Re*/MRT*/plot_yplus_vs_xH.py 仍讀 W_mean, 在新 VTK 上會 KeyError.
+      Re-dir/MRT-dir/plot_yplus_vs_xH.py still reads W_mean, will KeyError on new VTK.
 
 鬆弛時間 (GTS):
   omega_global = 3*niu/dt_global + 0.5   (__constant__ GILBM_omega_global)
   s_visc       = 1/omega_global           (__constant__ GILBM_s_visc_global)
-  dt_global    = CFL × min(1/|ẽ^η|, 1/|ẽ^ξ|, 1/|ẽ^ζ|)  (__constant__ GILBM_dt)
+  dt_global    = CFL * min(1/|e^eta|, 1/|e^xi|, 1/|e^zeta|)  (__constant__ GILBM_dt)
 
-已移除項目 (Edit9 → Edit11):
-  KERNEL_ALG      — 固定為 Algorithm1, 已刪除 Algorithm2/3
-  USE_LTS         — 固定為 GTS, 已刪除 LTS 路徑
-  USE_TWO_PASS    — Algorithm2/3 專用, 已刪除
-  USE_ALG3_FUSED  — Algorithm3 專用, 已刪除
-  dt_local_d      — LTS 陣列, 已由 __constant__ dt_global 取代
-  omega_local_d   — LTS 陣列, 已由 __constant__ omega_global 取代
-  omegadt_local_d — LTS 陣列, 已刪除 (可由 omega*dt 即時計算)
+Removed items (Edit9 -> Edit11):
+  KERNEL_ALG      - Algorithm1 only, removed Algorithm2/3
+  USE_LTS         - GTS only, removed LTS path
+  USE_TWO_PASS    - Algorithm2/3 only, removed
+  USE_ALG3_FUSED  - Algorithm3 only, removed
+  dt_local_d      - LTS array, replaced by __constant__ dt_global
+  omega_local_d   - LTS array, replaced by __constant__ omega_global
+  omegadt_local_d - LTS array, removed (omega*dt computed on the fly)
 */

@@ -20,6 +20,11 @@
 #   ./run dispatcher stop --kill-now   立刻 kill
 #   ./run dispatcher status      看 daemon 狀態
 #
+#   ./run job-guard list         列出本專案記錄的 job id
+#   ./run job-guard check <id>   驗證 job id 是否屬於本專案
+#   ./run job-guard scancel <id> 只允許取消本專案 job
+#   ./run job-guard stop-chain   僅對本專案建立 restart/STOP_CHAIN
+#
 #   ./run build H200             編譯 H200 版 a.out + 投遞
 #   ./run build GB200            編譯 GB200 版 a.out + 投遞
 #   ./run build H200 --build-only    只編譯不投
@@ -79,6 +84,10 @@ EOF
                 echo "       請用: start | stop | status" >&2
                 exit 2 ;;
         esac
+        ;;
+    job-guard)
+        shift
+        exec bash "$CHAIN_DIR/tools/project_job_guard.sh" "$@"
         ;;
     build)
         shift

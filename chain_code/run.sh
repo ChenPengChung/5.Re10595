@@ -273,7 +273,8 @@ if [ -d "${HEAD_LOCK_DIR:-restart/HEAD.lockdir}" ]; then
                 PENDING|RUNNING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
                     echo "[run.sh] ⚠ HEAD.lockdir 被 jobid=$HEAD_JID ($HEAD_STATE, squeue=$HEAD_LIVE) 持有"
                     echo "         拒絕投遞以維持「每格資料夾單一 head」準則"
-                    echo "         若 $HEAD_JID 是 orphan: scancel $HEAD_JID && rm -rf $HD"
+                    echo "         若 $HEAD_JID 是本專案 orphan: ./run job-guard scancel $HEAD_JID"
+                    echo "         切勿直接 scancel 未驗證的 jobid；避免干預其他專案 job"
                     exit 6
                     ;;
                 "")
@@ -300,7 +301,8 @@ if [ -d restart/RUNNING.lockdir ]; then
         PENDING|RUNNING|CONFIGURING|COMPLETING)
             echo "[run.sh] ⚠ legacy restart/RUNNING.lockdir 被 jobid=$LOCK_OWNER ($LOCK_STATE) 持有"
             echo "         拒絕投遞以維持單一寫入者準則"
-            echo "         若 $LOCK_OWNER 是 orphan: scancel $LOCK_OWNER && rm -rf restart/RUNNING.lockdir"
+            echo "         若 $LOCK_OWNER 是本專案 orphan: ./run job-guard scancel $LOCK_OWNER"
+            echo "         切勿直接 scancel 未驗證的 jobid；避免干預其他專案 job"
             exit 6
             ;;
         "")
@@ -321,7 +323,7 @@ if [ -f restart/chain_jobid ]; then
             PENDING|RUNNING|CONFIGURING|COMPLETING)
                 echo "[run.sh] ⚠ chain_jobid=$CUR_CHAIN_ID 仍 active ($CUR_CHAIN_STATE)"
                 echo "         拒絕再投以免並發寫入 restart/"
-                echo "         若要接手: 等本輪結束,或 scancel $CUR_CHAIN_ID"
+                echo "         若要接手: 等本輪結束,或 ./run job-guard scancel $CUR_CHAIN_ID"
                 exit 7
                 ;;
         esac
@@ -457,8 +459,8 @@ fi
 if [ -n "$QUEUE_JOBS" ]; then
     echo ""
     echo "[3A] Chain 正常運行中 -- run.sh 不會重投."
-    echo "     停鏈: touch restart/STOP_CHAIN   (solver 100 步內感應)"
-    echo "     強停: scancel <jobid>"
+    echo "     停鏈: ./run job-guard stop-chain   (solver 100 步內感應)"
+    echo "     強停: ./run job-guard scancel <jobid>   (只允許本專案 job)"
     exit 0
 fi
 

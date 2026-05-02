@@ -6,8 +6,9 @@
 #   ./dispatcher_stop.sh             # 優雅停止 (建 STOP_DISPATCHER, 下一輪結束後收工)
 #   ./dispatcher_stop.sh --kill-now  # 立刻 kill (SIGTERM 後 5s 再 SIGKILL)
 #
-# 注意: 停止 dispatcher 不會影響正在跑的 job. 若要強制停 chain 請另外:
-#   scancel <jobid>  或  touch restart/STOP_CHAIN
+# 注意: 停止 dispatcher 不會影響正在跑的 job. 若要停止本專案 chain 請另外:
+#   ./run job-guard stop-chain
+#   ./run job-guard scancel <jobid>   # 只允許取消本專案記錄的 job
 # ==============================================================================
 
 set -uo pipefail
