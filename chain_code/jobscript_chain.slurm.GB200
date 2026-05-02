@@ -232,10 +232,13 @@ if [ -n "$MATCHED_BAD" ]; then
     done
     _RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
     _RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
-    EX_LIST=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+    EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+    PRE_BAD_CSV=$(printf '%s\n' "$PRE_BAD_ALL" | grep -v '^[[:space:]]*$' | paste -sd,)
+    EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
+               | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Pre-flight requeue exclude: ${EX_LIST:-(empty)}  partition: ${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}"
+    log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}  partition: ${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}"
     NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     if [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "GB200"
@@ -505,21 +508,53 @@ log "[MUTEX-EPOCH] ✓ lock 身分驗證通過 (owner=$SLURM_JOB_ID), 啟動 mpi
 # ═════════════════════════════════════════
 
 log "Starting mpirun  TIMEOUT=${TIMEOUT}s  KILL_AFTER=${KILL_AFTER}s  ARGS=\"$ARGS\""
-# [REVIEW-FIX #3] 傳 chain round 給 solver
 export CHAIN_COUNT_FROM_JOBSCRIPT="$CHAIN_COUNT"
 START_TS=$(date +%s)
-# [REVIEW-FIX #4] 強制 mpirun 把 SIGUSR1/SIGTERM 轉發給 a.out
-#   HPCX 2.24 (NVIDIA HPC SDK 25.9) 底下的 mpirun 不支援 --forward-signals (OMPI 5.x 旗標),
-#   僅用 -mca orte_forward_job_control 1 (OMPI 4.x ORTE 相容旗標) 就足以轉發 SIGUSR1/SIGTERM.
-#   若未來 cluster 升級到 OMPI 5.x+, 可加回: --forward-signals SIGUSR1,SIGTERM
 MPIRUN_SIG_FLAGS="-mca orte_forward_job_control 1"
+
+# ── WATCHDOG: solver hang detection ──
+WATCHDOG_SENTINEL="restart/.watchdog_triggered"
+rm -f "$WATCHDOG_SENTINEL"
+WATCHDOG_HANG=0
+WATCHDOG_HANG_NODE=""
+
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
     mpirun -np 16 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
-           stdbuf -oL ./a.out $ARGS
+           stdbuf -oL ./a.out $ARGS &
+SOLVER_PID=$!
+
+if [ "${WATCHDOG_ENABLED:-1}" -eq 1 ] && [ -f "$CHAIN_DIR/tools/watchdog.sh" ]; then
+    bash "$CHAIN_DIR/tools/watchdog.sh" \
+        "$SOLVER_PID" "$WATCHDOG_SENTINEL" \
+        "${WATCHDOG_TIMEOUT:-600}" "${WATCHDOG_GRACE:-180}" &
+    WATCHDOG_PID=$!
+    log "WATCHDOG: pid=$WATCHDOG_PID solver=$SOLVER_PID timeout=${WATCHDOG_TIMEOUT:-600}s grace=${WATCHDOG_GRACE:-180}s"
+else
+    WATCHDOG_PID=""
+fi
+
+wait "$SOLVER_PID" 2>/dev/null
 RC=$?
+
+if [ -n "${WATCHDOG_PID:-}" ]; then
+    kill "$WATCHDOG_PID" 2>/dev/null
+    wait "$WATCHDOG_PID" 2>/dev/null || true
+fi
+
 END_TS=$(date +%s)
 ELAPSED=$((END_TS - START_TS))
 log "mpirun exit: RC=$RC  elapsed=${ELAPSED}s  nodes=$SLURM_NODELIST"
+
+# ── WATCHDOG: sentinel check + node blacklist (direct-write, bypass bl_add/NCHC) ──
+if [ -f "$WATCHDOG_SENTINEL" ]; then
+    WATCHDOG_HANG_NODE=$(head -1 "$WATCHDOG_SENTINEL" 2>/dev/null || echo "$SLURM_NODELIST")
+    WATCHDOG_HANG=1
+    log "WATCHDOG HANG: $WATCHDOG_HANG_NODE -> blacklist (bypass NCHC — node hung while ALLOCATED)"
+    mkdir -p "$(dirname "$BAD_NODES_FILE")"
+    printf '%s\t%d\twatchdog-hang rc=%d round=%d elapsed=%ds\twatchdog\n' \
+        "$WATCHDOG_HANG_NODE" "$(date +%s)" "$RC" "$CHAIN_COUNT" "$ELAPSED" >> "$BAD_NODES_FILE"
+    rm -f "$WATCHDOG_SENTINEL"
+fi
 
 # Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
 # Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
@@ -638,11 +673,22 @@ SBATCH_RETRY_DELAY=30
 _RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
 _RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
 
-EX_LIST=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+PRE_BAD_CSV=$(printf '%s\n' "${PRE_BAD_ALL:-}" | grep -v '^[[:space:]]*$' | paste -sd,)
+EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
+           | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
+
+if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
+    if ! printf ',%s,' "$EX_LIST" | grep -qF ",$WATCHDOG_HANG_NODE,"; then
+        EX_LIST="${EX_LIST:+$EX_LIST,}$WATCHDOG_HANG_NODE"
+        log "WATCHDOG: forced $WATCHDOG_HANG_NODE into resubmit exclude"
+    fi
+fi
+
 EXCLUDE_ARG=""
 if [ -n "$EX_LIST" ]; then
     EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Resubmit exclude (TTL+NCHC sync+cap): $EX_LIST"
+    log "Resubmit exclude (bl+PRE_BAD_ALL+watchdog merged): $EX_LIST"
 else
     log "Resubmit exclude: (empty — cluster healthy)"
 fi
