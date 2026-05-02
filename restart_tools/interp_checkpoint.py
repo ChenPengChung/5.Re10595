@@ -241,6 +241,38 @@ def ask_value(prompt_text, cast_fn=str, default=None):
             print('  (格式錯誤, 請重新輸入 / invalid format)')
 
 
+def resolve_old_dir(old_dir):
+    """Resolve source checkpoint directory, with a friendly fallback for local copies."""
+    old_dir = os.path.normpath(old_dir)
+    meta_path = os.path.join(old_dir, 'metadata.dat')
+    if os.path.isfile(meta_path):
+        return old_dir
+
+    restart_dir = 'restart'
+    candidates = []
+    if os.path.isdir(restart_dir):
+        for name in sorted(os.listdir(restart_dir)):
+            path = os.path.join(restart_dir, name)
+            if name.startswith('step_') and os.path.isfile(os.path.join(path, 'metadata.dat')):
+                candidates.append(path)
+
+    if len(candidates) == 1:
+        print('  OLD checkpoint default not found: {}'.format(old_dir))
+        print('  Auto-selected only available checkpoint: {}'.format(candidates[0]))
+        return candidates[0]
+
+    if len(candidates) > 1 and sys.stdin.isatty():
+        print('  OLD checkpoint default not found: {}'.format(old_dir))
+        print('  Available restart/step_* checkpoints:')
+        for i, path in enumerate(candidates, 1):
+            print('    {}. {}'.format(i, path))
+        idx = ask_value('  Select OLD checkpoint number', int, 1)
+        if 1 <= idx <= len(candidates):
+            return candidates[idx - 1]
+
+    sys.exit('FATAL: {} not found. Use --old-dir <checkpoint_dir>.'.format(meta_path))
+
+
 def resolve_output_dir(output_root, step, new_dir=None):
     """Return chain-compatible output directory for the requested step."""
     if new_dir:
@@ -279,10 +311,10 @@ def build_old_config(args):
             print('  Auto-detected from metadata: NX={} NY={} NZ={} jp={}'.format(
                 detected['NX'], detected['NY'], detected['NZ'], detected['jp']))
 
-    nx = args.old_nx or (detected and detected['NX']) or None
-    ny = args.old_ny or (detected and detected['NY']) or None
-    nz = args.old_nz or (detected and detected['NZ']) or None
-    jp = args.old_jp or (detected and detected['jp']) or None
+    nx = args.old_nx if args.old_nx is not None else (detected and detected['NX']) or None
+    ny = args.old_ny if args.old_ny is not None else (detected and detected['NY']) or None
+    nz = args.old_nz if args.old_nz is not None else (detected and detected['NZ']) or None
+    jp = args.old_jp if args.old_jp is not None else (detected and detected['jp']) or None
     gamma = args.old_gamma
     alpha = args.old_alpha
     grid_dat = args.old_grid_dat
@@ -358,12 +390,12 @@ def build_new_config(args):
         print('  Standalone mode: variables.h not found')
         print('  Enter NEW grid parameters interactively.')
 
-    nx = args.new_nx or vh_defs.get('NX')
-    ny = args.new_ny or vh_defs.get('NY')
-    nz = args.new_nz or vh_defs.get('NZ')
-    jp = args.new_jp or vh_defs.get('jp')
-    gamma = args.new_gamma or vh_defs.get('GAMMA')
-    alpha = args.new_alpha or vh_defs.get('ALPHA')
+    nx = args.new_nx if args.new_nx is not None else vh_defs.get('NX')
+    ny = args.new_ny if args.new_ny is not None else vh_defs.get('NY')
+    nz = args.new_nz if args.new_nz is not None else vh_defs.get('NZ')
+    jp = args.new_jp if args.new_jp is not None else vh_defs.get('jp')
+    gamma = args.new_gamma if args.new_gamma is not None else vh_defs.get('GAMMA')
+    alpha = args.new_alpha if args.new_alpha is not None else vh_defs.get('ALPHA')
     grid_dat = args.new_grid_dat
 
     if nx is None:
@@ -727,6 +759,7 @@ def main():
     args = p.parse_args()
 
     global OLD, NEW
+    args.old_dir = resolve_old_dir(args.old_dir)
 
     print()
     OLD = build_old_config(args)
@@ -779,7 +812,7 @@ def main():
 
     # ---- Step 2: build OLD grid ----
     print('[2/8] Building OLD grid coordinates')
-    x_old, y2d_old, z2d_old = build_grid_xyz(OLD)
+    _, y2d_old, z2d_old = build_grid_xyz(OLD)
     y_int = y2d_old[BFR:BFR+OLD.NY, BFR]
     z_int = z2d_old[BFR, BFR:BFR+OLD.NZ]
     print('      Y interior range [{:.4f}, {:.4f}] (expect [0, {:.1f}])'.format(
@@ -850,6 +883,11 @@ def main():
     print('      Z interior range [{:.4f}, {:.4f}]'.format(z_int_new.min(), z_int_new.max()))
 
     # ---- Step 5: interpolate macros ----
+    if OLD.GAMMA != NEW.GAMMA:
+        print('      NOTE: GAMMA differs (OLD={}, NEW={}): computational-space interpolation'.format(
+            OLD.GAMMA, NEW.GAMMA))
+        print('            maps same (j,k,i) fraction to different physical z-heights.')
+        print('            This is expected for grid-stretching refinement.')
     print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in computational space')
     t = time.time()
     rho_new = interpolate_comp_3d(rho_g, OLD, NEW)
@@ -916,8 +954,10 @@ def main():
         del feq, fneq_new
 
         rho_check += f_new
-        min_f = min(min_f, float(np.nanmin(f_new)))
-        max_f = max(max_f, float(np.nanmax(f_new)))
+        if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
+            sys.exit('FATAL: f{:02d} contains NaN or Inf after reconstruction'.format(q))
+        min_f = min(min_f, float(np.min(f_new)))
+        max_f = max(max_f, float(np.max(f_new)))
 
         pr = split_y(f_new, NEW)
         for r in range(NEW.JP):
@@ -929,8 +969,8 @@ def main():
     rho_diff = float(np.max(np.abs(rho_check - rho_new)))
     print('      f range after reconstruction = [{:.15e}, {:.15e}]'.format(min_f, max_f))
     print('      max |sum(f_new)-rho_new| = {:.3e}'.format(rho_diff))
-    if not np.isfinite(min_f) or not np.isfinite(max_f) or min_f <= 0.0:
-        sys.exit('FATAL: reconstructed f contains non-finite or non-positive values')
+    if min_f <= 0.0:
+        sys.exit('FATAL: reconstructed f contains non-positive values (min_f={:.6e})'.format(min_f))
     if rho_diff > 1e-10:
         sys.exit('FATAL: reconstructed f is not conservative enough: max |sum(f)-rho| = {:.3e}'.format(rho_diff))
 
