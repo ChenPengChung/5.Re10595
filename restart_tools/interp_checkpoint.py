@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """
-LBM checkpoint interpolation with dual-mode configuration.
+Generic LBM checkpoint rebuilder for fixed periodic-hill D3Q19 runs.
+
+Fixed by design:
+  - Domain: LX, LY, LZ, H_HILL
+  - Ghost layer width: 3
+  - Lattice model: D3Q19
 
 Modes:
-  Project mode:    auto-reads NX/NY/NZ/jp/GAMMA/ALPHA from variables.h
-  Standalone mode: interactive prompts when variables.h is not found
+  Project mode:    auto-reads NEW NX/NY/NZ/jp/GAMMA/ALPHA from variables.h
+  Standalone mode: prompts for missing grid parameters when variables.h is not found
 
 Pipeline:
   1. Build OLD/NEW grid configs (auto-detect from metadata + variables.h, or interactive)
@@ -14,24 +19,26 @@ Pipeline:
   5. Reconstruct f_q = f_eq(new) + scale * interp(f_neq_old) for q = 0..18
   6. Split into new ranks, write per-rank binary files + metadata.dat
 
-Output written atomically: write to <new_dir>.WRITING/, then rename.
+Output written atomically:
+  <output_root>/step_%08d.WRITING/ -> <output_root>/step_%08d/
 
 Usage:
-  # Project mode (inside project, variables.h auto-detected):
-  python3 restart_tools/interp_checkpoint.py --old-dir restart/step_12550001_origin129
-
-  # Standalone mode (interactive prompts for grid params):
-  python3 interp_checkpoint.py --old-dir ./old_checkpoint --new-dir ./new_checkpoint
+  # Project mode: NEW grid is read from ../variables.h, output is step_00000001
+  python3 restart_tools/interp_checkpoint.py \\
+      --old-dir restart/step_12550001_origin129 \\
+      --step 1
 
   # CLI override (skip prompts):
-  python3 interp_checkpoint.py --old-dir ./old_ckpt \\
+  python3 restart_tools/interp_checkpoint.py --old-dir ./old_ckpt \\
       --old-gamma 2.0 --old-grid-dat old_grid.dat \\
       --new-nx 257 --new-ny 513 --new-nz 257 --new-jp 16 \\
-      --new-gamma 3.0 --new-grid-dat new_grid.dat
+      --new-gamma 3.0 --new-alpha 0.5 --new-grid-dat new_grid.dat \\
+      --output-root restart/checkpoint --step 1 --fneq-scale 1.0
 
-Standalone folder structure:
+Expected folder structure:
   workspace/
-  +-- interp_checkpoint.py
+  +-- variables.h                     (optional, project mode)
+  +-- restart_tools/interp_checkpoint.py
   +-- J_Frohlich/                    (or any directory)
   |   +-- old_grid_I{NY}_J{NZ}_g{G}_a{A}.dat
   |   +-- new_grid_I{NY}_J{NZ}_g{G}_a{A}.dat
@@ -62,6 +69,8 @@ BFR = 3
 # ---------------------------------------------------------------
 class GridConfig:
     def __init__(self, nx, ny, nz, jp, gamma, alpha, grid_dat):
+        if (ny - 1) % jp != 0:
+            raise ValueError('(NY-1)={} is not divisible by jp={}'.format(ny - 1, jp))
         self.NX = nx
         self.NY = ny
         self.NZ = nz
@@ -230,6 +239,13 @@ def ask_value(prompt_text, cast_fn=str, default=None):
             return cast_fn(val)
         except (ValueError, TypeError):
             print('  (格式錯誤, 請重新輸入 / invalid format)')
+
+
+def resolve_output_dir(output_root, step, new_dir=None):
+    """Return chain-compatible output directory for the requested step."""
+    if new_dir:
+        return new_dir
+    return os.path.join(output_root, 'step_{:08d}'.format(step))
 
 
 def cross_validate_grid_dat(cfg, label):
@@ -611,102 +627,6 @@ def interpolate_comp_3d(field_old, cfg_old, cfg_new):
     return field_new
 
 
-# ---------------------------------------------------------------
-# 3D structured bilinear interpolation: OLD -> NEW
-# ---------------------------------------------------------------
-def interpolate_3d(field_old, y2d_old, z2d_old, cfg_old, y2d_new, z2d_new, cfg_new):
-    """Trilinear interp in physical (x, y, z) space.
-
-    - X is uniform in both grids (LX shared); use direct linear weights
-    - Y, Z form a 2D curvilinear grid; interp in physical (y, z) using bisection on
-      (1) old streamwise position y_2d_old[:, BFR] (assumes I-lines vertical),
-      (2) old wall-normal column at the bracketing j_old indices.
-
-    Returns: field_new[NY6_new, NZ6_new, NX6_new] with physical interior filled.
-             Ghost cells (j, k, i in {0..2, NY+3..NY6-1}) are zero; call fill_ghost.
-    """
-    # Streamwise positions at bottom row k = BFR
-    y_str_old = y2d_old[BFR:BFR+cfg_old.NY, BFR]   # (NY_old,)
-    y_str_new = y2d_new[BFR:BFR+cfg_new.NY, BFR]   # (NY_new,)
-
-    # Bisect new y_str into old y_str -> floor index + weight
-    j_old_floor = np.searchsorted(y_str_old, y_str_new, side='right') - 1
-    j_old_floor = np.clip(j_old_floor, 0, cfg_old.NY - 2)
-    j_old_ceil = j_old_floor + 1
-    denom_y = y_str_old[j_old_ceil] - y_str_old[j_old_floor]
-    denom_y = np.where(np.abs(denom_y) < 1e-30, 1.0, denom_y)
-    wy_arr = (y_str_new - y_str_old[j_old_floor]) / denom_y
-    wy_arr = np.clip(wy_arr, 0.0, 1.0)
-
-    # Spanwise (X) indices/weights for new physical i in [BFR, BFR+NX_new-1]
-    # x_new[i] / dx_new = (i - BFR), x_old[i'] / dx_old = (i' - BFR)
-    # dx_new / dx_old = (NX_old - 1) / (NX_new - 1)
-    # i_old_frac (in code coord) = (i_new - BFR) * (NX_old-1)/(NX_new-1) + BFR
-    i_new_phys = np.arange(BFR, BFR + cfg_new.NX)
-    i_old_frac = (i_new_phys - BFR) * (cfg_old.NX - 1.0) / (cfg_new.NX - 1.0) + BFR
-    i_old_floor = np.floor(i_old_frac).astype(np.int64)
-    i_old_floor = np.clip(i_old_floor, BFR, BFR + cfg_old.NX - 2)
-    i_old_ceil = i_old_floor + 1
-    wx_arr = i_old_frac - i_old_floor
-    wx_arr = np.clip(wx_arr, 0.0, 1.0)
-
-    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
-
-    NY_new = cfg_new.NY
-    NZ_new = cfg_new.NZ
-    NX_new = cfg_new.NX
-    NZ_old = cfg_old.NZ
-
-    for j_new_phys in range(NY_new):
-        j_new_code = j_new_phys + BFR
-        jf = int(j_old_floor[j_new_phys])
-        jc = int(j_old_ceil[j_new_phys])
-        wy = wy_arr[j_new_phys]
-
-        # Z columns at the bracketing j_old (physical interior in k)
-        z_col_f = z2d_old[BFR + jf, BFR:BFR + NZ_old]   # (NZ_old,)
-        z_col_c = z2d_old[BFR + jc, BFR:BFR + NZ_old]
-        z_new_col = z2d_new[j_new_code, BFR:BFR + NZ_new]  # (NZ_new,)
-
-        # Bisect for k_old in each old column
-        kf_floor_in_f = np.searchsorted(z_col_f, z_new_col, side='right') - 1
-        kf_floor_in_f = np.clip(kf_floor_in_f, 0, NZ_old - 2)
-        kf_ceil_in_f = kf_floor_in_f + 1
-        denom_zf = z_col_f[kf_ceil_in_f] - z_col_f[kf_floor_in_f]
-        denom_zf = np.where(np.abs(denom_zf) < 1e-30, 1.0, denom_zf)
-        wz_f = (z_new_col - z_col_f[kf_floor_in_f]) / denom_zf
-        wz_f = np.clip(wz_f, 0.0, 1.0)
-
-        kf_floor_in_c = np.searchsorted(z_col_c, z_new_col, side='right') - 1
-        kf_floor_in_c = np.clip(kf_floor_in_c, 0, NZ_old - 2)
-        kf_ceil_in_c = kf_floor_in_c + 1
-        denom_zc = z_col_c[kf_ceil_in_c] - z_col_c[kf_floor_in_c]
-        denom_zc = np.where(np.abs(denom_zc) < 1e-30, 1.0, denom_zc)
-        wz_c = (z_new_col - z_col_c[kf_floor_in_c]) / denom_zc
-        wz_c = np.clip(wz_c, 0.0, 1.0)
-
-        # 4 stencil corners -> shape (NZ_new, NX6_old)
-        # Use code-frame indices when accessing field_old (which is in code frame)
-        v_jf_kff = field_old[BFR + jf, BFR + kf_floor_in_f, :]
-        v_jf_kfc = field_old[BFR + jf, BFR + kf_ceil_in_f, :]
-        v_jc_kcf = field_old[BFR + jc, BFR + kf_floor_in_c, :]
-        v_jc_kcc = field_old[BFR + jc, BFR + kf_ceil_in_c, :]
-
-        wz_f_b = wz_f[:, None]
-        wz_c_b = wz_c[:, None]
-        f_jf = (1.0 - wz_f_b) * v_jf_kff + wz_f_b * v_jf_kfc
-        f_jc = (1.0 - wz_c_b) * v_jc_kcf + wz_c_b * v_jc_kcc
-        f_yz = (1.0 - wy) * f_jf + wy * f_jc                         # (NZ_new, NX6_old)
-
-        # Spanwise interp -> (NZ_new, NX_new)
-        f_xyz = (1.0 - wx_arr[None, :]) * f_yz[:, i_old_floor] \
-                       + wx_arr[None, :] * f_yz[:, i_old_ceil]
-
-        field_new[j_new_code, BFR:BFR+NZ_new, BFR:BFR+NX_new] = f_xyz
-
-    return field_new
-
-
 def fill_ghost(field, cfg):
     """Fill ghost cells of (NY6, NZ6, NX6) given physical interior is filled.
 
@@ -771,12 +691,16 @@ def main():
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--old-dir', default='restart/step_12550001_origin129',
                    help='old checkpoint directory (default: %(default)s)')
-    p.add_argument('--new-dir', default='restart/checkpoint/step_1',
-                   help='output checkpoint directory (default: %(default)s)')
     p.add_argument('--step', type=int, default=1,
                    help='new checkpoint step number written into metadata (default: 1)')
+    p.add_argument('--output-root', default='restart/checkpoint',
+                   help='root directory for chain-compatible output step_%%08d (default: %(default)s)')
+    p.add_argument('--new-dir', default=None,
+                   help='advanced override for output checkpoint directory; default is output-root/step_%%08d')
     p.add_argument('--fneq-scale', type=float, default=1.0,
                    help='scale factor applied to interpolated f_neq (default: %(default)s)')
+    p.add_argument('--dry-run', action='store_true',
+                   help='validate configuration and output path, then exit before reading/writing checkpoint data')
 
     g_old = p.add_argument_group('OLD grid (auto-detected from metadata when possible)')
     g_old.add_argument('--old-nx', type=int, default=None)
@@ -800,23 +724,9 @@ def main():
     g_new.add_argument('--variables-h', default=None,
                        help='path to variables.h (auto-detected if not specified)')
 
-    g_dom = p.add_argument_group('Domain constants (defaults: Frohlich periodic hill)')
-    g_dom.add_argument('--lx', type=float, default=None, help='spanwise length (4.5)')
-    g_dom.add_argument('--ly', type=float, default=None, help='streamwise length (9.0)')
-    g_dom.add_argument('--lz', type=float, default=None, help='wall-normal length (3.036)')
-    g_dom.add_argument('--h-hill', type=float, default=None, help='hill height (1.0)')
-
     args = p.parse_args()
 
-    global OLD, NEW, LX, LY, LZ, H_HILL
-    if args.lx is not None:
-        LX = args.lx
-    if args.ly is not None:
-        LY = args.ly
-    if args.lz is not None:
-        LZ = args.lz
-    if args.h_hill is not None:
-        H_HILL = args.h_hill
+    global OLD, NEW
 
     print()
     OLD = build_old_config(args)
@@ -834,11 +744,20 @@ def main():
     print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
     print()
 
-    writing_dir = args.new_dir + '.WRITING'
-    if os.path.exists(args.new_dir):
-        sys.exit('FATAL: {} already exists; refusing to overwrite'.format(args.new_dir))
+    out_dir = resolve_output_dir(args.output_root, args.step, args.new_dir)
+    writing_dir = out_dir + '.WRITING'
+    if os.path.exists(out_dir):
+        sys.exit('FATAL: {} already exists; refusing to overwrite'.format(out_dir))
     if os.path.exists(writing_dir):
         sys.exit('FATAL: {} already exists; remove it after verifying it is stale'.format(writing_dir))
+    if args.new_dir is None:
+        print('Output directory: {} (from --output-root + --step)'.format(out_dir))
+    else:
+        print('Output directory: {} (--new-dir override)'.format(out_dir))
+    print()
+    if args.dry_run:
+        print('Dry run complete: configuration is valid and no output was written.')
+        return
 
     # ---- Step 1: parse old metadata ----
     print('[1/8] Reading old metadata: {}/metadata.dat'.format(args.old_dir))
@@ -961,6 +880,9 @@ def main():
 
     # ---- Step 6 & 7: f_eq + per-rank write ----
     print('[6/8] Reconstructing f_eq and writing per-rank files')
+    parent_dir = os.path.dirname(writing_dir)
+    if parent_dir:
+        os.makedirs(parent_dir, exist_ok=True)
     os.makedirs(writing_dir)
 
     # Write rho per rank
@@ -1052,13 +974,13 @@ def main():
     print('      dt_global written as -1.0 (skip Phase 5 drift check; runtime computes its own dt)')
     print('      (naive minSize for reference: {:.6e}; runtime Imamura dt typically ~0.4-0.5x of this)'.format(naive_minsize))
 
-    print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, args.new_dir))
-    os.rename(writing_dir, args.new_dir)
+    print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, out_dir))
+    os.rename(writing_dir, out_dir)
 
     elapsed = time.time() - t0
     nf = 19 * NEW.JP + NEW.JP + 1
     print()
-    print('Done in {:.1f}s. New checkpoint at: {}'.format(elapsed, args.new_dir))
+    print('Done in {:.1f}s. New checkpoint at: {}'.format(elapsed, out_dir))
     print('Total files: 19f x {} ranks + {} rho + 1 metadata = {}'.format(NEW.JP, NEW.JP, nf))
 
 
