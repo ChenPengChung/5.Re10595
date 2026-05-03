@@ -548,6 +548,37 @@ if [ "$MODE_COLD" -eq 1 ]; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
+# Preflight: checkpoint interpolation (origin → new grid)
+#   條件: 無 restart/checkpoint/step_* 但有 restart/step_*_origin*
+#   動作: python3 restart_tools/interp_checkpoint.py --auto
+#   結果: restart/checkpoint/step_00000001/ 可供 chain 續跑
+# ═════════════════════════════════════════════════════════════════════════
+if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_FORCE_COLD" -eq 0 ]; then
+    _ORIGIN_DIR=""
+    for _d in restart/step_*_origin*/; do
+        [ -s "${_d}metadata.dat" ] && _ORIGIN_DIR="${_d%/}"
+    done
+
+    if [ -n "$_ORIGIN_DIR" ]; then
+        echo ""
+        echo "[preflight] Origin checkpoint 偵測到: $_ORIGIN_DIR"
+        echo "[preflight] 執行 checkpoint interpolation (old grid → new grid)..."
+        if python3 restart_tools/interp_checkpoint.py --auto --step 1; then
+            if [ -s restart/checkpoint/step_00000001/metadata.dat ]; then
+                echo "[preflight] 插值成功: restart/checkpoint/step_00000001"
+                HAS_CKPT=1
+            else
+                echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不存在"
+                exit 1
+            fi
+        else
+            echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
+            exit 1
+        fi
+    fi
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
 # 編譯 a.out (Scenario 1 / Scenario 2 缺 binary / --rebuild)
 # ═════════════════════════════════════════════════════════════════════════
 if [ "$HAS_BIN" -eq 0 ] || [ "$MODE_REBUILD" -eq 1 ]; then

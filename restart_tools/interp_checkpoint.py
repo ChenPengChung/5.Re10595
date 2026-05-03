@@ -115,6 +115,19 @@ def parse_variables_h(path):
     return defines
 
 
+def parse_string_defines(path, keys=('GRID_DAT_DIR', 'GRID_DAT_REF')):
+    """Parse #define KEY "value" string defines from variables.h."""
+    import re
+    result = {}
+    with open(path) as f:
+        text = f.read()
+    for key in keys:
+        m = re.search(rf'#define\s+{key}\s+"([^"]+)"', text)
+        if m:
+            result[key] = m.group(1)
+    return result
+
+
 def parse_grid_dat_header(path):
     """Extract I=, J= from Tecplot .dat file header for cross-validation."""
     dims = {}
@@ -169,18 +182,35 @@ def auto_detect_from_metadata(meta_path):
     return {'NX': nx, 'NY': ny, 'NZ': nz, 'jp': jp}
 
 
-def _grid_dat_search_dirs():
+def _grid_dat_search_dirs(grid_dat_dir=None):
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    return [
+    dirs = []
+    if grid_dat_dir:
+        dirs.append(grid_dat_dir)
+        dirs.append(os.path.join(script_dir, '..', grid_dat_dir))
+    dirs.extend([
         'J_Frohlich',
         os.path.join(script_dir, '..', 'J_Frohlich'),
         '../J_Frohlich',
         '.',
-    ]
+    ])
+    seen = set()
+    result = []
+    for d in dirs:
+        p = os.path.abspath(d)
+        if p not in seen:
+            seen.add(p)
+            result.append(d)
+    return result
 
 
 def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
-    """Try to find grid .dat file by naming convention I{NY}_J{NZ}_g{G}_a{A}."""
+    """Try to find grid .dat file by naming convention.
+
+    Searches for both formats:
+      - I{NY}_J{NZ}_g{G}_a{A}.dat  (Mode 2, uniform gamma)
+      - I{NY}_J{NZ}_a{A}.dat       (Mode 3, variable gamma)
+    """
     if search_dirs is None:
         search_dirs = _grid_dat_search_dirs()
     candidates = set()
@@ -188,6 +218,7 @@ def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
         g_str = fmt(gamma)
         a_str = fmt(alpha)
         candidates.add('I{}_J{}_g{}_a{}'.format(ny, nz, g_str, a_str))
+        candidates.add('I{}_J{}_a{}'.format(ny, nz, a_str))
     for d in search_dirs:
         if not os.path.isdir(d):
             continue
@@ -201,29 +232,43 @@ def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
 
 
 def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
-    """Find grid .dat by I{NY}_J{NZ} pattern only; extract gamma/alpha from filename."""
+    """Find grid .dat by I{NY}_J{NZ} pattern; extract gamma/alpha from filename.
+
+    Handles both formats:
+      _g{G}_a{A}.dat  → gamma=G, alpha=A  (Mode 2)
+      _a{A}.dat        → gamma=None, alpha=A (Mode 3)
+    """
     import re
     if search_dirs is None:
         search_dirs = _grid_dat_search_dirs()
     pattern = 'I{}_J{}'.format(ny, nz)
     ga_re = re.compile(r'_g([\d.]+)_a([\d.]+)\.dat$')
+    a_re = re.compile(r'_a([\d.]+)\.dat$')
     for d in search_dirs:
         if not os.path.isdir(d):
             continue
-        for fname in os.listdir(d):
+        for fname in sorted(os.listdir(d)):
             if not fname.endswith('.dat'):
                 continue
             if pattern in fname:
                 path = os.path.join(d, fname)
                 m = ga_re.search(fname)
-                gamma = float(m.group(1)) if m else None
-                alpha = float(m.group(2)) if m else None
-                return path, gamma, alpha
+                if m:
+                    return path, float(m.group(1)), float(m.group(2))
+                m = a_re.search(fname)
+                if m:
+                    return path, None, float(m.group(1))
     return None, None, None
 
 
+_AUTO_MODE = False
+
 def ask_value(prompt_text, cast_fn=str, default=None):
-    """Interactive prompt with optional default value."""
+    """Interactive prompt with optional default value. FATAL in --auto mode."""
+    if _AUTO_MODE:
+        if default is not None:
+            return default
+        sys.exit('FATAL: --auto mode requires all parameters but missing: {}'.format(prompt_text))
     if default is not None:
         full = '{} [{}]: '.format(prompt_text, default)
     else:
@@ -241,8 +286,28 @@ def ask_value(prompt_text, cast_fn=str, default=None):
             print('  (格式錯誤, 請重新輸入 / invalid format)')
 
 
+def find_origin_checkpoint(restart_dir='restart'):
+    """Find restart/step_*_origin* directories with valid metadata."""
+    if not os.path.isdir(restart_dir):
+        return None
+    candidates = []
+    for name in sorted(os.listdir(restart_dir)):
+        if name.startswith('step_') and '_origin' in name:
+            path = os.path.join(restart_dir, name)
+            if os.path.isfile(os.path.join(path, 'metadata.dat')):
+                candidates.append(path)
+    return candidates[-1] if candidates else None
+
+
 def resolve_old_dir(old_dir):
     """Resolve source checkpoint directory, with a friendly fallback for local copies."""
+    if old_dir is None:
+        origin = find_origin_checkpoint()
+        if origin:
+            print('  Auto-detected origin checkpoint: {}'.format(origin))
+            return origin
+        sys.exit('FATAL: --old-dir not specified and no restart/step_*_origin* found')
+
     old_dir = os.path.normpath(old_dir)
     meta_path = os.path.join(old_dir, 'metadata.dat')
     if os.path.isfile(meta_path):
@@ -470,6 +535,11 @@ def write_metadata(path, params):
     with open(path, 'w') as f:
         for k in keys_order:
             if k in params:
+                f.write('{}={}\n'.format(k, params[k]))
+        extra = sorted(set(params.keys()) - set(keys_order))
+        if extra:
+            f.write('# --- provenance ---\n')
+            for k in extra:
                 f.write('{}={}\n'.format(k, params[k]))
 
 
@@ -721,8 +791,10 @@ def compute_minsize(cfg):
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--old-dir', default='restart/step_12550001_origin129',
-                   help='old checkpoint directory (default: %(default)s)')
+    p.add_argument('--auto', action='store_true',
+                   help='fully automatic: detect origin checkpoint, old/new grids from variables.h')
+    p.add_argument('--old-dir', default=None,
+                   help='old checkpoint directory (auto-detected from restart/step_*_origin* if omitted)')
     p.add_argument('--step', type=int, default=1,
                    help='new checkpoint step number written into metadata (default: 1)')
     p.add_argument('--output-root', default='restart/checkpoint',
@@ -759,6 +831,100 @@ def main():
     args = p.parse_args()
 
     global OLD, NEW
+
+    if args.auto:
+        import re as _re
+        global _AUTO_MODE
+        _AUTO_MODE = True
+
+        vh_path = args.variables_h or find_variables_h()
+        if not vh_path:
+            sys.exit('FATAL: --auto requires variables.h (not found)')
+        vh = parse_variables_h(vh_path)
+        str_defs = parse_string_defines(vh_path)
+
+        grid_dat_dir_name = str_defs.get('GRID_DAT_DIR', 'J_Frohlich')
+        grid_dat_ref = str_defs.get('GRID_DAT_REF', '')
+        grid_ref_stem = os.path.splitext(grid_dat_ref)[0]
+        if not grid_ref_stem:
+            sys.exit('FATAL: --auto: GRID_DAT_REF not defined in {}'.format(vh_path))
+
+        vh_dir = os.path.dirname(os.path.abspath(vh_path))
+        grid_dir = os.path.join(vh_dir, grid_dat_dir_name)
+        if not os.path.isdir(grid_dir):
+            grid_dir = grid_dat_dir_name
+
+        NY_vh = int(vh['NY'])
+        NZ_vh = int(vh['NZ'])
+        ALPHA_vh = vh.get('ALPHA', 0.5)
+
+        # Check both restart/ and restart/checkpoint/ for existing non-origin checkpoints
+        restart_dir = os.path.join(vh_dir, 'restart')
+        ckpt_dir = os.path.join(restart_dir, 'checkpoint')
+        has_normal = False
+        for check_dir in [ckpt_dir, restart_dir]:
+            if not os.path.isdir(check_dir):
+                continue
+            for name in sorted(os.listdir(check_dir)):
+                if name.startswith('step_') and '_origin' not in name:
+                    if os.path.isfile(os.path.join(check_dir, name, 'metadata.dat')):
+                        has_normal = True
+                        break
+            if has_normal:
+                break
+        if has_normal:
+            print('[auto] Non-origin restart checkpoint exists — interpolation not needed')
+            sys.exit(0)
+
+        origin = find_origin_checkpoint(restart_dir)
+        if not origin:
+            sys.exit('FATAL: --auto: no restart/step_*_origin* found in {}'.format(restart_dir))
+        print('[auto] Origin checkpoint: {}'.format(origin))
+
+        # Scan grid files: require grid_ref_stem match, detect ambiguity
+        dim_tag = '_I{}_J{}_'.format(NY_vh, NZ_vh)
+        stem_prefix = 'adaptive_{}'.format(grid_ref_stem)
+        old_candidates = []
+        new_candidates = []
+
+        for f in sorted(os.listdir(grid_dir)):
+            if not f.endswith('.dat') or not f.startswith(stem_prefix) or dim_tag not in f:
+                continue
+            after_dim = f.split(dim_tag, 1)[1]
+            m_old = _re.match(r'g([\d.]+)_a([\d.]+)\.dat$', after_dim)
+            m_new = _re.match(r'a([\d.]+)\.dat$', after_dim)
+            if m_old:
+                old_candidates.append((os.path.join(grid_dir, f), f,
+                                       float(m_old.group(1)), float(m_old.group(2))))
+            elif m_new:
+                new_candidates.append((os.path.join(grid_dir, f), f,
+                                       float(m_new.group(1))))
+
+        if len(old_candidates) == 0:
+            sys.exit('FATAL: --auto: no OLD grid (with _g{{G}}_ in name) found for {} in {}'.format(
+                stem_prefix + dim_tag, grid_dir))
+        if len(old_candidates) > 1:
+            sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
+                len(old_candidates), ', '.join(c[1] for c in old_candidates)))
+        if len(new_candidates) == 0:
+            sys.exit('FATAL: --auto: no NEW grid (Mode 3, without _g) found for {} in {}'.format(
+                stem_prefix + dim_tag, grid_dir))
+        if len(new_candidates) > 1:
+            sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
+                len(new_candidates), ', '.join(c[1] for c in new_candidates)))
+
+        old_grid, old_fname, old_gamma, old_alpha = old_candidates[0]
+        new_grid, new_fname, new_alpha = new_candidates[0]
+        print('[auto] OLD grid (uniform gamma={}, alpha={}): {}'.format(old_gamma, old_alpha, old_fname))
+        print('[auto] NEW grid (variable gamma, alpha={}): {}'.format(new_alpha, new_fname))
+
+        args.old_dir = origin
+        args.old_gamma = old_gamma
+        args.old_alpha = old_alpha
+        args.old_grid_dat = old_grid
+        args.new_grid_dat = new_grid
+        args.variables_h = vh_path
+
     args.old_dir = resolve_old_dir(args.old_dir)
 
     print()
@@ -1007,6 +1173,13 @@ def main():
         'dt_global': '-1.0',
         'gpu_time_ms': '0',
         'cv_count': '0',
+        'interp_source': args.old_dir,
+        'interp_old_grid': OLD.GRID_DAT,
+        'interp_new_grid': NEW.GRID_DAT,
+        'interp_old_gamma': str(OLD.GAMMA),
+        'interp_new_gamma': str(NEW.GAMMA),
+        'interp_fneq_scale': str(args.fneq_scale),
+        'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
     write_metadata(os.path.join(writing_dir, 'metadata.dat'), new_meta)
     print('      Force={:.6e}  step={}  jp={}  grid_dims={}'.format(
