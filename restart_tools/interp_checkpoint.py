@@ -858,22 +858,17 @@ def main():
         NZ_vh = int(vh['NZ'])
         ALPHA_vh = vh.get('ALPHA', 0.5)
 
-        # Check both restart/ and restart/checkpoint/ for existing non-origin checkpoints
         restart_dir = os.path.join(vh_dir, 'restart')
         ckpt_dir = os.path.join(restart_dir, 'checkpoint')
         has_normal = False
-        for check_dir in [ckpt_dir, restart_dir]:
-            if not os.path.isdir(check_dir):
-                continue
-            for name in sorted(os.listdir(check_dir)):
+        if os.path.isdir(ckpt_dir):
+            for name in sorted(os.listdir(ckpt_dir)):
                 if name.startswith('step_') and '_origin' not in name:
-                    if os.path.isfile(os.path.join(check_dir, name, 'metadata.dat')):
+                    if os.path.isfile(os.path.join(ckpt_dir, name, 'metadata.dat')):
                         has_normal = True
                         break
-            if has_normal:
-                break
         if has_normal:
-            print('[auto] Non-origin restart checkpoint exists — interpolation not needed')
+            print('[auto] Non-origin checkpoint in restart/checkpoint/ — interpolation not needed')
             sys.exit(0)
 
         origin = find_origin_checkpoint(restart_dir)
@@ -1181,6 +1176,11 @@ def main():
         'interp_fneq_scale': str(args.fneq_scale),
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
+    vh_for_prov = getattr(args, 'variables_h', None)
+    if vh_for_prov and os.path.isfile(vh_for_prov):
+        new_meta['interp_variables_h_mtime'] = str(int(os.path.getmtime(vh_for_prov)))
+    if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT):
+        new_meta['interp_new_grid_mtime'] = str(int(os.path.getmtime(NEW.GRID_DAT)))
     write_metadata(os.path.join(writing_dir, 'metadata.dat'), new_meta)
     print('      Force={:.6e}  step={}  jp={}  grid_dims={}'.format(
         Force_value, args.step, NEW.JP, new_meta['grid_dims']))

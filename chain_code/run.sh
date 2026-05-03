@@ -378,7 +378,7 @@ HAS_CKPT=0
 while IFS= read -r _d; do
     _d=${_d%/}
     case "$_d" in *.WRITING) continue ;; esac
-    if [ -s "$_d/metadata.dat" ]; then
+    if [ -s "$_d/metadata.dat" ] && [ -s "$_d/f00_0.bin" ] && [ -s "$_d/rho_0.bin" ]; then
         HAS_CKPT=1
         break
     fi
@@ -548,7 +548,28 @@ if [ "$MODE_COLD" -eq 1 ]; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
-# Preflight: checkpoint interpolation (origin → new grid)
+# Preflight A: 確保 NEW grid 存在 (interpolation 和 solver 都需要)
+#   grid_zeta_tool.py --auto 是冪等的: 若 grid 已存在且新鮮, 幾乎立刻返回
+# ═════════════════════════════════════════════════════════════════════════
+if [ "$MODE_COLD" -eq 0 ]; then
+    _NEED_GRID=0
+    for _d in restart/step_*_origin*/; do
+        [ -s "${_d}metadata.dat" ] && _NEED_GRID=1 && break
+    done
+    [ "$HAS_CKPT" -eq 1 ] && _NEED_GRID=1
+    if [ "$_NEED_GRID" -eq 1 ]; then
+        echo "[preflight-A] 確認 NEW grid 存在 (grid_zeta_tool.py --auto)..."
+        if python3 restart_tools/grid_zeta_tool.py --auto; then
+            echo "[preflight-A] Grid OK"
+        else
+            echo "[FATAL] Grid generation 失敗 (grid_zeta_tool.py --auto exit=$?)"
+            exit 1
+        fi
+    fi
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
+# Preflight B: checkpoint interpolation (origin → new grid)
 #   條件: 無 restart/checkpoint/step_* 但有 restart/step_*_origin*
 #   動作: python3 restart_tools/interp_checkpoint.py --auto
 #   結果: restart/checkpoint/step_00000001/ 可供 chain 續跑
@@ -564,15 +585,68 @@ if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
         echo "[preflight] Origin checkpoint 偵測到: $_ORIGIN_DIR"
         echo "[preflight] 執行 checkpoint interpolation (old grid → new grid)..."
         if python3 restart_tools/interp_checkpoint.py --auto --step 1; then
-            if [ -s restart/checkpoint/step_00000001/metadata.dat ]; then
-                echo "[preflight] 插值成功: restart/checkpoint/step_00000001"
+            _CKPT_DIR="restart/checkpoint/step_00000001"
+            _CKPT_OK=1
+            [ -s "$_CKPT_DIR/metadata.dat" ] || _CKPT_OK=0
+            [ -s "$_CKPT_DIR/f00_0.bin" ]    || _CKPT_OK=0
+            [ -s "$_CKPT_DIR/rho_0.bin" ]    || _CKPT_OK=0
+            if [ "$_CKPT_OK" -eq 1 ]; then
+                echo "[preflight] 插值成功: $_CKPT_DIR"
                 HAS_CKPT=1
+                if [ "$HAS_STATE" -eq 1 ]; then
+                    echo "[preflight] 清除舊 chain state (插值後以 Scenario 2 重新開始)"
+                    rm -f restart/chain_count restart/chain_jobid
+                    HAS_STATE=0
+                fi
             else
-                echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不存在"
+                echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不完整 (缺 metadata/f00/rho)"
                 exit 1
             fi
         else
             echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
+            exit 1
+        fi
+    fi
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
+# Preflight C: 已存在的 interpolated checkpoint 一致性驗證
+#   若 variables.h 或 NEW grid 在插值後被修改, 舊 checkpoint 不可信
+# ═════════════════════════════════════════════════════════════════════════
+if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
+    _CKPT_META=""
+    while IFS= read -r _d; do
+        _d=${_d%/}
+        case "$_d" in *.WRITING) continue ;; esac
+        [ -s "$_d/metadata.dat" ] && _CKPT_META="$_d/metadata.dat" && break
+    done < <(ls -1d restart/checkpoint/step_*/ 2>/dev/null)
+
+    if [ -n "$_CKPT_META" ] && grep -q '^interp_source=' "$_CKPT_META" 2>/dev/null; then
+        _STALE=0
+        _SAVED_VH_MT=$(grep '^interp_variables_h_mtime=' "$_CKPT_META" 2>/dev/null | cut -d= -f2)
+        _SAVED_GRID_MT=$(grep '^interp_new_grid_mtime=' "$_CKPT_META" 2>/dev/null | cut -d= -f2)
+        _SAVED_NEW_GRID=$(grep '^interp_new_grid=' "$_CKPT_META" 2>/dev/null | cut -d= -f2)
+
+        if [ -n "$_SAVED_VH_MT" ] && [ -f variables.h ]; then
+            _CUR_VH_MT=$(stat -c %Y variables.h 2>/dev/null)
+            if [ -n "$_CUR_VH_MT" ] && [ "$_CUR_VH_MT" != "$_SAVED_VH_MT" ]; then
+                echo "[preflight-C] WARNING: variables.h 已變更 (saved=$_SAVED_VH_MT current=$_CUR_VH_MT)"
+                _STALE=1
+            fi
+        fi
+        if [ -n "$_SAVED_GRID_MT" ] && [ -n "$_SAVED_NEW_GRID" ] && [ -f "$_SAVED_NEW_GRID" ]; then
+            _CUR_GRID_MT=$(stat -c %Y "$_SAVED_NEW_GRID" 2>/dev/null)
+            if [ -n "$_CUR_GRID_MT" ] && [ "$_CUR_GRID_MT" != "$_SAVED_GRID_MT" ]; then
+                echo "[preflight-C] WARNING: NEW grid 已變更 (saved=$_SAVED_GRID_MT current=$_CUR_GRID_MT)"
+                _STALE=1
+            fi
+        fi
+        if [ "$_STALE" -eq 1 ]; then
+            echo ""
+            echo "[FATAL] Interpolated checkpoint 與當前 grid/variables 不一致"
+            echo "        刪除 restart/checkpoint/ 後重跑以強制重新插值:"
+            echo "          rm -rf restart/checkpoint/step_00000001"
+            echo "          ./run"
             exit 1
         fi
     fi
