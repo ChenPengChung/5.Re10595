@@ -1978,14 +1978,18 @@ def parse_variables_h(path):
     return result
 
 
-def _find_existing_adaptive_grid(grid_dir, NI, NJ):
+def _find_existing_adaptive_grid(grid_dir, NI, NJ, exclude_path=None):
     """Search GRID_DAT_DIR for an existing adaptive grid at NI x NJ."""
     import glob
     pattern = str(grid_dir / f"adaptive_*_I{NI}_J{NJ}_*.dat")
     candidates = sorted(glob.glob(pattern))
+    exclude_resolved = Path(exclude_path).resolve() if exclude_path else None
     for c in candidates:
+        c_path = Path(c)
+        if exclude_resolved and c_path.resolve() == exclude_resolved:
+            continue
         try:
-            with open(c) as f:
+            with open(c_path) as f:
                 for line in f:
                     up = line.upper()
                     if 'I=' in up and 'J=' in up:
@@ -1993,7 +1997,7 @@ def _find_existing_adaptive_grid(grid_dir, NI, NJ):
                         m_j = re.search(r'J\s*=\s*(\d+)', up)
                         if m_i and m_j:
                             if int(m_i.group(1)) == NI and int(m_j.group(1)) == NJ:
-                                return Path(c)
+                                return c_path
                         break
         except Exception:
             continue
@@ -2173,8 +2177,8 @@ def _auto_mode3(params, vh_dir, grid_dir, ref_path, out_path, grid_key, script_d
     print(f"  [auto] u_tau Re={utau_re}, z+_target={zp_target}")
 
     # ── Step 1: obtain base topology grid at NI × NJ ──
-    base_path = _find_existing_adaptive_grid(grid_dir, NI, NJ)
-    if base_path and base_path != out_path:
+    base_path = _find_existing_adaptive_grid(grid_dir, NI, NJ, exclude_path=out_path)
+    if base_path:
         print(f"  [auto] Base topology found: {base_path.name}")
         x_base, y_base, ni_b, nj_b = parse_tecplot_dat(base_path)
         print(f"  [auto] Base grid: I={ni_b} x J={nj_b} (skip Poisson)")
