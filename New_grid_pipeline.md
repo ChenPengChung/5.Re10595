@@ -122,7 +122,7 @@ Jacobian 計算 --> kernel loop 開始模擬
 |--------|-----|------|
 | `UTAU_BOT_DAT` | `"29.Re5600_...dat"` | 底壁 u_tau 檔案名 |
 | `UTAU_TOP_DAT` | `"28.Re5600_...dat"` | 頂壁 u_tau 檔案名 |
-| `UTAU_RE` | 5600 | u_tau 資料來源的 Re (非模擬 Re=10595) |
+| `UTAU_RE` | 5600 | u_tau 資料來源的 Re (= 模擬 Re=5600) |
 | `ZP_TARGET` | 0.9 | z+ 設計目標 (0.9 = 10% 安全裕度) |
 
 ---

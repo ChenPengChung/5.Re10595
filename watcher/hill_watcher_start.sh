@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hill_watcher_start.sh — daemon launcher for Periodic Hill Re10595 watcher
+# hill_watcher_start.sh — daemon launcher for Periodic Hill Re5600 watcher
 
 set -euo pipefail
 
@@ -50,7 +50,7 @@ if ! kill -0 "$WATCHER_PID" 2>/dev/null; then
 fi
 
 cat <<EOF
-=== Periodic Hill Re10595 Watcher started ===
+=== Periodic Hill Re5600 Watcher started ===
   PID         : $WATCHER_PID
   PID file    : $PID_FILE
   Log file    : $LOG_FILE

@@ -381,15 +381,14 @@ int main(int argc, char *argv[])
 
                 char cmd[1024];
                 snprintf(cmd, sizeof(cmd),
-                         "python3 %s/grid_zeta_tool.py --auto",
-                         GRID_DAT_DIR);
+                         "python3 restart_tools/grid_zeta_tool.py --auto");
                 fprintf(stderr, "  Running: %s\n", cmd);
                 int ret = system(cmd);
                 if (ret != 0) {
                     fprintf(stderr, "\n");
                     fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
                     fprintf(stderr, "║  FATAL: Python grid generation failed (exit=%d)         ║\n", ret);
-                    fprintf(stderr, "║  Please check %s/grid_zeta_tool.py             ║\n", GRID_DAT_DIR);
+                    fprintf(stderr, "║  Please check restart_tools/grid_zeta_tool.py           ║\n");
                     fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
                     MPI_Abort(MPI_COMM_WORLD, 1);
                 }

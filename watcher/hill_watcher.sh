@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hill_watcher.sh — Periodic Hill Re10595 watcher loop
+# hill_watcher.sh — Periodic Hill Re5600 watcher loop
 set -u
 
 PROJECT_DIR="/home/s8313697/5.Re10595/Edit3_5600newmesh"
@@ -11,7 +11,7 @@ PID_FILE="$LIVE_DIR/watcher.pid"
 CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
 
-RE=10595
+RE=5600
 POLL_SEC=30
 SIZE_STABLE_WAIT=3
 CONV_TIMEOUT=180
