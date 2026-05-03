@@ -514,6 +514,11 @@ if [ "$HAS_BIN" -eq 0 ] || [ "$MODE_REBUILD" -eq 1 ]; then
         echo "[FATAL] 編譯失敗, a.out 未產出."
         exit 1
     fi
+    # 編譯後自動保存 arch-specific 副本, 供 partition-smart-ETA 使用
+    if [ ! -s "a.out.${CLUSTER}" ] || [ a.out -nt "a.out.${CLUSTER}" ]; then
+        cp -f a.out "a.out.${CLUSTER}"
+        echo "[build] 已保存 a.out -> a.out.${CLUSTER}"
+    fi
     HAS_BIN=1
 fi
 
@@ -579,6 +584,42 @@ fi
 # ═════════════════════════════════════════════════════════════════════════
 # 投遞
 # ═════════════════════════════════════════════════════════════════════════
+
+# ── [ARCH-GUARD] 確保 a.out 架構與目標 CLUSTER 一致 ──────────────────────
+# 問題根因: run.sh 用 partition-smart-ETA 選定 CLUSTER (如 GB200),
+#   但 a.out 可能是上次 build H200 留下的 x86_64 binary,
+#   導致 aarch64 節點收到 x86_64 binary → RC=126 "cannot execute binary file".
+#   dispatcher (submit_dispatcher.sh) 有 `cp a.out.$cluster a.out` 但 run.sh 沒有.
+# 修法: 投遞前若 a.out.{CLUSTER} 存在, 自動切換; 若不存在則驗證架構.
+ARCH_EXPECTED=""
+case "$CLUSTER" in
+    GB200) ARCH_EXPECTED="aarch64" ;;
+    H200)  ARCH_EXPECTED="x86_64"  ;;
+esac
+
+if [ -s "a.out.${CLUSTER}" ]; then
+    CUR_ARCH=$(file -b a.out 2>/dev/null | grep -oE 'x86-64|ARM aarch64' | head -1)
+    WANT_ARCH=$(file -b "a.out.${CLUSTER}" 2>/dev/null | grep -oE 'x86-64|ARM aarch64' | head -1)
+    if [ "$CUR_ARCH" != "$WANT_ARCH" ]; then
+        echo "[ARCH-GUARD] a.out 架構 ($CUR_ARCH) != 目標 $CLUSTER ($WANT_ARCH)"
+        echo "             cp a.out.${CLUSTER} -> a.out"
+        cp -f "a.out.${CLUSTER}" a.out
+    fi
+elif [ -n "$ARCH_EXPECTED" ] && [ -x ./a.out ]; then
+    CUR_ARCH=$(file -b a.out 2>/dev/null | grep -oE 'x86-64|ARM aarch64' | head -1)
+    ARCH_OK=0
+    case "$ARCH_EXPECTED" in
+        aarch64) [[ "$CUR_ARCH" == "ARM aarch64" ]] && ARCH_OK=1 ;;
+        x86_64)  [[ "$CUR_ARCH" == "x86-64" ]]      && ARCH_OK=1 ;;
+    esac
+    if [ "$ARCH_OK" -eq 0 ]; then
+        echo "[ARCH-GUARD] ⚠ FATAL: a.out 架構 ($CUR_ARCH) 與目標 $CLUSTER ($ARCH_EXPECTED) 不符"
+        echo "             且 a.out.${CLUSTER} 不存在, 無法自動修正."
+        echo "             請先編譯: ./run build $CLUSTER --build-only && cp a.out a.out.${CLUSTER}"
+        exit 1
+    fi
+fi
+
 echo ""
 echo "[submit] 投遞: bash $BUILD_SCRIPT --no-clean --no-build  ($CLUSTER)"
 
