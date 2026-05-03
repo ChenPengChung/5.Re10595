@@ -1955,7 +1955,7 @@ def parse_variables_h(path):
         if m:
             result[key] = int(m.group(1))
     # Float defines (may have parentheses)
-    for key in ("GAMMA", "ALPHA", "CFL"):
+    for key in ("GAMMA", "ALPHA", "CFL", "ZP_TARGET"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
@@ -1964,91 +1964,139 @@ def parse_variables_h(path):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
+    # Integer defines (Re variants)
+    for key in ("UTAU_RE",):
+        m = re.search(rf'#define\s+{key}\s+(\d+)', text)
+        if m:
+            result[key] = int(m.group(1))
     # String defines
-    for key in ("GRID_DAT_DIR", "GRID_DAT_REF"):
+    for key in ("GRID_DAT_DIR", "GRID_DAT_REF",
+                "UTAU_BOT_DAT", "UTAU_TOP_DAT"):
         m = re.search(rf'#define\s+{key}\s+"([^"]+)"', text)
         if m:
             result[key] = m.group(1)
     return result
 
 
+def _find_existing_adaptive_grid(grid_dir, NI, NJ):
+    """Search GRID_DAT_DIR for an existing adaptive grid at NI x NJ."""
+    import glob
+    pattern = str(grid_dir / f"adaptive_*_I{NI}_J{NJ}_*.dat")
+    candidates = sorted(glob.glob(pattern))
+    for c in candidates:
+        try:
+            with open(c) as f:
+                for line in f:
+                    up = line.upper()
+                    if 'I=' in up and 'J=' in up:
+                        m_i = re.search(r'I\s*=\s*(\d+)', up)
+                        m_j = re.search(r'J\s*=\s*(\d+)', up)
+                        if m_i and m_j:
+                            if int(m_i.group(1)) == NI and int(m_j.group(1)) == NJ:
+                                return Path(c)
+                        break
+        except Exception:
+            continue
+    return None
+
+
 def auto_generate(variables_h_path, script_dir=None):
     """
-    Fully automatic grid generation:
-      1. Parse NY, NZ, LZ, LY, GAMMA, ALPHA from variables.h
-      2. GAMMA is required (user design parameter in variables.h)
-      3. Compute minSize from GAMMA analytically (gamma_to_minSize)
-      4. Load reference grid from GRID_DAT_REF
-      5. Run Steger-Sorenson adaptive grid generation (Mode 2)
-      6. Export Tecplot .dat with filename matching C code sprintf format
-      7. Print GILBM stability check
-    Returns: output filepath
+    Fully automatic grid generation from variables.h.
 
-    Naming convention:
-      NY = streamwise node count  → NI = NY  nodes (grid .dat I dimension)
-      NZ = wall-normal node count → NJ = NZ  nodes (grid .dat J dimension)
-      Streamwise cells = NY-1,  Wall-normal cells = NZ-1
+    Auto-selects mode:
+      - UTAU_BOT_DAT + UTAU_TOP_DAT defined → Mode 3 (variable gamma from u_tau)
+      - Otherwise → Mode 2 (Poisson + uniform GAMMA)
+
+    Mode 2 pipeline:
+      1. Load GRID_DAT_REF (Frohlich reference)
+      2. Poisson solve + uniform GAMMA stretching
+      3. Write output
+
+    Mode 3 pipeline:
+      1. Find existing adaptive grid at NI×NJ as base topology
+         (if not found, run Poisson from GRID_DAT_REF with gamma=0)
+      2. Load u_tau data from UTAU_BOT_DAT / UTAU_TOP_DAT
+      3. Compute gamma(y) field for z+ < ZP_TARGET
+      4. Redistribute vertically with variable gamma
+      5. Write output
+
+    Output filename matches C code snprintf:
+      GRID_DAT_DIR/adaptive_{GRID_DAT_REF stem}_I{NY}_J{NZ}_a{ALPHA:.1f}.dat
     """
     if script_dir is None:
         script_dir = Path(__file__).parent
 
     params = parse_variables_h(variables_h_path)
+    vh_dir = Path(variables_h_path).parent
+
     required = ["NY", "NZ", "ALPHA", "GAMMA", "GRID_DAT_REF"]
     for k in required:
         if k not in params:
             raise ValueError(f"Missing #define {k} in {variables_h_path}")
 
     NY = params["NY"]
-    NZ = params["NZ"]          # node count (格點數)
+    NZ = params["NZ"]
     alpha = params["ALPHA"]
     gamma = params["GAMMA"]
     ref_name = params["GRID_DAT_REF"]
     LZ = params.get("LZ", 3.036)
     LY = params.get("LY", 9.0)
-    CFL_val = params.get("CFL", 0.5)
 
-    NZ_cells = NZ - 1          # wall-normal cell count (格子數 = NZ-1)
-
-    # Compute minSize from GAMMA (analytic, no bisection)
-    # gamma_to_minSize expects cell count, not node count
-    if gamma > 0:
-        minSize_val = gamma_to_minSize(gamma, LZ, NZ_cells, LY)
-    else:
-        minSize_val = 0.0  # gamma=0 means no extra stretching
-
-    # Grid .dat dimensions:
-    #   I = NY  (streamwise nodes, NY is already node count)
-    #   J = NZ  (wall-normal nodes)
     NI = NY
     NJ = NZ
+    NZ_cells = NZ - 1
 
-    grid_dir = params.get("GRID_DAT_DIR")
-    if grid_dir:
-        ref_path = Path(grid_dir) / ref_name
-        if not ref_path.is_absolute():
-            ref_path = Path(variables_h_path).parent / ref_path
-    else:
-        ref_path = script_dir / ref_name
+    # Resolve GRID_DAT_DIR (output directory, relative to variables.h)
+    grid_dir_name = params.get("GRID_DAT_DIR", "J_Frohlich")
+    grid_dir = vh_dir / grid_dir_name
+    if not grid_dir.is_dir():
+        grid_dir = script_dir  # fallback
+
+    # Output filename: must match C code snprintf
+    grid_key = Path(ref_name).stem   # "3.fine grid"
+    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_a{alpha:.1f}.dat"
+    out_path = grid_dir / out_name
+
+    # Resolve GRID_DAT_REF (Frohlich reference, may not exist for Mode 3)
+    ref_path = grid_dir / ref_name
     if not ref_path.exists():
-        raise FileNotFoundError(f"Reference grid not found: {ref_path}")
+        ref_path = script_dir / ref_name
 
-    # Load reference grid
+    # ── Detect mode ──
+    has_utau = ("UTAU_BOT_DAT" in params and "UTAU_TOP_DAT" in params)
+
+    if has_utau:
+        return _auto_mode3(params, vh_dir, grid_dir, ref_path,
+                           out_path, grid_key, script_dir)
+    else:
+        if not ref_path.exists():
+            raise FileNotFoundError(f"Reference grid not found: {ref_path}")
+        return _auto_mode2(params, grid_dir, ref_path,
+                           out_path, grid_key, script_dir)
+
+
+def _auto_mode2(params, grid_dir, ref_path, out_path, grid_key, script_dir):
+    """Auto Mode 2: Poisson + uniform GAMMA."""
+    NY, NZ = params["NY"], params["NZ"]
+    alpha, gamma = params["ALPHA"], params["GAMMA"]
+    LZ = params.get("LZ", 3.036)
+    LY = params.get("LY", 9.0)
+    NI, NJ = NY, NZ
+    NZ_cells = NZ - 1
+
+    if gamma > 0:
+        minSize_val = gamma_to_minSize(gamma, LZ, NZ_cells, LY)
+
     x_ref, y_ref, ni_ref, nj_ref = parse_tecplot_dat(ref_path)
 
-    # ── Validate reference grid dimensions ──
-    # Reference grid may have different resolution (e.g. Frohlich 129x197)
-    # We only log its dimensions; the output will be re-gridded to NI x NJ
-    print(f"  [auto] Reference grid: I={ni_ref} x J={nj_ref}")
-
-    print(f"  [auto] variables.h: NY={NY} (nodes), NZ={NZ} (nodes), LZ={LZ}, ALPHA={alpha}")
-    print(f"  [auto] Wall-normal: {NZ} nodes = {NZ_cells} cells")
-    print(f"  [auto] GAMMA={gamma} (user input)")
+    print(f"  [auto] Mode 2: Poisson + uniform GAMMA")
+    print(f"  [auto] Reference grid: {ref_path.name} (I={ni_ref} x J={nj_ref})")
+    print(f"  [auto] variables.h: NY={NY}, NZ={NZ}, LZ={LZ}, GAMMA={gamma}, ALPHA={alpha}")
     if gamma > 0:
-        print(f"  [auto] minSize={minSize_val:.6e} (derived from GAMMA)")
-    print(f"  [auto] Reference: {ref_path.name}")
-    print(f"  [auto] Target grid: I={NI} (=NY) x J={NJ} (=NZ)")
+        print(f"  [auto] minSize={minSize_val:.6e} (from GAMMA)")
+    print(f"  [auto] Target: I={NI} x J={NJ}")
 
-    # ── GILBM stability pre-check ──
     print_gilbm_stability_table()
 
     x_out, y_out, conv = generate_adaptive_grid(
@@ -2056,15 +2104,11 @@ def auto_generate(variables_h_path, script_dir=None):
         gamma=gamma, alpha=alpha,
         poisson_iter=15000, poisson_tol=1e-12)
 
-    # ── Validate generated grid dimensions ──
     nj_out, ni_out = x_out.shape
     if ni_out != NI or nj_out != NJ:
-        print(f"  !! INTERNAL ERROR: generated grid {ni_out}x{nj_out} "
-              f"≠ expected {NI}x{NJ} !!")
-        sys.exit(1)
-    print(f"  [auto] Generated grid: I={ni_out} x J={nj_out} [OK]")
+        sys.exit(f"  !! INTERNAL ERROR: {ni_out}x{nj_out} ≠ {NI}x{NJ}")
+    print(f"  [auto] Generated: I={ni_out} x J={nj_out} [OK]")
 
-    # ── GILBM stability post-check (on actual generated grid) ──
     x_fro_max = x_ref[0, -1]
     h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
     scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
@@ -2074,45 +2118,185 @@ def auto_generate(variables_h_path, script_dir=None):
         stab["dt_global"], stab["a_max"], stab["status"])
 
     if stab["status"] == "UNSTABLE":
-        print("  !! Grid generation completed but omega > 2.0 !!")
-        print("  !! The GILBM simulation WILL DIVERGE with this grid. !!")
-        print("  !! Reduce GAMMA in variables.h and regenerate. !!")
-        print()
-
-    # Output filename must match C code sprintf format:
-    #   "%s/adaptive_%s_I%d_J%d_a%.1f.dat" with ("3.fine grid", NY, NZ, ALPHA)
-    #   I = NY (streamwise nodes), J = NZ (wall-normal nodes)
-    # ★ CRITICAL: use :.1f to match C's %.1f exactly (e.g. 0.5 not 0.50 or 0.500)
-    grid_key = ref_path.stem          # "3.fine grid"
-    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_a{alpha:.1f}.dat"
-    out_path = script_dir / out_name
+        print("  !! UNSTABLE: omega > 2.0, reduce GAMMA !!")
 
     write_tecplot_dat(out_path, x_out, y_out,
                       title=f"Periodic hill {NI}x{NJ}",
                       zone_title=f"I{NI}_J{NJ}_a{alpha}")
 
-    # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
-    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_a{alpha:.1f}.txt"
+    grid_data_path = grid_dir / f"grid_data_I{NI}_J{NJ}_a{alpha:.1f}.txt"
     write_grid_data(grid_data_path, x_out, y_out,
                     NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha, LZ=LZ,
                     source_dat=out_path.name)
 
-    # ── Validate written .dat file matches NY x NZ ──
-    ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(
-        str(out_path), NY, NZ)
+    ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(str(out_path), NY, NZ)
     if not ok:
-        print("  !! Output .dat file dimension mismatch — ABORTING !!")
-        sys.exit(1)
-    print(f"  [auto] Output validated: I={ni_a} J={nj_a} [OK] (matches NY={ni_e}, NZ={nj_e})")
+        sys.exit("  !! Output dimension mismatch !!")
+    print(f"  [auto] Validated: I={ni_a} J={nj_a} [OK]")
 
-    # Also save comparison plot
     tag = f"I{NI}_J{NJ}_a{alpha}"
     plot_compare(x_ref, y_ref, x_out, y_out,
                  labels=["Reference", f"New ({NI}x{NJ})"],
-                 title=f"Auto: GAMMA={gamma:.4f}, ALPHA={alpha}, Grid={NI}x{NJ}",
-                 savepath=script_dir / f"compare_auto_{tag}.png")
+                 title=f"Mode 2: GAMMA={gamma:.4f}, ALPHA={alpha}",
+                 savepath=grid_dir / f"compare_auto_{tag}.png")
 
     print(f"  [auto] Output: {out_path}")
+    return str(out_path)
+
+
+def _auto_mode3(params, vh_dir, grid_dir, ref_path, out_path, grid_key, script_dir):
+    """Auto Mode 3: variable gamma(y) from u_tau data."""
+    NY, NZ = params["NY"], params["NZ"]
+    alpha = params["ALPHA"]
+    gamma_vh = params["GAMMA"]
+    LZ = params.get("LZ", 3.036)
+    LY = params.get("LY", 9.0)
+    NI, NJ = NY, NZ
+    NZ_cells = NZ - 1
+
+    utau_re = params.get("UTAU_RE", params.get("Re", 5600))
+    if isinstance(utau_re, str):
+        utau_re = int(utau_re)
+    zp_target = params.get("ZP_TARGET", 0.9)
+
+    bot_name = params["UTAU_BOT_DAT"]
+    top_name = params["UTAU_TOP_DAT"]
+    bot_path = grid_dir / bot_name
+    top_path = grid_dir / top_name
+    if not bot_path.exists():
+        raise FileNotFoundError(f"Bottom u_tau not found: {bot_path}")
+    if not top_path.exists():
+        raise FileNotFoundError(f"Top u_tau not found: {top_path}")
+
+    print(f"  [auto] Mode 3: variable gamma(y) from u_tau")
+    print(f"  [auto] variables.h: NY={NY}, NZ={NZ}, ALPHA={alpha}, GAMMA={gamma_vh}")
+    print(f"  [auto] u_tau Re={utau_re}, z+_target={zp_target}")
+
+    # ── Step 1: obtain base topology grid at NI × NJ ──
+    base_path = _find_existing_adaptive_grid(grid_dir, NI, NJ)
+    if base_path and base_path != out_path:
+        print(f"  [auto] Base topology found: {base_path.name}")
+        x_base, y_base, ni_b, nj_b = parse_tecplot_dat(base_path)
+        print(f"  [auto] Base grid: I={ni_b} x J={nj_b} (skip Poisson)")
+    elif ref_path.exists():
+        print(f"  [auto] No existing base grid; running Poisson from {ref_path.name}")
+        x_ref, y_ref, ni_ref, nj_ref = parse_tecplot_dat(ref_path)
+        print(f"  [auto] Reference: I={ni_ref} x J={nj_ref}")
+        x_base, y_base, _ = generate_adaptive_grid(
+            x_ref, y_ref, NI, NJ,
+            gamma=0.0, alpha=alpha,
+            poisson_iter=15000, poisson_tol=1e-12)
+        print(f"  [auto] Poisson base grid: I={NI} x J={NJ} (gamma=0, no stretching)")
+    else:
+        raise FileNotFoundError(
+            f"Mode 3 needs a base grid: no adaptive grid at I={NI} J={NJ} "
+            f"in {grid_dir}, and GRID_DAT_REF '{ref_path}' not found")
+
+    # ── Step 2: load u_tau data ──
+    y_bot_ut, z_bot_ut, utau_bot, n_bot = parse_utau_dat(bot_path)
+    y_top_ut, z_top_ut, utau_top, n_top = parse_utau_dat(top_path)
+    print(f"  [auto] Bottom u_tau: {bot_name} ({n_bot} pts, "
+          f"[{utau_bot.min():.6f}, {utau_bot.max():.6f}])")
+    print(f"  [auto] Top u_tau:    {top_name} ({n_top} pts, "
+          f"[{utau_top.min():.6f}, {utau_top.max():.6f}])")
+
+    if n_bot != NI:
+        print(f"  WARNING: bottom u_tau {n_bot} pts ≠ NI={NI}")
+    if n_top != NI:
+        print(f"  WARNING: top u_tau {n_top} pts ≠ NI={NI}")
+
+    L_col = z_top_ut - z_bot_ut
+    print(f"  [auto] Column height L(y): [{L_col.min():.4f}, {L_col.max():.4f}]")
+
+    # ── Step 3: compute gamma(y) field ──
+    gamma_field, gamma_info = compute_gamma_field(
+        utau_bot, utau_top, L_col,
+        Re=utau_re, NZ_cells=NZ_cells, alpha=alpha,
+        zp_target=zp_target)
+
+    gi = gamma_info
+    print(f"  [auto] gamma(y): [{gamma_field.min():.4f}, {gamma_field.max():.4f}], "
+          f"mean={gamma_field.mean():.4f}")
+    print(f"  [auto] z+ achieved: max={gi['zp_max'].max():.4f}, "
+          f"mean={gi['zp_max'].mean():.4f}")
+
+    n_over = int(np.sum(gi["zp_max"] > 1.0))
+    if n_over == 0:
+        print(f"  [auto] ALL {NI} stations: z+ < 1.0 [OK]")
+    else:
+        print(f"  [auto] WARNING: {n_over}/{NI} stations z+ > 1.0")
+
+    # ── Step 4: redistribute with variable gamma ──
+    x_out, y_out = redistribute_vertical_adaptive(
+        x_base, y_base, gamma_field, alpha=alpha)
+    print(f"  [auto] Generated: I={NI} x J={NJ} (variable gamma)")
+
+    # ── Step 5: GILBM stability check ──
+    x_fro_max = x_base[0, -1]
+    h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
+    scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
+    stab = estimate_gilbm_stability(x_out, y_out, scale_factor=scale,
+                                     Re=utau_re)
+    print_gilbm_stability_warning(
+        gamma_field.max(), stab["omega"], stab["c_max"],
+        stab["dt_global"], stab["a_max"], stab["status"])
+
+    if stab["status"] == "UNSTABLE":
+        print("  !! UNSTABLE: omega > 2.0 !!")
+        sys.exit(1)
+
+    # ── Step 6: write output grid ──
+    write_tecplot_dat(out_path, x_out, y_out,
+                      title=f"Periodic hill {NI}x{NJ} variable-gamma",
+                      zone_title=f"I{NI}_J{NJ}_a{alpha}")
+
+    ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(str(out_path), NY, NZ)
+    if not ok:
+        sys.exit("  !! Output dimension mismatch !!")
+    print(f"  [auto] Validated: I={ni_a} J={nj_a} [OK]")
+
+    # ── Step 7: diagnostics ──
+    tag = f"I{NI}_J{NJ}_a{alpha:.1f}"
+
+    grid_data_path = grid_dir / f"grid_data_{tag}.txt"
+    write_grid_data(grid_data_path, x_out, y_out,
+                    NY=NY, NZ=NZ, GAMMA=gamma_field.max(),
+                    ALPHA=alpha, LZ=LZ,
+                    source_dat=out_path.name)
+
+    sens_path = grid_dir / f"sensitivity_{tag}.dat"
+    sensitivity_analysis(gamma_field, gamma_info, L_col,
+                         Re=utau_re, NZ_cells=NZ_cells, alpha=alpha,
+                         report_path=sens_path)
+
+    gamma_table = grid_dir / f"gamma_field_{tag}.dat"
+    with open(gamma_table, "w") as gf:
+        gf.write(f'TITLE = "gamma(y) for z+ < {zp_target}"\n')
+        gf.write('VARIABLES = "j" "y" "gamma" "zp_bot" "zp_top" "zp_max"\n')
+        gf.write(f'ZONE T="gamma_field", I={NI}, F=POINT\n')
+        gf.write('DT=(SINGLE SINGLE SINGLE SINGLE SINGLE SINGLE)\n')
+        for i in range(NI):
+            gf.write(f"  {i:4d} {y_bot_ut[i]:14.8e} {gamma_field[i]:10.6f} "
+                     f"{gi['zp_bot'][i]:10.6f} {gi['zp_top'][i]:10.6f} "
+                     f"{gi['zp_max'][i]:10.6f}\n")
+    print(f"  [written] {gamma_table}")
+
+    plot_compare(x_base, y_base, x_out, y_out,
+                 labels=["Base topology", f"Variable gamma (z+<{zp_target})"],
+                 title=f"Mode 3: Re={utau_re}, z+_target={zp_target}",
+                 savepath=grid_dir / f"compare_auto_{tag}.png")
+
+    # ── Summary ──
+    print()
+    print(f"  [auto] Output: {out_path}")
+    print(f"  [auto] gamma range: [{gamma_field.min():.4f}, {gamma_field.max():.4f}]")
+    print(f"  [auto] omega={stab['omega']:.4f} ({stab['status']})")
+    print(f"  [auto] variables.h GAMMA={gamma_vh} "
+          f"(max gamma_field={gamma_field.max():.4f})")
+    if abs(gamma_vh - gamma_field.max()) > 0.01:
+        print(f"  [auto] NOTE: consider updating GAMMA in variables.h to "
+              f"{gamma_field.max():.4f} (max of gamma field)")
+
     return str(out_path)
 
 

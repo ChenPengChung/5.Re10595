@@ -105,15 +105,15 @@
 #error "FATAL: (NY-1) must be divisible by jp! Fix: change NY or jp in variables.h so that (NY-1) % jp == 0. For jp=8, valid NY: 9,17,25,...,129,137,145,153,..."
 #endif
 
-//本專案為新輸入網格測試穩定性
-//透過新上傳的網格進行讀取與測試
-/*
 // ── 非均勻網格拉伸 ──
-//   GAMMA: Vinokur tanh 拉伸參數 (越大壁面越密, →0 趨近均勻)
+//   本專案使用 variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere)
+//   GAMMA: 取 gamma(y) 場最大值作為 minSize 參考 (保守值)
+//          實際網格由 restart_tools/grid_zeta_tool.py Mode 3 生成
+//          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
-//   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距
-#define     GAMMA               3.0 //此版本直接透過指定一個拉伸參數，來反求 minSIze 
-#define     ALPHA               0.5*/
+//   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
+#define     GAMMA               4.3217
+#define     ALPHA               0.5
 
 #define     CFL                 0.5
 #define     minSize             (                                              \
@@ -131,6 +131,14 @@
 // ── 外部網格 (Fröhlich Periodic Hill grid) ──
 #define     GRID_DAT_DIR        "J_Frohlich"
 #define     GRID_DAT_REF        "3.fine grid.dat"
+
+// ── Variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere) ──
+//   定義 UTAU_BOT_DAT / UTAU_TOP_DAT 後, --auto 自動使用 Mode 3
+//   不定義則 fallback 到 Mode 2 (Poisson + 均勻 GAMMA)
+#define     UTAU_BOT_DAT        "29.Re5600_j257_zplus_bottom_normal_spanavg_2nd.dat"
+#define     UTAU_TOP_DAT        "28.Re5600_j257_zplus_top_spanavg_2nd.dat"
+#define     UTAU_RE             5600        // u_tau 資料來源的 Re
+#define     ZP_TARGET           0.9         // z+ 設計目標 (< 1.0 含安全裕度)
 
 
 // ================================================================
