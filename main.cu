@@ -374,7 +374,7 @@ int main(int argc, char *argv[])
                  GRID_DAT_DIR, grid_ref_stem,
                  NY, NZ, (double)ALPHA);
 
-        // need_generate: 0=OK, 1=missing, 2=stale
+        // need_generate: 0=OK, 1=missing, 2=stale(input newer), 3=diagnostics missing
         int need_generate = 0;
         FILE *grid_test = fopen(grid_dat_path, "r");
 
@@ -382,12 +382,37 @@ int main(int argc, char *argv[])
             need_generate = 1;
         } else {
             fclose(grid_test);
-            // 新鮮度: variables.h 比格點檔更新 → 參數已變, 需重新生成
-            struct stat grid_st, vars_st;
-            if (stat(grid_dat_path, &grid_st) == 0 &&
-                stat("variables.h", &vars_st) == 0) {
-                if (vars_st.st_mtime > grid_st.st_mtime)
-                    need_generate = 2;
+            // 新鮮度: 全部輸入依賴 vs 格點檔 mtime
+            struct stat grid_st, dep_st;
+            if (stat(grid_dat_path, &grid_st) == 0) {
+                const char *deps[] = {
+                    "variables.h",
+                    "restart_tools/grid_zeta_tool.py",
+#ifdef UTAU_BOT_DAT
+                    GRID_DAT_DIR "/" UTAU_BOT_DAT,
+#endif
+#ifdef UTAU_TOP_DAT
+                    GRID_DAT_DIR "/" UTAU_TOP_DAT,
+#endif
+                    NULL
+                };
+                for (int d = 0; deps[d]; d++) {
+                    if (stat(deps[d], &dep_st) == 0 &&
+                        dep_st.st_mtime > grid_st.st_mtime) {
+                        need_generate = 2;
+                        if (myid == 0)
+                            fprintf(stderr, "[GRID] stale: %s is newer\n", deps[d]);
+                    }
+                }
+            }
+            // 診斷檔檢查: grid_data 不存在 → 補齊
+            if (!need_generate) {
+                char diag_path[512];
+                snprintf(diag_path, sizeof(diag_path),
+                         "%s/grid_data_I%d_J%d_a%.1f.txt",
+                         GRID_DAT_DIR, NY, NZ, (double)ALPHA);
+                if (stat(diag_path, &dep_st) != 0)
+                    need_generate = 3;
             }
         }
 
@@ -395,10 +420,12 @@ int main(int argc, char *argv[])
             if (myid == 0) {
                 fprintf(stderr, "\n");
                 fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
-                if (need_generate == 2)
-                    fprintf(stderr, "║  Grid STALE (variables.h newer) — regenerating ...     ║\n");
-                else
+                if (need_generate == 1)
                     fprintf(stderr, "║  Grid NOT FOUND — auto-generating ...                  ║\n");
+                else if (need_generate == 2)
+                    fprintf(stderr, "║  Grid STALE (input dependency newer) — regenerating ... ║\n");
+                else
+                    fprintf(stderr, "║  Grid OK, diagnostics missing — regenerating ...        ║\n");
                 fprintf(stderr, "║  Target: %s\n", grid_dat_path);
                 fprintf(stderr, "║  NY=%d, NZ=%d, ALPHA=%.1f, REF=%s\n",
                         NY, NZ, (double)ALPHA, GRID_DAT_REF);

@@ -156,21 +156,28 @@ Jacobian 計算 --> kernel loop 開始模擬
 
 ## 6. 命名慣例對齊
 
-**C 碼** (`initialization.h:94-97`):
+**C 碼** (`initialization.h` + `main.cu`):
 ```c
+// 從 GRID_DAT_REF 擷取 stem (去掉 .dat 副檔名)
+char grid_ref_stem[256];
+strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+{ char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
 snprintf(grid_dat_path, sizeof(grid_dat_path),
          "%s/adaptive_%s_I%d_J%d_a%.1f.dat",
-         GRID_DAT_DIR, "3.fine grid", NY, NZ, (double)ALPHA);
+         GRID_DAT_DIR, grid_ref_stem, NY, NZ, (double)ALPHA);
 ```
-生成路徑: `J_Frohlich/adaptive_3.fine grid_I257_J129_a0.5.dat`
+GRID_DAT_REF=`"3.fine grid.dat"` → stem=`"3.fine grid"` → `J_Frohlich/adaptive_3.fine grid_I257_J129_a0.5.dat`
 
 **Python** (`grid_zeta_tool.py`):
 ```python
+grid_key = Path(GRID_DAT_REF).stem   # "3.fine grid"
 out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_a{alpha:.1f}.dat"
 ```
 生成路徑: `J_Frohlich/adaptive_3.fine grid_I257_J129_a0.5.dat`
 
-兩者完全一致. 舊格點 `_g2.0_a0.5.dat` 因名稱不同, C 碼不會誤讀.
+兩者皆從 GRID_DAT_REF 動態擷取 stem, 不再硬編碼. 舊格點 `_g2.0_a0.5.dat` 因名稱不同, C 碼不會誤讀.
 
 ---
 
