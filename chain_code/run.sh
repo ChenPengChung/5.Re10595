@@ -534,6 +534,14 @@ if [ "$MODE_COLD" -eq 1 ]; then
     rm -f checkrho.dat Ustar_Force_record.dat timing_log.dat
     rm -rf statistics/
     mkdir -p restart/
+    # 恢復 [2] ETA 選出的 partition override (剛被 rm -rf restart/ 刪掉)
+    if [ -n "${_BEST_P:-}" ] && [ -n "${_BEST_C:-}" ]; then
+        _fc_default="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.${_BEST_C}" 2>/dev/null)"
+        if [ "$_BEST_P" != "$_fc_default" ]; then
+            echo "$_BEST_P" > restart/gb200_partition
+            echo "    [partition] 恢復 ETA 選出的 partition=$_BEST_P"
+        fi
+    fi
     HAS_CKPT=0
     HAS_STATE=0
     echo "[--force-cold] 已清理完畢, 進入 Scenario 1 冷啟動流程"
