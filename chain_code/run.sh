@@ -757,6 +757,9 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
         fi
     else
         echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
+        echo "        清除可能殘留的不完整產物..."
+        rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
+        rm -f restart/grid_provenance restart/grid_provenance.WRITING
         exit 1
     fi
 elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
@@ -770,7 +773,7 @@ fi
 # ═════════════════════════════════════════════════════════════════════════
 # Preflight C-0: provenance 存在但 checkpoint 不存在 → 不一致
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ] && [ "$MODE_REGRID" -eq 0 ] && [ -s restart/grid_provenance ]; then
+if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ] && [ "$MODE_REGRID" -eq 0 ] && [ -e restart/grid_provenance ]; then
     echo "[FATAL] restart/grid_provenance 存在但無有效 checkpoint"
     echo "        這是 regrid chain 的不一致狀態 (checkpoint 被刪但 provenance 殘留)"
     echo "        選擇:"
@@ -784,7 +787,7 @@ fi
 # Preflight C: grid_provenance 一致性驗證
 #   restart/grid_provenance 記錄本 chain 使用的 grid 身份 (session-level)
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ] && [ -s restart/grid_provenance ]; then
+if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ] && [ -e restart/grid_provenance ]; then
     _PROV="restart/grid_provenance"
 
     _prov_get() {

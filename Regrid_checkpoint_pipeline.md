@@ -95,6 +95,10 @@
  │       清除舊 chain_count / chain_jobid → HAS_STATE=0
  │       → 進入 Scenario [2] (Round 2)
  │
+ ├── Preflight C-0: Orphan provenance 偵測
+ │   條件: HAS_CKPT=0 且 非 cold 且 非 regrid 且 restart/grid_provenance 存在
+ │   → FATAL: provenance 存在但無有效 checkpoint (不一致狀態)
+ │
  └── Preflight C: Provenance 一致性驗證
      條件: HAS_CKPT=1 且 restart/grid_provenance 存在
      驗證 4 個 mtime:
@@ -220,6 +224,7 @@ created=2026-05-03 14:30:00
 | 1 | any | any | `--regrid + --force-regrid` | 清除 → 重新插值 → Scenario [2] |
 | 1 | any | 有 | `./run` (stale) | Preflight C → mtime 不符 → FATAL |
 | any | any | any | `--force-cold` | 全清 → Scenario [1] |
+| 0 | any | 有 | `./run` | **FATAL (C-0)**: provenance 存在但無 checkpoint → 不一致 |
 | 0 | 0 | - | `./run` (origin 存在) | 印 advisory, 不插值 → Scenario [1] |
 
 ---
