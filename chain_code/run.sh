@@ -64,6 +64,8 @@ MODE_REGRID=0
 MODE_FORCE_REGRID=0
 REGRID_OLD_GRID=""
 REGRID_NEW_GRID=""
+REGRID_OLD_GAMMA=""
+REGRID_OLD_ALPHA=""
 
 while [ $# -gt 0 ]; do
     arg="$1"
@@ -94,6 +96,18 @@ while [ $# -gt 0 ]; do
             REGRID_NEW_GRID="$1" ;;
         --new-grid=*|--new-grid-dat=*)
             REGRID_NEW_GRID="${arg#*=}" ;;
+        --old-gamma)
+            shift
+            if [ $# -eq 0 ]; then echo "[run.sh] Missing value after $arg"; exit 2; fi
+            REGRID_OLD_GAMMA="$1" ;;
+        --old-gamma=*)
+            REGRID_OLD_GAMMA="${arg#*=}" ;;
+        --old-alpha)
+            shift
+            if [ $# -eq 0 ]; then echo "[run.sh] Missing value after $arg"; exit 2; fi
+            REGRID_OLD_ALPHA="$1" ;;
+        --old-alpha=*)
+            REGRID_OLD_ALPHA="${arg#*=}" ;;
         -h|--help)
             sed -n '2,42p' "$0"
             exit 0 ;;
@@ -736,6 +750,8 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
     _INTERP_CMD=(python3 restart_tools/interp_checkpoint.py --auto --step 1
                  --old-grid-dat "$REGRID_OLD_GRID"
                  --new-grid-dat "$REGRID_NEW_GRID")
+    [ -n "$REGRID_OLD_GAMMA" ] && _INTERP_CMD+=(--old-gamma "$REGRID_OLD_GAMMA")
+    [ -n "$REGRID_OLD_ALPHA" ] && _INTERP_CMD+=(--old-alpha "$REGRID_OLD_ALPHA")
     if "${_INTERP_CMD[@]}"; then
         _CKPT_DIR="restart/checkpoint/step_00000001"
         _CKPT_OK=1
