@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <mpi.h>
 #include <stdarg.h>
 #include <signal.h>        // 必須在 variables.h 之前 — variables.h 定義 #define cs (1.0/sqrt(3))
@@ -388,6 +389,7 @@ int main(int argc, char *argv[])
                 const char *deps[] = {
                     "variables.h",
                     "restart_tools/grid_zeta_tool.py",
+                    GRID_DAT_DIR "/" GRID_DAT_REF,
 #ifdef UTAU_BOT_DAT
                     GRID_DAT_DIR "/" UTAU_BOT_DAT,
 #endif
@@ -397,11 +399,43 @@ int main(int argc, char *argv[])
                     NULL
                 };
                 for (int d = 0; deps[d]; d++) {
-                    if (stat(deps[d], &dep_st) == 0 &&
-                        dep_st.st_mtime > grid_st.st_mtime) {
+                    int sr = stat(deps[d], &dep_st);
+                    if (sr != 0) {
+                        // 依賴檔遺失 → 觸發 regen, 讓 --auto fail loud
+                        need_generate = 2;
+                        if (myid == 0)
+                            fprintf(stderr, "[GRID] dep missing: %s\n", deps[d]);
+                    } else if (dep_st.st_mtime > grid_st.st_mtime) {
                         need_generate = 2;
                         if (myid == 0)
                             fprintf(stderr, "[GRID] stale: %s is newer\n", deps[d]);
+                    }
+                }
+                // base topology: 掃描同 grid_key 同尺寸的其他 adaptive grid
+                if (!need_generate) {
+                    char prefix[512];
+                    snprintf(prefix, sizeof(prefix),
+                             "adaptive_%s_I%d_J%d_", grid_ref_stem, NY, NZ);
+                    int pfx_len = (int)strlen(prefix);
+                    DIR *dp = opendir(GRID_DAT_DIR);
+                    if (dp) {
+                        struct dirent *ent;
+                        char fpath[512];
+                        while ((ent = readdir(dp)) != NULL) {
+                            if (strncmp(ent->d_name, prefix, pfx_len) != 0) continue;
+                            snprintf(fpath, sizeof(fpath), "%s/%s",
+                                     GRID_DAT_DIR, ent->d_name);
+                            if (strcmp(fpath, grid_dat_path) == 0) continue;
+                            if (stat(fpath, &dep_st) == 0 &&
+                                dep_st.st_mtime > grid_st.st_mtime) {
+                                need_generate = 2;
+                                if (myid == 0)
+                                    fprintf(stderr, "[GRID] stale: base topology %s is newer\n",
+                                            ent->d_name);
+                                break;
+                            }
+                        }
+                        closedir(dp);
                     }
                 }
             }
