@@ -96,45 +96,45 @@ if [ -n "$MODE_CLUSTER" ]; then
     CLUSTER_SRC="override(--${MODE_CLUSTER,,})"
 fi
 
-# [2] Partition-smart-ETA: 未 override、雙 binary 都存在、sbatch 可用時才啟用
-# 用 `sbatch --test-only` 問 SLURM: "如果現在投這個 jobscript, 幾點會開始?"
-# 輸出格式: "sbatch: Job 12345 to start at 2026-04-22T06:30:43 using ..."
-# 或立即可跑: "sbatch: Job allocation 12345 can be allocated now"
+# [2] Partition-smart-ETA: 掃描所有候選 partition, 選 ETA 最早的
+# 候選清單與 dispatcher (submit_dispatcher.sh) 一致: GB200:gb200, gb200-full,
+#   gb200-rack1, gb200-rack2, gb200-dev; H200:dev
+# 每個候選用 sbatch --test-only --partition=<part> --time=<walltime> 查 ETA.
+# 需要對應 arch 的 a.out.{CLUSTER} 存在才會列入.
 if [ -z "$CLUSTER" ] \
-   && [ -s a.out.GB200 ] && [ -s a.out.H200 ] \
-   && [ -f "$CHAIN_DIR/jobscript_chain.slurm.GB200" ] && [ -f "$CHAIN_DIR/jobscript_chain.slurm.H200" ] \
    && command -v sbatch >/dev/null 2>&1 \
    && command -v sinfo  >/dev/null 2>&1; then
 
-    # 先拿 idle 節點數 (用於顯示 + fallback)
-    # partition 從 jobscript 動態讀取，不硬寫
-    # 注意: 尾端 "|| true" 是必要的 — set -eo pipefail 下, sinfo 若回 1
-    # 會讓 X="$(pipeline)" 觸發 set -e 靜默退出 rc=1
-    _gb_part="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.GB200")"
-    _h_part="$( awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.H200")"
-    GB_IDLE="$(sinfo -h -p "$_gb_part" -t idle -o '%D' 2>/dev/null | awk '{s+=$1} END{print s+0}' || true)"
-    H_IDLE="$( sinfo -h -p "$_h_part"  -t idle -o '%D' 2>/dev/null | awk '{s+=$1} END{print s+0}' || true)"
+    # 載入 partition_lib (walltime 查詢)
+    if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+        . "$CHAIN_DIR/tools/partition_lib.sh"
+    fi
 
-    # 內部函數: 用 --test-only 查單一 jobscript 的 ETA epoch, 失敗回 -1
+    # 候選清單: ARCH:partition (順序 = 平手時的優先級, 與 dispatcher 一致)
+    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev}"
+    _RUNSH_TIE_TOL=30   # ETA 差距 <= 30s 視為平手, 用候選順序先到先選
+
     _eta_epoch() {
-        local js="$1" out eta_str
-        # --test-only 不會真的投遞, 只詢問 scheduler 預期
-        out=$(sbatch --test-only "$js" 2>&1 || true)
+        local js="$1" part="$2" out eta_str wt="" time_arg=""
+        if [ -n "$part" ] && type gb200_partition_walltime >/dev/null 2>&1; then
+            wt="$(gb200_partition_walltime "$part")"
+        fi
+        [ -n "$wt" ] && time_arg="--time=$wt"
+        if [ -n "$part" ]; then
+            out=$(sbatch --test-only --partition="$part" $time_arg "$js" 2>&1 || true)
+        else
+            out=$(sbatch --test-only $time_arg "$js" 2>&1 || true)
+        fi
         if   echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
             eta_str=$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -1)
             date -d "$eta_str" +%s 2>/dev/null || echo -1
         elif echo "$out" | grep -qE "allocation .*can be allocated|to start immediately|to start now"; then
-            date +%s   # 立即可跑
+            date +%s
         else
-            echo -1    # --test-only 失敗 / 無法解析
+            echo -1
         fi
     }
 
-    GB_EPOCH=$(_eta_epoch "$CHAIN_DIR/jobscript_chain.slurm.GB200")
-    H_EPOCH=$( _eta_epoch "$CHAIN_DIR/jobscript_chain.slurm.H200" )
-    NOW_EPOCH=$(date +%s)
-
-    # 格式化 wait 時間為可讀字串 (e.g. "now", "~12min", "~3h15m")
     _fmt_wait() {
         local w=$1
         if   [ $w -lt 0 ];     then echo "unknown"
@@ -144,39 +144,74 @@ if [ -z "$CLUSTER" ] \
         fi
     }
 
-    # 兩邊 ETA 都成功 → 比 ETA
-    if [ "$GB_EPOCH" -ge 0 ] && [ "$H_EPOCH" -ge 0 ]; then
-        GB_WAIT=$((GB_EPOCH - NOW_EPOCH))
-        H_WAIT=$(( H_EPOCH - NOW_EPOCH))
-        [ $GB_WAIT -lt 0 ] && GB_WAIT=0
-        [ $H_WAIT  -lt 0 ] && H_WAIT=0
-        GB_WS=$(_fmt_wait $GB_WAIT)
-        H_WS=$( _fmt_wait $H_WAIT)
-        DELTA=$((GB_WAIT - H_WAIT))
-        # 差距 >60s 才算分勝負, 否則看 idle 節點數
-        if   [ $DELTA -lt -60 ]; then
-            CLUSTER="GB200"
-            CLUSTER_SRC="partition-smart-ETA(GB=$GB_WS < H=$H_WS; idle gb=$GB_IDLE/h=$H_IDLE)"
-        elif [ $DELTA -gt  60 ]; then
-            CLUSTER="H200"
-            CLUSTER_SRC="partition-smart-ETA(H=$H_WS < GB=$GB_WS; idle gb=$GB_IDLE/h=$H_IDLE)"
-        else
-            # ETA 平手 (60s 內) → idle 節點多的贏
-            if   [ "${GB_IDLE:-0}" -gt "${H_IDLE:-0}" ]; then
-                CLUSTER="GB200"; CLUSTER_SRC="partition-smart-ETA(tie $GB_WS~$H_WS; gb_idle=$GB_IDLE > h_idle=$H_IDLE)"
-            elif [ "${H_IDLE:-0}" -gt "${GB_IDLE:-0}" ]; then
-                CLUSTER="H200";  CLUSTER_SRC="partition-smart-ETA(tie $GB_WS~$H_WS; h_idle=$H_IDLE > gb_idle=$GB_IDLE)"
+    _BEST_TARGET=""
+    _BEST_EPOCH=0
+    _BEST_SET=0
+    _ETA_LOG=""
+
+    for _entry in $_RUNSH_CANDIDATES; do
+        _c="${_entry%%:*}"
+        _part="${_entry#*:}"
+        [ -z "$_c" ] || [ -z "$_part" ] || [ "$_c" = "$_part" ] && continue
+
+        # 需要對應 binary
+        [ -s "a.out.${_c}" ] || continue
+
+        _js="$CHAIN_DIR/jobscript_chain.slurm.${_c}"
+        [ -f "$_js" ] || continue
+
+        # cooldown sentinel 檢查 (與 dispatcher 一致)
+        _cd_file="restart/cooldown_${_part}.sentinel"
+        if [ -f "$_cd_file" ]; then
+            _cd_epoch=$(grep '^trigger_at_epoch=' "$_cd_file" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+            _cd_ttl=$(grep '^ttl_sec=' "$_cd_file" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
+            _age=$(( $(date +%s) - ${_cd_epoch:-0} ))
+            if [ "$_age" -lt "${_cd_ttl:-3600}" ]; then
+                _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: cooldown (skip)\n"
+                continue
+            else
+                rm -f "$_cd_file"
             fi
         fi
-    else
-        # --test-only 失敗 → fallback 回 idle-count
-        if   [ "${GB_IDLE:-0}" -gt "${H_IDLE:-0}" ]; then
-            CLUSTER="GB200"; CLUSTER_SRC="partition-smart-IDLE(ETA-fail; gb_idle=$GB_IDLE > h_idle=$H_IDLE)"
-        elif [ "${H_IDLE:-0}" -gt "${GB_IDLE:-0}" ]; then
-            CLUSTER="H200";  CLUSTER_SRC="partition-smart-IDLE(ETA-fail; h_idle=$H_IDLE > gb_idle=$GB_IDLE)"
+
+        _eta=$(_eta_epoch "$_js" "$_part")
+        if [ "$_eta" -lt 0 ]; then
+            _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: ETA unknown (skip)\n"
+            continue
+        fi
+        _now=$(date +%s)
+        _wait=$((_eta - _now))
+        [ $_wait -lt 0 ] && _wait=0
+        _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: wait $(_fmt_wait $_wait)\n"
+
+        if [ "$_BEST_SET" -eq 0 ]; then
+            _BEST_TARGET="${_c}@${_part}"
+            _BEST_EPOCH="$_eta"
+            _BEST_SET=1
+        else
+            _delta=$((_BEST_EPOCH - _eta))
+            if [ "$_delta" -gt "$_RUNSH_TIE_TOL" ]; then
+                _BEST_TARGET="${_c}@${_part}"
+                _BEST_EPOCH="$_eta"
+            fi
+        fi
+    done
+
+    if [ "$_BEST_SET" -eq 1 ] && [ -n "$_BEST_TARGET" ]; then
+        _BEST_C="${_BEST_TARGET%%@*}"
+        _BEST_P="${_BEST_TARGET#*@}"
+        CLUSTER="$_BEST_C"
+        CLUSTER_SRC="partition-smart-ETA(best=${_BEST_TARGET})"
+
+        # 自動寫入 partition override (供 jobscript chain 續投使用)
+        _js_default_part="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.${CLUSTER}")"
+        if [ "$_BEST_P" != "$_js_default_part" ]; then
+            mkdir -p restart/
+            echo "$_BEST_P" > restart/gb200_partition
+        else
+            rm -f restart/gb200_partition 2>/dev/null
         fi
     fi
-    # 全部平手或兩邊都 0 → CLUSTER 保持空,fall-through 到 [4]
 fi
 
 # [3] Fallback: uname -m
@@ -426,6 +461,10 @@ echo "════════════════════════�
 echo " run.sh 狀態偵測 @ $(date '+%F %T')"
 echo "   pwd          : $(pwd)"
 echo "   cluster      : $CLUSTER   ($CLUSTER_SRC)"
+if [ -n "${_ETA_LOG:-}" ]; then
+    echo "   ETA compare  :"
+    printf '%b' "$_ETA_LOG" | sed 's/^/   /'
+fi
 echo "   partition    : $PARTITION   ($PARTITION_SRC)"
 echo "   jobscript    : $JOBSCRIPT"
 echo "   build script : $BUILD_SCRIPT"
