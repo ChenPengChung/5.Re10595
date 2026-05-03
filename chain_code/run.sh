@@ -576,14 +576,23 @@ fi
 # ═════════════════════════════════════════════════════════════════════════
 if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
     _ORIGIN_DIR=""
+    _ORIGIN_COUNT=0
     for _d in restart/step_*_origin*/; do
-        [ -s "${_d}metadata.dat" ] && _ORIGIN_DIR="${_d%/}"
+        [ -s "${_d}metadata.dat" ] || continue
+        _ORIGIN_DIR="${_d%/}"
+        _ORIGIN_COUNT=$((_ORIGIN_COUNT + 1))
     done
+    if [ "$_ORIGIN_COUNT" -gt 1 ]; then
+        echo "[FATAL] 多個 origin checkpoint 存在 ($_ORIGIN_COUNT 個), 無法自動選擇"
+        ls -1d restart/step_*_origin*/ 2>/dev/null
+        echo "        請移除不需要的 origin, 只保留一個"
+        exit 1
+    fi
 
     if [ -n "$_ORIGIN_DIR" ]; then
         echo ""
-        echo "[preflight] Origin checkpoint 偵測到: $_ORIGIN_DIR"
-        echo "[preflight] 執行 checkpoint interpolation (old grid → new grid)..."
+        echo "[preflight-B] Origin checkpoint 偵測到: $_ORIGIN_DIR"
+        echo "[preflight-B] 執行 checkpoint interpolation (old grid → new grid)..."
         if python3 restart_tools/interp_checkpoint.py --auto --step 1; then
             _CKPT_DIR="restart/checkpoint/step_00000001"
             _CKPT_OK=1
@@ -591,10 +600,10 @@ if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
             [ -s "$_CKPT_DIR/f00_0.bin" ]    || _CKPT_OK=0
             [ -s "$_CKPT_DIR/rho_0.bin" ]    || _CKPT_OK=0
             if [ "$_CKPT_OK" -eq 1 ]; then
-                echo "[preflight] 插值成功: $_CKPT_DIR"
+                echo "[preflight-B] 插值成功: $_CKPT_DIR"
                 HAS_CKPT=1
                 if [ "$HAS_STATE" -eq 1 ]; then
-                    echo "[preflight] 清除舊 chain state (插值後以 Scenario 2 重新開始)"
+                    echo "[preflight-B] 清除舊 chain state (插值後以 Scenario 2 重新開始)"
                     rm -f restart/chain_count restart/chain_jobid
                     HAS_STATE=0
                 fi
@@ -610,45 +619,48 @@ if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
-# Preflight C: 已存在的 interpolated checkpoint 一致性驗證
-#   若 variables.h 或 NEW grid 在插值後被修改, 舊 checkpoint 不可信
+# Preflight C: grid_provenance 一致性驗證
+#   restart/grid_provenance 記錄本 chain 使用的 grid 身份 (session-level)
+#   若 variables.h / NEW grid / OLD grid 在插值後被修改, FATAL
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
-    _CKPT_META=""
-    while IFS= read -r _d; do
-        _d=${_d%/}
-        case "$_d" in *.WRITING) continue ;; esac
-        [ -s "$_d/metadata.dat" ] && _CKPT_META="$_d/metadata.dat" && break
-    done < <(ls -1d restart/checkpoint/step_*/ 2>/dev/null)
+if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ] && [ -f restart/grid_provenance ]; then
+    _STALE=0
+    _SAVED_VH_MT=$(grep '^variables_h_mtime=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
+    _SAVED_GRID_MT=$(grep '^new_grid_mtime=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
+    _SAVED_NEW_GRID=$(grep '^new_grid=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
+    _SAVED_OLD_MT=$(grep '^old_grid_mtime=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
+    _SAVED_OLD_GRID=$(grep '^old_grid=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
 
-    if [ -n "$_CKPT_META" ] && grep -q '^interp_source=' "$_CKPT_META" 2>/dev/null; then
-        _STALE=0
-        _SAVED_VH_MT=$(grep '^interp_variables_h_mtime=' "$_CKPT_META" 2>/dev/null | cut -d= -f2)
-        _SAVED_GRID_MT=$(grep '^interp_new_grid_mtime=' "$_CKPT_META" 2>/dev/null | cut -d= -f2)
-        _SAVED_NEW_GRID=$(grep '^interp_new_grid=' "$_CKPT_META" 2>/dev/null | cut -d= -f2)
-
-        if [ -n "$_SAVED_VH_MT" ] && [ -f variables.h ]; then
-            _CUR_VH_MT=$(stat -c %Y variables.h 2>/dev/null)
-            if [ -n "$_CUR_VH_MT" ] && [ "$_CUR_VH_MT" != "$_SAVED_VH_MT" ]; then
-                echo "[preflight-C] WARNING: variables.h 已變更 (saved=$_SAVED_VH_MT current=$_CUR_VH_MT)"
-                _STALE=1
-            fi
+    if [ -n "$_SAVED_VH_MT" ] && [ -f variables.h ]; then
+        _CUR=$(stat -c %Y variables.h 2>/dev/null)
+        if [ -n "$_CUR" ] && [ "$_CUR" != "$_SAVED_VH_MT" ]; then
+            echo "[preflight-C] variables.h 已變更 (saved=$_SAVED_VH_MT current=$_CUR)"
+            _STALE=1
         fi
-        if [ -n "$_SAVED_GRID_MT" ] && [ -n "$_SAVED_NEW_GRID" ] && [ -f "$_SAVED_NEW_GRID" ]; then
-            _CUR_GRID_MT=$(stat -c %Y "$_SAVED_NEW_GRID" 2>/dev/null)
-            if [ -n "$_CUR_GRID_MT" ] && [ "$_CUR_GRID_MT" != "$_SAVED_GRID_MT" ]; then
-                echo "[preflight-C] WARNING: NEW grid 已變更 (saved=$_SAVED_GRID_MT current=$_CUR_GRID_MT)"
-                _STALE=1
-            fi
+    fi
+    if [ -n "$_SAVED_GRID_MT" ] && [ -n "$_SAVED_NEW_GRID" ] && [ -f "$_SAVED_NEW_GRID" ]; then
+        _CUR=$(stat -c %Y "$_SAVED_NEW_GRID" 2>/dev/null)
+        if [ -n "$_CUR" ] && [ "$_CUR" != "$_SAVED_GRID_MT" ]; then
+            echo "[preflight-C] NEW grid 已變更 (saved=$_SAVED_GRID_MT current=$_CUR)"
+            _STALE=1
         fi
-        if [ "$_STALE" -eq 1 ]; then
-            echo ""
-            echo "[FATAL] Interpolated checkpoint 與當前 grid/variables 不一致"
-            echo "        刪除 restart/checkpoint/ 後重跑以強制重新插值:"
-            echo "          rm -rf restart/checkpoint/step_00000001"
-            echo "          ./run"
-            exit 1
+    fi
+    if [ -n "$_SAVED_OLD_MT" ] && [ -n "$_SAVED_OLD_GRID" ] && [ -f "$_SAVED_OLD_GRID" ]; then
+        _CUR=$(stat -c %Y "$_SAVED_OLD_GRID" 2>/dev/null)
+        if [ -n "$_CUR" ] && [ "$_CUR" != "$_SAVED_OLD_MT" ]; then
+            echo "[preflight-C] OLD grid 已變更 (saved=$_SAVED_OLD_MT current=$_CUR)"
+            _STALE=1
         fi
+    fi
+    if [ "$_STALE" -eq 1 ]; then
+        echo ""
+        echo "[FATAL] restart/grid_provenance 與當前 grid/variables 不一致"
+        echo "        checkpoint 是在不同 grid 設定下產生的, 不可續跑"
+        echo "        修正步驟:"
+        echo "          rm -rf restart/checkpoint/"
+        echo "          rm -f  restart/grid_provenance"
+        echo "          ./run"
+        exit 1
     fi
 fi
 

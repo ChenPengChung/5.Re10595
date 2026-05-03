@@ -287,7 +287,8 @@ def ask_value(prompt_text, cast_fn=str, default=None):
 
 
 def find_origin_checkpoint(restart_dir='restart'):
-    """Find restart/step_*_origin* directories with valid metadata."""
+    """Find restart/step_*_origin* directories with valid metadata.
+    FATAL if multiple origins exist (ambiguous)."""
     if not os.path.isdir(restart_dir):
         return None
     candidates = []
@@ -296,7 +297,10 @@ def find_origin_checkpoint(restart_dir='restart'):
             path = os.path.join(restart_dir, name)
             if os.path.isfile(os.path.join(path, 'metadata.dat')):
                 candidates.append(path)
-    return candidates[-1] if candidates else None
+    if len(candidates) > 1:
+        sys.exit('FATAL: multiple origin checkpoints found ({}): {}'.format(
+            len(candidates), ', '.join(os.path.basename(c) for c in candidates)))
+    return candidates[0] if candidates else None
 
 
 def resolve_old_dir(old_dir):
@@ -1189,6 +1193,21 @@ def main():
 
     print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, out_dir))
     os.rename(writing_dir, out_dir)
+
+    prov_path = os.path.join(os.path.dirname(out_dir), 'grid_provenance')
+    prov = {
+        'new_grid': NEW.GRID_DAT,
+        'old_grid': OLD.GRID_DAT,
+        'origin': args.old_dir,
+        'variables_h_mtime': str(int(os.path.getmtime(vh_for_prov))) if vh_for_prov and os.path.isfile(vh_for_prov) else '',
+        'new_grid_mtime': str(int(os.path.getmtime(NEW.GRID_DAT))) if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT) else '',
+        'old_grid_mtime': str(int(os.path.getmtime(OLD.GRID_DAT))) if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT) else '',
+        'created': time.strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    with open(prov_path, 'w') as fp:
+        for k, v in prov.items():
+            fp.write('{}={}\n'.format(k, v))
+    print('      grid_provenance written: {}'.format(prov_path))
 
     elapsed = time.time() - t0
     nf = 19 * NEW.JP + NEW.JP + 1
