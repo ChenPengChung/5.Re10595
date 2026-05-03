@@ -553,7 +553,7 @@ fi
 #   動作: python3 restart_tools/interp_checkpoint.py --auto
 #   結果: restart/checkpoint/step_00000001/ 可供 chain 續跑
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_FORCE_COLD" -eq 0 ]; then
+if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
     _ORIGIN_DIR=""
     for _d in restart/step_*_origin*/; do
         [ -s "${_d}metadata.dat" ] && _ORIGIN_DIR="${_d%/}"
