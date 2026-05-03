@@ -9,6 +9,9 @@
 #   ./run.sh --status         只看狀態,不投遞
 #   ./run.sh --rebuild        強制重編 a.out 再投
 #   ./run.sh --force-cold     清空所有 state / history 後從頭跑 (需確認)
+#   ./run.sh --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat>
+#                             從唯一 restart/step_*_origin* 轉換到新 grid checkpoint
+#   ./run.sh --force-regrid   搭配 --regrid-from-origin, 先清掉既有 checkpoint 再重建
 #   ./run.sh --h200           強制使用 H200 變體 (x86_64, sm_90, dev partition)
 #   ./run.sh --gb200          強制使用 GB200 變體 (aarch64, sm_100)
 #   ./run.sh --no-queue-check 關閉 partition 擁塞檢查 (CI/自動化用)
@@ -57,8 +60,13 @@ MODE_REBUILD=0
 MODE_STATUS=0
 MODE_NO_QCHECK=0   # 1 = 跳過 partition 擁塞查詢 (CI/自動化)
 MODE_CLUSTER=""    # "" = auto-detect; "H200" or "GB200" = user override
+MODE_REGRID=0
+MODE_FORCE_REGRID=0
+REGRID_OLD_GRID=""
+REGRID_NEW_GRID=""
 
-for arg in "$@"; do
+while [ $# -gt 0 ]; do
+    arg="$1"
     case "$arg" in
         --force-cold)      MODE_COLD=1 ;;
         --rebuild)         MODE_REBUILD=1 ;;
@@ -66,15 +74,86 @@ for arg in "$@"; do
         --no-queue-check)  MODE_NO_QCHECK=1 ;;
         --h200|--H200)     MODE_CLUSTER="H200" ;;
         --gb200|--GB200)   MODE_CLUSTER="GB200" ;;
+        --regrid-from-origin) MODE_REGRID=1 ;;
+        --force-regrid)    MODE_FORCE_REGRID=1 ;;
+        --old-grid|--old-grid-dat)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "[run.sh] Missing value after $arg"
+                exit 2
+            fi
+            REGRID_OLD_GRID="$1" ;;
+        --old-grid=*|--old-grid-dat=*)
+            REGRID_OLD_GRID="${arg#*=}" ;;
+        --new-grid|--new-grid-dat)
+            shift
+            if [ $# -eq 0 ]; then
+                echo "[run.sh] Missing value after $arg"
+                exit 2
+            fi
+            REGRID_NEW_GRID="$1" ;;
+        --new-grid=*|--new-grid-dat=*)
+            REGRID_NEW_GRID="${arg#*=}" ;;
         -h|--help)
-            sed -n '2,38p' "$0"
+            sed -n '2,42p' "$0"
             exit 0 ;;
         *)
             echo "[run.sh] Unknown arg: $arg"
             echo "         請用 -h / --help 查看合法參數"
             exit 2 ;;
     esac
+    shift
 done
+
+if [ "$MODE_COLD" -eq 1 ] && [ "$MODE_REGRID" -eq 1 ]; then
+    echo "[run.sh] FATAL: --force-cold 與 --regrid-from-origin 不能同時使用"
+    exit 2
+fi
+if [ "$MODE_FORCE_REGRID" -eq 1 ] && [ "$MODE_REGRID" -eq 0 ]; then
+    echo "[run.sh] FATAL: --force-regrid 必須搭配 --regrid-from-origin"
+    exit 2
+fi
+if [ "$MODE_REGRID" -eq 1 ]; then
+    if [ -z "$REGRID_OLD_GRID" ] || [ -z "$REGRID_NEW_GRID" ]; then
+        echo "[run.sh] FATAL: --regrid-from-origin 需要同時指定 --old-grid 與 --new-grid"
+        exit 2
+    fi
+fi
+
+_project_abs_path() {
+    case "$1" in
+        /*) printf '%s\n' "$1" ;;
+        *)  printf '%s/%s\n' "$PROJECT_ROOT" "$1" ;;
+    esac
+}
+
+_read_define_value() {
+    local key="$1"
+    awk -v key="$key" '
+        $1 == "#define" && $2 == key {
+            val=$3
+            gsub(/[()"]/, "", val)
+            print val
+            exit
+        }
+    ' variables.h 2>/dev/null
+}
+
+_grid_dim_value() {
+    local file="$1" key="$2"
+    awk -v key="$key" '
+        {
+            gsub(/,/, " ")
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ "^" key "=") {
+                    sub("^" key "=", "", $i)
+                    print $i
+                    exit
+                }
+            }
+        }
+    ' "$file" 2>/dev/null
+}
 
 # ═════════════════════════════════════════════════════════════════════════
 # Cluster 自動偵測 (partition-smart-ETA → idle-count → uname -m fallback) + override
@@ -548,14 +627,12 @@ if [ "$MODE_COLD" -eq 1 ]; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
-# Preflight A: 確保 NEW grid 存在 (interpolation 和 solver 都需要)
+# Preflight A: 確保 NEW grid 存在 (regrid / restart 都需要)
 #   grid_zeta_tool.py --auto 是冪等的: 若 grid 已存在且新鮮, 幾乎立刻返回
 # ═════════════════════════════════════════════════════════════════════════
 if [ "$MODE_COLD" -eq 0 ]; then
     _NEED_GRID=0
-    for _d in restart/step_*_origin*/; do
-        [ -s "${_d}metadata.dat" ] && _NEED_GRID=1 && break
-    done
+    [ "$MODE_REGRID" -eq 1 ] && _NEED_GRID=1
     [ "$HAS_CKPT" -eq 1 ] && _NEED_GRID=1
     if [ "$_NEED_GRID" -eq 1 ]; then
         echo "[preflight-A] 確認 NEW grid 存在 (grid_zeta_tool.py --auto)..."
@@ -569,12 +646,24 @@ if [ "$MODE_COLD" -eq 0 ]; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
-# Preflight B: checkpoint interpolation (origin → new grid)
-#   條件: 無 restart/checkpoint/step_* 但有 restart/step_*_origin*
-#   動作: python3 restart_tools/interp_checkpoint.py --auto
-#   結果: restart/checkpoint/step_00000001/ 可供 chain 續跑
+# Preflight B: explicit regrid interpolation (origin → new grid)
+#   只有 --regrid-from-origin 會觸發; origin 存在但未明示時不自動插值
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
+if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
+    REGRID_OLD_GRID="$(_project_abs_path "$REGRID_OLD_GRID")"
+    REGRID_NEW_GRID="$(_project_abs_path "$REGRID_NEW_GRID")"
+    _REGRID_CLEAN_EXISTING=0
+
+    if [ "$HAS_CKPT" -eq 1 ]; then
+        if [ "$MODE_FORCE_REGRID" -eq 1 ]; then
+            _REGRID_CLEAN_EXISTING=1
+        else
+            echo "[FATAL] --regrid-from-origin 但 restart/checkpoint/ 已有 checkpoint"
+            echo "        若確定要用 origin 重建, 請加 --force-regrid"
+            exit 1
+        fi
+    fi
+
     _ORIGIN_DIR=""
     _ORIGIN_COUNT=0
     for _d in restart/step_*_origin*/; do
@@ -582,6 +671,10 @@ if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
         _ORIGIN_DIR="${_d%/}"
         _ORIGIN_COUNT=$((_ORIGIN_COUNT + 1))
     done
+    if [ "$_ORIGIN_COUNT" -eq 0 ]; then
+        echo "[FATAL] --regrid-from-origin 需要唯一 restart/step_*_origin*/metadata.dat"
+        exit 1
+    fi
     if [ "$_ORIGIN_COUNT" -gt 1 ]; then
         echo "[FATAL] 多個 origin checkpoint 存在 ($_ORIGIN_COUNT 個), 無法自動選擇"
         ls -1d restart/step_*_origin*/ 2>/dev/null
@@ -589,77 +682,157 @@ if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
         exit 1
     fi
 
-    if [ -n "$_ORIGIN_DIR" ]; then
-        echo ""
-        echo "[preflight-B] Origin checkpoint 偵測到: $_ORIGIN_DIR"
-        echo "[preflight-B] 執行 checkpoint interpolation (old grid → new grid)..."
-        if python3 restart_tools/interp_checkpoint.py --auto --step 1; then
-            _CKPT_DIR="restart/checkpoint/step_00000001"
-            _CKPT_OK=1
-            [ -s "$_CKPT_DIR/metadata.dat" ] || _CKPT_OK=0
-            [ -s "$_CKPT_DIR/f00_0.bin" ]    || _CKPT_OK=0
-            [ -s "$_CKPT_DIR/rho_0.bin" ]    || _CKPT_OK=0
-            if [ "$_CKPT_OK" -eq 1 ]; then
-                echo "[preflight-B] 插值成功: $_CKPT_DIR"
-                HAS_CKPT=1
-                if [ "$HAS_STATE" -eq 1 ]; then
-                    echo "[preflight-B] 清除舊 chain state (插值後以 Scenario 2 重新開始)"
-                    rm -f restart/chain_count restart/chain_jobid
-                    HAS_STATE=0
-                fi
-            else
-                echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不完整 (缺 metadata/f00/rho)"
-                exit 1
-            fi
+    [ -s "$REGRID_OLD_GRID" ] || { echo "[FATAL] OLD grid 不存在或為空: $REGRID_OLD_GRID"; exit 1; }
+    [ -s "$REGRID_NEW_GRID" ] || { echo "[FATAL] NEW grid 不存在或為空: $REGRID_NEW_GRID"; exit 1; }
+
+    _VH_NY="$(_read_define_value NY)"
+    _VH_NZ="$(_read_define_value NZ)"
+    if [ -z "$_VH_NY" ] || [ -z "$_VH_NZ" ]; then
+        echo "[FATAL] 無法從 variables.h 讀取 NY/NZ"
+        exit 1
+    fi
+    _NEW_I="$(_grid_dim_value "$REGRID_NEW_GRID" I)"
+    _NEW_J="$(_grid_dim_value "$REGRID_NEW_GRID" J)"
+    if [ "$_NEW_I" != "$_VH_NY" ] || [ "$_NEW_J" != "$_VH_NZ" ]; then
+        echo "[FATAL] NEW grid header 與 variables.h 不一致"
+        echo "        NEW grid: I=$_NEW_I J=$_NEW_J"
+        echo "        variables.h: NY=$_VH_NY NZ=$_VH_NZ"
+        exit 1
+    fi
+
+    _ORIGIN_META="$_ORIGIN_DIR/metadata.dat"
+    _OLD_JP=$(awk -F= '$1=="mpi_rank_count"{print $2; exit}' "$_ORIGIN_META" 2>/dev/null)
+    _OLD_DIMS=$(awk -F= '$1=="grid_dims"{print $2; exit}' "$_ORIGIN_META" 2>/dev/null)
+    IFS=, read -r _OLD_NX6 _OLD_NYD6 _OLD_NZ6 <<< "$_OLD_DIMS"
+    if [ -z "$_OLD_JP" ] || [ -z "$_OLD_NYD6" ] || [ -z "$_OLD_NZ6" ]; then
+        echo "[FATAL] origin metadata 缺 mpi_rank_count 或 grid_dims: $_ORIGIN_META"
+        exit 1
+    fi
+    _OLD_NY=$(( (_OLD_NYD6 - 7) * _OLD_JP + 1 ))
+    _OLD_NZ=$(( _OLD_NZ6 - 6 ))
+    _OLD_I="$(_grid_dim_value "$REGRID_OLD_GRID" I)"
+    _OLD_J="$(_grid_dim_value "$REGRID_OLD_GRID" J)"
+    if [ "$_OLD_I" != "$_OLD_NY" ] || [ "$_OLD_J" != "$_OLD_NZ" ]; then
+        echo "[FATAL] OLD grid header 與 origin metadata 不一致"
+        echo "        OLD grid: I=$_OLD_I J=$_OLD_J"
+        echo "        origin: NY=$_OLD_NY NZ=$_OLD_NZ"
+        exit 1
+    fi
+
+    if [ "$_REGRID_CLEAN_EXISTING" -eq 1 ]; then
+        echo "[preflight-B] --force-regrid: 輸入驗證通過, 清除既有 checkpoint/provenance 後重建"
+        rm -rf restart/checkpoint/
+        rm -f restart/grid_provenance restart/grid_provenance.WRITING restart/checkpoint/grid_provenance
+        rm -f restart/chain_count restart/chain_jobid
+        HAS_CKPT=0
+        HAS_STATE=0
+    fi
+
+    echo ""
+    echo "[preflight-B] Origin checkpoint: $_ORIGIN_DIR"
+    echo "[preflight-B] OLD grid: $REGRID_OLD_GRID"
+    echo "[preflight-B] NEW grid: $REGRID_NEW_GRID"
+    echo "[preflight-B] 執行 checkpoint interpolation (old grid → new grid)..."
+    _INTERP_CMD=(python3 restart_tools/interp_checkpoint.py --auto --step 1
+                 --old-grid-dat "$REGRID_OLD_GRID"
+                 --new-grid-dat "$REGRID_NEW_GRID")
+    if "${_INTERP_CMD[@]}"; then
+        _CKPT_DIR="restart/checkpoint/step_00000001"
+        _CKPT_OK=1
+        [ -s "$_CKPT_DIR/metadata.dat" ] || _CKPT_OK=0
+        [ -s "$_CKPT_DIR/f00_0.bin" ]    || _CKPT_OK=0
+        [ -s "$_CKPT_DIR/rho_0.bin" ]    || _CKPT_OK=0
+        [ -s "restart/grid_provenance" ] || _CKPT_OK=0
+        if [ "$_CKPT_OK" -eq 1 ]; then
+            echo "[preflight-B] 插值成功: $_CKPT_DIR"
+            HAS_CKPT=1
+            rm -f restart/chain_count restart/chain_jobid
+            HAS_STATE=0
         else
-            echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
+            echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不完整 (缺 metadata/f00/rho/provenance)"
             exit 1
         fi
+    else
+        echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
+        exit 1
     fi
+elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
+    for _d in restart/step_*_origin*/; do
+        [ -s "${_d}metadata.dat" ] || continue
+        echo "[preflight-B] origin checkpoint 存在, 但未指定 --regrid-from-origin; 不自動插值"
+        break
+    done
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
 # Preflight C: grid_provenance 一致性驗證
 #   restart/grid_provenance 記錄本 chain 使用的 grid 身份 (session-level)
-#   若 variables.h / NEW grid / OLD grid 在插值後被修改, FATAL
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ] && [ -f restart/grid_provenance ]; then
-    _STALE=0
-    _SAVED_VH_MT=$(grep '^variables_h_mtime=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
-    _SAVED_GRID_MT=$(grep '^new_grid_mtime=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
-    _SAVED_NEW_GRID=$(grep '^new_grid=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
-    _SAVED_OLD_MT=$(grep '^old_grid_mtime=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
-    _SAVED_OLD_GRID=$(grep '^old_grid=' restart/grid_provenance 2>/dev/null | cut -d= -f2)
+if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
+    _PROV="restart/grid_provenance"
+    if [ ! -s "$_PROV" ]; then
+        echo "[FATAL] checkpoint 存在但缺 $_PROV"
+        echo "        不能判定 checkpoint 對應的 grid 身份; 拒絕續跑"
+        echo "        若要從 origin 重建: ./run --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat> --force-regrid"
+        exit 1
+    fi
 
-    if [ -n "$_SAVED_VH_MT" ] && [ -f variables.h ]; then
-        _CUR=$(stat -c %Y variables.h 2>/dev/null)
-        if [ -n "$_CUR" ] && [ "$_CUR" != "$_SAVED_VH_MT" ]; then
-            echo "[preflight-C] variables.h 已變更 (saved=$_SAVED_VH_MT current=$_CUR)"
+    _prov_get() {
+        awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$_PROV"
+    }
+    _PROV_BAD=0
+    _STALE=0
+    _check_prov_mtime() {
+        local label="$1" path="$2" saved="$3"
+        if [ -z "$path" ] || [ -z "$saved" ]; then
+            echo "[preflight-C] invalid provenance: missing $label path/mtime"
+            _PROV_BAD=1
+            return
+        fi
+        if [ ! -f "$path" ]; then
+            echo "[preflight-C] invalid provenance: $label missing: $path"
+            _PROV_BAD=1
+            return
+        fi
+        local cur
+        cur=$(stat -c %Y "$path" 2>/dev/null || true)
+        if [ -z "$cur" ]; then
+            echo "[preflight-C] invalid provenance: cannot stat $label: $path"
+            _PROV_BAD=1
+            return
+        fi
+        if [ "$cur" != "$saved" ]; then
+            echo "[preflight-C] $label 已變更 (saved=$saved current=$cur)"
             _STALE=1
         fi
-    fi
-    if [ -n "$_SAVED_GRID_MT" ] && [ -n "$_SAVED_NEW_GRID" ] && [ -f "$_SAVED_NEW_GRID" ]; then
-        _CUR=$(stat -c %Y "$_SAVED_NEW_GRID" 2>/dev/null)
-        if [ -n "$_CUR" ] && [ "$_CUR" != "$_SAVED_GRID_MT" ]; then
-            echo "[preflight-C] NEW grid 已變更 (saved=$_SAVED_GRID_MT current=$_CUR)"
-            _STALE=1
-        fi
-    fi
-    if [ -n "$_SAVED_OLD_MT" ] && [ -n "$_SAVED_OLD_GRID" ] && [ -f "$_SAVED_OLD_GRID" ]; then
-        _CUR=$(stat -c %Y "$_SAVED_OLD_GRID" 2>/dev/null)
-        if [ -n "$_CUR" ] && [ "$_CUR" != "$_SAVED_OLD_MT" ]; then
-            echo "[preflight-C] OLD grid 已變更 (saved=$_SAVED_OLD_MT current=$_CUR)"
-            _STALE=1
-        fi
-    fi
-    if [ "$_STALE" -eq 1 ]; then
+    }
+
+    _SAVED_ORIGIN="$(_prov_get origin)"
+    _SAVED_ORIGIN_MT="$(_prov_get origin_metadata_mtime)"
+    _SAVED_VH="$(_prov_get variables_h)"
+    _SAVED_VH_MT="$(_prov_get variables_h_mtime)"
+    _SAVED_NEW_GRID="$(_prov_get new_grid)"
+    _SAVED_NEW_MT="$(_prov_get new_grid_mtime)"
+    _SAVED_OLD_GRID="$(_prov_get old_grid)"
+    _SAVED_OLD_MT="$(_prov_get old_grid_mtime)"
+
+    _check_prov_mtime "origin metadata" "$_SAVED_ORIGIN/metadata.dat" "$_SAVED_ORIGIN_MT"
+    _check_prov_mtime "variables.h" "$_SAVED_VH" "$_SAVED_VH_MT"
+    _check_prov_mtime "NEW grid" "$_SAVED_NEW_GRID" "$_SAVED_NEW_MT"
+    _check_prov_mtime "OLD grid" "$_SAVED_OLD_GRID" "$_SAVED_OLD_MT"
+
+    if [ "$_PROV_BAD" -eq 1 ] || [ "$_STALE" -eq 1 ]; then
         echo ""
-        echo "[FATAL] restart/grid_provenance 與當前 grid/variables 不一致"
-        echo "        checkpoint 是在不同 grid 設定下產生的, 不可續跑"
+        if [ "$_PROV_BAD" -eq 1 ]; then
+            echo "[FATAL] restart/grid_provenance 格式不完整或指向不存在的檔案"
+        else
+            echo "[FATAL] restart/grid_provenance 與當前 grid/variables/origin 不一致"
+        fi
+        echo "        checkpoint 是在不同或不可驗證的 grid 設定下產生的, 不可續跑"
         echo "        修正步驟:"
         echo "          rm -rf restart/checkpoint/"
         echo "          rm -f  restart/grid_provenance"
-        echo "          ./run"
+        echo "          ./run --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat>"
         exit 1
     fi
 fi

@@ -21,12 +21,13 @@ Pipeline:
 
 Output written atomically:
   <output_root>/step_%08d.WRITING/ -> <output_root>/step_%08d/
+  restart/grid_provenance records the session-level grid identity.
 
 Usage:
-  # Project mode: NEW grid is read from ../variables.h, output is step_00000001
-  python3 restart_tools/interp_checkpoint.py \\
-      --old-dir restart/step_12550001_origin129 \\
-      --step 1
+  # Project auto mode: origin is restart/step_*_origin*, NEW dims are from variables.h
+  python3 restart_tools/interp_checkpoint.py --auto --step 1 \\
+      --old-grid-dat "J_Frohlich/adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat" \\
+      --new-grid-dat "J_Frohlich/adaptive_3.fine grid_I257_J129_a0.5.dat"
 
   # CLI override (skip prompts):
   python3 restart_tools/interp_checkpoint.py --old-dir ./old_ckpt \\
@@ -40,8 +41,8 @@ Expected folder structure:
   +-- variables.h                     (optional, project mode)
   +-- restart_tools/interp_checkpoint.py
   +-- J_Frohlich/                    (or any directory)
-  |   +-- old_grid_I{NY}_J{NZ}_g{G}_a{A}.dat
-  |   +-- new_grid_I{NY}_J{NZ}_g{G}_a{A}.dat
+  |   +-- adaptive_*_I{NY}_J{NZ}_g{G}_a{A}.dat   (OLD uniform gamma grid)
+  |   +-- adaptive_*_I{NY}_J{NZ}_a{A}.dat        (NEW variable gamma grid)
   +-- old_checkpoint/                (source checkpoint)
       +-- metadata.dat
       +-- f00_0.bin ... f18_{jp-1}.bin
@@ -147,6 +148,47 @@ def parse_grid_dat_header(path):
             if 'I' in dims and 'J' in dims:
                 break
     return dims
+
+
+def resolve_existing_file(path, label, base_dirs=()):
+    """Resolve a user-supplied file path against cwd and optional base dirs."""
+    tried = []
+    if os.path.isabs(path):
+        tried.append(path)
+    else:
+        tried.append(path)
+        for base in base_dirs:
+            if base:
+                tried.append(os.path.join(base, path))
+    seen = set()
+    for candidate in tried:
+        abs_candidate = os.path.abspath(candidate)
+        if abs_candidate in seen:
+            continue
+        seen.add(abs_candidate)
+        if os.path.isfile(abs_candidate):
+            return abs_candidate
+    sys.exit('FATAL: {} not found: {} (tried: {})'.format(
+        label, path, ', '.join(sorted(seen))))
+
+
+def infer_old_grid_params(path):
+    """Infer old uniform-grid gamma/alpha from *_g{gamma}_a{alpha}.dat."""
+    import re
+    m = re.search(r'_g([0-9]+(?:\.[0-9]+)?)_a([0-9]+(?:\.[0-9]+)?)\.dat$',
+                  os.path.basename(path))
+    if not m:
+        return None, None
+    return float(m.group(1)), float(m.group(2))
+
+
+def infer_new_grid_alpha(path):
+    """Infer variable-grid alpha from *_a{alpha}.dat when present."""
+    import re
+    m = re.search(r'_a([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
+    if not m:
+        return None
+    return float(m.group(1))
 
 
 def find_variables_h():
@@ -880,40 +922,70 @@ def main():
             sys.exit('FATAL: --auto: no restart/step_*_origin* found in {}'.format(restart_dir))
         print('[auto] Origin checkpoint: {}'.format(origin))
 
-        # Scan grid files: require grid_ref_stem match, detect ambiguity
         dim_tag = '_I{}_J{}_'.format(NY_vh, NZ_vh)
         stem_prefix = 'adaptive_{}'.format(grid_ref_stem)
-        old_candidates = []
-        new_candidates = []
+        old_grid = old_fname = old_gamma = old_alpha = None
+        new_grid = new_fname = new_alpha = None
 
-        for f in sorted(os.listdir(grid_dir)):
-            if not f.endswith('.dat') or not f.startswith(stem_prefix) or dim_tag not in f:
-                continue
-            after_dim = f.split(dim_tag, 1)[1]
-            m_old = _re.match(r'g([\d.]+)_a([\d.]+)\.dat$', after_dim)
-            m_new = _re.match(r'a([\d.]+)\.dat$', after_dim)
-            if m_old:
-                old_candidates.append((os.path.join(grid_dir, f), f,
-                                       float(m_old.group(1)), float(m_old.group(2))))
-            elif m_new:
-                new_candidates.append((os.path.join(grid_dir, f), f,
-                                       float(m_new.group(1))))
+        if args.old_grid_dat:
+            old_grid = resolve_existing_file(args.old_grid_dat, '--old-grid-dat',
+                                             base_dirs=(grid_dir, vh_dir))
+            old_fname = os.path.basename(old_grid)
+            inferred_gamma, inferred_alpha = infer_old_grid_params(old_grid)
+            old_gamma = args.old_gamma if args.old_gamma is not None else inferred_gamma
+            old_alpha = args.old_alpha if args.old_alpha is not None else inferred_alpha
+            if old_gamma is None or old_alpha is None:
+                sys.exit('FATAL: --auto with explicit --old-grid-dat requires filename *_g{G}_a{A}.dat '
+                         'or explicit --old-gamma/--old-alpha')
+        if args.new_grid_dat:
+            new_grid = resolve_existing_file(args.new_grid_dat, '--new-grid-dat',
+                                             base_dirs=(grid_dir, vh_dir))
+            new_fname = os.path.basename(new_grid)
+            new_old_gamma, _ = infer_old_grid_params(new_grid)
+            if new_old_gamma is not None:
+                sys.exit('FATAL: --new-grid-dat appears to be an OLD uniform-gamma grid: {}'.format(
+                    new_fname))
+            inferred_alpha = infer_new_grid_alpha(new_grid)
+            new_alpha = ALPHA_vh
+            if inferred_alpha is not None and abs(float(inferred_alpha) - float(ALPHA_vh)) > 1e-12:
+                sys.exit('FATAL: --new-grid-dat alpha {} does not match variables.h ALPHA {}'.format(
+                    inferred_alpha, ALPHA_vh))
 
-        if len(old_candidates) == 0:
-            sys.exit('FATAL: --auto: no OLD grid (with _g{{G}}_ in name) found for {} in {}'.format(
-                stem_prefix + dim_tag, grid_dir))
-        if len(old_candidates) > 1:
-            sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
-                len(old_candidates), ', '.join(c[1] for c in old_candidates)))
-        if len(new_candidates) == 0:
-            sys.exit('FATAL: --auto: no NEW grid (Mode 3, without _g) found for {} in {}'.format(
-                stem_prefix + dim_tag, grid_dir))
-        if len(new_candidates) > 1:
-            sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
-                len(new_candidates), ', '.join(c[1] for c in new_candidates)))
+        if not old_grid or not new_grid:
+            # Scan grid files only for the side not explicitly supplied by run.sh.
+            old_candidates = []
+            new_candidates = []
 
-        old_grid, old_fname, old_gamma, old_alpha = old_candidates[0]
-        new_grid, new_fname, new_alpha = new_candidates[0]
+            for f in sorted(os.listdir(grid_dir)):
+                if not f.endswith('.dat') or not f.startswith(stem_prefix) or dim_tag not in f:
+                    continue
+                after_dim = f.split(dim_tag, 1)[1]
+                m_old = _re.match(r'g([\d.]+)_a([\d.]+)\.dat$', after_dim)
+                m_new = _re.match(r'a([\d.]+)\.dat$', after_dim)
+                if m_old:
+                    old_candidates.append((os.path.join(grid_dir, f), f,
+                                           float(m_old.group(1)), float(m_old.group(2))))
+                elif m_new:
+                    new_candidates.append((os.path.join(grid_dir, f), f,
+                                           float(m_new.group(1))))
+
+            if not old_grid:
+                if len(old_candidates) == 0:
+                    sys.exit('FATAL: --auto: no OLD grid (with _g{{G}}_ in name) found for {} in {}'.format(
+                        stem_prefix + dim_tag, grid_dir))
+                if len(old_candidates) > 1:
+                    sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
+                        len(old_candidates), ', '.join(c[1] for c in old_candidates)))
+                old_grid, old_fname, old_gamma, old_alpha = old_candidates[0]
+            if not new_grid:
+                if len(new_candidates) == 0:
+                    sys.exit('FATAL: --auto: no NEW grid (Mode 3, without _g) found for {} in {}'.format(
+                        stem_prefix + dim_tag, grid_dir))
+                if len(new_candidates) > 1:
+                    sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
+                        len(new_candidates), ', '.join(c[1] for c in new_candidates)))
+                new_grid, new_fname, new_alpha = new_candidates[0]
+
         print('[auto] OLD grid (uniform gamma={}, alpha={}): {}'.format(old_gamma, old_alpha, old_fname))
         print('[auto] NEW grid (variable gamma, alpha={}): {}'.format(new_alpha, new_fname))
 
@@ -1157,6 +1229,7 @@ def main():
     #   on startup; dt_saved is only used for the drift guardrail and is
     #   discarded thereafter.
     naive_minsize = compute_minsize(NEW)
+    origin_meta_path = os.path.join(args.old_dir, 'metadata.dat')
     new_meta = {
         'checkpoint_version': '2',
         'mpi_rank_count': str(NEW.JP),
@@ -1185,6 +1258,10 @@ def main():
         new_meta['interp_variables_h_mtime'] = str(int(os.path.getmtime(vh_for_prov)))
     if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT):
         new_meta['interp_new_grid_mtime'] = str(int(os.path.getmtime(NEW.GRID_DAT)))
+    if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT):
+        new_meta['interp_old_grid_mtime'] = str(int(os.path.getmtime(OLD.GRID_DAT)))
+    if os.path.isfile(origin_meta_path):
+        new_meta['interp_origin_metadata_mtime'] = str(int(os.path.getmtime(origin_meta_path)))
     write_metadata(os.path.join(writing_dir, 'metadata.dat'), new_meta)
     print('      Force={:.6e}  step={}  jp={}  grid_dims={}'.format(
         Force_value, args.step, NEW.JP, new_meta['grid_dims']))
@@ -1194,19 +1271,24 @@ def main():
     print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, out_dir))
     os.rename(writing_dir, out_dir)
 
-    prov_path = os.path.join(os.path.dirname(out_dir), 'grid_provenance')
+    restart_root = os.path.dirname(os.path.abspath(args.output_root))
+    prov_path = os.path.join(restart_root, 'grid_provenance')
     prov = {
-        'new_grid': NEW.GRID_DAT,
-        'old_grid': OLD.GRID_DAT,
-        'origin': args.old_dir,
+        'new_grid': os.path.abspath(NEW.GRID_DAT),
+        'old_grid': os.path.abspath(OLD.GRID_DAT),
+        'origin': os.path.abspath(args.old_dir),
+        'origin_metadata_mtime': str(int(os.path.getmtime(origin_meta_path))) if os.path.isfile(origin_meta_path) else '',
+        'variables_h': os.path.abspath(vh_for_prov) if vh_for_prov else '',
         'variables_h_mtime': str(int(os.path.getmtime(vh_for_prov))) if vh_for_prov and os.path.isfile(vh_for_prov) else '',
         'new_grid_mtime': str(int(os.path.getmtime(NEW.GRID_DAT))) if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT) else '',
         'old_grid_mtime': str(int(os.path.getmtime(OLD.GRID_DAT))) if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT) else '',
         'created': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
-    with open(prov_path, 'w') as fp:
+    prov_tmp = prov_path + '.WRITING'
+    with open(prov_tmp, 'w') as fp:
         for k, v in prov.items():
             fp.write('{}={}\n'.format(k, v))
+    os.rename(prov_tmp, prov_path)
     print('      grid_provenance written: {}'.format(prov_path))
 
     elapsed = time.time() - t0
