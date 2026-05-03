@@ -3,6 +3,8 @@
 #include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
 #include <mpi.h>
 #include <stdarg.h>
 #include <signal.h>        // 必須在 variables.h 之前 — variables.h 定義 #define cs (1.0/sqrt(3))
@@ -358,25 +360,48 @@ int main(int argc, char *argv[])
     //  Stage 1: 外部網格讀取 (取代舊的 GenerateMesh_Y / GenerateMesh_Z)
     // ════════════════════════════════════════════════════════════════
 
-    // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在
+    // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在 + 新鮮度檢查
     {
+        // 從 GRID_DAT_REF 擷取 stem (去掉 .dat 副檔名)
+        char grid_ref_stem[256];
+        strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+        grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+        { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
         char grid_dat_path[512];
         snprintf(grid_dat_path, sizeof(grid_dat_path),
                  "%s/adaptive_%s_I%d_J%d_a%.1f.dat",
-                 GRID_DAT_DIR, "3.fine grid",
+                 GRID_DAT_DIR, grid_ref_stem,
                  NY, NZ, (double)ALPHA);
-                 // NY = 流向格點數, NZ = 法向格點數, I=NY, J=NZ
 
+        // need_generate: 0=OK, 1=missing, 2=stale
+        int need_generate = 0;
         FILE *grid_test = fopen(grid_dat_path, "r");
+
         if (!grid_test) {
-            // 網格檔不存在 → rank 0 自動呼叫 Python 生成
+            need_generate = 1;
+        } else {
+            fclose(grid_test);
+            // 新鮮度: variables.h 比格點檔更新 → 參數已變, 需重新生成
+            struct stat grid_st, vars_st;
+            if (stat(grid_dat_path, &grid_st) == 0 &&
+                stat("variables.h", &vars_st) == 0) {
+                if (vars_st.st_mtime > grid_st.st_mtime)
+                    need_generate = 2;
+            }
+        }
+
+        if (need_generate) {
             if (myid == 0) {
                 fprintf(stderr, "\n");
                 fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
-                fprintf(stderr, "║  Grid file not found — auto-generating ...              ║\n");
-                fprintf(stderr, "║  Expected: %s\n", grid_dat_path);
-                fprintf(stderr, "║  NY=%d (nodes), NZ=%d (nodes) → I=%d, J=%d, ALPHA=%.1f\n",
-                        NY, NZ, NY, NZ, (double)ALPHA);
+                if (need_generate == 2)
+                    fprintf(stderr, "║  Grid STALE (variables.h newer) — regenerating ...     ║\n");
+                else
+                    fprintf(stderr, "║  Grid NOT FOUND — auto-generating ...                  ║\n");
+                fprintf(stderr, "║  Target: %s\n", grid_dat_path);
+                fprintf(stderr, "║  NY=%d, NZ=%d, ALPHA=%.1f, REF=%s\n",
+                        NY, NZ, (double)ALPHA, GRID_DAT_REF);
                 fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
 
                 char cmd[1024];
@@ -395,18 +420,17 @@ int main(int argc, char *argv[])
             }
             MPI_Barrier(MPI_COMM_WORLD);
 
-            // 重新嘗試開啟
-            grid_test = fopen(grid_dat_path, "r");
-            if (!grid_test) {
-                if (myid == 0) {
-                    fprintf(stderr, "FATAL: Grid file still not found after generation: %s\n",
+            FILE *grid_verify = fopen(grid_dat_path, "r");
+            if (!grid_verify) {
+                if (myid == 0)
+                    fprintf(stderr, "FATAL: Grid file not found after generation: %s\n",
                             grid_dat_path);
-                }
                 MPI_Abort(MPI_COMM_WORLD, 1);
             }
+            fclose(grid_verify);
         }
-        fclose(grid_test);
-        if (myid == 0) printf("GRID: Found external grid file: %s\n", grid_dat_path);
+        if (myid == 0) printf("GRID: %s external grid: %s\n",
+                              need_generate ? "Generated" : "Found", grid_dat_path);
     }
 
     // 1.2 生成均勻 x 座標 (不變)

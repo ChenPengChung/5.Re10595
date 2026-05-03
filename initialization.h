@@ -89,13 +89,17 @@ void GenerateMesh_X() {
 void ReadExternalGrid_YZ(double *y_2d_out, double *z_out, int rank) {
     int bfr = 3;
 
-    // 構造檔案路徑
+    // 構造檔案路徑 — 從 GRID_DAT_REF 擷取 stem (去掉 .dat 副檔名)
+    char grid_ref_stem[256];
+    strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+    grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+    { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
     char grid_dat_path[512];
     snprintf(grid_dat_path, sizeof(grid_dat_path),
              "%s/adaptive_%s_I%d_J%d_a%.1f.dat",
-             GRID_DAT_DIR, "3.fine grid",
+             GRID_DAT_DIR, grid_ref_stem,
              NY, NZ, (double)ALPHA);
-             // NY = 流向格點數 (node count), NZ = 法向格點數, I=NY, J=NZ
 
     // 只 rank 0 讀取，然後 broadcast
     // 命名規則: NY=格點數 → I=NY, NZ=格點數 → J=NZ
