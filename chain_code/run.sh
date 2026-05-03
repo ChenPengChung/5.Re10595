@@ -750,6 +750,9 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
             HAS_STATE=0
         else
             echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不完整 (缺 metadata/f00/rho/provenance)"
+            echo "        清除不完整的產物..."
+            rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
+            rm -f restart/grid_provenance restart/grid_provenance.WRITING
             exit 1
         fi
     else
@@ -765,17 +768,24 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
+# Preflight C-0: provenance 存在但 checkpoint 不存在 → 不一致
+# ═════════════════════════════════════════════════════════════════════════
+if [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ] && [ "$MODE_REGRID" -eq 0 ] && [ -s restart/grid_provenance ]; then
+    echo "[FATAL] restart/grid_provenance 存在但無有效 checkpoint"
+    echo "        這是 regrid chain 的不一致狀態 (checkpoint 被刪但 provenance 殘留)"
+    echo "        選擇:"
+    echo "          (a) 重新插值: ./run --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat>"
+    echo "          (b) 完全重來: ./run --force-cold"
+    echo "          (c) 手動清除 provenance 後冷啟動: rm -f restart/grid_provenance && ./run"
+    exit 1
+fi
+
+# ═════════════════════════════════════════════════════════════════════════
 # Preflight C: grid_provenance 一致性驗證
 #   restart/grid_provenance 記錄本 chain 使用的 grid 身份 (session-level)
 # ═════════════════════════════════════════════════════════════════════════
-if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
+if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ] && [ -s restart/grid_provenance ]; then
     _PROV="restart/grid_provenance"
-    if [ ! -s "$_PROV" ]; then
-        echo "[FATAL] checkpoint 存在但缺 $_PROV"
-        echo "        不能判定 checkpoint 對應的 grid 身份; 拒絕續跑"
-        echo "        若要從 origin 重建: ./run --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat> --force-regrid"
-        exit 1
-    fi
 
     _prov_get() {
         awk -F= -v key="$1" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$_PROV"
@@ -816,7 +826,12 @@ if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
     _SAVED_OLD_GRID="$(_prov_get old_grid)"
     _SAVED_OLD_MT="$(_prov_get old_grid_mtime)"
 
-    _check_prov_mtime "origin metadata" "$_SAVED_ORIGIN/metadata.dat" "$_SAVED_ORIGIN_MT"
+    if [ -z "$_SAVED_ORIGIN" ]; then
+        echo "[preflight-C] invalid provenance: missing origin path"
+        _PROV_BAD=1
+    else
+        _check_prov_mtime "origin metadata" "$_SAVED_ORIGIN/metadata.dat" "$_SAVED_ORIGIN_MT"
+    fi
     _check_prov_mtime "variables.h" "$_SAVED_VH" "$_SAVED_VH_MT"
     _check_prov_mtime "NEW grid" "$_SAVED_NEW_GRID" "$_SAVED_NEW_MT"
     _check_prov_mtime "OLD grid" "$_SAVED_OLD_GRID" "$_SAVED_OLD_MT"
