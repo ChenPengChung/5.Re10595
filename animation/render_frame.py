@@ -13,7 +13,13 @@ pvpython 離線渲染：YZ 中間剖面 Contour (+ optional streamlines for U_me
 
 色標、色階、字體、尺規完全沿用 7.paraview_contour.py 設定。
 """
-import os, sys, glob, math
+import os, sys, glob, math, re as _re_mod
+
+# pvpython is Python 3.10, but PYTHONPATH from .bashrc injects Python 3.9
+# site-packages, breaking numpy/matplotlib and disabling VTK MathText rendering.
+_py_ver = f"{sys.version_info.major}.{sys.version_info.minor}"
+sys.path[:] = [p for p in sys.path
+               if not _re_mod.search(r'python\d+\.\d+', p) or f'python{_py_ver}' in p]
 
 # ═══════════════════════════════════════════════════════════════════
 # §0  引數解析
