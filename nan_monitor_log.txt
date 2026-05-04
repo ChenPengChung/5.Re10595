@@ -1,4 +1,0 @@
-[2026-05-04 00:35:04] [INFO] nan_monitor started for /home/s8313697/5.Re10595/Edit3_5600newmesh
-[2026-05-04 00:35:04] [INFO] Ma_max limit=0.15, poll=2.0s
-[2026-05-04 00:35:04] [INFO] Tailing: slurm_36733.log
-[2026-05-04 00:35:08] [WARNING] Force negative for 20+ reports at step 74001 (Force=-3.359530e-06)
