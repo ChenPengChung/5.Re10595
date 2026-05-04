@@ -62,6 +62,11 @@ source $HPCX_HOME/hpcx-init.sh
 hpcx_load
 export OMPI_MCA_coll_hcoll_enable=0
 
+# ── Python site-packages 架構分流 (Slurm non-login shell 不讀 ~/.bashrc) ──
+_PY_SITE="$HOME/.local/lib/python3.9/site-packages-$(uname -m)"
+[ -d "$_PY_SITE" ] && export PYTHONPATH="${_PY_SITE}${PYTHONPATH:+:$PYTHONPATH}"
+unset _PY_SITE
+
 # ── [方案 A path discipline] ──
 PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
 CHAIN_DIR="$PROJECT_ROOT/chain_code"
