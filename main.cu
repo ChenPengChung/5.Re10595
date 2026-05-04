@@ -362,9 +362,9 @@ int main(int argc, char *argv[])
     {
         char grid_dat_path[512];
         snprintf(grid_dat_path, sizeof(grid_dat_path),
-                 "%s/adaptive_%s_I%d_J%d_a%.1f.dat",
+                 "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat",
                  GRID_DAT_DIR, "3.fine grid",
-                 NY, NZ, (double)ALPHA);
+                 NY, NZ, (double)GAMMA, (double)ALPHA);
                  // NY = 流向格點數, NZ = 法向格點數, I=NY, J=NZ
 
         FILE *grid_test = fopen(grid_dat_path, "r");
@@ -375,8 +375,8 @@ int main(int argc, char *argv[])
                 fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
                 fprintf(stderr, "║  Grid file not found — auto-generating ...              ║\n");
                 fprintf(stderr, "║  Expected: %s\n", grid_dat_path);
-                fprintf(stderr, "║  NY=%d (nodes), NZ=%d (nodes) → I=%d, J=%d, ALPHA=%.1f\n",
-                        NY, NZ, NY, NZ, (double)ALPHA);
+                fprintf(stderr, "║  NY=%d (nodes), NZ=%d (nodes) → I=%d, J=%d, GAMMA=%.2f, ALPHA=%.1f\n",
+                        NY, NZ, NY, NZ, (double)GAMMA, (double)ALPHA);
                 fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
 
                 char cmd[1024];

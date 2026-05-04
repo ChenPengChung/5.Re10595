@@ -1555,19 +1555,20 @@ def auto_generate(variables_h_path, script_dir=None):
         print()
 
     # Output filename must match C code sprintf format:
-    #   "%s/adaptive_%s_I%d_J%d_a%.1f.dat" with ("3.fine grid", NY, NZ, ALPHA)
+    #   "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat"
+    #   with ("3.fine grid", NY, NZ, GAMMA, ALPHA)
     #   I = NY (streamwise nodes), J = NZ (wall-normal nodes)
-    # ★ CRITICAL: use :.1f to match C's %.1f exactly (e.g. 0.5 not 0.50 or 0.500)
+    # ★ CRITICAL: use :.2f for GAMMA and :.1f for ALPHA to match C's format exactly
     grid_key = ref_path.stem          # "3.fine grid"
-    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_a{alpha:.1f}.dat"
+    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.dat"
     out_path = script_dir / out_name
 
     write_tecplot_dat(out_path, x_out, y_out,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_a{alpha}")
+                      zone_title=f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}")
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
-    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_a{alpha:.1f}.txt"
+    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.txt"
     write_grid_data(grid_data_path, x_out, y_out,
                     NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha, LZ=LZ,
                     source_dat=out_path.name)
@@ -1581,7 +1582,7 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Output validated: I={ni_a} J={nj_a} ✓ (matches NY={ni_e}, NZ={nj_e})")
 
     # Also save comparison plot
-    tag = f"I{NI}_J{NJ}_a{alpha}"
+    tag = f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}"
     plot_compare(x_ref, y_ref, x_out, y_out,
                  labels=["Reference", f"New ({NI}x{NJ})"],
                  title=f"Auto: GAMMA={gamma:.4f}, ALPHA={alpha}, Grid={NI}x{NJ}",
@@ -1865,7 +1866,7 @@ if __name__ == "__main__":
     print("  [Step 7] Saving outputs ...")
     print("-" * 62)
 
-    tag_str = f"I{NI}_J{NJ}_g{GAMMA}_a{ALPHA}"
+    tag_str = f"I{NI}_J{NJ}_g{GAMMA:.2f}_a{ALPHA}"
 
     out_cmp = base / f"compare_{grid_key}_{tag_str}.png"
     plot_compare(x_ref, y_ref, x_new, y_new,
