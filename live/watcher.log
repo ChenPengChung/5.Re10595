@@ -1,0 +1,1321 @@
+[2026-05-04 15:53:46] ==========================================
+[2026-05-04 15:53:46] Periodic Hill Re10595 watcher started
+[2026-05-04 15:53:46]   pid=1809862  ppid=1809857  poll=30s
+[2026-05-04 15:53:46]   project  = /home/s8313697/5.Re10595/Edit2_restart
+[2026-05-04 15:53:46]   conv     = /home/s8313697/5.Re10595/Edit2_restart/result/4.Ma_U_Time.py
+[2026-05-04 15:53:46]   bench    = /home/s8313697/5.Re10595/Edit2_restart/result/2.Benchmark.py
+[2026-05-04 15:53:46] ==========================================
+[2026-05-04 15:54:58] ──────────────────────────────────────
+[2026-05-04 15:54:58] PROCESS step=46001  FTT=0.03  accu=0
+[2026-05-04 15:54:58]   [Step 47001 | FTT=0.03] Ub=0.001421  U*=0.0947  Re%=-90.53%  Force=6.76220E-05  F*=2.7049  Re=1003.5  Ma=0.0025  Ma_max=0.0038  Error=2.07e-03  [SIMPLE-PROP]
+[2026-05-04 15:55:03] CONV step=46001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 15:55:03] BENCH skipped: accu=0 (FTT=0.03, waiting for FTT>=40.0)
+[2026-05-04 15:56:10] ──────────────────────────────────────
+[2026-05-04 15:56:10] PROCESS step=51001  FTT=0.04  accu=0
+[2026-05-04 15:56:10]   [Step 51351 | FTT=0.04] Ub=0.001688  U*=0.1125  Re%=-88.75%  Force=7.34017E-05  F*=2.9361  Re=1192.0  Ma=0.0029  Ma_max=0.0045  Error=1.90e-03  [SIMPLE-PROP]
+[2026-05-04 15:56:13] CONV step=51001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 15:56:13] BENCH skipped: accu=0 (FTT=0.04, waiting for FTT>=40.0)
+[2026-05-04 15:56:47] ──────────────────────────────────────
+[2026-05-04 15:56:47] PROCESS step=53001  FTT=0.04  accu=0
+[2026-05-04 15:56:47]   [Step 54001 | FTT=0.04] Ub=0.001861  U*=0.1241  Re%=-87.59%  Force=7.68647E-05  F*=3.0746  Re=1314.8  Ma=0.0032  Ma_max=0.0049  Error=1.81e-03  [SIMPLE-PROP]
+[2026-05-04 15:56:49] CONV step=53001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 15:56:49] BENCH skipped: accu=0 (FTT=0.04, waiting for FTT>=40.0)
+[2026-05-04 16:01:54] ──────────────────────────────────────
+[2026-05-04 16:01:54] PROCESS step=71001  FTT=0.05  accu=0
+[2026-05-04 16:01:54]   [Step 71001 | FTT=0.05] Ub=0.003193  U*=0.2129  Re%=-78.71%  Force=9.78632E-05  F*=3.9145  Re=2255.4  Ma=0.0055  Ma_max=0.0084  Error=1.37e-03  [SIMPLE-PROP]
+[2026-05-04 16:01:58] CONV step=71001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:01:58] BENCH skipped: accu=0 (FTT=0.05, waiting for FTT>=40.0)
+[2026-05-04 16:02:32] ──────────────────────────────────────
+[2026-05-04 16:02:32] PROCESS step=72001  FTT=0.05  accu=0
+[2026-05-04 16:02:32]   [Step 72001 | FTT=0.05] Ub=0.003281  U*=0.2187  Re%=-78.13%  Force=9.90254E-05  F*=3.9610  Re=2317.4  Ma=0.0057  Ma_max=0.0086  Error=1.34e-03  [SIMPLE-PROP]
+[2026-05-04 16:02:35] CONV step=72001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:02:35] BENCH skipped: accu=0 (FTT=0.05, waiting for FTT>=40.0)
+[2026-05-04 16:03:09] ──────────────────────────────────────
+[2026-05-04 16:03:09] PROCESS step=74001  FTT=0.06  accu=0
+[2026-05-04 16:03:09]   [Step 74401 | FTT=0.06] Ub=0.003494  U*=0.2330  Re%=-76.70%  Force=1.01779E-04  F*=4.0712  Re=2468.1  Ma=0.0061  Ma_max=0.0092  Error=1.29e-03  [SIMPLE-PROP]
+[2026-05-04 16:03:12] CONV step=74001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:03:12] BENCH skipped: accu=0 (FTT=0.06, waiting for FTT>=40.0)
+[2026-05-04 16:03:46] ──────────────────────────────────────
+[2026-05-04 16:03:46] PROCESS step=76001  FTT=0.06  accu=0
+[2026-05-04 16:03:46]   [Step 77001 | FTT=0.06] Ub=0.003731  U*=0.2487  Re%=-75.13%  Force=1.04704E-04  F*=4.1882  Re=2635.1  Ma=0.0065  Ma_max=0.0098  Error=1.23e-03  [SIMPLE-PROP]
+[2026-05-04 16:03:50] CONV step=76001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:03:50] BENCH skipped: accu=0 (FTT=0.06, waiting for FTT>=40.0)
+[2026-05-04 16:05:30] ──────────────────────────────────────
+[2026-05-04 16:05:30] PROCESS step=83001  FTT=0.06  accu=0
+[2026-05-04 16:05:30]   [Step 83501 | FTT=0.06] Ub=0.004348  U*=0.2898  Re%=-71.02%  Force=1.11745E-04  F*=4.4698  Re=3070.8  Ma=0.0075  Ma_max=0.0114  Error=1.13e-03  [SIMPLE-PROP]
+[2026-05-04 16:05:33] CONV step=83001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:05:33] BENCH skipped: accu=0 (FTT=0.06, waiting for FTT>=40.0)
+[2026-05-04 16:06:07] ──────────────────────────────────────
+[2026-05-04 16:06:07] PROCESS step=85001  FTT=0.06  accu=0
+[2026-05-04 16:06:07]   [Step 85001 | FTT=0.06] Ub=0.004496  U*=0.2997  Re%=-70.03%  Force=1.13312E-04  F*=4.5325  Re=3175.4  Ma=0.0078  Ma_max=0.0118  Error=1.11e-03  [SIMPLE-PROP]
+[2026-05-04 16:06:11] CONV step=85001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:06:11] BENCH skipped: accu=0 (FTT=0.06, waiting for FTT>=40.0)
+[2026-05-04 16:06:45] ──────────────────────────────────────
+[2026-05-04 16:06:45] PROCESS step=86001  FTT=0.06  accu=0
+[2026-05-04 16:06:45]   [Step 86551 | FTT=0.06] Ub=0.004651  U*=0.3101  Re%=-68.99%  Force=1.14909E-04  F*=4.5964  Re=3285.1  Ma=0.0081  Ma_max=0.0122  Error=1.09e-03  [SIMPLE-PROP]
+[2026-05-04 16:06:48] CONV step=86001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:06:48] BENCH skipped: accu=0 (FTT=0.06, waiting for FTT>=40.0)
+[2026-05-04 16:07:22] ──────────────────────────────────────
+[2026-05-04 16:07:22] PROCESS step=88001  FTT=0.07  accu=0
+[2026-05-04 16:07:22]   [Step 89001 | FTT=0.07] Ub=0.004901  U*=0.3267  Re%=-67.33%  Force=1.17384E-04  F*=4.6953  Re=3461.5  Ma=0.0085  Ma_max=0.0129  Error=1.05e-03  [SIMPLE-PROP]
+[2026-05-04 16:07:24] CONV step=88001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:07:24] BENCH skipped: accu=0 (FTT=0.07, waiting for FTT>=40.0)
+[2026-05-04 16:09:05] ──────────────────────────────────────
+[2026-05-04 16:09:05] PROCESS step=95001  FTT=0.07  accu=0
+[2026-05-04 16:09:05]   [Step 95601 | FTT=0.07] Ub=0.005602  U*=0.3734  Re%=-62.66%  Force=1.23742E-04  F*=4.9497  Re=3956.6  Ma=0.0097  Ma_max=0.0147  Error=9.80e-04  [SIMPLE-PROP]
+[2026-05-04 16:09:08] CONV step=95001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:09:08] BENCH skipped: accu=0 (FTT=0.07, waiting for FTT>=40.0)
+[2026-05-04 16:09:42] ──────────────────────────────────────
+[2026-05-04 16:09:42] PROCESS step=97001  FTT=0.07  accu=0
+[2026-05-04 16:09:42]   [Step 98001 | FTT=0.07] Ub=0.005868  U*=0.3912  Re%=-60.88%  Force=1.25939E-04  F*=5.0376  Re=4145.1  Ma=0.0102  Ma_max=0.0154  Error=9.59e-04  [SIMPLE-PROP]
+[2026-05-04 16:09:45] CONV step=97001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:09:45] BENCH skipped: accu=0 (FTT=0.07, waiting for FTT>=40.0)
+[2026-05-04 16:10:20] ──────────────────────────────────────
+[2026-05-04 16:10:20] PROCESS step=99001  FTT=0.07  accu=0
+[2026-05-04 16:10:20]   [Step 99001 | FTT=0.07] Ub=0.005982  U*=0.3988  Re%=-60.12%  Force=1.26835E-04  F*=5.0734  Re=4225.0  Ma=0.0104  Ma_max=0.0157  Error=9.50e-04  [SIMPLE-PROP]
+[2026-05-04 16:10:23] CONV step=99001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:10:23] BENCH skipped: accu=0 (FTT=0.07, waiting for FTT>=40.0)
+[2026-05-04 16:10:57] ──────────────────────────────────────
+[2026-05-04 16:10:57] PROCESS step=100001  FTT=0.08  accu=0
+[2026-05-04 16:10:57]   [Step 101001 | FTT=0.08] Ub=0.006211  U*=0.4141  Re%=-58.59%  Force=1.28595E-04  F*=5.1438  Re=4387.1  Ma=0.0108  Ma_max=0.0163  Error=9.32e-04  [SIMPLE-PROP]
+[2026-05-04 16:11:00] CONV step=100001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:11:00] BENCH skipped: accu=0 (FTT=0.08, waiting for FTT>=40.0)
+[2026-05-04 16:12:07] ──────────────────────────────────────
+[2026-05-04 16:12:07] PROCESS step=105001  FTT=0.08  accu=0
+[2026-05-04 16:12:07]   [Step 105551 | FTT=0.08] Ub=0.006745  U*=0.4497  Re%=-55.03%  Force=1.32425E-04  F*=5.2970  Re=4764.4  Ma=0.0117  Ma_max=0.0177  Error=8.81e-04  [SIMPLE-PROP]
+[2026-05-04 16:12:10] CONV step=105001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:12:10] BENCH skipped: accu=0 (FTT=0.08, waiting for FTT>=40.0)
+[2026-05-04 16:12:44] ──────────────────────────────────────
+[2026-05-04 16:12:44] PROCESS step=107001  FTT=0.08  accu=0
+[2026-05-04 16:12:44]   [Step 108001 | FTT=0.08] Ub=0.007038  U*=0.4692  Re%=-53.08%  Force=1.34388E-04  F*=5.3755  Re=4970.9  Ma=0.0122  Ma_max=0.0185  Error=8.51e-04  [SIMPLE-PROP]
+[2026-05-04 16:12:47] CONV step=107001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:12:47] BENCH skipped: accu=0 (FTT=0.08, waiting for FTT>=40.0)
+[2026-05-04 16:14:28] ──────────────────────────────────────
+[2026-05-04 16:14:28] PROCESS step=113001  FTT=0.08  accu=0
+[2026-05-04 16:14:28]   [Step 113001 | FTT=0.08] Ub=0.007642  U*=0.5095  Re%=-49.05%  Force=1.38171E-04  F*=5.5269  Re=5397.8  Ma=0.0132  Ma_max=0.0200  Error=8.00e-04  [SIMPLE-PROP]
+[2026-05-04 16:14:33] CONV step=113001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:14:33] BENCH skipped: accu=0 (FTT=0.08, waiting for FTT>=40.0)
+[2026-05-04 16:15:40] ──────────────────────────────────────
+[2026-05-04 16:15:40] PROCESS step=117001  FTT=0.09  accu=0
+[2026-05-04 16:15:40]   [Step 117551 | FTT=0.09] Ub=0.008204  U*=0.5469  Re%=-45.31%  Force=1.41352E-04  F*=5.6541  Re=5794.6  Ma=0.0142  Ma_max=0.0215  Error=7.60e-04  [SIMPLE-PROP]
+[2026-05-04 16:15:42] CONV step=117001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:15:42] BENCH skipped: accu=0 (FTT=0.09, waiting for FTT>=40.0)
+[2026-05-04 16:16:17] ──────────────────────────────────────
+[2026-05-04 16:16:17] PROCESS step=119001  FTT=0.09  accu=0
+[2026-05-04 16:16:17]   [Step 120001 | FTT=0.09] Ub=0.008510  U*=0.5674  Re%=-43.26%  Force=1.42960E-04  F*=5.7184  Re=6011.2  Ma=0.0147  Ma_max=0.0223  Error=7.39e-04  [SIMPLE-PROP]
+[2026-05-04 16:16:19] CONV step=119001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:16:19] BENCH skipped: accu=0 (FTT=0.09, waiting for FTT>=40.0)
+[2026-05-04 16:18:37] ──────────────────────────────────────
+[2026-05-04 16:18:37] PROCESS step=126001  FTT=0.09  accu=0
+[2026-05-04 16:18:37]   [Step 126001 | FTT=0.09] Ub=0.009274  U*=0.6183  Re%=-38.17%  Force=1.46580E-04  F*=5.8632  Re=6550.8  Ma=0.0161  Ma_max=0.0243  Error=6.96e-04  [SIMPLE-PROP]
+[2026-05-04 16:18:41] CONV step=126001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:18:41] BENCH skipped: accu=0 (FTT=0.09, waiting for FTT>=40.0)
+[2026-05-04 16:22:37] ──────────────────────────────────────
+[2026-05-04 16:22:37] PROCESS step=139001  FTT=0.10  accu=0
+[2026-05-04 16:22:37]   [Step 139001 | FTT=0.10] Ub=0.011007  U*=0.7338  Re%=-26.62%  Force=1.52830E-04  F*=6.1132  Re=7774.3  Ma=0.0191  Ma_max=0.0288  Error=6.24e-04  [SIMPLE-PROP]
+[2026-05-04 16:22:40] CONV step=139001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:22:40] BENCH skipped: accu=0 (FTT=0.10, waiting for FTT>=40.0)
+[2026-05-04 16:23:14] ──────────────────────────────────────
+[2026-05-04 16:23:14] PROCESS step=140001  FTT=0.10  accu=0
+[2026-05-04 16:23:14]   [Step 140851 | FTT=0.10] Ub=0.011261  U*=0.7508  Re%=-24.92%  Force=1.53537E-04  F*=6.1415  Re=7954.2  Ma=0.0195  Ma_max=0.0295  Error=6.13e-04  [SIMPLE-PROP]
+[2026-05-04 16:23:18] CONV step=140001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:23:18] BENCH skipped: accu=0 (FTT=0.10, waiting for FTT>=40.0)
+[2026-05-04 16:23:52] ──────────────────────────────────────
+[2026-05-04 16:23:52] PROCESS step=142001  FTT=0.11  accu=0
+[2026-05-04 16:23:52]   [Step 143001 | FTT=0.11] Ub=0.011558  U*=0.7705  Re%=-22.95%  Force=1.54299E-04  F*=6.1719  Re=8163.9  Ma=0.0200  Ma_max=0.0303  Error=5.98e-04  [SIMPLE-PROP]
+[2026-05-04 16:23:54] CONV step=142001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:23:54] BENCH skipped: accu=0 (FTT=0.11, waiting for FTT>=40.0)
+[2026-05-04 16:27:16] ──────────────────────────────────────
+[2026-05-04 16:27:16] PROCESS step=154001  FTT=0.11  accu=0
+[2026-05-04 16:27:17]   [Step 154001 | FTT=0.11] Ub=0.013084  U*=0.8722  Re%=-12.78%  Force=1.57208E-04  F*=6.2883  Re=9241.3  Ma=0.0227  Ma_max=0.0342  Error=5.32e-04  [SIMPLE-PROP]
+[2026-05-04 16:27:21] CONV step=154001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:27:21] BENCH skipped: accu=0 (FTT=0.11, waiting for FTT>=40.0)
+[2026-05-04 16:27:55] ──────────────────────────────────────
+[2026-05-04 16:27:55] PROCESS step=155001  FTT=0.12  accu=0
+[2026-05-04 16:27:55]   [Step 156001 | FTT=0.12] Ub=0.013362  U*=0.8908  Re%=-10.92%  Force=1.57559E-04  F*=6.3023  Re=9437.9  Ma=0.0231  Ma_max=0.0350  Error=5.21e-04  [SIMPLE-PROP]
+[2026-05-04 16:27:58] CONV step=155001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:27:58] BENCH skipped: accu=0 (FTT=0.12, waiting for FTT>=40.0)
+[2026-05-04 16:30:12] ──────────────────────────────────────
+[2026-05-04 16:30:12] PROCESS step=162001  FTT=0.12  accu=0
+[2026-05-04 16:30:12]   [Step 162401 | FTT=0.12] Ub=0.014253  U*=0.9502  Re%=-4.98%  Force=1.58311E-04  F*=6.3324  Re=10067.2  Ma=0.0247  Ma_max=0.0373  Error=4.89e-04  [SIMPLE-PROP]
+[2026-05-04 16:30:15] CONV step=162001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:30:15] BENCH skipped: accu=0 (FTT=0.12, waiting for FTT>=40.0)
+[2026-05-04 16:30:49] ──────────────────────────────────────
+[2026-05-04 16:30:49] PROCESS step=164001  FTT=0.12  accu=0
+[2026-05-04 16:30:49]   [Step 165001 | FTT=0.12] Ub=0.014616  U*=0.9744  Re%=-2.56%  Force=1.58455E-04  F*=6.3382  Re=10323.6  Ma=0.0253  Ma_max=0.0382  Error=4.79e-04  [SIMPLE-PROP]
+[2026-05-04 16:30:52] CONV step=164001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:30:52] BENCH skipped: accu=0 (FTT=0.12, waiting for FTT>=40.0)
+[2026-05-04 16:31:25] ──────────────────────────────────────
+[2026-05-04 16:31:25] PROCESS step=166001  FTT=0.12  accu=0
+[2026-05-04 16:31:25]   [Step 167001 | FTT=0.12] Ub=0.014896  U*=0.9931  Re%=-0.69%  Force=1.58503E-04  F*=6.3401  Re=10521.5  Ma=0.0258  Ma_max=0.0390  Error=4.71e-04  [SIMPLE-PROP]
+[2026-05-04 16:31:28] CONV step=166001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:31:28] BENCH skipped: accu=0 (FTT=0.12, waiting for FTT>=40.0)
+[2026-05-04 16:33:43] ──────────────────────────────────────
+[2026-05-04 16:33:43] PROCESS step=173001  FTT=0.13  accu=0
+[2026-05-04 16:33:43]   [Step 173801 | FTT=0.13] Ub=0.015857  U*=1.0572  Re%=5.72%  Force=1.58248E-04  F*=6.3299  Re=11200.7  Ma=0.0275  Ma_max=0.0415  Error=4.48e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 16:33:48] CONV step=173001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:33:48] BENCH skipped: accu=0 (FTT=0.13, waiting for FTT>=40.0)
+[2026-05-04 16:34:21] ──────────────────────────────────────
+[2026-05-04 16:34:21] PROCESS step=175001  FTT=0.13  accu=0
+[2026-05-04 16:34:21]   [Step 175751 | FTT=0.13] Ub=0.016134  U*=1.0756  Re%=7.56%  Force=1.58055E-04  F*=6.3222  Re=11396.2  Ma=0.0279  Ma_max=0.0422  Error=4.40e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 16:34:24] CONV step=175001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:34:24] BENCH skipped: accu=0 (FTT=0.13, waiting for FTT>=40.0)
+[2026-05-04 16:34:58] ──────────────────────────────────────
+[2026-05-04 16:34:58] PROCESS step=177001  FTT=0.13  accu=0
+[2026-05-04 16:34:58]   [Step 178001 | FTT=0.13] Ub=0.016453  U*=1.0969  Re%=9.69%  Force=1.57767E-04  F*=6.3107  Re=11621.4  Ma=0.0285  Ma_max=0.0430  Error=4.30e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 16:35:00] CONV step=177001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:35:01] BENCH skipped: accu=0 (FTT=0.13, waiting for FTT>=40.0)
+[2026-05-04 16:37:15] ──────────────────────────────────────
+[2026-05-04 16:37:15] PROCESS step=184001  FTT=0.14  accu=0
+[2026-05-04 16:37:15]   [Step 184251 | FTT=0.14] Ub=0.017334  U*=1.1556  Re%=15.56%  Force=1.56595E-04  F*=6.2638  Re=12243.3  Ma=0.0300  Ma_max=0.0453  Error=4.04e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 16:37:19] CONV step=184001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:37:19] BENCH skipped: accu=0 (FTT=0.14, waiting for FTT>=40.0)
+[2026-05-04 16:38:26] ──────────────────────────────────────
+[2026-05-04 16:38:26] PROCESS step=188001  FTT=0.14  accu=0
+[2026-05-04 16:38:26]   [Step 188001 | FTT=0.14] Ub=0.017856  U*=1.1904  Re%=19.04%  Force=1.55632E-04  F*=6.2253  Re=12612.6  Ma=0.0309  Ma_max=0.0467  Error=3.89e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 16:38:29] CONV step=188001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 16:38:29] BENCH skipped: accu=0 (FTT=0.14, waiting for FTT>=40.0)
+[2026-05-04 16:38:59] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:38:59] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:39:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:39:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:40:00] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:40:00] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:40:30] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:40:30] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:41:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:41:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:41:31] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:41:31] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:42:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:42:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:42:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:42:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:43:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:43:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:43:33] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:43:33] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:44:03] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:44:03] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:44:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:44:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:45:04] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:45:04] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:45:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:45:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:46:06] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:46:06] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:46:36] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:46:36] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:47:07] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:47:07] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:47:38] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:47:38] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:48:08] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:48:08] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:48:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:48:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:49:09] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:49:09] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:49:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:49:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:50:10] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:50:10] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:50:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:50:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:51:11] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:51:11] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:51:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:51:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:52:12] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:52:12] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:52:42] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:52:42] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:53:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:53:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:53:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:53:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:54:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:54:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:54:44] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:54:44] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:55:15] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:55:15] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:55:45] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:55:45] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:56:16] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:56:16] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:56:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:56:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:57:17] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:57:17] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:57:47] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:57:47] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:58:18] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:58:18] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:58:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:58:49] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:59:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:59:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 16:59:49] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 16:59:50] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:00:20] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:00:20] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:00:50] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:00:50] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:01:21] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:01:21] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:01:51] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:01:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:02:22] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:02:22] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:02:52] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:02:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:03:23] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:03:23] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:03:53] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:03:53] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:04:24] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:04:24] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:04:54] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:04:54] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:05:25] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:05:25] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:05:55] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:05:55] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:06:26] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:06:26] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:06:56] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:06:56] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:07:27] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:07:27] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:07:57] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:07:57] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:08:28] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:08:28] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:08:58] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:08:58] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:09:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:09:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:10:00] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:10:00] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:10:30] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:10:30] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:11:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:11:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:11:31] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:11:31] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:12:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:12:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:12:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:12:33] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:13:03] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:13:03] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:13:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:13:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:14:04] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:14:04] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:14:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:14:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:15:05] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:15:05] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:15:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:15:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:16:06] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:16:06] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:16:36] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:16:36] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:17:07] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:17:07] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:17:37] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:17:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:18:08] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:18:08] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:18:38] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:18:38] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:19:09] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:19:09] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:19:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:19:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:20:10] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:20:10] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:20:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:20:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:21:11] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:21:11] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:21:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:21:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:22:12] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:22:12] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:22:42] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:22:42] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:23:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:23:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:23:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:23:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:24:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:24:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:24:44] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:24:44] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:25:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:25:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:25:45] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:25:45] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:26:16] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:26:16] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:26:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:26:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:27:17] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:27:17] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:27:47] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:27:47] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:28:18] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:28:18] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:28:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:28:48] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:29:18] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:29:18] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:29:49] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:29:49] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:30:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:30:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:30:50] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:30:50] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:31:20] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:31:20] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:31:51] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:31:51] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:32:21] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:32:21] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:32:52] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:32:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:33:22] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:33:22] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:33:53] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:33:53] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:34:23] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:34:23] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:34:54] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:34:54] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:35:24] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:35:24] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:35:55] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:35:55] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:36:25] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:36:25] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:36:55] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:36:55] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:37:26] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:37:26] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:37:56] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:37:56] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:38:27] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:38:27] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:38:57] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:38:57] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:39:28] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:39:28] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:39:58] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:39:58] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:40:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:40:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:40:59] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:40:59] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:41:30] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:41:30] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:42:00] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:42:00] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:42:31] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:42:31] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:43:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:43:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:43:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:43:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:44:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:44:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:44:33] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:44:33] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:45:03] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:45:03] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:45:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:45:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:46:05] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:46:05] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:46:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:46:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:47:06] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:47:06] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:47:36] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:47:36] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:48:07] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:48:07] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:48:37] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:48:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:49:08] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:49:08] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:49:38] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:49:38] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:50:09] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:50:09] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:50:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:50:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:51:10] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:51:10] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:51:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:51:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:52:11] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:52:11] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:52:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:52:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:53:12] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:53:12] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:53:42] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:53:42] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:54:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:54:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:54:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:54:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:55:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:55:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:55:44] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:55:44] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:56:15] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:56:15] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:56:45] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:56:45] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:57:15] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:57:16] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:57:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:57:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:58:17] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:58:17] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:58:47] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:58:47] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:59:18] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:59:18] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 17:59:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 17:59:48] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:00:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:00:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:00:49] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:00:49] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:01:20] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:01:20] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:01:50] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:01:50] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:02:21] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:02:21] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:02:51] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:02:51] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:03:22] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:03:22] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:03:52] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:03:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:04:23] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:04:23] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:04:53] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:04:53] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:05:24] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:05:24] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:05:54] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:05:54] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:06:25] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:06:25] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:06:55] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:06:55] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:07:26] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:07:26] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:07:56] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:07:56] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:08:27] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:08:27] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:08:57] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:08:57] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:09:27] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:09:27] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:09:58] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:09:58] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:10:28] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:10:28] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:10:59] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:10:59] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:11:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:11:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:12:00] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:12:00] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:12:31] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:12:31] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:13:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:13:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:13:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:13:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:14:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:14:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:14:33] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:14:33] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:15:03] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:15:03] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:15:33] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:15:33] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:16:04] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:16:04] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:16:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:16:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:17:05] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:17:05] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:17:36] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:17:36] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:18:06] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:18:06] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:18:37] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:18:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:19:07] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:19:07] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:19:38] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:19:38] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:20:08] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:20:08] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:20:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:20:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:21:09] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:21:09] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:21:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:21:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:22:10] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:22:10] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:22:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:22:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:23:11] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:23:11] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:23:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:23:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:24:12] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:24:12] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:24:42] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:24:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:25:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:25:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:25:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:25:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:26:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:26:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:26:44] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:26:44] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:27:15] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:27:15] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:27:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:27:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:28:16] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:28:16] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:28:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:28:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:29:17] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:29:17] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:29:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:29:48] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:30:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:30:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:30:49] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:30:49] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:31:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:31:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:31:50] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:31:50] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:32:20] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:32:20] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:32:51] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:32:51] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:33:21] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:33:21] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:33:52] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:33:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:34:22] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:34:22] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:34:53] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:34:53] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:35:23] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:35:23] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:35:54] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:35:54] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:36:24] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:36:24] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:36:55] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:36:55] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:37:25] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:37:25] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:37:56] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:37:56] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:38:26] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:38:26] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:38:57] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:38:57] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:39:27] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:39:27] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:39:58] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:39:58] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:40:28] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:40:28] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:40:59] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:40:59] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:41:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:41:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:42:00] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:42:00] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:42:31] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:42:31] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:43:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:43:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:43:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:43:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:44:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:44:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:44:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:44:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:45:03] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:45:03] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:45:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:45:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:46:04] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:46:04] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:46:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:46:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:47:05] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:47:05] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:47:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:47:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:48:06] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:48:06] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:48:36] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:48:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:49:07] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:49:07] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:49:37] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:49:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:50:08] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:50:08] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:50:38] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:50:38] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:51:09] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:51:09] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:51:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:51:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:52:10] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:52:10] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:52:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:52:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:53:11] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:53:11] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:53:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:53:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:54:12] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:54:12] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:54:42] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:54:42] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:55:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:55:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:55:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:55:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:56:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:56:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:56:44] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:56:44] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:57:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:57:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:57:45] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:57:45] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:58:15] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:58:15] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:58:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:58:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:59:16] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:59:16] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 18:59:47] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 18:59:47] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:00:17] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:00:17] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:00:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:00:48] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:01:18] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:01:18] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:01:49] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:01:49] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:02:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:02:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:02:50] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:02:50] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:03:20] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:03:20] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:03:51] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:03:51] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:04:21] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:04:21] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:04:52] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:04:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:05:22] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:05:22] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:05:52] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:05:52] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:06:23] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:06:23] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:06:53] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:06:53] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:07:24] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:07:24] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:07:54] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:07:54] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:08:25] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:08:25] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:08:55] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:08:55] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:09:26] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:09:26] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:09:56] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:09:56] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:10:27] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:10:27] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:10:57] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:10:57] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:11:28] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:11:28] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:11:58] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:11:58] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:12:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:12:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:12:59] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:12:59] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:13:30] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:13:30] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:14:00] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:14:00] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:14:31] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:14:31] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:15:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:15:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:15:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:15:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:16:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:16:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:16:33] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:16:33] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:17:03] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:17:03] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:17:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:17:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:18:04] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:18:04] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:18:34] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:18:34] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:19:05] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:19:05] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:19:35] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:19:35] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:20:06] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:20:06] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:20:37] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:20:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:21:07] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:21:07] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:21:37] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:21:37] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:22:08] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:22:08] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:22:38] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:22:38] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:23:09] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:23:09] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:23:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:23:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:24:10] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:24:10] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:24:40] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:24:40] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:25:11] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:25:11] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:25:41] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:25:41] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:26:12] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:26:12] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:26:42] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:26:42] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:27:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:27:13] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:27:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:27:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:28:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:28:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:28:44] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:28:44] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:29:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:29:14] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:29:45] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:29:45] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:30:15] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:30:15] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:30:46] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:30:46] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:31:16] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:31:16] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:31:47] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:31:47] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:32:17] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:32:17] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:32:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:32:48] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:33:18] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:33:18] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:33:48] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:33:48] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:34:19] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:34:19] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:34:49] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38367.log
+[2026-05-04 19:34:49] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:35:20] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38389.log
+[2026-05-04 19:35:20] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 19:35:54] ──────────────────────────────────────
+[2026-05-04 19:35:54] PROCESS step=189001  FTT=0.14  accu=0
+[2026-05-04 19:35:54]   [Step 189551 | FTT=0.14] Ub=0.018071  U*=1.2047  Re%=20.47%  Force=1.55177E-04  F*=6.2071  Re=12764.0  Ma=0.0313  Ma_max=0.0472  Error=3.82e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:35:58] CONV step=189001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:35:58] BENCH skipped: accu=0 (FTT=0.14, waiting for FTT>=40.0)
+[2026-05-04 19:37:39] ──────────────────────────────────────
+[2026-05-04 19:37:39] PROCESS step=196001  FTT=0.15  accu=0
+[2026-05-04 19:37:39]   [Step 196501 | FTT=0.15] Ub=0.019018  U*=1.2678  Re%=26.78%  Force=1.52740E-04  F*=6.1096  Re=13432.7  Ma=0.0329  Ma_max=0.0497  Error=3.54e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:37:42] CONV step=196001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:37:42] BENCH skipped: accu=0 (FTT=0.15, waiting for FTT>=40.0)
+[2026-05-04 19:38:15] ──────────────────────────────────────
+[2026-05-04 19:38:15] PROCESS step=198001  FTT=0.15  accu=0
+[2026-05-04 19:38:15]   [Step 199001 | FTT=0.15] Ub=0.019353  U*=1.2902  Re%=29.02%  Force=1.51705E-04  F*=6.0682  Re=13669.9  Ma=0.0335  Ma_max=0.0506  Error=3.46e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:38:18] CONV step=198001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:38:18] BENCH skipped: accu=0 (FTT=0.15, waiting for FTT>=40.0)
+[2026-05-04 19:39:25] ──────────────────────────────────────
+[2026-05-04 19:39:25] PROCESS step=203001  FTT=0.15  accu=0
+[2026-05-04 19:39:25]   [Step 203701 | FTT=0.15] Ub=0.019979  U*=1.3319  Re%=33.19%  Force=1.49536E-04  F*=5.9814  Re=14111.8  Ma=0.0346  Ma_max=0.0522  Error=3.32e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:39:28] CONV step=203001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:39:28] BENCH skipped: accu=0 (FTT=0.15, waiting for FTT>=40.0)
+[2026-05-04 19:41:09] ──────────────────────────────────────
+[2026-05-04 19:41:09] PROCESS step=210001  FTT=0.16  accu=0
+[2026-05-04 19:41:09]   [Step 210501 | FTT=0.16] Ub=0.020877  U*=1.3918  Re%=39.18%  Force=1.45886E-04  F*=5.8354  Re=14746.2  Ma=0.0362  Ma_max=0.0546  Error=3.14e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:41:11] CONV step=210001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:41:11] BENCH skipped: accu=0 (FTT=0.16, waiting for FTT>=40.0)
+[2026-05-04 19:41:45] ──────────────────────────────────────
+[2026-05-04 19:41:45] PROCESS step=212001  FTT=0.16  accu=0
+[2026-05-04 19:41:45]   [Step 213001 | FTT=0.16] Ub=0.021203  U*=1.4135  Re%=41.35%  Force=1.44393E-04  F*=5.7757  Re=14976.4  Ma=0.0367  Ma_max=0.0554  Error=3.06e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:41:48] CONV step=212001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:41:48] BENCH skipped: accu=0 (FTT=0.16, waiting for FTT>=40.0)
+[2026-05-04 19:42:55] ──────────────────────────────────────
+[2026-05-04 19:42:55] PROCESS step=217001  FTT=0.16  accu=0
+[2026-05-04 19:42:55]   [Step 217601 | FTT=0.16] Ub=0.021794  U*=1.4529  Re%=45.29%  Force=1.41437E-04  F*=5.6575  Re=15393.5  Ma=0.0377  Ma_max=0.0570  Error=2.92e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:42:58] CONV step=217001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:42:58] BENCH skipped: accu=0 (FTT=0.16, waiting for FTT>=40.0)
+[2026-05-04 19:43:31] ──────────────────────────────────────
+[2026-05-04 19:43:32] PROCESS step=219001  FTT=0.16  accu=0
+[2026-05-04 19:43:32]   [Step 220001 | FTT=0.16] Ub=0.022097  U*=1.4731  Re%=47.31%  Force=1.39789E-04  F*=5.5916  Re=15607.8  Ma=0.0383  Ma_max=0.0578  Error=2.85e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:43:36] CONV step=219001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:43:36] BENCH skipped: accu=0 (FTT=0.16, waiting for FTT>=40.0)
+[2026-05-04 19:44:43] ──────────────────────────────────────
+[2026-05-04 19:44:43] PROCESS step=224001  FTT=0.17  accu=0
+[2026-05-04 19:44:43]   [Step 224651 | FTT=0.17] Ub=0.022674  U*=1.5116  Re%=51.16%  Force=1.36394E-04  F*=5.4558  Re=16015.1  Ma=0.0393  Ma_max=0.0593  Error=2.70e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:44:46] CONV step=224001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:44:46] BENCH skipped: accu=0 (FTT=0.17, waiting for FTT>=40.0)
+[2026-05-04 19:47:00] ──────────────────────────────────────
+[2026-05-04 19:47:00] PROCESS step=233001  FTT=0.17  accu=0
+[2026-05-04 19:47:00]   [Step 233301 | FTT=0.17] Ub=0.023695  U*=1.5796  Re%=57.96%  Force=1.29391E-04  F*=5.1756  Re=16736.3  Ma=0.0410  Ma_max=0.0619  Error=2.41e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:47:03] CONV step=233001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:47:03] BENCH skipped: accu=0 (FTT=0.17, waiting for FTT>=40.0)
+[2026-05-04 19:47:36] ──────────────────────────────────────
+[2026-05-04 19:47:36] PROCESS step=235001  FTT=0.18  accu=0
+[2026-05-04 19:47:36]   [Step 236001 | FTT=0.18] Ub=0.023999  U*=1.6000  Re%=60.00%  Force=1.27030E-04  F*=5.0812  Re=16951.6  Ma=0.0416  Ma_max=0.0627  Error=2.33e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:47:39] CONV step=235001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:47:39] BENCH skipped: accu=0 (FTT=0.18, waiting for FTT>=40.0)
+[2026-05-04 19:49:20] ──────────────────────────────────────
+[2026-05-04 19:49:20] PROCESS step=242001  FTT=0.18  accu=0
+[2026-05-04 19:49:20]   [Step 242401 | FTT=0.18] Ub=0.024704  U*=1.6469  Re%=64.69%  Force=1.21113E-04  F*=4.8445  Re=17449.2  Ma=0.0428  Ma_max=0.0645  Error=2.19e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:49:23] CONV step=242001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:49:23] BENCH skipped: accu=0 (FTT=0.18, waiting for FTT>=40.0)
+[2026-05-04 19:49:56] ──────────────────────────────────────
+[2026-05-04 19:49:56] PROCESS step=244001  FTT=0.18  accu=0
+[2026-05-04 19:49:57]   [Step 245001 | FTT=0.18] Ub=0.024983  U*=1.6655  Re%=66.55%  Force=1.18583E-04  F*=4.7433  Re=17646.0  Ma=0.0433  Ma_max=0.0653  Error=2.13e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:49:59] CONV step=244001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:49:59] BENCH skipped: accu=0 (FTT=0.18, waiting for FTT>=40.0)
+[2026-05-04 19:51:07] ──────────────────────────────────────
+[2026-05-04 19:51:07] PROCESS step=249001  FTT=0.19  accu=0
+[2026-05-04 19:51:07]   [Step 249351 | FTT=0.19] Ub=0.025437  U*=1.6958  Re%=69.58%  Force=1.14192E-04  F*=4.5677  Re=17967.2  Ma=0.0441  Ma_max=0.0664  Error=2.02e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:51:09] CONV step=249001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:51:09] BENCH skipped: accu=0 (FTT=0.19, waiting for FTT>=40.0)
+[2026-05-04 19:51:43] ──────────────────────────────────────
+[2026-05-04 19:51:43] PROCESS step=251001  FTT=0.19  accu=0
+[2026-05-04 19:51:43]   [Step 252001 | FTT=0.19] Ub=0.025706  U*=1.7138  Re%=71.38%  Force=1.11423E-04  F*=4.4569  Re=18157.2  Ma=0.0445  Ma_max=0.0671  Error=1.95e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:51:46] CONV step=251001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:51:46] BENCH skipped: accu=0 (FTT=0.19, waiting for FTT>=40.0)
+[2026-05-04 19:52:53] ──────────────────────────────────────
+[2026-05-04 19:52:53] PROCESS step=256001  FTT=0.19  accu=0
+[2026-05-04 19:52:53]   [Step 256551 | FTT=0.19] Ub=0.026154  U*=1.7436  Re%=74.36%  Force=1.06507E-04  F*=4.2603  Re=18473.3  Ma=0.0453  Ma_max=0.0683  Error=1.84e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:52:56] CONV step=256001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:52:56] BENCH skipped: accu=0 (FTT=0.19, waiting for FTT>=40.0)
+[2026-05-04 19:53:30] ──────────────────────────────────────
+[2026-05-04 19:53:30] PROCESS step=258001  FTT=0.19  accu=0
+[2026-05-04 19:53:30]   [Step 259001 | FTT=0.19] Ub=0.026387  U*=1.7591  Re%=75.91%  Force=1.03778E-04  F*=4.1511  Re=18637.7  Ma=0.0457  Ma_max=0.0689  Error=1.78e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:53:34] CONV step=258001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:53:34] BENCH skipped: accu=0 (FTT=0.19, waiting for FTT>=40.0)
+[2026-05-04 19:54:41] ──────────────────────────────────────
+[2026-05-04 19:54:41] PROCESS step=263001  FTT=0.20  accu=0
+[2026-05-04 19:54:41]   [Step 263651 | FTT=0.20] Ub=0.026810  U*=1.7873  Re%=78.73%  Force=9.84470E-05  F*=3.9379  Re=18936.6  Ma=0.0464  Ma_max=0.0700  Error=1.65e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:54:45] CONV step=263001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:54:45] BENCH skipped: accu=0 (FTT=0.20, waiting for FTT>=40.0)
+[2026-05-04 19:58:07] ──────────────────────────────────────
+[2026-05-04 19:58:07] PROCESS step=276001  FTT=0.21  accu=0
+[2026-05-04 19:58:07]   [Step 276551 | FTT=0.21] Ub=0.027842  U*=1.8562  Re%=85.62%  Force=8.27118E-05  F*=3.3085  Re=19665.9  Ma=0.0482  Ma_max=0.0726  Error=1.31e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:58:09] CONV step=276001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:58:09] BENCH skipped: accu=0 (FTT=0.21, waiting for FTT>=40.0)
+[2026-05-04 19:58:43] ──────────────────────────────────────
+[2026-05-04 19:58:43] PROCESS step=278001  FTT=0.21  accu=0
+[2026-05-04 19:58:43]   [Step 279001 | FTT=0.21] Ub=0.028019  U*=1.8679  Re%=86.79%  Force=7.95809E-05  F*=3.1832  Re=19790.4  Ma=0.0485  Ma_max=0.0731  Error=1.26e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 19:58:46] CONV step=278001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 19:58:46] BENCH skipped: accu=0 (FTT=0.21, waiting for FTT>=40.0)
+[2026-05-04 20:02:41] ──────────────────────────────────────
+[2026-05-04 20:02:41] PROCESS step=293001  FTT=0.22  accu=0
+[2026-05-04 20:02:41]   [Step 293551 | FTT=0.22] Ub=0.028934  U*=1.9289  Re%=92.89%  Force=6.01750E-05  F*=2.4070  Re=20437.1  Ma=0.0501  Ma_max=0.0754  Error=9.52e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:02:43] CONV step=293001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:02:43] BENCH skipped: accu=0 (FTT=0.22, waiting for FTT>=40.0)
+[2026-05-04 20:03:17] ──────────────────────────────────────
+[2026-05-04 20:03:17] PROCESS step=295001  FTT=0.22  accu=0
+[2026-05-04 20:03:17]   [Step 296001 | FTT=0.22] Ub=0.029065  U*=1.9377  Re%=93.77%  Force=5.67853E-05  F*=2.2714  Re=20529.7  Ma=0.0503  Ma_max=0.0757  Error=8.93e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:03:21] CONV step=295001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:03:21] BENCH skipped: accu=0 (FTT=0.22, waiting for FTT>=40.0)
+[2026-05-04 20:05:35] ──────────────────────────────────────
+[2026-05-04 20:05:35] PROCESS step=304001  FTT=0.23  accu=0
+[2026-05-04 20:05:35]   [Step 304501 | FTT=0.23] Ub=0.029452  U*=1.9634  Re%=96.34%  Force=4.48007E-05  F*=1.7920  Re=20802.6  Ma=0.0510  Ma_max=0.0767  Error=6.64e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:05:38] CONV step=304001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:05:38] BENCH skipped: accu=0 (FTT=0.23, waiting for FTT>=40.0)
+[2026-05-04 20:06:11] ──────────────────────────────────────
+[2026-05-04 20:06:11] PROCESS step=306001  FTT=0.23  accu=0
+[2026-05-04 20:06:11]   [Step 307001 | FTT=0.23] Ub=0.029545  U*=1.9696  Re%=96.96%  Force=4.12188E-05  F*=1.6488  Re=20868.3  Ma=0.0512  Ma_max=0.0769  Error=6.02e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:06:14] CONV step=306001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:06:14] BENCH skipped: accu=0 (FTT=0.23, waiting for FTT>=40.0)
+[2026-05-04 20:07:55] ──────────────────────────────────────
+[2026-05-04 20:07:55] PROCESS step=313001  FTT=0.23  accu=0
+[2026-05-04 20:07:55]   [Step 313751 | FTT=0.23] Ub=0.029755  U*=1.9837  Re%=98.37%  Force=3.14437E-05  F*=1.2577  Re=21016.8  Ma=0.0515  Ma_max=0.0774  Error=4.53e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:07:58] CONV step=313001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:07:58] BENCH skipped: accu=0 (FTT=0.23, waiting for FTT>=40.0)
+[2026-05-04 20:11:10] ──────────────────────────────────────
+[2026-05-04 20:11:10] PROCESS step=326001  FTT=0.24  accu=0
+[2026-05-04 20:11:10]   [Step 326351 | FTT=0.24] Ub=0.029998  U*=1.9999  Re%=99.99%  Force=1.29013E-05  F*=0.5161  Re=21188.9  Ma=0.0520  Ma_max=0.0786  Error=1.97e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:11:13] CONV step=326001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:11:13] BENCH skipped: accu=0 (FTT=0.24, waiting for FTT>=40.0)
+[2026-05-04 20:11:46] ──────────────────────────────────────
+[2026-05-04 20:11:46] PROCESS step=328001  FTT=0.24  accu=0
+[2026-05-04 20:11:46]   [Step 329001 | FTT=0.24] Ub=0.030025  U*=2.0017  Re%=100.17%  Force=8.97007E-06  F*=0.3588  Re=21208.0  Ma=0.0520  Ma_max=0.0789  Error=1.46e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:11:49] CONV step=328001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:11:49] BENCH skipped: accu=0 (FTT=0.24, waiting for FTT>=40.0)
+[2026-05-04 20:12:56] ──────────────────────────────────────
+[2026-05-04 20:12:56] PROCESS step=333001  FTT=0.25  accu=0
+[2026-05-04 20:12:56]   [Step 333301 | FTT=0.25] Ub=0.030050  U*=2.0034  Re%=100.34%  Force=2.57947E-06  F*=0.1032  Re=21225.6  Ma=0.0520  Ma_max=0.0795  Error=4.82e-06  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:12:59] CONV step=333001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:12:59] BENCH skipped: accu=0 (FTT=0.25, waiting for FTT>=40.0)
+[2026-05-04 20:13:33] ──────────────────────────────────────
+[2026-05-04 20:13:33] PROCESS step=335001  FTT=0.25  accu=0
+[2026-05-04 20:13:33]   [Step 336001 | FTT=0.25] Ub=0.030052  U*=2.0035  Re%=100.35%  Force=-1.43649E-06  F*=-0.0575  Re=21227.0  Ma=0.0521  Ma_max=0.0789  Error=2.08e-06  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:13:36] CONV step=335001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:13:36] BENCH skipped: accu=0 (FTT=0.25, waiting for FTT>=40.0)
+[2026-05-04 20:14:43] ──────────────────────────────────────
+[2026-05-04 20:14:43] PROCESS step=340001  FTT=0.25  accu=0
+[2026-05-04 20:14:43]   [Step 340301 | FTT=0.25] Ub=0.030032  U*=2.0021  Re%=100.21%  Force=-7.82893E-06  F*=-0.3132  Re=21212.7  Ma=0.0520  Ma_max=0.0787  Error=1.31e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:14:46] CONV step=340001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:14:46] BENCH skipped: accu=0 (FTT=0.25, waiting for FTT>=40.0)
+[2026-05-04 20:15:20] ──────────────────────────────────────
+[2026-05-04 20:15:20] PROCESS step=342001  FTT=0.26  accu=0
+[2026-05-04 20:15:20]   [Step 343001 | FTT=0.26] Ub=0.030005  U*=2.0003  Re%=100.03%  Force=-1.18360E-05  F*=-0.4734  Re=21193.6  Ma=0.0520  Ma_max=0.0780  Error=1.99e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:15:22] CONV step=342001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:15:22] BENCH skipped: accu=0 (FTT=0.26, waiting for FTT>=40.0)
+[2026-05-04 20:17:03] ──────────────────────────────────────
+[2026-05-04 20:17:03] PROCESS step=349001  FTT=0.26  accu=0
+[2026-05-04 20:17:03]   [Step 349601 | FTT=0.26] Ub=0.029895  U*=1.9930  Re%=99.30%  Force=-2.15889E-05  F*=-0.8636  Re=21115.5  Ma=0.0518  Ma_max=0.0779  Error=3.52e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:17:06] CONV step=349001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:17:06] BENCH skipped: accu=0 (FTT=0.26, waiting for FTT>=40.0)
+[2026-05-04 20:17:39] ──────────────────────────────────────
+[2026-05-04 20:17:39] PROCESS step=351001  FTT=0.26  accu=0
+[2026-05-04 20:17:40]   [Step 352001 | FTT=0.26] Ub=0.029840  U*=1.9893  Re%=98.93%  Force=-2.51148E-05  F*=-1.0046  Re=21077.0  Ma=0.0517  Ma_max=0.0782  Error=4.05e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:17:43] CONV step=351001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:17:43] BENCH skipped: accu=0 (FTT=0.26, waiting for FTT>=40.0)
+[2026-05-04 20:18:50] ──────────────────────────────────────
+[2026-05-04 20:18:50] PROCESS step=356001  FTT=0.27  accu=0
+[2026-05-04 20:18:50]   [Step 356451 | FTT=0.27] Ub=0.029720  U*=1.9813  Re%=98.13%  Force=-3.16144E-05  F*=-1.2646  Re=20991.9  Ma=0.0515  Ma_max=0.0800  Error=4.99e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:18:53] CONV step=356001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:18:53] BENCH skipped: accu=0 (FTT=0.27, waiting for FTT>=40.0)
+[2026-05-04 20:19:26] ──────────────────────────────────────
+[2026-05-04 20:19:26] PROCESS step=358001  FTT=0.27  accu=0
+[2026-05-04 20:19:26]   [Step 359001 | FTT=0.27] Ub=0.029640  U*=1.9760  Re%=97.60%  Force=-3.53133E-05  F*=-1.4125  Re=20935.7  Ma=0.0513  Ma_max=0.0811  Error=5.48e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:19:29] CONV step=358001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:19:29] BENCH skipped: accu=0 (FTT=0.27, waiting for FTT>=40.0)
+[2026-05-04 20:21:10] ──────────────────────────────────────
+[2026-05-04 20:21:10] PROCESS step=365001  FTT=0.27  accu=0
+[2026-05-04 20:21:10]   [Step 365501 | FTT=0.27] Ub=0.029407  U*=1.9605  Re%=96.05%  Force=-4.46434E-05  F*=-1.7857  Re=20771.0  Ma=0.0509  Ma_max=0.0832  Error=6.70e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:21:12] CONV step=365001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:21:12] BENCH skipped: accu=0 (FTT=0.27, waiting for FTT>=40.0)
+[2026-05-04 20:21:46] ──────────────────────────────────────
+[2026-05-04 20:21:46] PROCESS step=367001  FTT=0.27  accu=0
+[2026-05-04 20:21:46]   [Step 368001 | FTT=0.27] Ub=0.029304  U*=1.9536  Re%=95.36%  Force=-4.81896E-05  F*=-1.9276  Re=20698.5  Ma=0.0508  Ma_max=0.0836  Error=7.26e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:21:49] CONV step=367001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:21:49] BENCH skipped: accu=0 (FTT=0.27, waiting for FTT>=40.0)
+[2026-05-04 20:23:30] ──────────────────────────────────────
+[2026-05-04 20:23:30] PROCESS step=374001  FTT=0.28  accu=0
+[2026-05-04 20:23:30]   [Step 374551 | FTT=0.28] Ub=0.028994  U*=1.9329  Re%=93.29%  Force=-5.73498E-05  F*=-2.2940  Re=20479.2  Ma=0.0502  Ma_max=0.0833  Error=8.97e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:23:33] CONV step=374001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:23:33] BENCH skipped: accu=0 (FTT=0.28, waiting for FTT>=40.0)
+[2026-05-04 20:24:06] ──────────────────────────────────────
+[2026-05-04 20:24:06] PROCESS step=376001  FTT=0.28  accu=0
+[2026-05-04 20:24:06]   [Step 377001 | FTT=0.28] Ub=0.028862  U*=1.9241  Re%=92.41%  Force=-6.07215E-05  F*=-2.4289  Re=20386.1  Ma=0.0500  Ma_max=0.0829  Error=9.58e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:24:11] CONV step=376001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:24:11] BENCH skipped: accu=0 (FTT=0.28, waiting for FTT>=40.0)
+[2026-05-04 20:25:18] ──────────────────────────────────────
+[2026-05-04 20:25:18] PROCESS step=381001  FTT=0.28  accu=0
+[2026-05-04 20:25:18]   [Step 381551 | FTT=0.28] Ub=0.028596  U*=1.9064  Re%=90.64%  Force=-6.68945E-05  F*=-2.6758  Re=20198.4  Ma=0.0495  Ma_max=0.0822  Error=1.07e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:25:21] CONV step=381001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:25:21] BENCH skipped: accu=0 (FTT=0.28, waiting for FTT>=40.0)
+[2026-05-04 20:25:54] ──────────────────────────────────────
+[2026-05-04 20:25:54] PROCESS step=383001  FTT=0.29  accu=0
+[2026-05-04 20:25:54]   [Step 384001 | FTT=0.29] Ub=0.028441  U*=1.8961  Re%=89.61%  Force=-7.01671E-05  F*=-2.8067  Re=20089.0  Ma=0.0493  Ma_max=0.0819  Error=1.14e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:25:57] CONV step=383001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:25:57] BENCH skipped: accu=0 (FTT=0.29, waiting for FTT>=40.0)
+[2026-05-04 20:27:38] ──────────────────────────────────────
+[2026-05-04 20:27:38] PROCESS step=390001  FTT=0.29  accu=0
+[2026-05-04 20:27:38]   [Step 390551 | FTT=0.29] Ub=0.027988  U*=1.8659  Re%=86.59%  Force=-7.87220E-05  F*=-3.1489  Re=19769.2  Ma=0.0485  Ma_max=0.0859  Error=1.30e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:27:41] CONV step=390001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:27:41] BENCH skipped: accu=0 (FTT=0.29, waiting for FTT>=40.0)
+[2026-05-04 20:28:15] ──────────────────────────────────────
+[2026-05-04 20:28:15] PROCESS step=392001  FTT=0.29  accu=0
+[2026-05-04 20:28:15]   [Step 393001 | FTT=0.29] Ub=0.027807  U*=1.8538  Re%=85.38%  Force=-8.18440E-05  F*=-3.2738  Re=19640.7  Ma=0.0482  Ma_max=0.0870  Error=1.36e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:28:18] CONV step=392001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:28:18] BENCH skipped: accu=0 (FTT=0.29, waiting for FTT>=40.0)
+[2026-05-04 20:29:25] ──────────────────────────────────────
+[2026-05-04 20:29:25] PROCESS step=397001  FTT=0.30  accu=0
+[2026-05-04 20:29:25]   [Step 397451 | FTT=0.30] Ub=0.027463  U*=1.8308  Re%=83.08%  Force=-8.73995E-05  F*=-3.4960  Re=19397.7  Ma=0.0476  Ma_max=0.0883  Error=1.44e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:29:27] CONV step=397001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:29:27] BENCH skipped: accu=0 (FTT=0.30, waiting for FTT>=40.0)
+[2026-05-04 20:30:01] ──────────────────────────────────────
+[2026-05-04 20:30:01] PROCESS step=399001  FTT=0.30  accu=0
+[2026-05-04 20:30:01]   [Step 400001 | FTT=0.30] Ub=0.027258  U*=1.8172  Re%=81.72%  Force=-9.05136E-05  F*=-3.6205  Re=19253.2  Ma=0.0472  Ma_max=0.0889  Error=1.49e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:30:04] CONV step=399001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:30:04] BENCH skipped: accu=0 (FTT=0.30, waiting for FTT>=40.0)
+[2026-05-04 20:31:45] ──────────────────────────────────────
+[2026-05-04 20:31:45] PROCESS step=406001  FTT=0.30  accu=0
+[2026-05-04 20:31:45]   [Step 406601 | FTT=0.30] Ub=0.026699  U*=1.7799  Re%=77.99%  Force=-9.83267E-05  F*=-3.9331  Re=18858.5  Ma=0.0462  Ma_max=0.0864  Error=1.65e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:31:47] CONV step=406001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:31:47] BENCH skipped: accu=0 (FTT=0.30, waiting for FTT>=40.0)
+[2026-05-04 20:32:21] ──────────────────────────────────────
+[2026-05-04 20:32:21] PROCESS step=408001  FTT=0.30  accu=0
+[2026-05-04 20:32:21]   [Step 409001 | FTT=0.30] Ub=0.026484  U*=1.7656  Re%=76.56%  Force=-1.01075E-04  F*=-4.0430  Re=18706.5  Ma=0.0459  Ma_max=0.0853  Error=1.72e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:32:24] CONV step=408001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:32:24] BENCH skipped: accu=0 (FTT=0.30, waiting for FTT>=40.0)
+[2026-05-04 20:32:54] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38389.log
+[2026-05-04 20:32:54] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 20:32:58] ──────────────────────────────────────
+[2026-05-04 20:32:58] PROCESS step=410001  FTT=0.31  accu=0
+[2026-05-04 20:32:58]   [Step 410001 | FTT=0.31] Ub=0.026392  U*=1.7595  Re%=75.95%  Force=-1.02205E-04  F*=-4.0882  Re=18641.7  Ma=0.0457  Ma_max=0.0846  Error=1.75e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:33:01] CONV step=410001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:33:01] BENCH skipped: accu=0 (FTT=0.31, waiting for FTT>=40.0)
+[2026-05-04 20:34:01] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38441.log
+[2026-05-04 20:34:01] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 20:34:32] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38441.log
+[2026-05-04 20:34:32] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 20:35:02] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit2_restart/slurm_38441.log
+[2026-05-04 20:35:02] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-04 20:37:38] ──────────────────────────────────────
+[2026-05-04 20:37:38] PROCESS step=411001  FTT=0.31  accu=0
+[2026-05-04 20:37:38]   [Step 412001 | FTT=0.31] Ub=0.026205  U*=1.7470  Re%=74.70%  Force=-1.04438E-04  F*=-4.1775  Re=18509.5  Ma=0.0454  Ma_max=0.0830  Error=1.80e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:37:41] CONV step=411001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:37:41] BENCH skipped: accu=0 (FTT=0.31, waiting for FTT>=40.0)
+[2026-05-04 20:38:48] ──────────────────────────────────────
+[2026-05-04 20:38:48] PROCESS step=416001  FTT=0.31  accu=0
+[2026-05-04 20:38:48]   [Step 416301 | FTT=0.31] Ub=0.025789  U*=1.7192  Re%=71.92%  Force=-1.09110E-04  F*=-4.3644  Re=18215.4  Ma=0.0447  Ma_max=0.0888  Error=1.92e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:38:51] CONV step=416001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:38:51] BENCH skipped: accu=0 (FTT=0.31, waiting for FTT>=40.0)
+[2026-05-04 20:39:24] ──────────────────────────────────────
+[2026-05-04 20:39:24] PROCESS step=418001  FTT=0.31  accu=0
+[2026-05-04 20:39:24]   [Step 419001 | FTT=0.31] Ub=0.025517  U*=1.7012  Re%=70.12%  Force=-1.11952E-04  F*=-4.4781  Re=18023.8  Ma=0.0442  Ma_max=0.0928  Error=1.99e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:39:27] CONV step=418001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:39:27] BENCH skipped: accu=0 (FTT=0.31, waiting for FTT>=40.0)
+[2026-05-04 20:40:34] ──────────────────────────────────────
+[2026-05-04 20:40:34] PROCESS step=423001  FTT=0.31  accu=0
+[2026-05-04 20:40:34]   [Step 423401 | FTT=0.31] Ub=0.025058  U*=1.6706  Re%=67.06%  Force=-1.16424E-04  F*=-4.6570  Re=17699.7  Ma=0.0434  Ma_max=0.1005  Error=2.13e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:40:37] CONV step=423001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:40:37] BENCH skipped: accu=0 (FTT=0.31, waiting for FTT>=40.0)
+[2026-05-04 20:41:11] ──────────────────────────────────────
+[2026-05-04 20:41:11] PROCESS step=425001  FTT=0.32  accu=0
+[2026-05-04 20:41:11]   [Step 426001 | FTT=0.32] Ub=0.024778  U*=1.6518  Re%=65.18%  Force=-1.18972E-04  F*=-4.7589  Re=17501.2  Ma=0.0429  Ma_max=0.0982  Error=2.20e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:41:14] CONV step=425001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:41:14] BENCH skipped: accu=0 (FTT=0.32, waiting for FTT>=40.0)
+[2026-05-04 20:42:21] ──────────────────────────────────────
+[2026-05-04 20:42:21] PROCESS step=430001  FTT=0.32  accu=0
+[2026-05-04 20:42:21]   [Step 430601 | FTT=0.32] Ub=0.024267  U*=1.6178  Re%=61.78%  Force=-1.23300E-04  F*=-4.9320  Re=17140.6  Ma=0.0420  Ma_max=0.1000  Error=2.31e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:42:24] CONV step=430001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:42:24] BENCH skipped: accu=0 (FTT=0.32, waiting for FTT>=40.0)
+[2026-05-04 20:42:57] ──────────────────────────────────────
+[2026-05-04 20:42:57] PROCESS step=432001  FTT=0.32  accu=0
+[2026-05-04 20:42:57]   [Step 433001 | FTT=0.32] Ub=0.023996  U*=1.5997  Re%=59.97%  Force=-1.25465E-04  F*=-5.0186  Re=16949.2  Ma=0.0416  Ma_max=0.1023  Error=2.36e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:43:00] CONV step=432001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:43:00] BENCH skipped: accu=0 (FTT=0.32, waiting for FTT>=40.0)
+[2026-05-04 20:44:08] ──────────────────────────────────────
+[2026-05-04 20:44:08] PROCESS step=437001  FTT=0.33  accu=0
+[2026-05-04 20:44:08]   [Step 437701 | FTT=0.33] Ub=0.023457  U*=1.5638  Re%=56.38%  Force=-1.29517E-04  F*=-5.1807  Re=16568.7  Ma=0.0406  Ma_max=0.1002  Error=2.47e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:44:10] CONV step=437001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:44:11] BENCH skipped: accu=0 (FTT=0.33, waiting for FTT>=40.0)
+[2026-05-04 20:46:25] ──────────────────────────────────────
+[2026-05-04 20:46:25] PROCESS step=446001  FTT=0.33  accu=0
+[2026-05-04 20:46:25]   [Step 446501 | FTT=0.33] Ub=0.022409  U*=1.4939  Re%=49.39%  Force=-1.36417E-04  F*=-5.4567  Re=15828.0  Ma=0.0388  Ma_max=0.0993  Error=2.73e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:46:28] CONV step=446001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:46:28] BENCH skipped: accu=0 (FTT=0.33, waiting for FTT>=40.0)
+[2026-05-04 20:47:02] ──────────────────────────────────────
+[2026-05-04 20:47:02] PROCESS step=448001  FTT=0.33  accu=0
+[2026-05-04 20:47:02]   [Step 449001 | FTT=0.33] Ub=0.022100  U*=1.4733  Re%=47.33%  Force=-1.38208E-04  F*=-5.5283  Re=15609.9  Ma=0.0383  Ma_max=0.1052  Error=2.81e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:47:04] CONV step=448001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:47:04] BENCH skipped: accu=0 (FTT=0.33, waiting for FTT>=40.0)
+[2026-05-04 20:48:45] ──────────────────────────────────────
+[2026-05-04 20:48:45] PROCESS step=455001  FTT=0.34  accu=0
+[2026-05-04 20:48:45]   [Step 455551 | FTT=0.34] Ub=0.021271  U*=1.4180  Re%=41.80%  Force=-1.42534E-04  F*=-5.7014  Re=15024.2  Ma=0.0368  Ma_max=0.1028  Error=3.03e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:48:48] CONV step=455001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:48:48] BENCH skipped: accu=0 (FTT=0.34, waiting for FTT>=40.0)
+[2026-05-04 20:49:22] ──────────────────────────────────────
+[2026-05-04 20:49:22] PROCESS step=457001  FTT=0.34  accu=0
+[2026-05-04 20:49:22]   [Step 458001 | FTT=0.34] Ub=0.020952  U*=1.3968  Re%=39.68%  Force=-1.44013E-04  F*=-5.7605  Re=14799.3  Ma=0.0363  Ma_max=0.1051  Error=3.12e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:49:24] CONV step=457001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:49:24] BENCH skipped: accu=0 (FTT=0.34, waiting for FTT>=40.0)
+[2026-05-04 20:51:05] ──────────────────────────────────────
+[2026-05-04 20:51:05] PROCESS step=464001  FTT=0.35  accu=0
+[2026-05-04 20:51:05]   [Step 464351 | FTT=0.35] Ub=0.020110  U*=1.3407  Re%=34.07%  Force=-1.47483E-04  F*=-5.8993  Re=14204.3  Ma=0.0348  Ma_max=0.0998  Error=3.33e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:51:08] CONV step=464001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:51:08] BENCH skipped: accu=0 (FTT=0.35, waiting for FTT>=40.0)
+[2026-05-04 20:51:42] ──────────────────────────────────────
+[2026-05-04 20:51:42] PROCESS step=466001  FTT=0.35  accu=0
+[2026-05-04 20:51:42]   [Step 467001 | FTT=0.35] Ub=0.019754  U*=1.3169  Re%=31.69%  Force=-1.48773E-04  F*=-5.9509  Re=13952.8  Ma=0.0342  Ma_max=0.1006  Error=3.41e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:51:45] CONV step=466001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:51:45] BENCH skipped: accu=0 (FTT=0.35, waiting for FTT>=40.0)
+[2026-05-04 20:53:59] ──────────────────────────────────────
+[2026-05-04 20:53:59] PROCESS step=475001  FTT=0.35  accu=0
+[2026-05-04 20:53:59]   [Step 475601 | FTT=0.35] Ub=0.018591  U*=1.2394  Re%=23.94%  Force=-1.52317E-04  F*=-6.0927  Re=13131.4  Ma=0.0322  Ma_max=0.1024  Error=3.65e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-04 20:54:02] CONV step=475001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:54:02] BENCH skipped: accu=0 (FTT=0.35, waiting for FTT>=40.0)
+[2026-05-04 20:55:07] ──────────────────────────────────────
+[2026-05-04 20:55:07] PROCESS step=479001  FTT=0.36  accu=0
+[2026-05-04 20:55:07]   [Step 480001 | FTT=0.36] Ub=0.017990  U*=1.1994  Re%=19.94%  Force=-1.53746E-04  F*=-6.1499  Re=12707.2  Ma=0.0312  Ma_max=0.1067  Error=3.81e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 20:55:09] CONV step=479001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:55:10] BENCH skipped: accu=0 (FTT=0.36, waiting for FTT>=40.0)
+[2026-05-04 20:56:17] ──────────────────────────────────────
+[2026-05-04 20:56:17] PROCESS step=484001  FTT=0.36  accu=0
+[2026-05-04 20:56:17]   [Step 484701 | FTT=0.36] Ub=0.017341  U*=1.1561  Re%=15.61%  Force=-1.54983E-04  F*=-6.1993  Re=12248.8  Ma=0.0300  Ma_max=0.1043  Error=4.00e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 20:56:20] CONV step=484001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:56:20] BENCH skipped: accu=0 (FTT=0.36, waiting for FTT>=40.0)
+[2026-05-04 20:58:34] ──────────────────────────────────────
+[2026-05-04 20:58:34] PROCESS step=493001  FTT=0.37  accu=0
+[2026-05-04 20:58:34]   [Step 493751 | FTT=0.37] Ub=0.016074  U*=1.0716  Re%=7.16%  Force=-1.56509E-04  F*=-6.2604  Re=11353.5  Ma=0.0278  Ma_max=0.0976  Error=4.40e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-04 20:58:37] CONV step=493001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 20:58:37] BENCH skipped: accu=0 (FTT=0.37, waiting for FTT>=40.0)
+[2026-05-04 21:00:52] ──────────────────────────────────────
+[2026-05-04 21:00:52] PROCESS step=502001  FTT=0.37  accu=0
+[2026-05-04 21:00:52]   [Step 502301 | FTT=0.37] Ub=0.014858  U*=0.9905  Re%=-0.95%  Force=-1.56900E-04  F*=-6.2760  Re=10494.8  Ma=0.0257  Ma_max=0.1086  Error=4.77e-04  [SIMPLE-PROP]
+[2026-05-04 21:00:54] CONV step=502001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:00:54] BENCH skipped: accu=0 (FTT=0.37, waiting for FTT>=40.0)
+[2026-05-04 21:01:28] ──────────────────────────────────────
+[2026-05-04 21:01:28] PROCESS step=504001  FTT=0.38  accu=0
+[2026-05-04 21:01:28]   [Step 505001 | FTT=0.38] Ub=0.014476  U*=0.9651  Re%=-3.49%  Force=-1.56810E-04  F*=-6.2724  Re=10224.9  Ma=0.0251  Ma_max=0.1083  Error=4.87e-04  [SIMPLE-PROP]
+[2026-05-04 21:01:31] CONV step=504001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:01:31] BENCH skipped: accu=0 (FTT=0.38, waiting for FTT>=40.0)
+[2026-05-04 21:03:12] ──────────────────────────────────────
+[2026-05-04 21:03:12] PROCESS step=511001  FTT=0.38  accu=0
+[2026-05-04 21:03:12]   [Step 511451 | FTT=0.38] Ub=0.013572  U*=0.9048  Re%=-9.52%  Force=-1.56185E-04  F*=-6.2474  Re=9586.3  Ma=0.0235  Ma_max=0.1293  Error=5.13e-04  [SIMPLE-PROP]
+[2026-05-04 21:03:15] CONV step=511001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:03:15] BENCH skipped: accu=0 (FTT=0.38, waiting for FTT>=40.0)
+[2026-05-04 21:03:49] ──────────────────────────────────────
+[2026-05-04 21:03:49] PROCESS step=513001  FTT=0.38  accu=0
+[2026-05-04 21:03:49]   [Step 514001 | FTT=0.38] Ub=0.013217  U*=0.8812  Re%=-11.88%  Force=-1.55780E-04  F*=-6.2312  Re=9335.8  Ma=0.0229  Ma_max=0.1494  Error=5.25e-04  [SIMPLE-PROP]
+[2026-05-04 21:03:52] CONV step=513001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:03:52] BENCH skipped: accu=0 (FTT=0.38, waiting for FTT>=40.0)
+[2026-05-04 21:04:59] ──────────────────────────────────────
+[2026-05-04 21:04:59] PROCESS step=518001  FTT=0.39  accu=0
+[2026-05-04 21:04:59]   [Step 518601 | FTT=0.39] Ub=0.012582  U*=0.8388  Re%=-16.12%  Force=-1.54823E-04  F*=-6.1929  Re=8886.9  Ma=0.0218  Ma_max=0.1329  Error=5.47e-04  [SIMPLE-PROP]
+[2026-05-04 21:05:03] CONV step=518001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:05:03] BENCH skipped: accu=0 (FTT=0.39, waiting for FTT>=40.0)
+[2026-05-04 21:07:17] ──────────────────────────────────────
+[2026-05-04 21:07:17] PROCESS step=527001  FTT=0.39  accu=0
+[2026-05-04 21:07:17]   [Step 527401 | FTT=0.39] Ub=0.011376  U*=0.7584  Re%=-24.16%  Force=-1.52192E-04  F*=-6.0877  Re=8035.2  Ma=0.0197  Ma_max=0.1113  Error=6.00e-04  [SIMPLE-PROP]
+[2026-05-04 21:07:20] CONV step=527001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:07:20] BENCH skipped: accu=0 (FTT=0.39, waiting for FTT>=40.0)
+[2026-05-04 21:07:54] ──────────────────────────────────────
+[2026-05-04 21:07:54] PROCESS step=529001  FTT=0.39  accu=0
+[2026-05-04 21:07:54]   [Step 530001 | FTT=0.39] Ub=0.011021  U*=0.7347  Re%=-26.53%  Force=-1.51215E-04  F*=-6.0486  Re=7784.4  Ma=0.0191  Ma_max=0.1139  Error=6.19e-04  [SIMPLE-PROP]
+[2026-05-04 21:07:57] CONV step=529001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:07:57] BENCH skipped: accu=0 (FTT=0.39, waiting for FTT>=40.0)
+[2026-05-04 21:09:38] ──────────────────────────────────────
+[2026-05-04 21:09:38] PROCESS step=536001  FTT=0.40  accu=0
+[2026-05-04 21:09:38]   [Step 536701 | FTT=0.40] Ub=0.010112  U*=0.6741  Re%=-32.59%  Force=-1.48276E-04  F*=-5.9310  Re=7142.3  Ma=0.0175  Ma_max=0.1207  Error=6.64e-04  [SIMPLE-PROP]
+[2026-05-04 21:09:41] CONV step=536001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:09:41] BENCH skipped: accu=0 (FTT=0.40, waiting for FTT>=40.0)
+[2026-05-04 21:11:56] ──────────────────────────────────────
+[2026-05-04 21:11:56] PROCESS step=545001  FTT=0.41  accu=0
+[2026-05-04 21:11:56]   [Step 545351 | FTT=0.41] Ub=0.008975  U*=0.5983  Re%=-40.17%  Force=-1.43606E-04  F*=-5.7442  Re=6339.0  Ma=0.0155  Ma_max=0.1171  Error=7.15e-04  [SIMPLE-PROP]
+[2026-05-04 21:11:58] CONV step=545001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:11:58] BENCH skipped: accu=0 (FTT=0.41, waiting for FTT>=40.0)
+[2026-05-04 21:12:32] ──────────────────────────────────────
+[2026-05-04 21:12:32] PROCESS step=547001  FTT=0.41  accu=0
+[2026-05-04 21:12:32]   [Step 548001 | FTT=0.41] Ub=0.008637  U*=0.5758  Re%=-42.42%  Force=-1.41983E-04  F*=-5.6793  Re=6100.5  Ma=0.0150  Ma_max=0.1108  Error=7.32e-04  [SIMPLE-PROP]
+[2026-05-04 21:12:35] CONV step=547001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:12:35] BENCH skipped: accu=0 (FTT=0.41, waiting for FTT>=40.0)
+[2026-05-04 21:14:16] ──────────────────────────────────────
+[2026-05-04 21:14:16] PROCESS step=554001  FTT=0.41  accu=0
+[2026-05-04 21:14:16]   [Step 554601 | FTT=0.41] Ub=0.007816  U*=0.5211  Re%=-47.89%  Force=-1.37562E-04  F*=-5.5025  Re=5521.0  Ma=0.0135  Ma_max=0.1092  Error=7.80e-04  [SIMPLE-PROP]
+[2026-05-04 21:14:19] CONV step=554001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:14:19] BENCH skipped: accu=0 (FTT=0.41, waiting for FTT>=40.0)
+[2026-05-04 21:17:04] ──────────────────────────────────────
+[2026-05-04 21:17:04] PROCESS step=565001  FTT=0.42  accu=0
+[2026-05-04 21:17:04]   [Step 565351 | FTT=0.42] Ub=0.006542  U*=0.4361  Re%=-56.39%  Force=-1.29245E-04  F*=-5.1698  Re=4620.9  Ma=0.0113  Ma_max=0.1042  Error=8.87e-04  [SIMPLE-PROP]
+[2026-05-04 21:17:07] CONV step=565001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:17:07] BENCH skipped: accu=0 (FTT=0.42, waiting for FTT>=40.0)
+[2026-05-04 21:17:41] ──────────────────────────────────────
+[2026-05-04 21:17:41] PROCESS step=567001  FTT=0.42  accu=0
+[2026-05-04 21:17:41]   [Step 568001 | FTT=0.42] Ub=0.006236  U*=0.4157  Re%=-58.43%  Force=-1.26990E-04  F*=-5.0796  Re=4404.6  Ma=0.0108  Ma_max=0.1065  Error=9.20e-04  [SIMPLE-PROP]
+[2026-05-04 21:17:44] CONV step=567001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:17:44] BENCH skipped: accu=0 (FTT=0.42, waiting for FTT>=40.0)
+[2026-05-04 21:18:51] ──────────────────────────────────────
+[2026-05-04 21:18:51] PROCESS step=572001  FTT=0.43  accu=0
+[2026-05-04 21:18:51]   [Step 572301 | FTT=0.43] Ub=0.005749  U*=0.3833  Re%=-61.67%  Force=-1.23161E-04  F*=-4.9264  Re=4060.7  Ma=0.0100  Ma_max=0.1187  Error=9.69e-04  [SIMPLE-PROP]
+[2026-05-04 21:18:53] CONV step=572001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:18:53] BENCH skipped: accu=0 (FTT=0.43, waiting for FTT>=40.0)
+[2026-05-04 21:19:27] ──────────────────────────────────────
+[2026-05-04 21:19:27] PROCESS step=574001  FTT=0.43  accu=0
+[2026-05-04 21:19:27]   [Step 575001 | FTT=0.43] Ub=0.005452  U*=0.3635  Re%=-63.65%  Force=-1.20652E-04  F*=-4.8261  Re=3850.8  Ma=0.0094  Ma_max=0.1226  Error=9.97e-04  [SIMPLE-PROP]
+[2026-05-04 21:19:30] CONV step=574001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:19:30] BENCH skipped: accu=0 (FTT=0.43, waiting for FTT>=40.0)
+[2026-05-04 21:21:11] ──────────────────────────────────────
+[2026-05-04 21:21:11] PROCESS step=581001  FTT=0.43  accu=0
+[2026-05-04 21:21:11]   [Step 581401 | FTT=0.43] Ub=0.004777  U*=0.3185  Re%=-68.15%  Force=-1.14396E-04  F*=-4.5758  Re=3374.1  Ma=0.0083  Ma_max=0.1037  Error=1.07e-03  [SIMPLE-PROP]
+[2026-05-04 21:21:13] CONV step=581001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:21:13] BENCH skipped: accu=0 (FTT=0.43, waiting for FTT>=40.0)
+[2026-05-04 21:21:47] ──────────────────────────────────────
+[2026-05-04 21:21:47] PROCESS step=583001  FTT=0.43  accu=0
+[2026-05-04 21:21:47]   [Step 584001 | FTT=0.43] Ub=0.004515  U*=0.3010  Re%=-69.90%  Force=-1.11735E-04  F*=-4.4694  Re=3188.8  Ma=0.0078  Ma_max=0.1020  Error=1.10e-03  [SIMPLE-PROP]
+[2026-05-04 21:21:50] CONV step=583001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:21:50] BENCH skipped: accu=0 (FTT=0.43, waiting for FTT>=40.0)
+[2026-05-04 21:23:31] ──────────────────────────────────────
+[2026-05-04 21:23:31] PROCESS step=590001  FTT=0.44  accu=0
+[2026-05-04 21:23:31]   [Step 590751 | FTT=0.44] Ub=0.003867  U*=0.2578  Re%=-74.22%  Force=-1.04521E-04  F*=-4.1809  Re=2731.7  Ma=0.0067  Ma_max=0.1007  Error=1.19e-03  [SIMPLE-PROP]
+[2026-05-04 21:23:33] CONV step=590001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:23:33] BENCH skipped: accu=0 (FTT=0.44, waiting for FTT>=40.0)
+[2026-05-04 21:24:38] ──────────────────────────────────────
+[2026-05-04 21:24:38] PROCESS step=594001  FTT=0.44  accu=0
+[2026-05-04 21:24:38]   [Step 595001 | FTT=0.44] Ub=0.003486  U*=0.2324  Re%=-76.76%  Force=-9.97643E-05  F*=-3.9906  Re=2462.1  Ma=0.0060  Ma_max=0.1071  Error=1.25e-03  [SIMPLE-PROP]
+[2026-05-04 21:24:41] CONV step=594001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:24:41] BENCH skipped: accu=0 (FTT=0.44, waiting for FTT>=40.0)
+[2026-05-04 21:25:48] ──────────────────────────────────────
+[2026-05-04 21:25:48] PROCESS step=599001  FTT=0.45  accu=0
+[2026-05-04 21:25:48]   [Step 599551 | FTT=0.45] Ub=0.003097  U*=0.2064  Re%=-79.36%  Force=-9.44984E-05  F*=-3.7799  Re=2187.2  Ma=0.0054  Ma_max=0.1155  Error=1.35e-03  [SIMPLE-PROP]
+[2026-05-04 21:25:51] CONV step=599001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:25:51] BENCH skipped: accu=0 (FTT=0.45, waiting for FTT>=40.0)
+[2026-05-04 21:26:24] ──────────────────────────────────────
+[2026-05-04 21:26:24] PROCESS step=601001  FTT=0.45  accu=0
+[2026-05-04 21:26:24]   [Step 602001 | FTT=0.45] Ub=0.002893  U*=0.1929  Re%=-80.71%  Force=-9.15914E-05  F*=-3.6637  Re=2043.4  Ma=0.0050  Ma_max=0.1257  Error=1.42e-03  [SIMPLE-PROP]
+[2026-05-04 21:26:27] CONV step=601001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:26:27] BENCH skipped: accu=0 (FTT=0.45, waiting for FTT>=40.0)
+[2026-05-04 21:27:01] ──────────────────────────────────────
+[2026-05-04 21:27:01] PROCESS step=603001  FTT=0.45  accu=0
+[2026-05-04 21:27:01]   [Step 604001 | FTT=0.45] Ub=0.002730  U*=0.1820  Re%=-81.80%  Force=-8.91822E-05  F*=-3.5673  Re=1928.5  Ma=0.0047  Ma_max=0.1205  Error=1.47e-03  [SIMPLE-PROP]
+[2026-05-04 21:27:03] CONV step=603001  Re=10595  png=monitor_convergence_Re10595.png  pdf=monitor_convergence_Re10595.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re10595.pdf / .png
+[2026-05-04 21:27:03] BENCH skipped: accu=0 (FTT=0.45, waiting for FTT>=40.0)
