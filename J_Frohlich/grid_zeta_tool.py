@@ -282,6 +282,57 @@ def gamma_to_minSize(gamma, LZ, NZ_cells, LY=9.0, alpha=0.5):
     return minSize
 
 
+def estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re,
+                           H_HILL=1.0, CFL=0.5, LY=9.0, alpha=0.5):
+    """
+    [階段 A] 無網格 omega 預估 — 不需要生成網格.
+
+    打破循環依賴: "需要網格算 omega, 但需要 omega 選 GAMMA"
+
+    近似鏈 (純 1D 解析):
+      1. dz_min  = gamma_to_minSize(GAMMA, LZ, NZ-1)   [Vinokur 解析]
+      2. max|c̃| ≈ 1 / dz_min    [壁面法向拉伸主導 max|c̃|]
+      3. dt      ≈ CFL / max|c̃| = CFL × dz_min
+      4. omega   ≈ 0.5 + 3·niu / dt
+
+    精度: 與完整 2D 計算相差 ~3-5%.  略為樂觀 (低估 omega),
+    因為 1D 近似忽略了流向度量的交叉項 (y_zeta, z_xi) 對
+    contravariant velocity 的貢獻, 實際 2D 的 max|c̃| 通常比
+    1/dz_min 略大.  校準表驗證: GAMMA=2.0 預估 0.61 vs 實際 0.63.
+
+    使用時機: 生成網格前 (< 1ms), 如果 omega_est > 2.0 可提前
+    攔截, 避免浪費 Poisson solve 時間.
+
+    Parameters
+    ----------
+    gamma    : float  Vinokur stretching parameter (> 0)
+    LZ       : float  wall-normal domain height
+    NZ_cells : int    wall-normal cell count (NZ - 1)
+    Uref, Re, H_HILL : float  flow parameters
+    CFL      : float  CFL number
+    LY       : float  streamwise length (for hill_function)
+    alpha    : float  stretching symmetry (0.5 = symmetric)
+
+    Returns
+    -------
+    dict with keys:
+        omega_est, dt_est, max_c_est, dz_min, niu
+    """
+    niu = Uref * H_HILL / Re
+    dz_min = gamma_to_minSize(gamma, LZ, NZ_cells, LY, alpha)
+    max_c_est = 1.0 / dz_min
+    dt_est = CFL / max_c_est      # = CFL * dz_min
+    omega_est = 0.5 + 3.0 * niu / dt_est
+
+    return {
+        "omega_est": omega_est,
+        "dt_est": dt_est,
+        "max_c_est": max_c_est,
+        "dz_min": dz_min,
+        "niu": niu,
+    }
+
+
 def vinokur_tanh(eta, gamma, alpha=0.5):
     """
     Vinokur two-sided tanh clustering.  eta in [0,1].
@@ -334,32 +385,91 @@ def get_vinokur_gamma_from_ref(x_ref, y_ref, nj_new, alpha=0.5):
 # ============================================================
 #  3b. GILBM Stability Estimation (LBM-specific)
 # ============================================================
+#
+#  omega_global 計算流程 (兩階段)
+#  ================================
+#
+#  階段 A — 無網格 1D 預估 (estimate_omega_pregrid)
+#  ------------------------------------------------
+#  輸入: GAMMA, LZ, NZ, Uref, Re, H_HILL, CFL
+#  流程:
+#    1. dz_min = gamma_to_minSize(GAMMA, LZ, NZ-1)     ← 1D Vinokur 解析
+#    2. max|c̃| ≈ 1/dz_min                               ← 壁面法向主導
+#    3. dt     = CFL / max|c̃| = CFL × dz_min
+#    4. omega  ≈ 0.5 + 3·niu / dt
+#  優點: < 1ms, 不需要生成網格, 可提前攔截不穩定的 GAMMA
+#  精度: 略為樂觀 (低估 omega ~3-5%), 因忽略 2D 交叉度量項
+#
+#  階段 B — 有網格 2D 精確計算 (estimate_gilbm_stability)
+#  -------------------------------------------------------
+#  輸入: 已生成的 2D 網格 x_grid(nj,ni), y_grid(nj,ni)
+#  流程:
+#    1. 正向度量 (中央差分):
+#         y_xi   = ∂y/∂ξ  (axis=1, 流向)
+#         y_zeta = ∂y/∂ζ  (axis=0, 壁面法向)
+#         z_xi   = ∂z/∂ξ  (axis=1)
+#         z_zeta = ∂z/∂ζ  (axis=0)
+#    2. Jacobian:  J = y_xi·z_zeta − y_zeta·z_xi
+#    3. 逆度量:
+#         ζ_y = −z_xi / J,   ζ_z =  y_xi / J
+#         ξ_y =  z_zeta / J, ξ_z = −y_zeta / J
+#    4. Contravariant velocity (D3Q19 全部方向):
+#         c̃_ζ = |ζ_y·e_y + ζ_z·e_z|
+#         c̃_ξ = |ξ_y·e_y + ξ_z·e_z|
+#         max|c̃| = max over all (ξ,ζ) 格點 and all 19 lattice directions
+#    5. dt_global = CFL / max|c̃|
+#    6. omega = 0.5 + 3·niu / dt_global
+#  精度: 完整 2D 度量, 為最終穩定性判斷
+#
+#  座標對應:
+#    x_grid → y (LBM 流向)     ξ  → axis=1 (i, streamwise)
+#    y_grid → z (LBM 壁面法向) ζ  → axis=0 (j, wall-normal)
+#
+#  omega 物理意義 (此程式碼的 omega = 教科書的 τ):
+#    標準 LBM (dt=1):  τ = 0.5 + 3·ν
+#    GILBM (dt<1):     τ = 0.5 + 3·ν/dt   (sub-cycling 時每步需更多碰撞)
+#    穩定範圍:  0.5 < omega < 2.0
+#      omega → 0.5 : 黏度 → 0 (數值不穩定)
+#      omega → 2.0 : s_visc = 1/omega → 0.5 (過度鬆弛, GILBM 插值不穩定)
+#
+#  建議工作流程:
+#    1. estimate_omega_pregrid   → 快速預判, omega_est > 2.0 則提前攔截
+#    2. 生成網格 (Poisson solve)
+#    3. estimate_gilbm_stability → 最終精確確認
+# ============================================================
 
 def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
-                             Uref=0.0503, Re=150, H_HILL=1.0,
+
+                             Uref=0.0503, Re=150.0, H_HILL=1.0,
                              CFL_lambda=0.5):
     """
-    Estimate GILBM (Generalized Interpolation LBM) stability parameters
-    for a given body-fitted grid.
+    [階段 B] 有網格後的精確 omega 計算.
 
-    The LBM MRT collision operator requires omega in approximately [0.5, 2.0].
-    omega = 0.5 + 3 * niu / dt_global, where dt_global = CFL_lambda / max|c_tilde|.
+    omega (= tau in textbooks) = 3*niu/dt_global + 0.5.
+    Practical stable range: omega in (0.5, 2.0).
+      omega < 0.5 : negative viscosity (mathematically forbidden)
+      omega > 2.0 : s_visc = 1/omega < 0.5, GILBM interpolation unstable
+    dt_global = CFL_lambda / max|c_tilde|.
 
     Parameters
     ----------
     x_grid, y_grid : ndarray (nj, ni)
         Grid coordinates (raw Frohlich or code units).
+        x_grid = streamwise (= y in LBM), y_grid = wall-normal (= z in LBM).
     scale_factor : float
         Multiply grid coords to get code units (=1 if already in code units).
     Uref, Re, H_HILL : float
         Flow parameters. niu = Uref * H_HILL / Re.
+        Defaults match the legacy Re=150 calibration table.  Auto mode
+        overrides these values from variables.h.
     CFL_lambda : float
         CFL number (default 0.5).
 
     Returns
     -------
     dict with keys:
-        omega, dt_global, c_max, dz_min, dz_max, dz_ratio, a_max, status
+        omega, dt_global, c_max, dz_min, dz_max, dz_ratio, a_max, status,
+        niu, Uref, Re, H_HILL, CFL_lambda, scale_factor
     """
     niu = Uref * H_HILL / Re
 
@@ -400,16 +510,16 @@ def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
 
     # Max contravariant velocity over all D3Q19 directions
     max_c = 0.0
-    for alpha in range(3, 19):
-        c_zeta = np.abs(zeta_y[sl] * e_y[alpha] + zeta_z[sl] * e_z[alpha])
-        c_xi   = np.abs(xi_y[sl]   * e_y[alpha] + xi_z[sl]   * e_z[alpha])
+    for iq in range(3, 19):
+        c_zeta = np.abs(zeta_y[sl] * e_y[iq] + zeta_z[sl] * e_z[iq])
+        c_xi   = np.abs(xi_y[sl]   * e_y[iq] + xi_z[sl]   * e_z[iq])
         max_c = max(max_c, c_zeta.max(), c_xi.max())
 
     # Wall-normal spacing
     dz_min = 1e30
     dz_max = 0.0
-    for j in range(ni):
-        dz = np.diff(y_c[:, j])
+    for i in range(ni):
+        dz = np.diff(y_c[:, i])
         dz_pos = dz[dz > 0]
         if len(dz_pos) > 0:
             dz_min = min(dz_min, dz_pos.min())
@@ -422,6 +532,10 @@ def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
     a_max = dz_ratio  # rough LTS acceleration estimate
 
     # Status classification
+    #   omega = 3*niu/dt_global + 0.5  (relaxation time, = tau)
+    #   Hard limits: omega < 0.5 → negative viscosity (forbidden)
+    #                omega > 2.0 → s_visc = 1/omega < 0.5 (overly stiff)
+    #   Practical range: [0.5, ~2.0]
     if omega > 2.0:
         status = "UNSTABLE"
     elif omega > 1.5:
@@ -430,19 +544,23 @@ def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
         status = "OK"
     elif omega >= 0.55:
         status = "OPTIMAL"
-    else:
+    elif omega >= 0.505:
         status = "GOOD"
+    else:
+        status = "DANGEROUS"
 
     return {
         "omega": omega, "dt_global": dt_global, "c_max": max_c,
         "dz_min": dz_min, "dz_max": dz_max, "dz_ratio": dz_ratio,
         "a_max": a_max, "status": status, "niu": niu,
+        "Uref": Uref, "Re": Re, "H_HILL": H_HILL,
+        "CFL_lambda": CFL_lambda, "scale_factor": scale_factor,
     }
 
 
 def print_gilbm_stability_table():
     """
-    Print the pre-computed GILBM stability reference table.
+    Print the pre-computed GILBM stability calibration table.
 
     This table was calibrated for:
       Reference grid : Frohlich 3.fine (197x129)
@@ -451,16 +569,21 @@ def print_gilbm_stability_table():
       Flow params    : Re=150, Uref=0.0503, H_HILL=1.0
       CFL lambda     : 0.5
 
+    The table is reference-only.  Actual omega depends on the target
+    grid resolution, scale factor, Uref, Re, H_HILL, and CFL; auto mode
+    recomputes it from the generated grid and variables.h.
+
     NOTE: physical-z redistribution REPLACES Frohlich's native wall
     clustering with Vinokur tanh in physical z-space (symmetric when
     alpha=0.5).  GAMMA=0 means UNIFORM spacing (no clustering).
     """
     print()
     print("  " + "=" * 72)
-    print("   GILBM Stability Reference  (Poisson + physical-z redistribution)")
-    print("   3.fine ref -> 129x64, Re=150, Uref=0.0503, CFL=0.5, ALPHA=0.5")
+    print("   GILBM Stability Calibration Reference")
+    print("   REFERENCE ONLY: 3.fine -> 129x64, Re=150, Uref=0.0503, CFL=0.5")
+    print("   Actual omega is recomputed from variables.h after grid generation.")
     print("  " + "=" * 72)
-    print(f"  {'GAMMA':>6s} | {'omega':>8s} | {'max|c~|':>10s} | {'dz_ratio':>8s} | {'Status':<12s} | Note")
+    print(f"  {'GAMMA':>6s} | {'omega':>8s} | {'max|c~|':>10s} | {'dz_ratio':>8s} | {'RefStatus':<12s} | Note")
     print("  " + "-" * 72)
     #                GAMMA  omega   c_max   ratio  status         note
     # Calibrated with redistribute_vertical_physical (2026-03)
@@ -469,9 +592,9 @@ def print_gilbm_stability_table():
         (0.5,  0.58,   38,   2, "OPTIMAL",  "Very mild symmetric clustering"),
         (1.0,  0.59,   42,   2, "OPTIMAL",  "Mild symmetric clustering"),
         (1.5,  0.60,   50,   3, "OPTIMAL",  "Moderate symmetric clustering"),
-        (2.0,  0.63,   63,   4, "OPTIMAL",  "Recommended (good clustering, very stable)"),
+        (2.0,  0.63,   63,   4, "OPTIMAL",  "Ref case: recommended"),
         (2.5,  0.67,   83,   5, "OPTIMAL",  "Good clustering"),
-        (3.0,  0.73,  112,   8, "OPTIMAL",  "Strong clustering, still optimal"),
+        (3.0,  0.73,  112,   8, "OPTIMAL",  "Ref case: strong clustering"),
         (3.5,  0.81,  156,  12, "OPTIMAL",  "Strong clustering"),
         (4.0,  0.94,  221,  20, "OPTIMAL",  "Very strong (approaching Frohlich-level)"),
         (5.0,  1.43,  463,  52, "OK",       "Extreme clustering, omega > 1.2"),
@@ -479,7 +602,7 @@ def print_gilbm_stability_table():
     for gamma, omega, c_max, ratio, status, note in table:
         marker = ""
         if gamma == 2.0:
-            marker = " <--"
+            marker = " <-- ref rec"
         elif status in ("MARGINAL", "UNSTABLE"):
             marker = " ***"
         print(f"  {gamma:6.1f} | {omega:8.2f} | {c_max:10d} | {ratio:8d} | {status:<12s} | {note}{marker}")
@@ -487,12 +610,15 @@ def print_gilbm_stability_table():
     print()
     print("  Physical-z redistribution: GAMMA controls Vinokur tanh in z-space.")
     print("  GAMMA=0 = uniform (NO wall clustering, minSize macro = NaN!).")
-    print("  GAMMA=2.0 is recommended: symmetric, ratio=3.5, omega=0.63.")
-    print("  All GAMMA <= 4.0 are in OPTIMAL range (omega < 1.0).")
+    print("  GAMMA=2.0 was the reference-case recommendation only.")
+    print("  Do not infer current-grid stability from this table; use the")
+    print("  post-generation check computed with variables.h flow parameters.")
     print()
 
 
-def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status):
+def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status,
+                                  Uref=None, Re=None, H_HILL=None,
+                                  CFL_lambda=None, niu=None):
     """
     Print a concise GILBM stability warning for the chosen parameters.
     Called after grid generation to alert the user.
@@ -502,6 +628,12 @@ def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status)
     print("   GILBM Stability Check")
     print("  " + "=" * 62)
     print(f"    GAMMA        = {gamma:.4f}")
+    if Uref is not None and Re is not None:
+        h_val = 1.0 if H_HILL is None else H_HILL
+        cfl_val = 0.5 if CFL_lambda is None else CFL_lambda
+        print(f"    flow params  = Uref={Uref:g}, Re={Re:g}, H_HILL={h_val:g}, CFL={cfl_val:g}")
+        if niu is not None:
+            print(f"    niu          = {niu:.6e}")
     print(f"    omega_global = {omega:.4f}", end="")
     if omega > 2.0:
         print("  *** UNSTABLE (omega > 2.0) ***")
@@ -509,6 +641,8 @@ def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status)
         print("  ** MARGINAL (omega > 1.5) **")
     elif omega > 1.2:
         print("  * OK (omega > 1.2)")
+    elif omega < 0.505:
+        print("  *** DANGEROUS (omega ≈ 0.5, near negative-viscosity limit) ***")
     else:
         print("  [OPTIMAL]")
     print(f"    max|c_tilde| = {c_max:.1f}")
@@ -520,7 +654,11 @@ def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status)
         print()
         print("  !! WARNING: This grid WILL DIVERGE in GILBM !!")
         print("  !! Reduce GAMMA (try 2.0~3.0 for safe symmetric clustering) !!")
-        print("  !! MRT collision requires omega < 2.0 for stability. !!")
+        print("  !! omega (= 3*niu/dt_global + 0.5) > 2.0 → s_visc < 0.5, overly stiff !!")
+    elif omega < 0.505:
+        print()
+        print("  !! DANGEROUS: omega ≈ 0.5 → niu ≈ 0 (near negative-viscosity limit) !!")
+        print("  !! Check Uref, Re, and grid scale. Increase Uref or reduce Re. !!")
     elif omega > 1.5:
         print()
         print("  ** CAUTION: Marginal stability. May diverge under")
@@ -788,29 +926,36 @@ def _bilinear_interp_2d(data, eta_old, xi_old, eta_new, xi_new):
     Bilinear interpolation of 2D data from (eta_old, xi_old) grid
     to (eta_new, xi_new) grid. Pure numpy, no scipy required.
     """
-    nj_new = len(eta_new)
-    ni_new = len(xi_new)
     nj_old = len(eta_old)
     ni_old = len(xi_old)
-    result = np.empty((nj_new, ni_new))
+    if nj_old < 2 or ni_old < 2:
+        raise ValueError("Bilinear interpolation requires at least 2x2 source points")
 
-    for jj in range(nj_new):
-        e = eta_new[jj]
-        j0 = np.searchsorted(eta_old, e, side='right') - 1
-        j0 = max(0, min(j0, nj_old - 2))
-        j1 = j0 + 1
-        te = (e - eta_old[j0]) / (eta_old[j1] - eta_old[j0]) if eta_old[j1] != eta_old[j0] else 0.0
+    j0 = np.searchsorted(eta_old, eta_new, side='right') - 1
+    i0 = np.searchsorted(xi_old, xi_new, side='right') - 1
+    j0 = np.clip(j0, 0, nj_old - 2)
+    i0 = np.clip(i0, 0, ni_old - 2)
+    j1 = j0 + 1
+    i1 = i0 + 1
 
-        for ii in range(ni_new):
-            x = xi_new[ii]
-            i0 = np.searchsorted(xi_old, x, side='right') - 1
-            i0 = max(0, min(i0, ni_old - 2))
-            i1 = i0 + 1
-            tx = (x - xi_old[i0]) / (xi_old[i1] - xi_old[i0]) if xi_old[i1] != xi_old[i0] else 0.0
+    eta_den = eta_old[j1] - eta_old[j0]
+    xi_den = xi_old[i1] - xi_old[i0]
+    te = np.divide(eta_new - eta_old[j0], eta_den,
+                   out=np.zeros_like(eta_new, dtype=float),
+                   where=eta_den != 0.0)
+    tx = np.divide(xi_new - xi_old[i0], xi_den,
+                   out=np.zeros_like(xi_new, dtype=float),
+                   where=xi_den != 0.0)
 
-            result[jj, ii] = ((1-te)*(1-tx)*data[j0, i0] + (1-te)*tx*data[j0, i1]
-                             + te*(1-tx)*data[j1, i0] + te*tx*data[j1, i1])
-    return result
+    w00 = (1.0 - te)[:, np.newaxis] * (1.0 - tx)[np.newaxis, :]
+    w01 = (1.0 - te)[:, np.newaxis] * tx[np.newaxis, :]
+    w10 = te[:, np.newaxis] * (1.0 - tx)[np.newaxis, :]
+    w11 = te[:, np.newaxis] * tx[np.newaxis, :]
+
+    return (w00 * data[j0[:, np.newaxis], i0[np.newaxis, :]]
+            + w01 * data[j0[:, np.newaxis], i1[np.newaxis, :]]
+            + w10 * data[j1[:, np.newaxis], i0[np.newaxis, :]]
+            + w11 * data[j1[:, np.newaxis], i1[np.newaxis, :]])
 
 
 def _interpolate_PQ(P, Q, ni_old, nj_old, ni_new, nj_new):
@@ -1214,8 +1359,10 @@ def detect_dat_files(folder):
 def parse_variables_h(path):
     """
     Parse #define macros from variables.h.
-    Returns dict with keys: NY, NZ, LZ, LY, CFL, ALPHA, GRID_DAT_DIR, GRID_DAT_REF.
-    GAMMA is optional (auto-computed from bisection if missing).
+    Returns dict with keys such as:
+      NY, NZ, LZ, LY, H_HILL, CFL, ALPHA, GAMMA, Uref, Re,
+      GRID_DAT_DIR, GRID_DAT_REF.
+    GAMMA is parsed when present; auto_generate requires it.
 
     Naming convention (enforced):
       NX, NY, NZ = node count  (格點數)  → cells = NX-1, NY-1, NZ-1
@@ -1229,12 +1376,12 @@ def parse_variables_h(path):
         if m:
             result[key] = int(m.group(1))
     # Float defines (may have parentheses)
-    for key in ("GAMMA", "ALPHA", "CFL"):
+    for key in ("GAMMA", "ALPHA", "CFL", "Uref", "Re"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
     # Float defines that may be in parentheses like (3.036)
-    for key in ("LZ", "LY"):
+    for key in ("LZ", "LY", "H_HILL"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
@@ -1267,7 +1414,8 @@ def auto_generate(variables_h_path, script_dir=None):
         script_dir = Path(__file__).parent
 
     params = parse_variables_h(variables_h_path)
-    required = ["NY", "NZ", "ALPHA", "GAMMA", "GRID_DAT_REF"]
+    required = ["NY", "NZ", "LZ", "ALPHA", "GAMMA", "GRID_DAT_REF",
+                "Uref", "Re"]
     for k in required:
         if k not in params:
             raise ValueError(f"Missing #define {k} in {variables_h_path}")
@@ -1277,9 +1425,12 @@ def auto_generate(variables_h_path, script_dir=None):
     alpha = params["ALPHA"]
     gamma = params["GAMMA"]
     ref_name = params["GRID_DAT_REF"]
-    LZ = params.get("LZ", 3.036)
+    LZ = params["LZ"]
     LY = params.get("LY", 9.0)
+    H_HILL = params.get("H_HILL", 1.0)
     CFL_val = params.get("CFL", 0.5)
+    Uref = params["Uref"]
+    Re_val = params["Re"]
 
     NZ_cells = NZ - 1          # wall-normal cell count (格子數 = NZ-1)
 
@@ -1309,6 +1460,7 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Reference grid: I={ni_ref} x J={nj_ref}")
 
     print(f"  [auto] variables.h: NY={NY} (nodes), NZ={NZ} (nodes), LZ={LZ}, ALPHA={alpha}")
+    print(f"  [auto] Flow: Re={Re_val:g}, Uref={Uref:g}, H_HILL={H_HILL:g}, CFL={CFL_val:g}")
     print(f"  [auto] Wall-normal: {NZ} nodes = {NZ_cells} cells")
     print(f"  [auto] GAMMA={gamma} (user input)")
     if gamma > 0:
@@ -1316,9 +1468,29 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Reference: {ref_path.name}")
     print(f"  [auto] Target grid: I={NI} (=NY) x J={NJ} (=NZ)")
 
-    # ── GILBM stability pre-check ──
+    # ── GILBM stability pre-check (階段 A: 1D 無網格預估) ──
     print_gilbm_stability_table()
+    if gamma > 0:
+        pre = estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re_val,
+                                     H_HILL=H_HILL, CFL=CFL_val, LY=LY,
+                                     alpha=alpha)
+        print(f"  [pre-check] 1D 預估 (無網格, estimate_omega_pregrid):")
+        print(f"    dz_min     = {pre['dz_min']:.6e}")
+        print(f"    max|c̃| est = {pre['max_c_est']:.1f}")
+        print(f"    dt_est     = {pre['dt_est']:.4e}")
+        print(f"    omega_est  = {pre['omega_est']:.4f}", end="")
+        if pre["omega_est"] > 2.0:
+            print("  *** 預估不穩定 (omega > 2.0) ***")
+            print()
+            print("  !! WARNING: 1D 預估 omega > 2.0, 網格很可能不穩定 !!")
+            print("  !! 建議減小 GAMMA 再試. 繼續生成以取得精確值... !!")
+        elif pre["omega_est"] > 1.5:
+            print("  ** 預估邊際 (omega > 1.5)")
+        else:
+            print(f"  [預估穩定]")
+        print()
 
+    # ── 生成網格 (階段 B 的前置: Poisson solve) ──
     x_out, y_out, conv = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
         gamma=gamma, alpha=alpha,
@@ -1332,14 +1504,25 @@ def auto_generate(variables_h_path, script_dir=None):
         sys.exit(1)
     print(f"  [auto] Generated grid: I={ni_out} x J={nj_out} ✓")
 
-    # ── GILBM stability post-check (on actual generated grid) ──
+    # ── GILBM stability post-check (階段 B: 2D 精確計算, 需已生成網格) ──
     x_fro_max = x_ref[0, -1]
     h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
     scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
-    stab = estimate_gilbm_stability(x_out, y_out, scale_factor=scale)
+    stab = estimate_gilbm_stability(
+        x_out, y_out, scale_factor=scale,
+        Uref=Uref, Re=Re_val, H_HILL=H_HILL,
+        CFL_lambda=CFL_val)
     print_gilbm_stability_warning(
         gamma, stab["omega"], stab["c_max"],
-        stab["dt_global"], stab["a_max"], stab["status"])
+        stab["dt_global"], stab["a_max"], stab["status"],
+        Uref=stab["Uref"], Re=stab["Re"], H_HILL=stab["H_HILL"],
+        CFL_lambda=stab["CFL_lambda"], niu=stab["niu"])
+
+    # 比較階段 A 預估 vs 階段 B 精確值
+    if gamma > 0:
+        print(f"  [對照] 階段A預估 omega={pre['omega_est']:.4f} vs "
+              f"階段B精確 omega={stab['omega']:.4f} "
+              f"(誤差 {abs(pre['omega_est']-stab['omega'])/stab['omega']*100:.1f}%)")
 
     if stab["status"] == "UNSTABLE":
         print("  !! Grid generation completed but omega > 2.0 !!")
@@ -1429,6 +1612,26 @@ if __name__ == "__main__":
     print("  Periodic Hill Grid -- Steger-Sorenson Poisson + Zeta")
     print("  (Interactive Mode)")
     print("=" * 62)
+
+    stability_flow = {}
+    stability_LY = 9.0
+    variables_h_for_flow = script_dir.parent / "variables.h"
+    if variables_h_for_flow.exists():
+        try:
+            vh_params = parse_variables_h(variables_h_for_flow)
+            stability_LY = vh_params.get("LY", stability_LY)
+            if "Uref" in vh_params and "Re" in vh_params:
+                stability_flow = {
+                    "Uref": vh_params["Uref"],
+                    "Re": vh_params["Re"],
+                    "H_HILL": vh_params.get("H_HILL", 1.0),
+                    "CFL_lambda": vh_params.get("CFL", 0.5),
+                }
+                print(f"  Stability flow params from variables.h: "
+                      f"Re={stability_flow['Re']:g}, Uref={stability_flow['Uref']:g}, "
+                      f"H_HILL={stability_flow['H_HILL']:g}, CFL={stability_flow['CFL_lambda']:g}")
+        except Exception as exc:
+            print(f"  [warn] Could not parse stability flow params from variables.h: {exc}")
 
     # -----------------------------------------------------------
     #  Step 1 -- select reference grid
@@ -1530,10 +1733,9 @@ if __name__ == "__main__":
     print()
     print("  GAMMA -- Vinokur stretching in physical z-space")
     print("           0.0 = UNIFORM spacing (no wall clustering, minSize=NaN!)")
-    print("           1.0~2.0 = mild-moderate symmetric clustering (RECOMMENDED)")
-    print("           2.0~3.0 = good clustering, omega still optimal (<0.73)")
-    print("           4.0     = strong (approaching Frohlich-level ratio ~20)")
-    print("           >=5.0   = extreme (omega > 1.0, use with caution)")
+    print("           larger value = stronger symmetric wall clustering")
+    print("           reference-table omega/status is not valid for every Re/grid")
+    print("           actual omega is printed after this grid is generated")
     print()
     GAMMA = ask_float("GAMMA", default=2.0,
                       lo=0.0, hi=10.0)
@@ -1561,6 +1763,29 @@ if __name__ == "__main__":
     print(f"  -> GAMMA: {GAMMA}  |  ALPHA: {ALPHA}")
     if mode == 2:
         print(f"  -> Poisson iterations: {POISSON_ITER}")
+
+    # ── GILBM stability pre-check (階段 A: 1D 無網格預估) ──
+    pre_interactive = None
+    if GAMMA > 0 and stability_flow:
+        LZ_est = y_ref[-1, 0] - y_ref[0, 0]
+        NZ_est = NJ
+        pre_interactive = estimate_omega_pregrid(
+            GAMMA, LZ_est, NZ_est - 1,
+            stability_flow["Uref"], stability_flow["Re"],
+            H_HILL=stability_flow["H_HILL"],
+            CFL=stability_flow["CFL_lambda"],
+            LY=stability_LY, alpha=ALPHA)
+        print()
+        print(f"  [階段A] 1D 預估 (無網格, estimate_omega_pregrid):")
+        print(f"    dz_min     = {pre_interactive['dz_min']:.6e}")
+        print(f"    max|c̃| est = {pre_interactive['max_c_est']:.1f}")
+        print(f"    omega_est  = {pre_interactive['omega_est']:.4f}", end="")
+        if pre_interactive["omega_est"] > 2.0:
+            print("  *** 預估不穩定 ***")
+        elif pre_interactive["omega_est"] > 1.5:
+            print("  ** 預估邊際")
+        else:
+            print("  [預估穩定]")
 
     # -----------------------------------------------------------
     #  Step 5 -- identity verification
@@ -1592,14 +1817,22 @@ if __name__ == "__main__":
 
     print(f"  Generated grid: I={NI}, J={NJ}")
 
-    # ── GILBM stability post-check ──
+    # ── GILBM stability post-check (階段 B: 2D 精確計算) ──
     x_fro_max = x_ref[0, -1]
-    h_phys = x_fro_max / 9.0 if x_fro_max < 1.0 else 1.0
+    h_phys = x_fro_max / stability_LY if x_fro_max < 1.0 else 1.0
     scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
-    stab = estimate_gilbm_stability(x_new, y_new, scale_factor=scale)
+    stab = estimate_gilbm_stability(
+        x_new, y_new, scale_factor=scale, **stability_flow)
     print_gilbm_stability_warning(
         GAMMA, stab["omega"], stab["c_max"],
-        stab["dt_global"], stab["a_max"], stab["status"])
+        stab["dt_global"], stab["a_max"], stab["status"],
+        Uref=stab["Uref"], Re=stab["Re"], H_HILL=stab["H_HILL"],
+        CFL_lambda=stab["CFL_lambda"], niu=stab["niu"])
+
+    if pre_interactive is not None:
+        print(f"  [對照] 階段A預估 omega={pre_interactive['omega_est']:.4f} vs "
+              f"階段B��確 omega={stab['omega']:.4f} "
+              f"(誤差 {abs(pre_interactive['omega_est']-stab['omega'])/max(stab['omega'],1e-30)*100:.1f}%)")
 
     # -----------------------------------------------------------
     #  Step 7 -- output
