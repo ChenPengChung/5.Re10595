@@ -286,26 +286,35 @@ def estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re,
                            H_HILL=1.0, CFL=0.5, LY=9.0, alpha=0.5,
                            non_ortho_factor=1.17):
     """
-    [階段 A] 無網格 omega 預估 — 不需要生成網格.
+    Pre-grid omega estimate — no generated grid needed.
 
-    打破循環依賴: "需要網格算 omega, 但需要 omega 選 GAMMA"
+    Breaks the circular dependency:
+      "need grid to compute omega, need omega to choose GAMMA"
 
-    近似鏈:
-      1. dz_min   = gamma_to_minSize(GAMMA, LZ, NZ-1)  [Vinokur 解析]
-      2. max|c̃|_1D ≈ 1 / dz_min                         [正交假設]
-      3. max|c̃|    ≈ max|c̃|_1D × non_ortho_factor       [非正交修正]
-      4. dt        = CFL / max|c̃|
-      5. omega     = 0.5 + 3·niu / dt
+    Approximation chain:
+      1. dz_min     = gamma_to_minSize(GAMMA, LZ, NZ-1)  [analytic]
+      2. max|c̃|_1D  ≈ 1 / dz_min                         [orthogonal]
+      3. max|c̃|_est ≈ max|c̃|_1D × non_ortho_factor       [correction]
+      4. dt          = CFL / max|c̃|_est
+      5. omega       = 3·niu / dt + 0.5
 
-    誤差來源 (已用 513×257 GAMMA=4.0 網格驗證):
-      1D 近似 max|c̃| ≈ 1/dz_min 低估了 ~15%, 因為:
-      - 忽略非正交項 ζ_y = -z_xi/J (hill 斜面 z_xi ≠ 0)
-      - 忽略 D3Q19 edge direction (e_y=1,e_z=1) 的 ζ_y+ζ_z 疊加
-      - 實測: max|c̃|_1D = 845, max|c̃|_2D = 992 → 比值 ≈ 1.17
-      non_ortho_factor=1.17 修正後 omega 誤差 < 0.1%.
+    Why 1/dz_min underestimates max|c̃|:
+      max|c̃| occurs at hill foot (j=1, i≈27) in D3Q19 edge direction
+      (e_y=1, e_z=1).  At that location:
+        c̃_ζ = |ζ_y·e_y + ζ_z·e_z| = |(-z_ξ/J)·1 + (y_ξ/J)·1|
+      The ζ_z term (70%) is well captured by 1/dz_min, but the
+      ζ_y term (30%) comes from the hill slope (z_ξ ≠ 0) and is
+      missing in the 1D estimate.
 
-    使用時機: 生成網格前 (< 1ms), 如果 omega_est > 2.0 可提前
-    攔截, 避免浪費 Poisson solve 時間.
+    Calibration (Periodic Hill, physical-z redistribution):
+      factor = max|c̃|_2D / (1/dz_min), measured over multiple configs:
+        GAMMA=2.0 129×64  → 1.15
+        GAMMA=3.0 129×64  → 1.13
+        GAMMA=4.0 129×64  → 1.11
+        GAMMA=4.0 513×257 → 1.17
+        GAMMA=5.0 129×64  → 1.09
+      Range: 1.09 – 1.18.  Default 1.17 ≈ upper bound → conservative
+      (over-predicts omega, safe for stability screening).
 
     Parameters
     ----------
@@ -317,9 +326,10 @@ def estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re,
     LY       : float  streamwise length (for hill_function)
     alpha    : float  stretching symmetry (0.5 = symmetric)
     non_ortho_factor : float
-        Periodic Hill 非正交修正係數 (default 1.17).
-        來源: hill 斜面的 z_xi ≠ 0 + D3Q19 edge direction 疊加.
-        設為 1.0 可退回純正交假設.
+        Periodic Hill non-orthogonality correction (default 1.17).
+        Source: hill slope z_ξ ≠ 0 + D3Q19 edge direction stacking.
+        Varies 1.09–1.18 across GAMMA/resolution; 1.17 is conservative.
+        Set to 1.0 to revert to pure orthogonal assumption.
 
     Returns
     -------
