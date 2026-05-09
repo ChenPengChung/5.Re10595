@@ -1206,6 +1206,141 @@ def compute_inverse_metric_2d(y_2d, z_2d):
     return dj_dy, dj_dz, dk_dy, dk_dz
 
 
+# ---------------------------------------------------------------
+# Phase A: 6th-order Fornberg inverse metric (mirrors solver
+# gilbm/metric_terms.h). Two stencils:
+#   - j direction: pure 6th-order central, reads ±3 periodic ghost
+#     (build_grid_xyz fills j-ghost with ±LY shift, valid 6th-order).
+#   - k direction: 6th-order adaptive skew, NEVER reads k ghost
+#     (k ghost is linear extrap, only 2nd-order valid; reading it
+#     would degrade the entire stencil).
+# ---------------------------------------------------------------
+# 7-point Fornberg coefficients, 1st derivative, unit spacing.
+# FD6_COEFF[p, m] : evaluation point at offset p in stencil window [s, s+6]
+# Mirror gilbm/metric_terms.h:34-42. Divisor 60 absorbed into table.
+FD6_COEFF = np.array([
+    [-147.0,  360.0, -450.0,  400.0, -225.0,   72.0,  -10.0],   # p=0 forward
+    [ -10.0,  -77.0,  150.0, -100.0,   50.0,  -15.0,    2.0],   # p=1
+    [   2.0,  -24.0,  -35.0,   80.0,  -30.0,    8.0,   -1.0],   # p=2
+    [  -1.0,    9.0,  -45.0,    0.0,   45.0,   -9.0,    1.0],   # p=3 central (6th-order)
+    [   1.0,   -8.0,   30.0,  -80.0,   35.0,   24.0,   -2.0],   # p=4
+    [  -2.0,   15.0,  -50.0,  100.0, -150.0,   77.0,   10.0],   # p=5
+    [  10.0,  -72.0,  225.0, -400.0,  450.0, -360.0,  147.0],   # p=6 backward
+], dtype=np.float64) / 60.0
+
+
+def fd6_axis_central(arr, k_lo, k_hi, axis):
+    """6th-order pure central FD using p=3 row of Fornberg table.
+
+    For each evaluation point k in [k_lo, k_hi]:
+      deriv[k] = sum FD6_COEFF[3, m] * arr[k + m - 3]   for m in [0, 6]
+
+    REQUIRES: k_lo - 3 >= 0 and k_hi + 3 < arr.shape[axis]
+    (3 ghost layers each side filled with valid 6th-order data; this holds for
+    j-direction periodic ghost from build_grid_xyz).
+
+    Mirrors gilbm/metric_terms.h:100-109 FD6_j_central exactly.
+    """
+    if axis not in (0, 1):
+        raise ValueError('fd6_axis_central: axis must be 0 or 1')
+    if axis == 0:
+        arr_w = np.moveaxis(arr, 0, -1)
+    else:
+        arr_w = arr
+    deriv = np.zeros_like(arr_w)
+    coef = FD6_COEFF[3]
+    for m in range(7):
+        offset = m - 3
+        deriv[..., k_lo:k_hi+1] += coef[m] * arr_w[..., k_lo+offset:k_hi+1+offset]
+    if axis == 0:
+        deriv = np.moveaxis(deriv, -1, 0)
+    return deriv
+
+
+def fd6_axis_adaptive(arr, k_lo, k_hi, axis):
+    """6th-order Fornberg adaptive-skew derivative along one axis.
+
+    For each evaluation point k in [k_lo, k_hi]:
+      s = clip(k - 3, k_lo, k_hi - 6)        # stencil start, all 7 pts in [k_lo, k_hi]
+      p = k - s                              # eval point's offset within stencil
+      deriv[k] = sum FD6_COEFF[p, m] * arr[s + m]   for m in [0, 6]
+
+    Outside [k_lo, k_hi]: returns 0 (caller should not use those values).
+    Stencil never reads outside [k_lo, k_hi] -> safe even when ghosts are
+    unreliable (e.g., k-direction with linear-extrapolated ghosts).
+
+    Mirrors gilbm/metric_terms.h:71-95 k-direction adaptive Fornberg exactly.
+    """
+    if axis not in (0, 1):
+        raise ValueError('fd6_axis_adaptive: axis must be 0 or 1')
+    if axis == 0:
+        arr_w = np.moveaxis(arr, 0, -1)
+    else:
+        arr_w = arr
+    deriv = np.zeros_like(arr_w)
+    if k_hi - k_lo < 6:
+        # not enough fluid nodes for 7-point stencil; fall back to nothing
+        # (caller must ensure fluid range >= 7 nodes for 6th-order)
+        return np.moveaxis(deriv, -1, 0) if axis == 0 else deriv
+    s_max = k_hi - 6
+    for k in range(k_lo, k_hi + 1):
+        s = k - 3
+        if s < k_lo:
+            s = k_lo
+        elif s > s_max:
+            s = s_max
+        p = k - s
+        for m in range(7):
+            deriv[..., k] += FD6_COEFF[p, m] * arr_w[..., s + m]
+    if axis == 0:
+        deriv = np.moveaxis(deriv, -1, 0)
+    return deriv
+
+
+def compute_inverse_metric_2d_fornberg(y_2d, z_2d):
+    """6th-order Fornberg version of compute_inverse_metric_2d.
+
+    Mirrors solver: j-direction pure central (periodic ghost OK),
+                    k-direction adaptive skew (wall ghost unreliable).
+
+    j-direction range: j_lo=BFR, j_hi=NY6-1-BFR (fluid nodes; ghost reads OK)
+    k-direction range: k_lo=BFR, k_hi=NZ6-1-BFR (fluid nodes; no ghost reads)
+
+    Same return signature as compute_inverse_metric_2d: (dj_dy, dj_dz, dk_dy, dk_dz)
+    each shape (NY6, NZ6). Ghost-row metric values are zeros (callers should
+    only use the interior slice [BFR:BFR+NY, BFR:BFR+NZ]).
+    """
+    NY6, NZ6 = y_2d.shape
+    j_lo, j_hi = BFR, NY6 - 1 - BFR
+    k_lo, k_hi = BFR, NZ6 - 1 - BFR
+
+    # j-direction: periodic ghost from build_grid_xyz is 6th-order valid
+    y_j = fd6_axis_central(y_2d, j_lo, j_hi, axis=0)
+    z_j = fd6_axis_central(z_2d, j_lo, j_hi, axis=0)
+
+    # k-direction: wall ghost is linear extrap (only 2nd-order valid)
+    # -> adaptive skew, never reads ghost
+    y_k = fd6_axis_adaptive(y_2d, k_lo, k_hi, axis=1)
+    z_k = fd6_axis_adaptive(z_2d, k_lo, k_hi, axis=1)
+
+    det = y_j * z_k - y_k * z_j
+    eps = 1e-30
+    # Only count singularities inside the interior region (ghost rows are 0)
+    interior_det = det[j_lo:j_hi+1, k_lo:k_hi+1]
+    sing = int(np.sum(np.abs(interior_det) <= eps))
+    if sing > 0:
+        print('      WARN: Jacobian near-singular at {} interior grid points'.format(sing))
+    inv_det = np.zeros_like(det)
+    safe = np.abs(det) > eps
+    inv_det[safe] = 1.0 / det[safe]
+
+    dj_dy =  z_k * inv_det
+    dj_dz = -y_k * inv_det
+    dk_dy = -z_j * inv_det
+    dk_dz =  y_j * inv_det
+    return dj_dy, dj_dz, dk_dy, dk_dz
+
+
 def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
     """Compute (∂u/∂x, ∂u/∂y, ∂u/∂z) on interior for one velocity component.
 
@@ -1329,6 +1464,10 @@ def main():
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
                         '"comp" = legacy computational-space (j,k,i) index remap '
                         '(causes physical mis-placement when GAMMA differs).')
+    p.add_argument('--metric-order', type=int, choices=[2, 6], default=6,
+                   help='Order of FD for inverse metric used in CE f_neq reconstruction. '
+                        '6 mirrors solver (j-central + k-adaptive Fornberg, '
+                        'gilbm/metric_terms.h). 2 is legacy 2nd-order central.')
     p.add_argument('--niu', type=float, default=None,
                    help='kinematic viscosity for Chapman-Enskog mode (auto-read from variables.h '
                         'as Uref/Re when omitted)')
@@ -1699,8 +1838,15 @@ def main():
         print('      mode = chapman-enskog: niu = {:.6e}, ce_coeff = -3*niu = {:.6e}'.format(
             niu, ce_coeff))
 
-        # Inverse metric on NEW grid (uses ghost-filled y2d/z2d from build_grid_xyz)
-        dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
+        # Inverse metric on NEW grid. Order 6 mirrors solver (gilbm/metric_terms.h);
+        # order 2 is legacy 2nd-order central (kept for A/B comparison).
+        if args.metric_order == 6:
+            dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d_fornberg(y2d_new, z2d_new)
+        else:
+            dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
+        print('      metric order = {} ({})'.format(
+            args.metric_order,
+            'Fornberg j-central + k-adaptive' if args.metric_order == 6 else '2nd-order central'))
         dx_phys = LX / (NEW.NX - 1)
 
         # No-slip wall clamp: physical wall is u=v=w=0. After macro interpolation,
@@ -1895,6 +2041,7 @@ def main():
         'interp_new_gamma': str(NEW.GAMMA),
         'interp_fneq_mode': args.fneq_mode,
         'interp_macro_mode': args.interp_mode,
+        'interp_metric_order': str(args.metric_order),
         'interp_origin_ftt': origin_ftt,
         'interp_origin_accu_count': origin_accu,
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
