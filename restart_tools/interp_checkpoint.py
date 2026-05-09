@@ -16,8 +16,23 @@ Pipeline:
   2. Cross-validate grid .dat headers against NX/NY/NZ
   3. Read old checkpoint, compute macros (rho, ux, uy, uz)
   4. Interpolate macros old -> new in computational (j, k, i) space
-  5. Reconstruct f_q = f_eq(new) + scale * interp(f_neq_old) for q = 0..18
-  6. Split into new ranks, write per-rank binary files + metadata.dat
+  5. Reconstruct f_q for q = 0..18 according to --fneq-mode:
+       chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
+                                 NEW-grid velocity gradients via Chapman-Enskog.
+                                 Wall rows use 4th-order one-sided FD to match
+                                 the solver's wall CE formula.
+       interp (legacy):          f_q = f_eq(new) + scale * interp(f_neq_old)
+                                 (linear interp in computational space; loses
+                                 gradient information across GAMMA changes).
+  6. Preserve controller state (Force_integral, error_prev, ctrl_initialized,
+     gehrke_activated) ONLY from origin metadata to avoid F* step on restart.
+     FTT and accu_count are NOT preserved — they are reset to 0 because:
+       - regrid is a fresh start on the new mesh (FTT=0 aligns new stats window);
+       - accu_count > 0 would trigger fileIO.h:748 to load 36 stats binaries
+         (sum_u_*.bin, ...) that this pipeline does NOT regenerate.
+     Origin FTT / accu_count are written into metadata as `interp_origin_*`
+     fields for audit only.
+  7. Split into new ranks, write per-rank binary files + metadata.dat
 
 Output written atomically:
   <output_root>/step_%08d.WRITING/ -> <output_root>/step_%08d/
@@ -832,6 +847,190 @@ def compute_minsize(cfg):
 
 
 # ---------------------------------------------------------------
+# Chapman-Enskog f_neq reconstruction (Direction A from review)
+# ---------------------------------------------------------------
+# Generalized from gilbm/boundary_conditions.h:13-21 (wall-only) to
+# interior nodes by retaining all 9 partial derivatives ∂u_α/∂x_β.
+#
+#   f_neq_q = w_q * rho * ce_coeff * Σ_αβ (3·c_qα·c_qβ - δ_αβ) · ∂u_α/∂x_β
+#
+#   ce_coeff = -(omega - 0.5) * dt = -3*niu      (variables.h:152)
+#
+# This replaces direct linear interpolation of f_neq, which destroys the
+# velocity-gradient information encoded in f_neq via Chapman-Enskog and
+# is the dominant divergence cause when GAMMA changes between grids.
+#
+# Conservation properties (analytically exact):
+#   Σ_q f_neq_q          = 0     (since 3·Σ_q W_q·c_qα·c_qβ = δ_αβ)
+#   Σ_q c_q · f_neq_q    = 0     (third-order moment vanishes for D3Q19)
+def parse_niu_from_variables_h(vh_path):
+    """Parse niu = Uref / Re from variables.h. Returns None if unavailable."""
+    uref = None
+    re_num = None
+    try:
+        with open(vh_path) as f:
+            for line in f:
+                stripped = line.strip()
+                if not stripped.startswith('#define'):
+                    continue
+                parts = stripped.split(None, 2)
+                if len(parts) < 3:
+                    continue
+                key = parts[1]
+                val_str = parts[2].split('//')[0].strip().strip('()')
+                if key == 'Uref':
+                    try: uref = float(val_str)
+                    except ValueError: pass
+                elif key == 'Re':
+                    try: re_num = float(val_str)
+                    except ValueError: pass
+    except (IOError, OSError):
+        return None
+    if uref is None or re_num is None or re_num == 0.0:
+        return None
+    return uref / re_num
+
+
+def compute_inverse_metric_2d(y_2d, z_2d):
+    """Inverse Jacobian for curvilinear (j,k) → (y_phys, z_phys).
+
+    Forward:  J = [[y_j, y_k], [z_j, z_k]]
+    Inverse:  J^{-1} = (1/det) * [[z_k, -y_k], [-z_j, y_j]]
+              det = y_j*z_k - y_k*z_j
+
+    Centered FD on interior; ghost cells (already filled by build_grid_xyz
+    with periodic ±LY in j and linear extrapolation in k) make boundary
+    differencing 2nd-order. Returns four (NY6, NZ6) arrays.
+    """
+    y_j = np.empty_like(y_2d)
+    z_j = np.empty_like(z_2d)
+    y_j[1:-1, :] = (y_2d[2:, :] - y_2d[:-2, :]) / 2.0
+    z_j[1:-1, :] = (z_2d[2:, :] - z_2d[:-2, :]) / 2.0
+    y_j[0, :]  = y_2d[1, :] - y_2d[0, :]
+    y_j[-1, :] = y_2d[-1, :] - y_2d[-2, :]
+    z_j[0, :]  = z_2d[1, :] - z_2d[0, :]
+    z_j[-1, :] = z_2d[-1, :] - z_2d[-2, :]
+
+    y_k = np.empty_like(y_2d)
+    z_k = np.empty_like(z_2d)
+    y_k[:, 1:-1] = (y_2d[:, 2:] - y_2d[:, :-2]) / 2.0
+    z_k[:, 1:-1] = (z_2d[:, 2:] - z_2d[:, :-2]) / 2.0
+    y_k[:, 0]  = y_2d[:, 1] - y_2d[:, 0]
+    y_k[:, -1] = y_2d[:, -1] - y_2d[:, -2]
+    z_k[:, 0]  = z_2d[:, 1] - z_2d[:, 0]
+    z_k[:, -1] = z_2d[:, -1] - z_2d[:, -2]
+
+    det = y_j * z_k - y_k * z_j
+    eps = 1e-30
+    sing = int(np.sum(np.abs(det) <= eps))
+    if sing > 0:
+        print('      WARN: Jacobian near-singular at {} grid points'.format(sing))
+    inv_det = 1.0 / np.where(np.abs(det) > eps, det, eps)
+
+    dj_dy =  z_k * inv_det
+    dj_dz = -y_k * inv_det
+    dk_dy = -z_j * inv_det
+    dk_dz =  y_j * inv_det
+    return dj_dy, dj_dz, dk_dy, dk_dz
+
+
+def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
+    """Compute (∂u/∂x, ∂u/∂y, ∂u/∂z) on interior for one velocity component.
+
+    u : (NY6, NZ6, NX6) ghost-filled
+    dx : LX/(NX-1) — uniform spanwise step
+    dj_dy, ..., dk_dz : (NY6, NZ6) inverse metric
+
+    Spanwise (i) is uniform → ∂u/∂x = (∂u/∂i)/dx
+    Streamwise (y) and wall-normal (z) use chain rule:
+      ∂u/∂y = (∂u/∂j)·(∂j/∂y) + (∂u/∂k)·(∂k/∂y)
+      ∂u/∂z = (∂u/∂j)·(∂j/∂z) + (∂u/∂k)·(∂k/∂z)
+
+    Returns three (NY, NZ, NX) interior arrays.
+    """
+    NZ6 = u.shape[1]
+    du_di = np.empty_like(u)
+    du_dj = np.empty_like(u)
+    du_dk = np.empty_like(u)
+
+    du_di[:, :, 1:-1] = (u[:, :, 2:] - u[:, :, :-2]) / 2.0
+    du_di[:, :, 0]  = du_di[:, :, 1]
+    du_di[:, :, -1] = du_di[:, :, -2]
+
+    du_dj[1:-1, :, :] = (u[2:, :, :] - u[:-2, :, :]) / 2.0
+    du_dj[0, :, :]  = du_dj[1, :, :]
+    du_dj[-1, :, :] = du_dj[-2, :, :]
+
+    # k-derivative — centered on fluid interior, 4th-order one-sided AT walls.
+    # Plain centered FD at k=BFR collapses to (u[BFR+1]-u[BFR])/2 because
+    # fill_ghost copies u[BFR-1]=u[BFR], underestimating du/dk by ~50% in viscous
+    # sublayer. Solver wall CE uses 4th-order one-sided; mirror that to keep
+    # restart wall-stress consistent (gilbm/boundary_conditions.h:30-33).
+    du_dk[:, 1:-1, :] = (u[:, 2:, :] - u[:, :-2, :]) / 2.0
+
+    # Bottom wall (k = BFR = 3): du/dk = (48*u[B+1] - 36*u[B+2] + 16*u[B+3] - 3*u[B+4]) / 12
+    du_dk[:, BFR, :] = (
+         48.0 * u[:, BFR+1, :]
+        - 36.0 * u[:, BFR+2, :]
+        + 16.0 * u[:, BFR+3, :]
+        -  3.0 * u[:, BFR+4, :]
+    ) / 12.0
+
+    # Top wall (k = NZ6-4): same coefficients, 4 points BELOW wall, reversed sign.
+    kt = NZ6 - 1 - BFR  # = NZ6 - 4
+    du_dk[:, kt, :] = -(
+         48.0 * u[:, kt-1, :]
+        - 36.0 * u[:, kt-2, :]
+        + 16.0 * u[:, kt-3, :]
+        -  3.0 * u[:, kt-4, :]
+    ) / 12.0
+
+    # Ghost rows are not in the interior crop; fill non-pathologically.
+    du_dk[:, 0, :]  = du_dk[:, BFR, :]
+    du_dk[:, -1, :] = du_dk[:, kt, :]
+
+    sl = (slice(BFR, BFR+cfg.NY), slice(BFR, BFR+cfg.NZ), slice(BFR, BFR+cfg.NX))
+    du_di_int = du_di[sl]
+    du_dj_int = du_dj[sl]
+    du_dk_int = du_dk[sl]
+
+    metric_sl = (slice(BFR, BFR+cfg.NY), slice(BFR, BFR+cfg.NZ))
+    dj_dy_int = dj_dy[metric_sl][:, :, np.newaxis]
+    dj_dz_int = dj_dz[metric_sl][:, :, np.newaxis]
+    dk_dy_int = dk_dy[metric_sl][:, :, np.newaxis]
+    dk_dz_int = dk_dz[metric_sl][:, :, np.newaxis]
+
+    du_dx = du_di_int / dx
+    du_dy = du_dj_int * dj_dy_int + du_dk_int * dk_dy_int
+    du_dz = du_dj_int * dj_dz_int + du_dk_int * dk_dz_int
+    return du_dx, du_dy, du_dz
+
+
+def chapman_enskog_fneq_q(rho_int, grad, q, ce_coeff):
+    """Reconstruct f_neq_q from velocity gradient tensor on interior nodes.
+
+    grad : 9-tuple in (α, β) order (du_dx, du_dy, du_dz, dv_dx, ..., dw_dz),
+           each (NY, NZ, NX). The tensor [3·c_qα·c_qβ − δ_αβ] is symmetric in
+           αβ so the formula contracts symmetrized gradient pairs.
+    """
+    cqx = E[q, 0]; cqy = E[q, 1]; cqz = E[q, 2]
+    Txx = 3.0*cqx*cqx - 1.0
+    Tyy = 3.0*cqy*cqy - 1.0
+    Tzz = 3.0*cqz*cqz - 1.0
+    Txy = 3.0*cqx*cqy
+    Txz = 3.0*cqx*cqz
+    Tyz = 3.0*cqy*cqz
+    dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz = grad
+    contraction = (
+        Txx * dudx + Tyy * dvdy + Tzz * dwdz
+        + Txy * (dudy + dvdx)
+        + Txz * (dudz + dwdx)
+        + Tyz * (dvdz + dwdy)
+    )
+    return W[q] * rho_int * ce_coeff * contraction
+
+
+# ---------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------
 def main():
@@ -848,7 +1047,14 @@ def main():
     p.add_argument('--new-dir', default=None,
                    help='advanced override for output checkpoint directory; default is output-root/step_%%08d')
     p.add_argument('--fneq-scale', type=float, default=1.0,
-                   help='scale factor applied to interpolated f_neq (default: %(default)s)')
+                   help='scale factor applied to interpolated f_neq (legacy mode only; default: %(default)s)')
+    p.add_argument('--fneq-mode', choices=['interp', 'chapman-enskog'], default='chapman-enskog',
+                   help='f_neq reconstruction strategy. "interp" = legacy linear interp of f_neq '
+                        '(loses gradient info; default before fix). "chapman-enskog" = rebuild f_neq '
+                        'on NEW grid from velocity gradients via CE expansion (recommended; default).')
+    p.add_argument('--niu', type=float, default=None,
+                   help='kinematic viscosity for Chapman-Enskog mode (auto-read from variables.h '
+                        'as Uref/Re when omitted)')
     p.add_argument('--dry-run', action='store_true',
                    help='validate configuration and output path, then exit before reading/writing checkpoint data')
 
@@ -1166,42 +1372,140 @@ def main():
         rho_pr[r].tofile(os.path.join(writing_dir, 'rho_{}.bin'.format(r)))
     print('      wrote rho_0..rho_{}.bin'.format(NEW.JP - 1))
 
-    # Per-q: interpolate f_neq, rebuild f = f_eq_new + scale*f_neq_new, split, write.
-    # This preserves the old checkpoint's viscous/non-equilibrium content while
-    # keeping the new-grid macroscopic field controlled by rho_new/u_new.
+    # f_neq reconstruction. Two modes:
+    #   chapman-enskog (default, fix for divergence): rebuild f_neq on NEW grid
+    #     from velocity gradients via CE expansion. Drops the OLD f_q files
+    #     after rho/u extraction; gradients are evaluated on the NEW grid so
+    #     they are self-consistent with NEW spacing.
+    #   interp (legacy): linearly interpolate f_neq from OLD computational
+    #     space — destroys gradient information across GAMMA changes.
     rho_check = np.zeros_like(rho_new)
     min_f = float('inf')
     max_f = -float('inf')
-    for q in range(19):
-        per_rank = []
-        for r in range(OLD.JP):
-            path = os.path.join(args.old_dir, 'f{:02d}_{}.bin'.format(q, r))
-            per_rank.append(read_rank_bin(path, OLD))
-        f_old = stitch_y(per_rank, OLD)
-        feq_old = compute_feq_q(rho_g, ux_g, uy_g, uz_g, q)
-        fneq_old = f_old - feq_old
-        del f_old, feq_old, per_rank
 
-        fneq_new = interpolate_comp_3d(fneq_old, OLD, NEW)
-        del fneq_old
-        fill_ghost(fneq_new, NEW)
+    if args.fneq_mode == 'chapman-enskog':
+        # Resolve viscosity (variables.h: niu = Uref / Re).
+        niu = args.niu
+        if niu is None:
+            vh_for_niu = getattr(args, 'variables_h', None) or find_variables_h()
+            if vh_for_niu and os.path.isfile(vh_for_niu):
+                niu = parse_niu_from_variables_h(vh_for_niu)
+        if niu is None:
+            sys.exit('FATAL: --fneq-mode chapman-enskog requires niu. '
+                     'Pass --niu <value> or run from a project with variables.h.')
+        ce_coeff = -3.0 * niu     # = -(omega - 0.5) * dt   (variables.h:152, 363)
+        print('      mode = chapman-enskog: niu = {:.6e}, ce_coeff = -3*niu = {:.6e}'.format(
+            niu, ce_coeff))
 
-        feq = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
-        f_new = feq + args.fneq_scale * fneq_new
-        del feq, fneq_new
+        # Inverse metric on NEW grid (uses ghost-filled y2d/z2d from build_grid_xyz)
+        dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
+        dx_phys = LX / (NEW.NX - 1)
 
-        rho_check += f_new
-        if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
-            sys.exit('FATAL: f{:02d} contains NaN or Inf after reconstruction'.format(q))
-        min_f = min(min_f, float(np.min(f_new)))
-        max_f = max(max_f, float(np.max(f_new)))
+        # No-slip wall clamp: physical wall is u=v=w=0. After computational-space
+        # interpolation (interpolate_comp_3d), u_new[BFR] inherits OLD's wall value
+        # which may carry small residual (~O(δz·∂u/∂z|_wall) plus FP noise) because
+        # LBM CE wall BC produces approximately, not bitwise, zero. The 4th-order
+        # one-sided FD formula at boundary_conditions.h:30 explicitly assumes
+        # u_wall=0 (drops the -25*u_wall/12 term). Clamp here so CE wall stress
+        # estimate matches the solver's wall BC kernel exactly.
+        kt = NEW.NZ6 - 1 - BFR  # top wall row index
+        wall_residual_max = max(
+            float(np.max(np.abs(ux_new[:, BFR, :]))), float(np.max(np.abs(ux_new[:, kt, :]))),
+            float(np.max(np.abs(uy_new[:, BFR, :]))), float(np.max(np.abs(uy_new[:, kt, :]))),
+            float(np.max(np.abs(uz_new[:, BFR, :]))), float(np.max(np.abs(uz_new[:, kt, :]))),
+        )
+        print('      max |u_wall| before clamp = {:.3e}   (any value > 1e-10 indicates '
+              'OLD checkpoint or interp introduced non-zero wall residual)'.format(wall_residual_max))
+        for arr in (ux_new, uy_new, uz_new):
+            arr[:, BFR, :] = 0.0
+            arr[:, kt, :]  = 0.0
 
-        pr = split_y(f_new, NEW)
-        for r in range(NEW.JP):
-            pr[r].tofile(os.path.join(writing_dir, 'f{:02d}_{}.bin'.format(q, r)))
-        print('      wrote f{:02d}_0..f{:02d}_{} with f_neq scale {:.3f}'.format(
-            q, q, NEW.JP - 1, args.fneq_scale), flush=True)
-        del f_new, pr
+        # 9-component velocity gradient tensor on NEW interior
+        t = time.time()
+        dudx, dudy, dudz = compute_velocity_gradient_3d(ux_new, dx_phys, dj_dy, dj_dz, dk_dy, dk_dz, NEW)
+        dvdx, dvdy, dvdz = compute_velocity_gradient_3d(uy_new, dx_phys, dj_dy, dj_dz, dk_dy, dk_dz, NEW)
+        dwdx, dwdy, dwdz = compute_velocity_gradient_3d(uz_new, dx_phys, dj_dy, dj_dz, dk_dy, dk_dz, NEW)
+        print('      velocity gradient tensor: {:.1f}s'.format(time.time() - t))
+
+        div_u = dudx + dvdy + dwdz
+        max_div = float(np.max(np.abs(div_u)))
+        max_strain = max(
+            float(np.max(np.abs(dudx))), float(np.max(np.abs(dudy))), float(np.max(np.abs(dudz))),
+            float(np.max(np.abs(dvdx))), float(np.max(np.abs(dvdy))), float(np.max(np.abs(dvdz))),
+            float(np.max(np.abs(dwdx))), float(np.max(np.abs(dwdy))), float(np.max(np.abs(dwdz))),
+        )
+        print('      max |div(u)|  = {:.3e}   (incompressibility residual)'.format(max_div))
+        print('      max |grad u|  = {:.3e}'.format(max_strain))
+        del div_u
+
+        rho_int = rho_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX]
+        grad = (dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz)
+
+        max_fneq_ratio = 0.0
+        for q in range(19):
+            feq_full = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
+            fneq_int = chapman_enskog_fneq_q(rho_int, grad, q, ce_coeff)
+
+            f_new = feq_full.copy()
+            f_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX] += fneq_int
+            fill_ghost(f_new, NEW)
+            del feq_full
+
+            feq_int_for_diag = compute_feq_q(rho_int,
+                ux_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX],
+                uy_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX],
+                uz_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX], q)
+            ratio = float(np.max(np.abs(fneq_int) / np.maximum(feq_int_for_diag, 1e-30)))
+            max_fneq_ratio = max(max_fneq_ratio, ratio)
+            del feq_int_for_diag, fneq_int
+
+            rho_check += f_new
+            if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
+                sys.exit('FATAL: f{:02d} contains NaN or Inf after CE reconstruction'.format(q))
+            min_f = min(min_f, float(np.min(f_new)))
+            max_f = max(max_f, float(np.max(f_new)))
+
+            pr = split_y(f_new, NEW)
+            for r in range(NEW.JP):
+                pr[r].tofile(os.path.join(writing_dir, 'f{:02d}_{}.bin'.format(q, r)))
+            print('      wrote f{:02d}_0..f{:02d}_{} (CE)'.format(q, q, NEW.JP - 1), flush=True)
+            del f_new, pr
+
+        del dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz, grad
+        del dj_dy, dj_dz, dk_dy, dk_dz
+        print('      max |f_neq / f_eq|  = {:.3e}   (Knudsen-like; should be << 1)'.format(max_fneq_ratio))
+    else:
+        # Legacy: per-q interp f_neq, rebuild f = f_eq_new + scale*f_neq_new
+        for q in range(19):
+            per_rank = []
+            for r in range(OLD.JP):
+                path = os.path.join(args.old_dir, 'f{:02d}_{}.bin'.format(q, r))
+                per_rank.append(read_rank_bin(path, OLD))
+            f_old = stitch_y(per_rank, OLD)
+            feq_old = compute_feq_q(rho_g, ux_g, uy_g, uz_g, q)
+            fneq_old = f_old - feq_old
+            del f_old, feq_old, per_rank
+
+            fneq_new = interpolate_comp_3d(fneq_old, OLD, NEW)
+            del fneq_old
+            fill_ghost(fneq_new, NEW)
+
+            feq = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
+            f_new = feq + args.fneq_scale * fneq_new
+            del feq, fneq_new
+
+            rho_check += f_new
+            if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
+                sys.exit('FATAL: f{:02d} contains NaN or Inf after reconstruction'.format(q))
+            min_f = min(min_f, float(np.min(f_new)))
+            max_f = max(max_f, float(np.max(f_new)))
+
+            pr = split_y(f_new, NEW)
+            for r in range(NEW.JP):
+                pr[r].tofile(os.path.join(writing_dir, 'f{:02d}_{}.bin'.format(q, r)))
+            print('      wrote f{:02d}_0..f{:02d}_{} with f_neq scale {:.3f}'.format(
+                q, q, NEW.JP - 1, args.fneq_scale), flush=True)
+            del f_new, pr
 
     rho_diff = float(np.max(np.abs(rho_check - rho_new)))
     print('      f range after reconstruction = [{:.15e}, {:.15e}]'.format(min_f, max_f))
@@ -1230,6 +1534,43 @@ def main():
     #   discarded thereafter.
     naive_minsize = compute_minsize(NEW)
     origin_meta_path = os.path.join(args.old_dir, 'metadata.dat')
+    # Preserve controller state from origin checkpoint to avoid the F* step
+    # that occurs when a hot flow field is restarted with a cold PID integrator.
+    # fileIO.h documents these fields as "required to avoid Force_integral /
+    # error_prev reset on restart".
+    #
+    # IMPORTANT: accu_count and FTT are NOT preserved from origin.
+    #   * accu_count > 0 triggers fileIO.h:748 to load 36 statistics binaries
+    #     (sum_u_*.bin, sum_uu_*.bin, ...). This regrid pipeline only writes
+    #     f00..f18 + rho + metadata.dat — the stats binaries are NOT regenerated
+    #     on the new grid. Preserving accu_count > 0 would make the rebuilt
+    #     checkpoint unloadable (result_readbin abort on missing stats).
+    #     We set accu_count=0 so fileIO.h:748 skips stats loading entirely;
+    #     the runtime will re-accumulate stats fresh from FTT_STATS_START.
+    #   * FTT (flow-through-time clock) is reset to 0 because the regrid is
+    #     a fresh start on the new mesh; statistics windows align to FTT.
+    # Origin values are kept ONLY as provenance fields (interp_origin_*) for audit.
+    controller_keys = ('Force_integral', 'error_prev',
+                       'ctrl_initialized', 'gehrke_activated')
+    controller_defaults = {
+        'Force_integral':  '{:.15f}'.format(0.0),
+        'error_prev':      '{:.15f}'.format(0.0),
+        'ctrl_initialized': '0',
+        'gehrke_activated': '0',
+    }
+    controller_preserved = {k: meta_old.get(k, controller_defaults[k]) for k in controller_keys}
+    origin_ftt = meta_old.get('FTT', '0.0')
+    origin_accu = meta_old.get('accu_count', '0')
+    print('      Controller state preserved from origin: '
+          'Force_integral={} error_prev={} ctrl_initialized={} gehrke_activated={}'.format(
+              controller_preserved['Force_integral'],
+              controller_preserved['error_prev'],
+              controller_preserved['ctrl_initialized'],
+              controller_preserved['gehrke_activated']))
+    print('      accu_count=0, FTT=0 (regrid pipeline does NOT write stats binaries; '
+          'preserving accu_count>0 would break checkpoint load)')
+    print('      origin FTT={} accu_count={} kept as provenance only'.format(origin_ftt, origin_accu))
+
     new_meta = {
         'checkpoint_version': '2',
         'mpi_rank_count': str(NEW.JP),
@@ -1238,10 +1579,10 @@ def main():
         'FTT': '{:.15f}'.format(0.0),
         'accu_count': '0',
         'Force': '{:.15f}'.format(Force_value),
-        'Force_integral': '{:.15f}'.format(0.0),
-        'error_prev': '{:.15f}'.format(0.0),
-        'ctrl_initialized': '0',
-        'gehrke_activated': '0',
+        'Force_integral': controller_preserved['Force_integral'],
+        'error_prev': controller_preserved['error_prev'],
+        'ctrl_initialized': controller_preserved['ctrl_initialized'],
+        'gehrke_activated': controller_preserved['gehrke_activated'],
         'dt_global': '-1.0',
         'gpu_time_ms': '0',
         'cv_count': '0',
@@ -1250,9 +1591,14 @@ def main():
         'interp_new_grid': NEW.GRID_DAT,
         'interp_old_gamma': str(OLD.GAMMA),
         'interp_new_gamma': str(NEW.GAMMA),
-        'interp_fneq_scale': str(args.fneq_scale),
+        'interp_fneq_mode': args.fneq_mode,
+        'interp_origin_ftt': origin_ftt,
+        'interp_origin_accu_count': origin_accu,
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
+    # interp_fneq_scale only meaningful in legacy 'interp' mode; CE mode does not use it.
+    if args.fneq_mode == 'interp':
+        new_meta['interp_fneq_scale'] = str(args.fneq_scale)
     vh_for_prov = getattr(args, 'variables_h', None)
     if vh_for_prov and os.path.isfile(vh_for_prov):
         new_meta['interp_variables_h_mtime'] = str(int(os.path.getmtime(vh_for_prov)))
