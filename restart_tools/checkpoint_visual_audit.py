@@ -7,7 +7,7 @@ legacy VTK files for ParaView, and emits JSON/TXT continuity diagnostics.
 Typical use:
   python restart_tools/checkpoint_visual_audit.py ^
     --checkpoint-dir restart/checkpoint/step_00000001 ^
-    --grid-dat "J_Frohlich/adaptive_3.fine grid_I257_J129_a0.5.dat"
+    --grid-dat "phase1_generategrid/newgrid_I257_J129_a0.5.dat"
 """
 import argparse
 import json
@@ -19,8 +19,11 @@ import time
 import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-if SCRIPT_DIR not in sys.path:
-    sys.path.insert(0, SCRIPT_DIR)
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
+PHASE2_DIR = os.path.join(PROJECT_ROOT, 'phase2_generatecheckpoint')
+for _path in (SCRIPT_DIR, PHASE2_DIR):
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
 
 from interp_checkpoint import (  # noqa: E402
     BFR, E, LX, LY,

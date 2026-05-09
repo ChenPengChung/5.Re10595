@@ -41,13 +41,14 @@ Output written atomically:
   restart/grid_provenance records the session-level grid identity.
 
 Usage:
-  # Project auto mode: origin is restart/step_*_origin*, NEW dims are from variables.h
-  python3 restart_tools/interp_checkpoint.py --auto --step 1 \\
-      --old-grid-dat "J_Frohlich/adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat" \\
-      --new-grid-dat "J_Frohlich/adaptive_3.fine grid_I257_J129_a0.5.dat"
+  # Project auto mode:
+  #   origin checkpoint: phase2_generatecheckpoint/step_*_origin*
+  #   OLD grid:          phase1_generategrid/oldgrid_*.dat
+  #   NEW grid:          phase1_generategrid/newgrid_*.dat
+  python3 phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
 
   # CLI override (skip prompts):
-  python3 restart_tools/interp_checkpoint.py --old-dir ./old_ckpt \\
+  python3 phase2_generatecheckpoint/interp_checkpoint.py --old-dir ./old_ckpt \\
       --old-gamma 2.0 --old-grid-dat old_grid.dat \\
       --new-nx 257 --new-ny 513 --new-nz 257 --new-jp 16 \\
       --new-gamma 3.0 --new-alpha 0.5 --new-grid-dat new_grid.dat \\
@@ -57,11 +58,11 @@ Usage:
 Expected folder structure:
   workspace/
   +-- variables.h                     (optional, project mode)
-  +-- restart_tools/interp_checkpoint.py
-  +-- J_Frohlich/                    (or any directory)
-  |   +-- adaptive_*_I{NY}_J{NZ}_g{G}_a{A}.dat   (OLD uniform gamma grid)
-  |   +-- adaptive_*_I{NY}_J{NZ}_a{A}.dat        (NEW variable gamma grid)
-  +-- old_checkpoint/                (source checkpoint)
+  +-- phase2_generatecheckpoint/interp_checkpoint.py
+  +-- phase1_generategrid/
+  |   +-- oldgrid_*_I{NY}_J{NZ}_g{G}_a{A}.dat    (OLD uniform gamma grid)
+  |   +-- newgrid_*_I{NY}_J{NZ}_a{A}.dat         (NEW variable gamma grid)
+  +-- phase2_generatecheckpoint/step_*_origin*/  (source checkpoint)
       +-- metadata.dat
       +-- f00_0.bin ... f18_{jp-1}.bin
       +-- rho_0.bin ... rho_{jp-1}.bin
@@ -116,7 +117,7 @@ def parse_variables_h(path):
                'LX', 'LY', 'LZ', 'H_HILL'}
     int_keys = {'NX', 'NY', 'NZ', 'jp'}
     defines = {}
-    with open(path) as f:
+    with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
             stripped = line.strip()
             if not stripped.startswith('#define'):
@@ -139,7 +140,7 @@ def parse_string_defines(path, keys=('GRID_DAT_DIR', 'GRID_DAT_REF')):
     """Parse #define KEY "value" string defines from variables.h."""
     import re
     result = {}
-    with open(path) as f:
+    with open(path, encoding='utf-8', errors='replace') as f:
         text = f.read()
     for key in keys:
         m = re.search(rf'#define\s+{key}\s+"([^"]+)"', text)
@@ -151,7 +152,7 @@ def parse_string_defines(path, keys=('GRID_DAT_DIR', 'GRID_DAT_REF')):
 def parse_grid_dat_header(path):
     """Extract I=, J= from Tecplot .dat file header for cross-validation."""
     dims = {}
-    with open(path) as f:
+    with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
             for token in line.replace(',', ' ').split():
                 if token.startswith('I='):
@@ -208,6 +209,26 @@ def infer_new_grid_alpha(path):
     if not m:
         return None
     return float(m.group(1))
+
+
+def project_root():
+    """Return repository root inferred from this phase2 script location."""
+    return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+
+def _unique_paths(paths):
+    """Preserve path order while removing duplicates after abs-normalization."""
+    result = []
+    seen = set()
+    for p in paths:
+        if not p:
+            continue
+        abs_p = os.path.abspath(os.path.normpath(p))
+        if abs_p in seen:
+            continue
+        seen.add(abs_p)
+        result.append(abs_p)
+    return result
 
 
 def find_variables_h():
@@ -347,20 +368,34 @@ def ask_value(prompt_text, cast_fn=str, default=None):
             print('  (格式錯誤, 請重新輸入 / invalid format)')
 
 
-def find_origin_checkpoint(restart_dir='restart'):
-    """Find restart/step_*_origin* directories with valid metadata.
+def origin_search_dirs(primary_dir=None):
+    """Default direct parent folders that may contain step_*_origin* checkpoints."""
+    root = project_root()
+    return _unique_paths([
+        primary_dir,
+        os.path.join(root, 'phase2_generatecheckpoint'),
+        os.path.join(root, 'restart'),
+        os.path.join(root, 'restart', 'checkpoint'),
+        'phase2_generatecheckpoint',
+        'restart',
+    ])
+
+
+def find_origin_checkpoint(search_dir=None):
+    """Find step_*_origin* directories with valid metadata across phase layout.
     FATAL if multiple origins exist (ambiguous)."""
-    if not os.path.isdir(restart_dir):
-        return None
     candidates = []
-    for name in sorted(os.listdir(restart_dir)):
-        if name.startswith('step_') and '_origin' in name:
-            path = os.path.join(restart_dir, name)
-            if os.path.isfile(os.path.join(path, 'metadata.dat')):
-                candidates.append(path)
+    for parent in origin_search_dirs(search_dir):
+        if not os.path.isdir(parent):
+            continue
+        for name in sorted(os.listdir(parent)):
+            if name.startswith('step_') and '_origin' in name:
+                path = os.path.join(parent, name)
+                if os.path.isfile(os.path.join(path, 'metadata.dat')):
+                    candidates.append(os.path.abspath(path))
     if len(candidates) > 1:
         sys.exit('FATAL: multiple origin checkpoints found ({}): {}'.format(
-            len(candidates), ', '.join(os.path.basename(c) for c in candidates)))
+            len(candidates), ', '.join(candidates)))
     return candidates[0] if candidates else None
 
 
@@ -371,18 +406,20 @@ def resolve_old_dir(old_dir):
         if origin:
             print('  Auto-detected origin checkpoint: {}'.format(origin))
             return origin
-        sys.exit('FATAL: --old-dir not specified and no restart/step_*_origin* found')
+        sys.exit('FATAL: --old-dir not specified and no phase2_generatecheckpoint/step_*_origin* '
+                 'or restart/step_*_origin* found')
 
     old_dir = os.path.normpath(old_dir)
     meta_path = os.path.join(old_dir, 'metadata.dat')
     if os.path.isfile(meta_path):
         return old_dir
 
-    restart_dir = 'restart'
     candidates = []
-    if os.path.isdir(restart_dir):
-        for name in sorted(os.listdir(restart_dir)):
-            path = os.path.join(restart_dir, name)
+    for parent in origin_search_dirs():
+        if not os.path.isdir(parent):
+            continue
+        for name in sorted(os.listdir(parent)):
+            path = os.path.join(parent, name)
             if name.startswith('step_') and os.path.isfile(os.path.join(path, 'metadata.dat')):
                 candidates.append(path)
 
@@ -580,7 +617,7 @@ W = np.array([1.0/3.0] + [1.0/18.0]*6 + [1.0/36.0]*12, dtype=np.float64)
 # ---------------------------------------------------------------
 def parse_metadata(path):
     d = {}
-    with open(path) as f:
+    with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
             line = line.strip()
             if '=' in line:
@@ -597,7 +634,7 @@ def write_metadata(path, params):
         'ctrl_initialized', 'gehrke_activated',
         'dt_global', 'gpu_time_ms', 'cv_count',
     ]
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding='utf-8') as f:
         for k in keys_order:
             if k in params:
                 f.write('{}={}\n'.format(k, params[k]))
@@ -629,7 +666,7 @@ def build_grid_xyz(cfg):
 
     # Parse Tecplot POINT format: skip header until "DT=" line
     coords = []
-    with open(cfg.GRID_DAT) as f:
+    with open(cfg.GRID_DAT, encoding='utf-8', errors='replace') as f:
         in_data = False
         for line in f:
             if not in_data:
@@ -1141,7 +1178,7 @@ def parse_niu_from_variables_h(vh_path):
     uref = None
     re_num = None
     try:
-        with open(vh_path) as f:
+        with open(vh_path, encoding='utf-8', errors='replace') as f:
             for line in f:
                 stripped = line.strip()
                 if not stripped.startswith('#define'):
@@ -1497,9 +1534,9 @@ def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--auto', action='store_true',
-                   help='fully automatic: detect origin checkpoint, old/new grids from variables.h')
+                   help='fully automatic: detect phase2 origin checkpoint and phase1 oldgrid/newgrid files')
     p.add_argument('--old-dir', default=None,
-                   help='old checkpoint directory (auto-detected from restart/step_*_origin* if omitted)')
+                   help='old checkpoint directory (auto-detected from phase2_generatecheckpoint/step_*_origin* if omitted)')
     p.add_argument('--step', type=int, default=1,
                    help='new checkpoint step number written into metadata (default: 1)')
     p.add_argument('--output-root', default='restart/checkpoint',
@@ -1570,22 +1607,26 @@ def main():
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
 
-        grid_dat_dir_name = str_defs.get('GRID_DAT_DIR', 'J_Frohlich')
-        grid_dat_ref = str_defs.get('GRID_DAT_REF', '')
-        grid_ref_stem = os.path.splitext(grid_dat_ref)[0]
-        if not grid_ref_stem:
-            sys.exit('FATAL: --auto: GRID_DAT_REF not defined in {}'.format(vh_path))
-
         vh_dir = os.path.dirname(os.path.abspath(vh_path))
-        grid_dir = os.path.join(vh_dir, grid_dat_dir_name)
-        if not os.path.isdir(grid_dir):
+        phase1_grid_dir = os.path.join(vh_dir, 'phase1_generategrid')
+        grid_dat_dir_name = str_defs.get('GRID_DAT_DIR', 'J_Frohlich')
+        legacy_grid_dir = os.path.join(vh_dir, grid_dat_dir_name)
+        if os.path.isdir(phase1_grid_dir):
+            grid_dir = phase1_grid_dir
+        elif os.path.isdir(legacy_grid_dir):
+            grid_dir = legacy_grid_dir
+        elif os.path.isdir(grid_dat_dir_name):
             grid_dir = grid_dat_dir_name
+        else:
+            sys.exit('FATAL: --auto: grid directory not found. Expected phase1_generategrid/ '
+                     'or GRID_DAT_DIR={} near {}'.format(grid_dat_dir_name, vh_path))
 
         NY_vh = int(vh['NY'])
         NZ_vh = int(vh['NZ'])
         ALPHA_vh = vh.get('ALPHA', 0.5)
 
         restart_dir = os.path.join(vh_dir, 'restart')
+        phase2_dir = os.path.join(vh_dir, 'phase2_generatecheckpoint')
         ckpt_dir = os.path.join(restart_dir, 'checkpoint')
         has_normal = False
         if os.path.isdir(ckpt_dir):
@@ -1598,19 +1639,21 @@ def main():
             print('[auto] Non-origin checkpoint in restart/checkpoint/ — interpolation not needed')
             sys.exit(0)
 
-        origin = find_origin_checkpoint(restart_dir)
+        origin = find_origin_checkpoint(phase2_dir)
         if not origin:
-            sys.exit('FATAL: --auto: no restart/step_*_origin* found in {}'.format(restart_dir))
+            sys.exit('FATAL: --auto: no phase2_generatecheckpoint/step_*_origin* '
+                     'or restart/step_*_origin* found')
         print('[auto] Origin checkpoint: {}'.format(origin))
+        print('[auto] Grid directory: {}'.format(os.path.abspath(grid_dir)))
 
-        dim_tag = '_I{}_J{}_'.format(NY_vh, NZ_vh)
-        stem_prefix = 'adaptive_{}'.format(grid_ref_stem)
+        dim_tag = '_I{}_J{}'.format(NY_vh, NZ_vh)
         old_grid = old_fname = old_gamma = old_alpha = None
         new_grid = new_fname = new_alpha = None
+        resolve_bases = (grid_dir, vh_dir, project_root())
 
         if args.old_grid_dat:
             old_grid = resolve_existing_file(args.old_grid_dat, '--old-grid-dat',
-                                             base_dirs=(grid_dir, vh_dir))
+                                             base_dirs=resolve_bases)
             old_fname = os.path.basename(old_grid)
             inferred_gamma, inferred_alpha = infer_old_grid_params(old_grid)
             old_gamma = args.old_gamma if args.old_gamma is not None else inferred_gamma
@@ -1620,7 +1663,7 @@ def main():
                          'or explicit --old-gamma/--old-alpha')
         if args.new_grid_dat:
             new_grid = resolve_existing_file(args.new_grid_dat, '--new-grid-dat',
-                                             base_dirs=(grid_dir, vh_dir))
+                                             base_dirs=resolve_bases)
             new_fname = os.path.basename(new_grid)
             new_old_gamma, _ = infer_old_grid_params(new_grid)
             if new_old_gamma is not None:
@@ -1638,30 +1681,39 @@ def main():
             new_candidates = []
 
             for f in sorted(os.listdir(grid_dir)):
-                if not f.endswith('.dat') or not f.startswith(stem_prefix) or dim_tag not in f:
+                if not f.endswith('.dat') or dim_tag not in f:
                     continue
-                after_dim = f.split(dim_tag, 1)[1]
-                m_old = _re.match(r'g([\d.]+)_a([\d.]+)\.dat$', after_dim)
-                m_new = _re.match(r'a([\d.]+)\.dat$', after_dim)
-                if m_old:
-                    old_candidates.append((os.path.join(grid_dir, f), f,
-                                           float(m_old.group(1)), float(m_old.group(2))))
-                elif m_new:
-                    new_candidates.append((os.path.join(grid_dir, f), f,
-                                           float(m_new.group(1))))
+                full = os.path.join(grid_dir, f)
+                if f.startswith('oldgrid_'):
+                    gamma, alpha = infer_old_grid_params(f)
+                    if gamma is None or alpha is None:
+                        continue
+                    if abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
+                        continue
+                    old_candidates.append((full, f, gamma, alpha))
+                elif f.startswith('newgrid_'):
+                    old_style_gamma, _ = infer_old_grid_params(f)
+                    if old_style_gamma is not None:
+                        continue
+                    alpha = infer_new_grid_alpha(f)
+                    if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
+                        continue
+                    new_candidates.append((full, f, ALPHA_vh if alpha is None else alpha))
 
             if not old_grid:
                 if len(old_candidates) == 0:
-                    sys.exit('FATAL: --auto: no OLD grid (with _g{{G}}_ in name) found for {} in {}'.format(
-                        stem_prefix + dim_tag, grid_dir))
+                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*.dat containing {} '
+                             'and *_g{{G}}_a{{A}}.dat (ALPHA={}) in {}'.format(
+                                 dim_tag, ALPHA_vh, grid_dir))
                 if len(old_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
                         len(old_candidates), ', '.join(c[1] for c in old_candidates)))
                 old_grid, old_fname, old_gamma, old_alpha = old_candidates[0]
             if not new_grid:
                 if len(new_candidates) == 0:
-                    sys.exit('FATAL: --auto: no NEW grid (Mode 3, without _g) found for {} in {}'.format(
-                        stem_prefix + dim_tag, grid_dir))
+                    sys.exit('FATAL: --auto: no NEW grid named newgrid_*.dat containing {} '
+                             '(ALPHA={}) in {}. Place newgrid_*.dat there or pass '
+                             '--new-grid-dat.'.format(dim_tag, ALPHA_vh, grid_dir))
                 if len(new_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
                         len(new_candidates), ', '.join(c[1] for c in new_candidates)))
@@ -2165,7 +2217,7 @@ def main():
         'created': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
     prov_tmp = prov_path + '.WRITING'
-    with open(prov_tmp, 'w') as fp:
+    with open(prov_tmp, 'w', encoding='utf-8') as fp:
         for k, v in prov.items():
             fp.write('{}={}\n'.format(k, v))
     os.rename(prov_tmp, prov_path)

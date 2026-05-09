@@ -128,9 +128,7 @@ checkrho.dat
 png_frames/
 result/monitor_convergence_*.{pdf,png}
 
-# simulation outputs
-Ustar_Force_record.dat
-timing_log.dat
-checkrho.dat
-png_frames/
-result/monitor_convergence_*.{pdf,png}
+# -----------------------------------------------------------------------------
+# 11. Phase2 checkpoint 二進制資料（只追蹤腳本，不追蹤 .bin）
+# -----------------------------------------------------------------------------
+phase2_generatecheckpoint/step_*/
