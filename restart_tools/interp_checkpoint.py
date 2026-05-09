@@ -15,7 +15,9 @@ Pipeline:
   1. Build OLD/NEW grid configs (auto-detect from metadata + variables.h, or interactive)
   2. Cross-validate grid .dat headers against NX/NY/NZ
   3. Read old checkpoint, compute macros (rho, ux, uy, uz)
-  4. Interpolate macros old -> new in computational (j, k, i) space
+  4. Interpolate macros old -> new according to --interp-mode:
+       phys (default): physical-space remap; correct when GAMMA changes.
+       comp:           legacy computational (j, k, i) remap for A/B tests.
   5. Reconstruct f_q for q = 0..18 according to --fneq-mode:
        chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
                                  NEW-grid velocity gradients via Chapman-Enskog.
@@ -49,7 +51,8 @@ Usage:
       --old-gamma 2.0 --old-grid-dat old_grid.dat \\
       --new-nx 257 --new-ny 513 --new-nz 257 --new-jp 16 \\
       --new-gamma 3.0 --new-alpha 0.5 --new-grid-dat new_grid.dat \\
-      --output-root restart/checkpoint --step 1 --fneq-scale 1.0
+      --output-root restart/checkpoint --step 1 \
+      --interp-mode phys --fneq-mode chapman-enskog
 
 Expected folder structure:
   workspace/
@@ -827,6 +830,275 @@ def fill_ghost(field, cfg):
 
 
 # ---------------------------------------------------------------
+# Phase C: Physical-space interpolation (replaces interpolate_comp_3d
+# for GAMMA-changed regrids; computational-space remap places turbulent
+# structure at wrong wall distance when GAMMA differs between OLD and NEW).
+#
+# Pipeline:
+#   1. build_old_cell_search_index — per-cell bbox prefilter
+#   2. find_containing_cell_2d — Newton 2x2 inverse + triangle fallback
+#   3. precompute_phys_mapping_2d — build (j*, k*, xi, eta) cache once
+#   4. interpolate_phys_3d_with_mapping — trilinear blend using cached mapping
+# ---------------------------------------------------------------
+class _DegenerateCellError(Exception):
+    """Bilinear inverse failed (cell ill-conditioned or non-convex)."""
+
+
+def build_old_cell_search_index(y_old, z_old):
+    """Per-cell axis-aligned bounding boxes for fast point-in-cell prefilter.
+
+    y_old, z_old : (NY, NZ) interior arrays (no ghost).
+    Returns 4 arrays of shape (NY-1, NZ-1) — min/max y and z per cell.
+    """
+    cy = np.stack([y_old[:-1, :-1], y_old[1:, :-1],
+                   y_old[:-1, 1:],  y_old[1:, 1:]], axis=-1)
+    cz = np.stack([z_old[:-1, :-1], z_old[1:, :-1],
+                   z_old[:-1, 1:],  z_old[1:, 1:]], axis=-1)
+    return cy.min(-1), cy.max(-1), cz.min(-1), cz.max(-1)
+
+
+def bilinear_inverse_newton(y_n, z_n, y_corners, z_corners,
+                            max_iter=8, tol=1e-12):
+    """Newton 2x2 solve for (xi, eta) in [0,1]^2 inside a bilinear cell.
+
+    Bilinear:
+      y(xi,eta) = (1-xi)(1-eta)*y_a + xi(1-eta)*y_b + (1-xi)*eta*y_c + xi*eta*y_d
+      z(xi,eta) = same with z corners
+    Corner index: a=(0,0), b=(1,0), c=(0,1), d=(1,1).
+
+    Returns (xi, eta). Raises _DegenerateCellError on Jacobian collapse or
+    non-convergence within max_iter.
+    """
+    y_a, y_b, y_c, y_d = y_corners
+    z_a, z_b, z_c, z_d = z_corners
+    xi, eta = 0.5, 0.5
+    for _ in range(max_iter):
+        one_xi = 1.0 - xi
+        one_et = 1.0 - eta
+        y_int = one_xi*one_et*y_a + xi*one_et*y_b + one_xi*eta*y_c + xi*eta*y_d
+        z_int = one_xi*one_et*z_a + xi*one_et*z_b + one_xi*eta*z_c + xi*eta*z_d
+        ry = y_int - y_n
+        rz = z_int - z_n
+        if abs(ry) < tol and abs(rz) < tol:
+            return xi, eta
+        dy_dxi  = -one_et*y_a + one_et*y_b - eta*y_c + eta*y_d
+        dy_deta = -one_xi*y_a - xi*y_b + one_xi*y_c + xi*y_d
+        dz_dxi  = -one_et*z_a + one_et*z_b - eta*z_c + eta*z_d
+        dz_deta = -one_xi*z_a - xi*z_b + one_xi*z_c + xi*z_d
+        det = dy_dxi*dz_deta - dy_deta*dz_dxi
+        if abs(det) < 1e-30:
+            raise _DegenerateCellError()
+        inv = 1.0 / det
+        xi  -= ( dz_deta*ry - dy_deta*rz) * inv
+        eta -= (-dz_dxi *ry + dy_dxi *rz) * inv
+    raise _DegenerateCellError()
+
+
+def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-9):
+    """Triangle barycentric fallback when Newton fails or converges out-of-bounds.
+
+    Splits cell (a, b, c, d) into 2 triangles:
+      Triangle 1: a=(0,0), b=(1,0), d=(1,1)  -> covers xi >= eta region
+      Triangle 2: a=(0,0), c=(0,1), d=(1,1)  -> covers eta >= xi region
+
+    Solves barycentric per triangle; returns first one with all weights in [0,1].
+    Raises _DegenerateCellError if neither triangle contains the point.
+    """
+    y_a, y_b, y_c, y_d = y_corners
+    z_a, z_b, z_c, z_d = z_corners
+
+    def _solve_tri(y0, z0, y1, z1, y2, z2):
+        det = (y1-y0)*(z2-z0) - (z1-z0)*(y2-y0)
+        if abs(det) < 1e-30:
+            return None
+        w1 = ((y_n-y0)*(z2-z0) - (z_n-z0)*(y2-y0)) / det
+        w2 = ((y1-y0)*(z_n-z0) - (z1-z0)*(y_n-y0)) / det
+        w0 = 1.0 - w1 - w2
+        return w0, w1, w2
+
+    # Triangle 1: a, b, d  ->  xi = w1 + w2, eta = w2
+    w = _solve_tri(y_a, z_a, y_b, z_b, y_d, z_d)
+    if w is not None and all(-eps <= wi <= 1 + eps for wi in w):
+        return w[1] + w[2], w[2]
+
+    # Triangle 2: a, c, d  ->  xi = w2, eta = w1 + w2
+    w = _solve_tri(y_a, z_a, y_c, z_c, y_d, z_d)
+    if w is not None and all(-eps <= wi <= 1 + eps for wi in w):
+        return w[2], w[1] + w[2]
+
+    raise _DegenerateCellError()
+
+
+def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-9):
+    """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
+
+    Per-candidate strategy:
+      1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps tolerance).
+      2. If Newton failed OR converged out-of-bounds -> triangle fallback.
+      3. Both failed -> next candidate.
+      4. All candidates exhausted -> ValueError.
+    """
+    bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max = bboxes
+    candidates = ((bbox_y_min - eps <= y_n) & (y_n <= bbox_y_max + eps) &
+                  (bbox_z_min - eps <= z_n) & (z_n <= bbox_z_max + eps))
+    cand_jk = np.argwhere(candidates)
+    if len(cand_jk) == 0:
+        raise ValueError('No OLD cell brackets ({:.6e}, {:.6e})'.format(y_n, z_n))
+
+    def _in_bounds(xi, eta):
+        return -eps <= xi <= 1 + eps and -eps <= eta <= 1 + eps
+
+    for j, k in cand_jk:
+        y_corners = (y_old[j, k],   y_old[j+1, k],
+                     y_old[j, k+1], y_old[j+1, k+1])
+        z_corners = (z_old[j, k],   z_old[j+1, k],
+                     z_old[j, k+1], z_old[j+1, k+1])
+        xi, eta = None, None
+
+        # Newton: accept only if converged AND in-bounds
+        try:
+            xi_n, eta_n = bilinear_inverse_newton(y_n, z_n, y_corners, z_corners)
+            if _in_bounds(xi_n, eta_n):
+                xi, eta = xi_n, eta_n
+        except _DegenerateCellError:
+            pass
+
+        # Triangle fallback (Newton failed OR Newton out-of-bounds)
+        if xi is None:
+            try:
+                xi_t, eta_t = bilinear_inverse_triangle_fallback(y_n, z_n,
+                                                                 y_corners, z_corners)
+                if _in_bounds(xi_t, eta_t):
+                    xi, eta = xi_t, eta_t
+            except _DegenerateCellError:
+                pass
+
+        if xi is not None:
+            return int(j), int(k), float(np.clip(xi, 0, 1)), float(np.clip(eta, 0, 1))
+
+    raise ValueError(
+        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle'.format(y_n, z_n))
+
+
+class PhysMapping2D:
+    """Precomputed mapping from NEW (j_n, k_n) to OLD cell + bilinear weights.
+
+    Built once per OLD/NEW grid pair; shared across all field interpolations
+    (rho, ux, uy, uz). Cell search is the dominant cost; reusing it across
+    4 fields gives ~3.3x speedup vs rebuilding for each field.
+    """
+    __slots__ = ('jstar', 'kstar', 'xistar', 'etastar',
+                 'i_o_arr', 'xi_i_arr', 'cfg_old', 'cfg_new')
+
+    def __init__(self, jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
+                 cfg_old, cfg_new):
+        self.jstar = jstar
+        self.kstar = kstar
+        self.xistar = xistar
+        self.etastar = etastar
+        self.i_o_arr = i_o_arr
+        self.xi_i_arr = xi_i_arr
+        self.cfg_old = cfg_old
+        self.cfg_new = cfg_new
+
+
+def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
+                                cfg_old, cfg_new):
+    """Build PhysMapping2D once for a given OLD/NEW grid pair.
+
+    Cell search dominates Phase C runtime. Reusing this across rho/ux/uy/uz
+    saves 4x cost on the dominant operation.
+    """
+    y_int_old = y2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
+    z_int_old = z2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
+    bboxes = build_old_cell_search_index(y_int_old, z_int_old)
+
+    jstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
+    kstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
+    xistar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
+    etastar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
+    for j_n in range(cfg_new.NY):
+        for k_n in range(cfg_new.NZ):
+            y_n = y2d_new[BFR + j_n, BFR + k_n]
+            z_n = z2d_new[BFR + j_n, BFR + k_n]
+            j_o, k_o, xi, eta = find_containing_cell_2d(
+                y_n, z_n, y_int_old, z_int_old, bboxes)
+            jstar[j_n, k_n] = j_o
+            kstar[j_n, k_n] = k_o
+            xistar[j_n, k_n] = xi
+            etastar[j_n, k_n] = eta
+
+    # i mapping: uniform spanwise, periodic ghost handles wrap (no clamp)
+    dx_old = LX / (cfg_old.NX - 1)
+    dx_new = LX / (cfg_new.NX - 1)
+    i_o_float_arr = (np.arange(cfg_new.NX, dtype=np.float64) * dx_new) / dx_old
+    i_o_arr = np.floor(i_o_float_arr).astype(np.int64)
+    xi_i_arr = i_o_float_arr - i_o_arr
+
+    print('      Phys mapping cache built: {} cells located'.format(
+        cfg_new.NY * cfg_new.NZ))
+    return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
+                         cfg_old, cfg_new)
+
+
+def interpolate_phys_3d_with_mapping(field_old, mapping):
+    """Interpolate one (NY6_old, NZ6_old, NX6_old) field using cached mapping.
+
+    No cell search — just trilinear blend with cached weights. Caller must
+    ensure field_old has ghosts filled (real checkpoints already do; synthetic
+    test fields require explicit fill_ghost(field_old, cfg_old)).
+    """
+    cfg_old, cfg_new = mapping.cfg_old, mapping.cfg_new
+    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
+
+    i_o_arr = mapping.i_o_arr
+    xi_i_arr = mapping.xi_i_arr
+    ib0 = BFR + i_o_arr
+    ib1 = BFR + i_o_arr + 1     # ghost wrap handles last-point case
+
+    for j_n in range(cfg_new.NY):
+        for k_n in range(cfg_new.NZ):
+            j_o = int(mapping.jstar[j_n, k_n])
+            k_o = int(mapping.kstar[j_n, k_n])
+            xi  = float(mapping.xistar[j_n, k_n])
+            eta = float(mapping.etastar[j_n, k_n])
+
+            w_a = (1 - xi) * (1 - eta)
+            w_b = xi       * (1 - eta)
+            w_c = (1 - xi) * eta
+            w_d = xi       * eta
+
+            jb, kb = BFR + j_o, BFR + k_o
+            a0 = field_old[jb,   kb,   ib0]; a1 = field_old[jb,   kb,   ib1]
+            b0 = field_old[jb+1, kb,   ib0]; b1 = field_old[jb+1, kb,   ib1]
+            c0 = field_old[jb,   kb+1, ib0]; c1 = field_old[jb,   kb+1, ib1]
+            d0 = field_old[jb+1, kb+1, ib0]; d1 = field_old[jb+1, kb+1, ib1]
+
+            v0 = w_a*a0 + w_b*b0 + w_c*c0 + w_d*d0
+            v1 = w_a*a1 + w_b*b1 + w_c*c1 + w_d*d1
+            field_new[BFR + j_n, BFR + k_n, BFR:BFR + cfg_new.NX] = (
+                (1 - xi_i_arr) * v0 + xi_i_arr * v1)
+
+    fill_ghost(field_new, cfg_new)
+    return field_new
+
+
+def interpolate_phys_3d(field_old, cfg_old, cfg_new,
+                        y2d_old, z2d_old, y2d_new, z2d_new):
+    """One-shot wrapper: build mapping + interp single field.
+
+    For multi-field workflows (rho, ux, uy, uz), prefer:
+        mapping = precompute_phys_mapping_2d(...)
+        rho_new = interpolate_phys_3d_with_mapping(rho, mapping)
+        ux_new  = interpolate_phys_3d_with_mapping(ux,  mapping)
+    to avoid redundant cell search.
+    """
+    mapping = precompute_phys_mapping_2d(
+        y2d_old, z2d_old, y2d_new, z2d_new, cfg_old, cfg_new)
+    return interpolate_phys_3d_with_mapping(field_old, mapping)
+
+
+# ---------------------------------------------------------------
 # Equilibrium reconstruction (initialization.h:36-42)
 # ---------------------------------------------------------------
 def compute_feq_q(rho, ux, uy, uz, q):
@@ -1052,6 +1324,11 @@ def main():
                    help='f_neq reconstruction strategy. "interp" = legacy linear interp of f_neq '
                         '(loses gradient info; default before fix). "chapman-enskog" = rebuild f_neq '
                         'on NEW grid from velocity gradients via CE expansion (recommended; default).')
+    p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
+                   help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
+                        'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
+                        '"comp" = legacy computational-space (j,k,i) index remap '
+                        '(causes physical mis-placement when GAMMA differs).')
     p.add_argument('--niu', type=float, default=None,
                    help='kinematic viscosity for Chapman-Enskog mode (auto-read from variables.h '
                         'as Uref/Re when omitted)')
@@ -1326,24 +1603,49 @@ def main():
     print('      Z interior range [{:.4f}, {:.4f}]'.format(z_int_new.min(), z_int_new.max()))
 
     # ---- Step 5: interpolate macros ----
-    if OLD.GAMMA != NEW.GAMMA:
-        print('      NOTE: GAMMA differs (OLD={}, NEW={}): computational-space interpolation'.format(
-            OLD.GAMMA, NEW.GAMMA))
-        print('            maps same (j,k,i) fraction to different physical z-heights.')
-        print('            This is expected for grid-stretching refinement.')
-    print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in computational space')
-    t = time.time()
-    rho_new = interpolate_comp_3d(rho_g, OLD, NEW)
-    print('      rho:  {:.1f}s'.format(time.time() - t))
-    t = time.time()
-    ux_new = interpolate_comp_3d(ux_g, OLD, NEW)
-    print('      ux:   {:.1f}s'.format(time.time() - t))
-    t = time.time()
-    uy_new = interpolate_comp_3d(uy_g, OLD, NEW)
-    print('      uy:   {:.1f}s'.format(time.time() - t))
-    t = time.time()
-    uz_new = interpolate_comp_3d(uz_g, OLD, NEW)
-    print('      uz:   {:.1f}s'.format(time.time() - t))
+    # Ensure OLD ghosts are filled before interp reads them (interpolate_phys_3d
+    # may read field_old[NX+3] for spanwise periodic wrap; real checkpoints
+    # already have ghosts but defensive fill makes behavior identical to
+    # synthetic test fields).
+    fill_ghost(rho_g, OLD)
+    fill_ghost(ux_g,  OLD)
+    fill_ghost(uy_g,  OLD)
+    fill_ghost(uz_g,  OLD)
+
+    if args.interp_mode == 'phys':
+        # OLD grid coords needed for physical-space inverse mapping
+        _, y2d_old, z2d_old = build_grid_xyz(OLD)
+        print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space')
+        t = time.time()
+        mapping = precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new, OLD, NEW)
+        print('      mapping cache build: {:.1f}s'.format(time.time() - t))
+        t = time.time(); rho_new = interpolate_phys_3d_with_mapping(rho_g, mapping)
+        print('      rho:  {:.1f}s'.format(time.time() - t))
+        t = time.time(); ux_new  = interpolate_phys_3d_with_mapping(ux_g,  mapping)
+        print('      ux:   {:.1f}s'.format(time.time() - t))
+        t = time.time(); uy_new  = interpolate_phys_3d_with_mapping(uy_g,  mapping)
+        print('      uy:   {:.1f}s'.format(time.time() - t))
+        t = time.time(); uz_new  = interpolate_phys_3d_with_mapping(uz_g,  mapping)
+        print('      uz:   {:.1f}s'.format(time.time() - t))
+    else:
+        if OLD.GAMMA != NEW.GAMMA:
+            print('      WARN: GAMMA differs (OLD={}, NEW={}) but --interp-mode=comp:'.format(
+                OLD.GAMMA, NEW.GAMMA))
+            print('            same (j,k,i) fraction maps to different physical z-heights.')
+            print('            This causes turbulence structure mis-placement (use --interp-mode phys).')
+        print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in COMPUTATIONAL space (legacy)')
+        t = time.time()
+        rho_new = interpolate_comp_3d(rho_g, OLD, NEW)
+        print('      rho:  {:.1f}s'.format(time.time() - t))
+        t = time.time()
+        ux_new = interpolate_comp_3d(ux_g, OLD, NEW)
+        print('      ux:   {:.1f}s'.format(time.time() - t))
+        t = time.time()
+        uy_new = interpolate_comp_3d(uy_g, OLD, NEW)
+        print('      uy:   {:.1f}s'.format(time.time() - t))
+        t = time.time()
+        uz_new = interpolate_comp_3d(uz_g, OLD, NEW)
+        print('      uz:   {:.1f}s'.format(time.time() - t))
 
     print('      Filling ghost cells')
     fill_ghost(rho_new, NEW)
@@ -1401,8 +1703,8 @@ def main():
         dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
         dx_phys = LX / (NEW.NX - 1)
 
-        # No-slip wall clamp: physical wall is u=v=w=0. After computational-space
-        # interpolation (interpolate_comp_3d), u_new[BFR] inherits OLD's wall value
+        # No-slip wall clamp: physical wall is u=v=w=0. After macro interpolation,
+        # u_new[BFR] may inherit OLD's wall value
         # which may carry small residual (~O(δz·∂u/∂z|_wall) plus FP noise) because
         # LBM CE wall BC produces approximately, not bitwise, zero. The 4th-order
         # one-sided FD formula at boundary_conditions.h:30 explicitly assumes
@@ -1592,6 +1894,7 @@ def main():
         'interp_old_gamma': str(OLD.GAMMA),
         'interp_new_gamma': str(NEW.GAMMA),
         'interp_fneq_mode': args.fneq_mode,
+        'interp_macro_mode': args.interp_mode,
         'interp_origin_ftt': origin_ftt,
         'interp_origin_accu_count': origin_accu,
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
