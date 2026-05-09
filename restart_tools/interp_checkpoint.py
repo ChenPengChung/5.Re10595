@@ -111,8 +111,9 @@ NEW = None
 # Configuration helpers (dual-mode: project / standalone)
 # ---------------------------------------------------------------
 def parse_variables_h(path):
-    """Parse #define NX/NY/NZ/jp/GAMMA/ALPHA/LX/LY/LZ/H_HILL from variables.h."""
-    targets = {'NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'LX', 'LY', 'LZ', 'H_HILL'}
+    """Parse selected numeric #define values from variables.h."""
+    targets = {'NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'CFL',
+               'LX', 'LY', 'LZ', 'H_HILL'}
     int_keys = {'NX', 'NY', 'NZ', 'jp'}
     defines = {}
     with open(path) as f:
@@ -1341,6 +1342,58 @@ def compute_inverse_metric_2d_fornberg(y_2d, z_2d):
     return dj_dy, dj_dz, dk_dy, dk_dz
 
 
+# ---------------------------------------------------------------
+# Phase B: real dt_global computation (mirrors gilbm/precompute.h:78-115
+# ComputeGlobalTimeStep). Replaces the dt_global=-1.0 placeholder that
+# bypasses fileIO.h:658 Phase 5 drift check.
+# ---------------------------------------------------------------
+def compute_dt_global_gilbm(cfg, cfl=0.5, metric_order=6):
+    """Mirror gilbm/precompute.h:78-115 ComputeGlobalTimeStep.
+
+    dt_global = cfl / max|c~|, where max is over (eta, xi, zeta) and D3Q19 dirs:
+      c~_eta(α)  = e_x[α] / dx           (spanwise, uniform)
+                   max over α gives 1/dx (since |e_x| in {0, 1})
+      c~_xi(α)   = xi_y · e_y[α] + xi_z · e_z[α]    (per α, per (j,k))
+      c~_zeta(α) = zeta_y · e_y[α] + zeta_z · e_z[α] (per α, per (j,k))
+
+    Returns (dt_global, max_component_label) where max_component_label is one
+    of "eta", "xi (alpha=N)", or "zeta (alpha=N)" for audit.
+
+    metric_order: 6 mirrors solver (recommended, drift check < 1e-6);
+                  2 is legacy 2nd-order (drift may exceed 1e-6).
+    """
+    _, y_2d, z_2d = build_grid_xyz(cfg)
+    if metric_order == 6:
+        dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d_fornberg(y_2d, z_2d)
+    else:
+        dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y_2d, z_2d)
+
+    sl = (slice(BFR, BFR + cfg.NY), slice(BFR, BFR + cfg.NZ))
+    zeta_y, zeta_z = dk_dy[sl], dk_dz[sl]
+    xi_y,   xi_z   = dj_dy[sl], dj_dz[sl]
+    dx = LX / (cfg.NX - 1)
+
+    # spanwise: c~_eta = max over α of |e_x[α]| / dx = 1/dx
+    max_c = 1.0 / dx
+    max_component = 'eta'
+
+    # streamwise / wall-normal: scan D3Q19 non-zero shifts (α in [3, 18]).
+    # α=0 is rest, α=1,2 are pure spanwise (handled by c_eta).
+    for alpha in range(3, 19):
+        ey, ez = E[alpha, 1], E[alpha, 2]
+        c_xi_max   = float(np.abs(xi_y   * ey + xi_z   * ez).max())
+        c_zeta_max = float(np.abs(zeta_y * ey + zeta_z * ez).max())
+        if c_xi_max > max_c:
+            max_c, max_component = c_xi_max, 'xi (alpha={})'.format(alpha)
+        if c_zeta_max > max_c:
+            max_c, max_component = c_zeta_max, 'zeta (alpha={})'.format(alpha)
+
+    if max_c <= 0.0:
+        raise ValueError('compute_dt_global_gilbm: max|c~|=0 (degenerate grid)')
+
+    return cfl / max_c, max_component
+
+
 def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
     """Compute (∂u/∂x, ∂u/∂y, ∂u/∂z) on interior for one velocity component.
 
@@ -1468,6 +1521,12 @@ def main():
                    help='Order of FD for inverse metric used in CE f_neq reconstruction. '
                         '6 mirrors solver (j-central + k-adaptive Fornberg, '
                         'gilbm/metric_terms.h). 2 is legacy 2nd-order central.')
+    p.add_argument('--cfl', type=float, default=None,
+                   help='CFL lambda for dt_global computation. Defaults to variables.h CFL '
+                        'when available, otherwise 0.5.')
+    p.add_argument('--skip-drift-check', action='store_true',
+                   help='Write dt_global=-1.0 to bypass solver Phase 5 drift check '
+                        '(fileIO.h:658). Debug only; production runs should leave this off.')
     p.add_argument('--niu', type=float, default=None,
                    help='kinematic viscosity for Chapman-Enskog mode (auto-read from variables.h '
                         'as Uref/Re when omitted)')
@@ -1617,6 +1676,14 @@ def main():
         args.old_grid_dat = old_grid
         args.new_grid_dat = new_grid
         args.variables_h = vh_path
+
+    if args.cfl is None:
+        args.cfl = 0.5
+        vh_for_cfl = getattr(args, 'variables_h', None) or find_variables_h()
+        if vh_for_cfl and os.path.isfile(vh_for_cfl):
+            cfl_from_vh = parse_variables_h(vh_for_cfl).get('CFL')
+            if cfl_from_vh is not None:
+                args.cfl = float(cfl_from_vh)
 
     args.old_dir = resolve_old_dir(args.old_dir)
 
@@ -1968,18 +2035,31 @@ def main():
 
     # ---- Step 8: metadata + atomic rename ----
     print('[7/8] Writing new metadata.dat')
-    # NOTE on dt_global:
-    #   The runtime computes dt_global = CFL / max|c_tilde| from Jacobian metric
-    #   terms (gilbm/precompute.h:ComputeGlobalTimeStep), NOT from the simple
-    #   minSize formula in variables.h. They differ by a factor of ~0.4-0.5,
-    #   so any naively-written value would trip Phase 5 drift check
-    #   (fileIO.h:658, |drift| > 1e-6 -> MPI_Abort).
+    # dt_global handling (Phase B):
+    #   compute_dt_global_gilbm mirrors gilbm/precompute.h:78-115
+    #   ComputeGlobalTimeStep:  dt = CFL / max|c~|  over (eta, xi, zeta) and
+    #   D3Q19 dirs. With --metric-order 6 (default), the metric matches solver
+    #   to ~6th order accuracy, so dt_saved should pass solver Phase 5 drift
+    #   check (fileIO.h:658: |dt_runtime - dt_saved| < 1e-6).
     #
-    #   We deliberately write dt_global=-1.0 to trigger the legacy-format
-    #   skip path (fileIO.h:650): "metadata.dat 無 dt_global 欄位, 跳過漂移檢查".
-    #   The runtime will compute its own dt_global from the new grid metrics
-    #   on startup; dt_saved is only used for the drift guardrail and is
-    #   discarded thereafter.
+    #   --skip-drift-check writes -1.0 to trigger fileIO.h:650 legacy skip path
+    #   ("metadata.dat 無 dt_global 欄位, 跳過漂移檢查") for debugging.
+    if args.skip_drift_check:
+        dt_for_meta = '-1.0'
+        dt_max_component = 'SKIPPED'
+        print('      WARN: --skip-drift-check; dt_global=-1.0; '
+              'solver Phase 5 drift check WILL be skipped.')
+    else:
+        dt_real, dt_max_component = compute_dt_global_gilbm(
+            NEW, cfl=args.cfl, metric_order=args.metric_order)
+        dt_for_meta = '{:.15e}'.format(dt_real)
+        dx_new = LX / (NEW.NX - 1)
+        print('      dt_global = {:.6e}  (CFL={}, metric_order={}, dx={:.6e})'.format(
+            dt_real, args.cfl, args.metric_order, dx_new))
+        print('      dt limited by {} component'.format(dt_max_component))
+        if dt_max_component == 'eta':
+            print('      (eta dominates: spanwise dx is the tightest constraint; '
+                  'expected if y/z metric c~ < 1/dx; not an error)')
     naive_minsize = compute_minsize(NEW)
     origin_meta_path = os.path.join(args.old_dir, 'metadata.dat')
     # Preserve controller state from origin checkpoint to avoid the F* step
@@ -2031,7 +2111,7 @@ def main():
         'error_prev': controller_preserved['error_prev'],
         'ctrl_initialized': controller_preserved['ctrl_initialized'],
         'gehrke_activated': controller_preserved['gehrke_activated'],
-        'dt_global': '-1.0',
+        'dt_global': dt_for_meta,
         'gpu_time_ms': '0',
         'cv_count': '0',
         'interp_source': args.old_dir,
@@ -2042,6 +2122,8 @@ def main():
         'interp_fneq_mode': args.fneq_mode,
         'interp_macro_mode': args.interp_mode,
         'interp_metric_order': str(args.metric_order),
+        'interp_cfl': str(args.cfl),
+        'interp_dt_max_component': dt_max_component,
         'interp_origin_ftt': origin_ftt,
         'interp_origin_accu_count': origin_accu,
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
@@ -2061,7 +2143,9 @@ def main():
     write_metadata(os.path.join(writing_dir, 'metadata.dat'), new_meta)
     print('      Force={:.6e}  step={}  jp={}  grid_dims={}'.format(
         Force_value, args.step, NEW.JP, new_meta['grid_dims']))
-    print('      dt_global written as -1.0 (skip Phase 5 drift check; runtime computes its own dt)')
+    print('      dt_global written as {}'.format(dt_for_meta))
+    if args.skip_drift_check:
+        print('      Phase 5 drift check skipped by request; runtime computes its own dt')
     print('      (naive minSize for reference: {:.6e}; runtime Imamura dt typically ~0.4-0.5x of this)'.format(naive_minsize))
 
     print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, out_dir))
