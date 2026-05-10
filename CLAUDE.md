@@ -96,6 +96,63 @@ missing.
 **DO NOT** start the animation pipeline (`animation/pipeline.py`,
 `animation/png_frames/`, `animation/flow_*.mp4`). The watcher in this project
 is convergence + benchmark plots only — no per-VTK rendering, no MP4 encoding.
+
+## Short-video snapshot shortcut (triggered by user command)
+
+When the user types **`periodicHill-shortvedio`** (or `periodichill-shortvideo`,
+the user's typo is canonical), build a **bounded** ~3-second animation from
+the upcoming VTKs without disturbing the solver. The default budget is
+**100 frames @ 33 fps ≈ 3.0 s**. Optional integer arg overrides the count
+(e.g. `periodicHill-shortvedio 130` → ~3.9 s). Hard upper cap is 200 frames
+to prevent runaway login-node load.
+
+### Sequence
+
+1. **Pre-flight**:
+   - Confirm `result/velocity_merged_*.vtk` is being produced (solver running).
+   - `mkdir -p animation/png_frames`.
+   - Pick a tag: `T=$(date +%Y%m%d_%H%M%S)`. Final outputs go to
+     `animation/short_${T}_cont.mp4` / `animation/short_${T}_RD.mp4`.
+2. **Bounded snapshot loop** — implement as a `Monitor` task with a counter
+   and an explicit `break` when N frames are rendered:
+   - Track `RENDERED=0`. Newest-first scan of `result/velocity_merged_*.vtk`,
+     skip steps already rendered. For each candidate: wait 5s for size
+     stability, re-verify the file still exists (rolling retention may have
+     purged it), then call:
+     ```bash
+     python3 animation/pipeline.py "$vtk" "$step" --width 1920 --fps 33 \
+         --codec libx264 --pix-fmt yuv420p
+     ```
+     If `rc==0`, increment `RENDERED`. Append a one-line status update.
+   - When `RENDERED >= N`, **stop the monitor** (`TaskStop`) — do not loop
+     forever.
+3. **Final rename**:
+   ```bash
+   mv animation/flow_cont.mp4 animation/short_${T}_cont.mp4
+   mv animation/flow_RD.mp4   animation/short_${T}_RD.mp4
+   ```
+   Also surface the final MP4 path back to the user.
+
+### Constraints (the reason for the bound)
+
+- Each frame render takes ~7–15 s on login node. 100 frames ≈ 12–25 min wall
+  time — tolerable as a one-shot task. >200 frames is rejected.
+- Login-node rendering is decoupled from compute-node simulation, so this
+  shortcut **does not** stretch FTT progress directly. The bound exists so
+  one accidental long video doesn't tie up login CPU/IO during the entire
+  simulation lifetime.
+- VTK rolling retention keeps only the newest ~10 files. The shortcut
+  therefore captures the **next** N VTKs as they appear, NOT past ones —
+  and uses a 5 s stat-stable check so half-written VTKs are skipped.
+- `live/monitor_latest.png` and `hill_watcher.sh` keep running normally.
+  This shortcut is **additive**, not a replacement for the watcher.
+
+### Pairs with `periodichill-testing`
+
+Trigger `periodicHill-shortvedio` only after the cold-start has been running
+long enough that VTKs are actively being produced (typically a few minutes
+post-submit). Aborting mid-shortcut: `TaskStop` the monitor; the partial
+MP4 in `animation/flow_*.mp4` will reflect whatever frames were rendered.
 7. **Trust main's auto-grid path** — when the solver enters and finds no
    `J_Frohlich/adaptive_<stem>_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.dat`, it will
    invoke `python3 J_Frohlich/grid_zeta_tool.py --auto` itself. Do not race
