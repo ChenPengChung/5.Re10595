@@ -367,26 +367,6 @@ __device__ void algorithm1_step1_GTS(
         mz_stream  += GILBM_e[q][2] * f_streamed;
     }
 
-
-    const bool is_wall = (is_bottom || is_top);
-
-    // ── Wall CE regularization (v3) ──
-#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
-    if (is_wall) {
-#if USE_GUO_FORCING
-        const double half_Fdt_wall = 0.5 * GILBM_dt * Force[0];
-#else
-        const double half_Fdt_wall = 0.0;
-#endif
-        WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
-                         rho_stream, rho_wall,
-                         du_dk, dv_dk, dw_dk,
-                         zeta_y_val, zeta_z_val,
-                         omega_global, dt_global,
-                         half_Fdt_wall);
-    }
-#endif
-
     // ── STEP 1.5: Macroscopic (mass correction) ──
     if (i < NX6 - 4 && j < NYD6 - 4) {
         rho_stream += rho_modify[0];
@@ -409,9 +389,8 @@ __device__ void algorithm1_step1_GTS(
     // ── STEP 2: Collision (MRT/BGK) — 直接在 register 做, 零 DRAM 往返 ──
     // ★ 方案B: 原 Step3 kernel 的碰撞融合進來, 消除 f_new 的 19R+19W
     double f_out[19];
-    const double Force_collision = is_wall ? 0.0 : Force[0];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
-                        GILBM_s_visc_global, GILBM_dt, Force_collision);
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
 
     // ── Write: 碰後分佈 → f_post_write (唯一 DRAM 寫入) ──
     for (int q = 0; q < 19; q++)
@@ -719,26 +698,6 @@ __device__ void algorithm1_step1_GTS_smem(
 
     if (!valid) return;
 
-
-    const bool is_wall = (is_bottom || is_top);
-
-    // ── Wall CE regularization (v3) ──
-#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
-    if (is_wall) {
-#if USE_GUO_FORCING
-        const double half_Fdt_wall = 0.5 * GILBM_dt * Force[0];
-#else
-        const double half_Fdt_wall = 0.0;
-#endif
-        WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
-                         rho_stream, rho_wall,
-                         du_dk, dv_dk, dw_dk,
-                         zeta_y_val, zeta_z_val,
-                         omega_global, dt_global,
-                         half_Fdt_wall);
-    }
-#endif
-
     // ── STEP 1.5: Macroscopic (mass correction) ──
     if (i < NX6 - 4 && j < NYD6 - 4) {
         rho_stream += rho_modify[0];
@@ -760,9 +719,8 @@ __device__ void algorithm1_step1_GTS_smem(
 
     // ── STEP 2: Collision ──
     double f_out[19];
-    const double Force_collision = is_wall ? 0.0 : Force[0];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
-                        GILBM_s_visc_global, GILBM_dt, Force_collision);
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
 
     for (int q = 0; q < 19; q++)
         f_post_write[q * GRID_SIZE + index] = f_out[q];

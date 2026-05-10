@@ -106,40 +106,9 @@ __device__ double ChapmanEnskogBC(
 
     // CE 理論: f^neq ∝ -(τ-0.5)·Δt = -3ν (Navier-Stokes 一致)
     // omega_global = τ = 0.5 + 3ν/Δt, 因此 (τ-0.5)·Δt = 3ν
-    C_alpha *= -(omega_global) * dt_global;
+    C_alpha *= -(omega_global - 0.5) * dt_global;
     double f_eq_atwall = GILBM_W[alpha] * rho_wall;
     return f_eq_atwall * (1.0 + C_alpha);
 }
 
-
-// ════════════════════════════════════════════════════════════════════════════
-// Phase 1b: wall no-slip CE regularization (v3)
-// ════════════════════════════════════════════════════════════════════════════
-// v2: 全部 f_arr = f_eq(rho, u=0) → 消除假動量 ✓ 但丟失壁面剪應力 ✗
-//     壁面發出零應力分佈 → k=4 收不到正確 τ_w → L_inf ~ 6.5e-4
-//
-// v3（本版）: 全部 f_arr = CE 重建 W_q·ρ·(1+C_q)
-//   C_q 編碼壁面速度梯度 → 正確剪應力 f_neq
-//   Σ W_q·C_q = 0 (質量守恆)   Σ W_q·e_q·C_q = 0 (u=0 保持)
-//   消除假動量 ✓   保留壁面剪應力 ✓
-__device__ __forceinline__ void WallCERegularize(
-    double f_arr[19],
-    double &mx_stream,
-    double &my_stream,
-    double &mz_stream,
-    double &rho_stream,
-    double rho_wall,
-    double du_dk, double dv_dk, double dw_dk,
-    double zeta_y_val, double zeta_z_val,
-    double omega_global, double dt_global,
-    double half_Fdt
-) {
-    for (int q = 0; q < 19; q++)
-        f_arr[q] = ChapmanEnskogBC(q, rho_wall, du_dk, dv_dk, dw_dk,
-                                    zeta_y_val, zeta_z_val, omega_global, dt_global);
-    rho_stream = rho_wall;
-    mx_stream = 0.0;
-    my_stream = -half_Fdt;
-    mz_stream = 0.0;
-}
 #endif
