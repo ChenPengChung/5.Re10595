@@ -373,17 +373,11 @@ __device__ void algorithm1_step1_GTS(
     // ── Wall CE regularization (v3) ──
 #ifndef DISABLE_WALL_MOMENTUM_CORRECTION
     if (is_wall) {
-#if USE_GUO_FORCING
-        const double half_Fdt_wall = 0.5 * GILBM_dt * Force[0];
-#else
-        const double half_Fdt_wall = 0.0;
-#endif
         WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
                          rho_stream, rho_wall,
                          du_dk, dv_dk, dw_dk,
                          zeta_y_val, zeta_z_val,
-                         omega_global, dt_global,
-                         half_Fdt_wall);
+                         omega_global, dt_global);
     }
 #endif
 
@@ -406,12 +400,20 @@ __device__ void algorithm1_step1_GTS(
     double w_local = mz_stream / rho_local;
 #endif
 
+    // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
+    if (is_wall) {
+        u_local = 0.0;
+        v_local = 0.0;
+        w_local = 0.0;
+    }
+#endif
+
     // ── STEP 2: Collision (MRT/BGK) — 直接在 register 做, 零 DRAM 往返 ──
     // ★ 方案B: 原 Step3 kernel 的碰撞融合進來, 消除 f_new 的 19R+19W
     double f_out[19];
-    const double Force_collision = is_wall ? 0.0 : Force[0];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
-                        GILBM_s_visc_global, GILBM_dt, Force_collision);
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
 
     // ── Write: 碰後分佈 → f_post_write (唯一 DRAM 寫入) ──
     for (int q = 0; q < 19; q++)
@@ -725,17 +727,11 @@ __device__ void algorithm1_step1_GTS_smem(
     // ── Wall CE regularization (v3) ──
 #ifndef DISABLE_WALL_MOMENTUM_CORRECTION
     if (is_wall) {
-#if USE_GUO_FORCING
-        const double half_Fdt_wall = 0.5 * GILBM_dt * Force[0];
-#else
-        const double half_Fdt_wall = 0.0;
-#endif
         WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
                          rho_stream, rho_wall,
                          du_dk, dv_dk, dw_dk,
                          zeta_y_val, zeta_z_val,
-                         omega_global, dt_global,
-                         half_Fdt_wall);
+                         omega_global, dt_global);
     }
 #endif
 
@@ -758,11 +754,19 @@ __device__ void algorithm1_step1_GTS_smem(
     double w_local = mz_stream / rho_local;
 #endif
 
+    // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
+    if (is_wall) {
+        u_local = 0.0;
+        v_local = 0.0;
+        w_local = 0.0;
+    }
+#endif
+
     // ── STEP 2: Collision ──
     double f_out[19];
-    const double Force_collision = is_wall ? 0.0 : Force[0];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
-                        GILBM_s_visc_global, GILBM_dt, Force_collision);
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
 
     for (int q = 0; q < 19; q++)
         f_post_write[q * GRID_SIZE + index] = f_out[q];

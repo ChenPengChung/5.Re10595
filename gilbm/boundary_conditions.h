@@ -131,15 +131,14 @@ __device__ __forceinline__ void WallCERegularize(
     double rho_wall,
     double du_dk, double dv_dk, double dw_dk,
     double zeta_y_val, double zeta_z_val,
-    double omega_global, double dt_global,
-    double half_Fdt
+    double omega_global, double dt_global
 ) {
     for (int q = 0; q < 19; q++)
         f_arr[q] = ChapmanEnskogBC(q, rho_wall, du_dk, dv_dk, dw_dk,
                                     zeta_y_val, zeta_z_val, omega_global, dt_global);
     rho_stream = rho_wall;
     mx_stream = 0.0;
-    my_stream = -half_Fdt;
+    my_stream = 0.0;
     mz_stream = 0.0;
 }
 #endif
