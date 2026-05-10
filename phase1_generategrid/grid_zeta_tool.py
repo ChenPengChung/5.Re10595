@@ -2026,8 +2026,13 @@ def auto_generate(variables_h_path, script_dir=None):
       4. Redistribute vertically with variable gamma
       5. Write output
 
-    Output filename matches C code snprintf:
-      GRID_DAT_DIR/adaptive_{GRID_DAT_REF stem}_I{NY}_J{NZ}_a{ALPHA:.1f}.dat
+    GRID PIPELINE REGULATION:
+      Phase 1 工具的輸出固定寫到 phase1_generategrid/ (= script_dir)，
+      絕不寫到 J_Frohlich/ — 後者只屬於 main pipeline 的生產網格。
+      Reference grid (Frohlich .dat) 仍可從 J_Frohlich/ 讀取 (read-only)。
+
+    Output path:
+      phase1_generategrid/adaptive_{GRID_DAT_REF stem}_I{NY}_J{NZ}_a{ALPHA:.1f}.dat
     """
     if script_dir is None:
         script_dir = Path(__file__).parent
@@ -2052,21 +2057,25 @@ def auto_generate(variables_h_path, script_dir=None):
     NJ = NZ
     NZ_cells = NZ - 1
 
-    # Resolve GRID_DAT_DIR (output directory, relative to variables.h)
-    grid_dir_name = params.get("GRID_DAT_DIR", "J_Frohlich")
-    grid_dir = vh_dir / grid_dir_name
-    if not grid_dir.is_dir():
-        grid_dir = script_dir  # fallback
+    # ── Output dir: 固定為 phase1_generategrid/，不污染 J_Frohlich/ ──
+    out_dir = script_dir
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    # Output filename: must match C code snprintf
     grid_key = Path(ref_name).stem   # "3.fine grid"
     out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_a{alpha:.1f}.dat"
-    out_path = grid_dir / out_name
+    out_path = out_dir / out_name
 
-    # Resolve GRID_DAT_REF (Frohlich reference, may not exist for Mode 3)
-    ref_path = grid_dir / ref_name
-    if not ref_path.exists():
-        ref_path = script_dir / ref_name
+    # ── Reference grid 解析: 允許從 J_Frohlich/ 或 phase1_generategrid/ 讀 (read-only) ──
+    j_frohlich_dir_name = params.get("GRID_DAT_DIR", "J_Frohlich")
+    ref_candidates = [
+        vh_dir / j_frohlich_dir_name / ref_name,
+        script_dir / ref_name,
+    ]
+    ref_path = next((p for p in ref_candidates if p.exists()),
+                    ref_candidates[0])  # fallback (will fail downstream)
+
+    # 後續 Mode 2/3 使用的 grid_dir = 輸出目錄
+    grid_dir = out_dir
 
     # ── Detect mode ──
     has_utau = ("UTAU_BOT_DAT" in params and "UTAU_TOP_DAT" in params)

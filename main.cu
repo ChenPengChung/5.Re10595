@@ -359,6 +359,25 @@ int main(int argc, char *argv[])
 
     // ════════════════════════════════════════════════════════════════
     //  Stage 1: 外部網格讀取 (取代舊的 GenerateMesh_Y / GenerateMesh_Z)
+    //
+    //  ── GRID PIPELINE REGULATION (規範) ─────────────────────────────
+    //
+    //  Production (本 stage 唯一接觸的路徑):
+    //    J_Frohlich/grid_zeta_tool.py    ← main 偵測到網格不存在/過期時呼叫
+    //    J_Frohlich/adaptive_*.dat        ← main 讀取的網格檔
+    //    J_Frohlich/grid_data_*.txt       ← 配套診斷檔
+    //
+    //  Phase 1/2 (與本 stage 完全隔離, main 永不觸碰):
+    //    phase1_generategrid/grid_zeta_tool.py
+    //        → 獨立工具, 輸出留在 phase1_generategrid/, 僅供 Phase 2 使用
+    //    phase2_generatecheckpoint/interp_checkpoint.py
+    //        → 唯一讀取 phase1_generategrid/ 輸出的程式
+    //
+    //  兩條 pipeline 的目的不同, 切勿混用 (執行路徑 / 輸出目錄 / 工具腳本).
+    //
+    //  檔名約定 (Python 與 C 必須一致):
+    //    adaptive_<grid_stem>_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.dat
+    //    grid_data_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.txt
     // ════════════════════════════════════════════════════════════════
 
     // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在 + 新鮮度檢查
@@ -371,9 +390,9 @@ int main(int argc, char *argv[])
 
         char grid_dat_path[512];
         snprintf(grid_dat_path, sizeof(grid_dat_path),
-                 "%s/adaptive_%s_I%d_J%d_a%.1f.dat",
+                 "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat",
                  GRID_DAT_DIR, grid_ref_stem,
-                 NY, NZ, (double)ALPHA);
+                 NY, NZ, (double)GAMMA, (double)ALPHA);
 
         // need_generate: 0=OK, 1=missing, 2=stale(input newer), 3=diagnostics missing
         int need_generate = 0;
@@ -388,7 +407,7 @@ int main(int argc, char *argv[])
             if (stat(grid_dat_path, &grid_st) == 0) {
                 const char *deps[] = {
                     "variables.h",
-                    "restart_tools/grid_zeta_tool.py",
+                    GRID_DAT_DIR "/grid_zeta_tool.py",
                     GRID_DAT_DIR "/" GRID_DAT_REF,
 #ifdef UTAU_BOT_DAT
                     GRID_DAT_DIR "/" UTAU_BOT_DAT,
@@ -415,7 +434,7 @@ int main(int argc, char *argv[])
                 if (!need_generate) {
                     char prefix[512];
                     snprintf(prefix, sizeof(prefix),
-                             "adaptive_%s_I%d_J%d_", grid_ref_stem, NY, NZ);
+                             "adaptive_%s_I%d_J%d_g%.2f_", grid_ref_stem, NY, NZ, (double)GAMMA);
                     int pfx_len = (int)strlen(prefix);
                     DIR *dp = opendir(GRID_DAT_DIR);
                     if (dp) {
@@ -443,8 +462,8 @@ int main(int argc, char *argv[])
             if (!need_generate) {
                 char diag_path[512];
                 snprintf(diag_path, sizeof(diag_path),
-                         "%s/grid_data_I%d_J%d_a%.1f.txt",
-                         GRID_DAT_DIR, NY, NZ, (double)ALPHA);
+                         "%s/grid_data_I%d_J%d_g%.2f_a%.1f.txt",
+                         GRID_DAT_DIR, NY, NZ, (double)GAMMA, (double)ALPHA);
                 if (stat(diag_path, &dep_st) != 0)
                     need_generate = 3;
             }
@@ -467,14 +486,14 @@ int main(int argc, char *argv[])
 
                 char cmd[1024];
                 snprintf(cmd, sizeof(cmd),
-                         "python3 restart_tools/grid_zeta_tool.py --auto");
+                         "python3 %s/grid_zeta_tool.py --auto", GRID_DAT_DIR);
                 fprintf(stderr, "  Running: %s\n", cmd);
                 int ret = system(cmd);
                 if (ret != 0) {
                     fprintf(stderr, "\n");
                     fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
                     fprintf(stderr, "║  FATAL: Python grid generation failed (exit=%d)         ║\n", ret);
-                    fprintf(stderr, "║  Please check restart_tools/grid_zeta_tool.py           ║\n");
+                    fprintf(stderr, "║  Check: %s/grid_zeta_tool.py\n", GRID_DAT_DIR);
                     fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
                     MPI_Abort(MPI_COMM_WORLD, 1);
                 }

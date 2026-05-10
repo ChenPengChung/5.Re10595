@@ -265,16 +265,22 @@ def auto_detect_from_metadata(meta_path):
 
 
 def _grid_dat_search_dirs(grid_dat_dir=None):
+    """
+    GRID PIPELINE REGULATION:
+      Phase 2 只認 phase1_generategrid/ 與 script_dir 自身。
+      不再回退 J_Frohlich/ (main pipeline 的目錄, 不在 phase2 路徑上).
+      grid_dat_dir 仍接受顯式 CLI 傳入 (explicit override)。
+    """
     script_dir = os.path.dirname(os.path.abspath(__file__))
+    project_dir = os.path.abspath(os.path.join(script_dir, '..'))
     dirs = []
     if grid_dat_dir:
         dirs.append(grid_dat_dir)
         dirs.append(os.path.join(script_dir, '..', grid_dat_dir))
     dirs.extend([
-        'J_Frohlich',
-        os.path.join(script_dir, '..', 'J_Frohlich'),
-        '../J_Frohlich',
-        '.',
+        os.path.join(project_dir, 'phase1_generategrid'),
+        os.path.join(script_dir, '..', 'phase1_generategrid'),
+        '../phase1_generategrid',
     ])
     seen = set()
     result = []
@@ -1607,19 +1613,22 @@ def main():
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
 
+        # ── GRID PIPELINE REGULATION ──────────────────────────────────
+        # Phase 2 (initial-data-point checkpoint 生成) 的觸發條件：
+        #   phase1_generategrid/ 內必須同時有 oldgrid_*.dat 與 newgrid_*.dat
+        #   匹配 variables.h 的 NY/NZ/ALPHA。
+        # 只有這條路徑會被走；不再 fallback 到 J_Frohlich/。
+        # 若任一條件不符 → 印訊息退出，由使用者人工準備後再觸發。
+        # ──────────────────────────────────────────────────────────────
         vh_dir = os.path.dirname(os.path.abspath(vh_path))
         phase1_grid_dir = os.path.join(vh_dir, 'phase1_generategrid')
-        grid_dat_dir_name = str_defs.get('GRID_DAT_DIR', 'J_Frohlich')
-        legacy_grid_dir = os.path.join(vh_dir, grid_dat_dir_name)
-        if os.path.isdir(phase1_grid_dir):
-            grid_dir = phase1_grid_dir
-        elif os.path.isdir(legacy_grid_dir):
-            grid_dir = legacy_grid_dir
-        elif os.path.isdir(grid_dat_dir_name):
-            grid_dir = grid_dat_dir_name
-        else:
-            sys.exit('FATAL: --auto: grid directory not found. Expected phase1_generategrid/ '
-                     'or GRID_DAT_DIR={} near {}'.format(grid_dat_dir_name, vh_path))
+        if not os.path.isdir(phase1_grid_dir):
+            sys.exit(
+                'FATAL: --auto: phase1_generategrid/ 不存在於 {}.\n'
+                '  Phase 2 觸發條件: phase1_generategrid/ 內需有 oldgrid_*.dat + newgrid_*.dat.\n'
+                '  J_Frohlich/ 屬於 main pipeline，不在 phase2 路徑上 (regulation).'
+                .format(vh_dir))
+        grid_dir = phase1_grid_dir
 
         NY_vh = int(vh['NY'])
         NZ_vh = int(vh['NZ'])

@@ -649,11 +649,14 @@ if [ "$MODE_COLD" -eq 0 ]; then
     [ "$MODE_REGRID" -eq 1 ] && _NEED_GRID=1
     [ "$HAS_CKPT" -eq 1 ] && _NEED_GRID=1
     if [ "$_NEED_GRID" -eq 1 ]; then
-        echo "[preflight-A] 確認 NEW grid 存在 (grid_zeta_tool.py --auto)..."
-        if python3 restart_tools/grid_zeta_tool.py --auto; then
+        # GRID PIPELINE REGULATION:
+        #   生產用網格工具固定為 J_Frohlich/grid_zeta_tool.py
+        #   phase1_generategrid/ 與 phase2_generatecheckpoint/ 不在這條路徑
+        echo "[preflight-A] 確認 NEW grid 存在 (J_Frohlich/grid_zeta_tool.py --auto)..."
+        if python3 J_Frohlich/grid_zeta_tool.py --auto; then
             echo "[preflight-A] Grid OK"
         else
-            echo "[FATAL] Grid generation 失敗 (grid_zeta_tool.py --auto exit=$?)"
+            echo "[FATAL] Grid generation 失敗 (J_Frohlich/grid_zeta_tool.py --auto exit=$?)"
             exit 1
         fi
     fi

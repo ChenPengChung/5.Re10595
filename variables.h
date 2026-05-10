@@ -108,7 +108,7 @@
 // ── 非均勻網格拉伸 ──
 //   本專案使用 variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere)
 //   GAMMA: 取 gamma(y) 場最大值作為 minSize 參考 (保守值)
-//          實際網格由 restart_tools/grid_zeta_tool.py Mode 3 生成
+//          實際網格由 J_Frohlich/grid_zeta_tool.py Mode 3 生成 (main 自動觸發)
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
@@ -181,7 +181,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     40.0    // 統計量開始累積
+#define     FTT_STATS_START     50.0    // 統計量開始累積
 #define     FTT_STOP            130.0   // 模擬結束
 
 // VTK 輸出等級
