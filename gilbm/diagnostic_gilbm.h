@@ -265,10 +265,10 @@ void DiagnoseGILBM_Phase1(
     double uy8 = (f8[3]+f8[7]+f8[8]+f8[15]+f8[17] - (f8[4]+f8[9]+f8[10]+f8[16]+f8[18])) / rho8;
     double uz8 = (f8[5]+f8[11]+f8[12]+f8[15]+f8[16] - (f8[6]+f8[13]+f8[14]+f8[17]+f8[18])) / rho8;
 
-    // 6th-order: du/dk = (360*u₁ - 450*u₂ + 400*u₃ - 225*u₄ + 72*u₅ - 10*u₆) / 60
-    double du_x_dk = (360.0*ux3 - 450.0*ux4 + 400.0*ux5 - 225.0*ux6 + 72.0*ux7 - 10.0*ux8) / 60.0;
-    double du_y_dk = (360.0*uy3 - 450.0*uy4 + 400.0*uy5 - 225.0*uy6 + 72.0*uy7 - 10.0*uy8) / 60.0;
-    double du_z_dk = (360.0*uz3 - 450.0*uz4 + 400.0*uz5 - 225.0*uz6 + 72.0*uz7 - 10.0*uz8) / 60.0;
+    // 2nd-order one-sided FD (u_wall=0): (4u₁ - u₂)/2, O(h²)
+    double du_x_dk = (4.0*ux3 - ux4) / 2.0;
+    double du_y_dk = (4.0*uy3 - uy4) / 2.0;
+    double du_z_dk = (4.0*uz3 - uz4) / 2.0;
 
     bc_rho_wall = rho3;
     printf("  rho_wall (from k=4) = %.10f\n", rho3);
