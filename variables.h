@@ -81,7 +81,7 @@
 #define     NX      129         // 展向格點
 #define     NY      257         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
 #define     NZ      129         // 法向格點
-#define     jp      16           //   GPU 數量 (流向分割)
+#define     jp      8           //   GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -112,7 +112,7 @@
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               4.3217
+#define     GAMMA               2.0
 #define     ALPHA               0.5
 
 #define     CFL                 0.5
@@ -131,7 +131,7 @@
 // ── 外部網格 (Fröhlich Periodic Hill grid) ──
 #define     GRID_DAT_DIR        "J_Frohlich"
 #define     GRID_DAT_REF        "3.fine grid.dat"
-
+/*
 // ── Variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere) ──
 //   定義 UTAU_BOT_DAT / UTAU_TOP_DAT 後, --auto 自動使用 Mode 3
 //   不定義則 fallback 到 Mode 2 (Poisson + 均勻 GAMMA)
@@ -139,7 +139,7 @@
 #define     UTAU_TOP_DAT        "28.Re5600_j257_zplus_top_spanavg_2nd.dat"
 #define     UTAU_RE             5600        // u_tau 資料來源的 Re
 #define     ZP_TARGET           0.9         // z+ 設計目標 (< 1.0 含安全裕度)
-
+*/
 
 // ================================================================
 //  §4. 物理參數
