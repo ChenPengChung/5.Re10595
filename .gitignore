@@ -129,6 +129,7 @@ png_frames/
 result/monitor_convergence_*.{pdf,png}
 
 # -----------------------------------------------------------------------------
-# 11. Phase2 checkpoint 二進制資料（只追蹤腳本，不追蹤 .bin）
+# 11. Phase2 checkpoint 二進制資料（只追蹤腳本與 metadata，不追蹤 .bin）
 # -----------------------------------------------------------------------------
-phase2_generatecheckpoint/step_*/
+phase2_generatecheckpoint/step_*/*.bin
+phase2_generatecheckpoint/step_*/__pycache__/
