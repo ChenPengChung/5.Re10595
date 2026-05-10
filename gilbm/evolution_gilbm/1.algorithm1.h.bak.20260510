@@ -190,9 +190,9 @@ __device__ void algorithm1_step1_GTS(
         double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
         double w7 = w_out[idx7], w8 = w_out[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
-        du_dk = (4.0*u3 - u4) / 2.0;
-        dv_dk = (4.0*v3 - v4) / 2.0;
-        dw_dk = (4.0*w3 - w4) / 2.0;
+        du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
+        dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
+        dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
         rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
@@ -208,9 +208,9 @@ __device__ void algorithm1_step1_GTS(
         double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
         double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
-        du_dk = -(4.0*um1 - um2) / 2.0;
-        dv_dk = -(4.0*vm1 - vm2) / 2.0;
-        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+        du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
+        dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
+        dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
         rho_wall = rho_out_arr[idxm1];
     }
 
@@ -367,26 +367,6 @@ __device__ void algorithm1_step1_GTS(
         mz_stream  += GILBM_e[q][2] * f_streamed;
     }
 
-
-    const bool is_wall = (is_bottom || is_top);
-
-    // ── Wall CE regularization (v3) ──
-#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
-    if (is_wall) {
-#if USE_GUO_FORCING
-        const double half_Fdt_wall = 0.5 * GILBM_dt * Force[0];
-#else
-        const double half_Fdt_wall = 0.0;
-#endif
-        WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
-                         rho_stream, rho_wall,
-                         du_dk, dv_dk, dw_dk,
-                         zeta_y_val, zeta_z_val,
-                         omega_global, dt_global,
-                         half_Fdt_wall);
-    }
-#endif
-
     // ── STEP 1.5: Macroscopic (mass correction) ──
     if (i < NX6 - 4 && j < NYD6 - 4) {
         rho_stream += rho_modify[0];
@@ -409,9 +389,8 @@ __device__ void algorithm1_step1_GTS(
     // ── STEP 2: Collision (MRT/BGK) — 直接在 register 做, 零 DRAM 往返 ──
     // ★ 方案B: 原 Step3 kernel 的碰撞融合進來, 消除 f_new 的 19R+19W
     double f_out[19];
-    const double Force_collision = is_wall ? 0.0 : Force[0];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
-                        GILBM_s_visc_global, GILBM_dt, Force_collision);
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
 
     // ── Write: 碰後分佈 → f_post_write (唯一 DRAM 寫入) ──
     for (int q = 0; q < 19; q++)
@@ -496,9 +475,9 @@ __device__ void algorithm1_step1_GTS_smem(
         double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
         double w7 = w_out[idx7], w8 = w_out[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
-        du_dk = (4.0*u3 - u4) / 2.0;
-        dv_dk = (4.0*v3 - v4) / 2.0;
-        dw_dk = (4.0*w3 - w4) / 2.0;
+        du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
+        dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
+        dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
         rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
@@ -514,9 +493,9 @@ __device__ void algorithm1_step1_GTS_smem(
         double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
         double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
-        du_dk = -(4.0*um1 - um2) / 2.0;
-        dv_dk = -(4.0*vm1 - vm2) / 2.0;
-        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+        du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
+        dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
+        dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
         rho_wall = rho_out_arr[idxm1];
     }
 
@@ -719,26 +698,6 @@ __device__ void algorithm1_step1_GTS_smem(
 
     if (!valid) return;
 
-
-    const bool is_wall = (is_bottom || is_top);
-
-    // ── Wall CE regularization (v3) ──
-#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
-    if (is_wall) {
-#if USE_GUO_FORCING
-        const double half_Fdt_wall = 0.5 * GILBM_dt * Force[0];
-#else
-        const double half_Fdt_wall = 0.0;
-#endif
-        WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
-                         rho_stream, rho_wall,
-                         du_dk, dv_dk, dw_dk,
-                         zeta_y_val, zeta_z_val,
-                         omega_global, dt_global,
-                         half_Fdt_wall);
-    }
-#endif
-
     // ── STEP 1.5: Macroscopic (mass correction) ──
     if (i < NX6 - 4 && j < NYD6 - 4) {
         rho_stream += rho_modify[0];
@@ -760,9 +719,8 @@ __device__ void algorithm1_step1_GTS_smem(
 
     // ── STEP 2: Collision ──
     double f_out[19];
-    const double Force_collision = is_wall ? 0.0 : Force[0];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
-                        GILBM_s_visc_global, GILBM_dt, Force_collision);
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
 
     for (int q = 0; q < 19; q++)
         f_post_write[q * GRID_SIZE + index] = f_out[q];
