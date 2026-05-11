@@ -192,7 +192,7 @@ BENCHMARK_SOURCES = {
         'dir_name':  'MGLET (Breuer et al. 2009)',
         'label':     r'$\mathit{MGLET}$-Breuer $\mathit{et\,al.}$',
         'delimiter': None,
-        'color':     '#DAA520',   # yellow (goldenrod)
+        'color':     '#228B22',   # green (forest green)
         'marker':    'D',         # diamond (body-fitted FVM family)
         'markersize': 3.5,
         'markevery':  4,
@@ -201,10 +201,20 @@ BENCHMARK_SOURCES = {
         'dir_name':  'MGLET (Manhart et al. 2011)',
         'label':     r'$\mathit{MGLET}$-Manhart $\mathit{et\,al.}$',
         'delimiter': None,
-        'color':     '#DAA520',   # yellow (goldenrod) — same as MGLET family
+        'color':     '#228B22',   # green (forest green) — same as MGLET family
         'marker':    'D',         # diamond — same as MGLET family
         'markersize': 3.5,
         'markevery':  4,
+    },
+    'Krank': {
+        'dir_name':  'Benjamin Krank et al. 2018',
+        'label':     r'Krank $\mathit{et\,al.}$',
+        'delimiter': ',',
+        'color':     '#7B2D8E',   # purple
+        'marker':    'o',         # circle
+        'markersize': 3.5,
+        'markevery':  4,
+        'format':    'krank',
     },
     'Experiment': {
         'dir_name':  'Exp. (Rapp et al. 2011)',
@@ -287,12 +297,13 @@ print(f"[INFO] Re = {Re}  {'(laminar mode)' if LAMINAR else '(turbulent mode)'}"
 # 層流: 100% (全部顯示)
 # 紊流: 使用者選擇每個 benchmark 的顯示密度 (%)
 _DEFAULT_DENSITY = {
-    'LESOCC':        10,
-    'MGLET':         10,
-    'MGLET_Manhart': 10,
-    'Experiment':    10,
-    'LBM':           10,
-    'ISLBM':         10,
+    'LESOCC':        6,
+    'MGLET':         2.5,
+    'MGLET_Manhart': 2.5,
+    'Krank':         20,
+    'Experiment':    80,
+    'LBM':           6,
+    'ISLBM':         6,
 }
 
 def subsample_uniform(y_arr, data_arr, density_pct):
@@ -338,7 +349,7 @@ def _init_benchmark_density(bench_sources_list, is_laminar):
             avg = src_stats.get(src_id, 0)
             d = density[src_id]
             n_show = max(2, int(round(avg * d / 100))) if avg > 0 else 0
-            print(f"  {info['label']:30s}  {d:3d}%  ({avg} -> ~{n_show} pts/station)")
+            print(f"  {info['label']:30s}  {d:>5g}%  ({avg} -> ~{n_show} pts/station)")
         print("="*60 + "\n")
         return density
 
@@ -733,6 +744,19 @@ def load_station_file(filepath, delimiter=None, fmt=None, xh_station=0.0,
                     "V": data[:, 3],        # w/Uref (wall-normal, code w → VTK V)
                     "uu": None, "vv": None, "uv": None, "k": None,
                 }
+        elif fmt == 'krank':
+            data = np.loadtxt(filepath, comments='%', delimiter=',')
+            if data.ndim < 2 or data.shape[1] < 9:
+                return None
+            return {
+                "y":  data[:, 0],
+                "U":  data[:, 1],
+                "V":  data[:, 2],
+                "uu": data[:, 4],
+                "vv": data[:, 5],
+                "uv": data[:, 7],
+                "k":  data[:, 8],
+            }
         else:
             data = np.loadtxt(filepath, comments="#", delimiter=delimiter)
     except Exception:
@@ -1449,7 +1473,7 @@ def _place_hill_legend(ax, field_label, scale, Re_val, legend_pos='bottom-left',
     # Target: each row occupies ~(MAX_Y1 - MAX_Y0) / n_rows in data coords
     row_h_data = (MAX_Y1 - MAX_Y0) / n_rows
     row_h_inch = (row_h_data / yr) * axes_h_inch
-    fontsize = max(8.0, min(row_h_inch * 72 * 0.80, 18.0))
+    fontsize = max(8.0, min(row_h_inch * 72 * 0.80, 12.0))
 
     # ── Layout constants (data-coord offsets relative to box left) ──
     PAD = 0.03            # internal padding around text content
