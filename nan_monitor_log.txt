@@ -1,7 +1,3 @@
-[2026-05-11 17:04:39] [INFO] nan_monitor started for /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild
-[2026-05-11 17:04:39] [INFO] Ma_max limit=0.15, poll=2.0s
-[2026-05-11 17:04:39] [INFO] No slurm log found yet, waiting...
-[2026-05-11 17:04:49] [INFO] No slurm log found yet, waiting...
-[2026-05-11 17:04:59] [INFO] No slurm log found yet, waiting...
-[2026-05-11 17:05:09] [INFO] Tailing: slurm_47287.log
-[2026-05-11 18:04:04] [INFO] Job ended normally (RC=124 SIGUSR1 chain)
+[2026-05-11 22:58:28] [INFO] nan_monitor started for /home/s8313697/5.Re10595/Edit4_test2_transbound
+[2026-05-11 22:58:28] [INFO] Ma_max limit=0.15, poll=2.0s
+[2026-05-11 22:58:28] [INFO] Tailing: slurm_47417.log
