@@ -3,6 +3,9 @@
 #include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <mpi.h>
 #include <stdarg.h>
 #include <signal.h>        // 必須在 variables.h 之前 — variables.h 定義 #define cs (1.0/sqrt(3))
@@ -356,58 +359,158 @@ int main(int argc, char *argv[])
 
     // ════════════════════════════════════════════════════════════════
     //  Stage 1: 外部網格讀取 (取代舊的 GenerateMesh_Y / GenerateMesh_Z)
+    //
+    //  ── GRID PIPELINE REGULATION (規範) ─────────────────────────────
+    //
+    //  Production (本 stage 唯一接觸的路徑):
+    //    J_Frohlich/grid_zeta_tool.py    ← main 偵測到網格不存在/過期時呼叫
+    //    J_Frohlich/adaptive_*.dat        ← main 讀取的網格檔
+    //    J_Frohlich/grid_data_*.txt       ← 配套診斷檔
+    //
+    //  Phase 1/2 (與本 stage 完全隔離, main 永不觸碰):
+    //    phase1_generategrid/grid_zeta_tool.py
+    //        → 獨立工具, 輸出留在 phase1_generategrid/, 僅供 Phase 2 使用
+    //    phase2_generatecheckpoint/interp_checkpoint.py
+    //        → 唯一讀取 phase1_generategrid/ 輸出的程式
+    //
+    //  兩條 pipeline 的目的不同, 切勿混用 (執行路徑 / 輸出目錄 / 工具腳本).
+    //
+    //  檔名約定 (Python 與 C 必須一致):
+    //    adaptive_<grid_stem>_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.dat
+    //    grid_data_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.txt
     // ════════════════════════════════════════════════════════════════
 
-    // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在
+    // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在 + 新鮮度檢查
     {
+        // 從 GRID_DAT_REF 擷取 stem (去掉 .dat 副檔名)
+        char grid_ref_stem[256];
+        strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+        grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+        { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
         char grid_dat_path[512];
         snprintf(grid_dat_path, sizeof(grid_dat_path),
                  "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat",
-                 GRID_DAT_DIR, "3.fine grid",
+                 GRID_DAT_DIR, grid_ref_stem,
                  NY, NZ, (double)GAMMA, (double)ALPHA);
-                 // NY = 流向格點數, NZ = 法向格點數, I=NY, J=NZ
 
+        // need_generate: 0=OK, 1=missing, 2=stale(input newer), 3=diagnostics missing
+        int need_generate = 0;
         FILE *grid_test = fopen(grid_dat_path, "r");
+
         if (!grid_test) {
-            // 網格檔不存在 → rank 0 自動呼叫 Python 生成
+            need_generate = 1;
+        } else {
+            fclose(grid_test);
+            // 新鮮度: 全部輸入依賴 vs 格點檔 mtime
+            struct stat grid_st, dep_st;
+            if (stat(grid_dat_path, &grid_st) == 0) {
+                const char *deps[] = {
+                    "variables.h",
+                    GRID_DAT_DIR "/grid_zeta_tool.py",
+                    GRID_DAT_DIR "/" GRID_DAT_REF,
+#ifdef UTAU_BOT_DAT
+                    GRID_DAT_DIR "/" UTAU_BOT_DAT,
+#endif
+#ifdef UTAU_TOP_DAT
+                    GRID_DAT_DIR "/" UTAU_TOP_DAT,
+#endif
+                    NULL
+                };
+                for (int d = 0; deps[d]; d++) {
+                    int sr = stat(deps[d], &dep_st);
+                    if (sr != 0) {
+                        // 依賴檔遺失 → 觸發 regen, 讓 --auto fail loud
+                        need_generate = 2;
+                        if (myid == 0)
+                            fprintf(stderr, "[GRID] dep missing: %s\n", deps[d]);
+                    } else if (dep_st.st_mtime > grid_st.st_mtime) {
+                        need_generate = 2;
+                        if (myid == 0)
+                            fprintf(stderr, "[GRID] stale: %s is newer\n", deps[d]);
+                    }
+                }
+                // base topology: 掃描同 grid_key 同尺寸的其他 adaptive grid
+                if (!need_generate) {
+                    char prefix[512];
+                    snprintf(prefix, sizeof(prefix),
+                             "adaptive_%s_I%d_J%d_g%.2f_", grid_ref_stem, NY, NZ, (double)GAMMA);
+                    int pfx_len = (int)strlen(prefix);
+                    DIR *dp = opendir(GRID_DAT_DIR);
+                    if (dp) {
+                        struct dirent *ent;
+                        char fpath[512];
+                        while ((ent = readdir(dp)) != NULL) {
+                            if (strncmp(ent->d_name, prefix, pfx_len) != 0) continue;
+                            snprintf(fpath, sizeof(fpath), "%s/%s",
+                                     GRID_DAT_DIR, ent->d_name);
+                            if (strcmp(fpath, grid_dat_path) == 0) continue;
+                            if (stat(fpath, &dep_st) == 0 &&
+                                dep_st.st_mtime > grid_st.st_mtime) {
+                                need_generate = 2;
+                                if (myid == 0)
+                                    fprintf(stderr, "[GRID] stale: base topology %s is newer\n",
+                                            ent->d_name);
+                                break;
+                            }
+                        }
+                        closedir(dp);
+                    }
+                }
+            }
+            // 診斷檔檢查: grid_data 不存在 → 補齊
+            if (!need_generate) {
+                char diag_path[512];
+                snprintf(diag_path, sizeof(diag_path),
+                         "%s/grid_data_I%d_J%d_g%.2f_a%.1f.txt",
+                         GRID_DAT_DIR, NY, NZ, (double)GAMMA, (double)ALPHA);
+                if (stat(diag_path, &dep_st) != 0)
+                    need_generate = 3;
+            }
+        }
+
+        if (need_generate) {
             if (myid == 0) {
                 fprintf(stderr, "\n");
                 fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
-                fprintf(stderr, "║  Grid file not found — auto-generating ...              ║\n");
-                fprintf(stderr, "║  Expected: %s\n", grid_dat_path);
-                fprintf(stderr, "║  NY=%d (nodes), NZ=%d (nodes) → I=%d, J=%d, GAMMA=%.2f, ALPHA=%.1f\n",
-                        NY, NZ, NY, NZ, (double)GAMMA, (double)ALPHA);
+                if (need_generate == 1)
+                    fprintf(stderr, "║  Grid NOT FOUND — auto-generating ...                  ║\n");
+                else if (need_generate == 2)
+                    fprintf(stderr, "║  Grid STALE (input dependency newer) — regenerating ... ║\n");
+                else
+                    fprintf(stderr, "║  Grid OK, diagnostics missing — regenerating ...        ║\n");
+                fprintf(stderr, "║  Target: %s\n", grid_dat_path);
+                fprintf(stderr, "║  NY=%d, NZ=%d, ALPHA=%.1f, REF=%s\n",
+                        NY, NZ, (double)ALPHA, GRID_DAT_REF);
                 fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
 
                 char cmd[1024];
                 snprintf(cmd, sizeof(cmd),
-                         "python3 %s/grid_zeta_tool.py --auto",
-                         GRID_DAT_DIR);
+                         "python3 %s/grid_zeta_tool.py --auto", GRID_DAT_DIR);
                 fprintf(stderr, "  Running: %s\n", cmd);
                 int ret = system(cmd);
                 if (ret != 0) {
                     fprintf(stderr, "\n");
                     fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
                     fprintf(stderr, "║  FATAL: Python grid generation failed (exit=%d)         ║\n", ret);
-                    fprintf(stderr, "║  Please check %s/grid_zeta_tool.py             ║\n", GRID_DAT_DIR);
+                    fprintf(stderr, "║  Check: %s/grid_zeta_tool.py\n", GRID_DAT_DIR);
                     fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
                     MPI_Abort(MPI_COMM_WORLD, 1);
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
 
-            // 重新嘗試開啟
-            grid_test = fopen(grid_dat_path, "r");
-            if (!grid_test) {
-                if (myid == 0) {
-                    fprintf(stderr, "FATAL: Grid file still not found after generation: %s\n",
+            FILE *grid_verify = fopen(grid_dat_path, "r");
+            if (!grid_verify) {
+                if (myid == 0)
+                    fprintf(stderr, "FATAL: Grid file not found after generation: %s\n",
                             grid_dat_path);
-                }
                 MPI_Abort(MPI_COMM_WORLD, 1);
             }
+            fclose(grid_verify);
         }
-        fclose(grid_test);
-        if (myid == 0) printf("GRID: Found external grid file: %s\n", grid_dat_path);
+        if (myid == 0) printf("GRID: %s external grid: %s\n",
+                              need_generate ? "Generated" : "Found", grid_dat_path);
     }
 
     // 1.2 生成均勻 x 座標 (不變)
@@ -942,13 +1045,51 @@ int main(int argc, char *argv[])
                        FTT_restart, FTT_STATS_START, accu_count);
             accu_count = 0;
             stage1_announced = false;
+
+            // Zero all 33 MeanVars+MeanDerivatives arrays (LOAD block overwrites memory.h zeros)
+            if ((int)TBSWITCH) {
+                CHECK_CUDA( cudaMemset(U,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(V,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(W,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(P,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PP, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UVW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDZ2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDZ2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDZ2, 0, tavg_bytes_gate) );
+            }
+            // Tavg mirrors (host + device)
             memset(u_tavg_h, 0, tavg_bytes_gate);
             memset(v_tavg_h, 0, tavg_bytes_gate);
             memset(w_tavg_h, 0, tavg_bytes_gate);
             CHECK_CUDA( cudaMemset(u_tavg_d, 0, tavg_bytes_gate) );
             CHECK_CUDA( cudaMemset(v_tavg_d, 0, tavg_bytes_gate) );
             CHECK_CUDA( cudaMemset(w_tavg_d, 0, tavg_bytes_gate) );
-            // Also clear vorticity mean
+            // Vorticity (host + device)
             if (ox_tavg_h) {
                 memset(ox_tavg_h, 0, tavg_bytes_gate);
                 memset(oy_tavg_h, 0, tavg_bytes_gate);
@@ -957,7 +1098,6 @@ int main(int argc, char *argv[])
                 CHECK_CUDA( cudaMemset(oy_tavg_d, 0, tavg_bytes_gate) );
                 CHECK_CUDA( cudaMemset(oz_tavg_d, 0, tavg_bytes_gate) );
             }
-            // TBSWITCH arrays already cudaMemset'd to 0 in AllocateMemory
         }
     }
 
@@ -1188,7 +1328,7 @@ int main(int argc, char *argv[])
 
         // ===== Mid-step mass correction (between even and odd) =====
         // 由 SKIP_MIDSTEP_MASSCORR 開關控制 (variables.h)
-        // Edit8 也有此區塊 (main.cu line 1034-1057)
+        // Mid-step mass correction 區塊
         // 包含: ReduceRhoSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
         // ★ 這是全域 MPI barrier, MPI_Wtime 計時可測量其實際開銷
 #if !SKIP_MIDSTEP_MASSCORR

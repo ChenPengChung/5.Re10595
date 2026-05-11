@@ -27,16 +27,17 @@
 //   + ⑥ (3·c_{iz}²−1)   · (dw/dk)·(dk/dz)        α=z, β=z  (δ_{zz}=1)
 //   }
 //
-// Wall velocity gradient: 4th-order one-sided finite difference (u[wall]=0):
-//   du/dk|wall = (48*u₁ - 36*u₂ + 16*u₃ - 3*u₄) / 12 + O(h⁴)
-//   Bottom: u₁=u[k=4], u₂=u[k=5], u₃=u[k=6], u₄=u[k=7]
-//   Top:    u₁=u[k=NZ6-5], ..., u₄=u[k=NZ6-8] (reversed sign)
+// Wall velocity gradient: 6th-order one-sided finite difference (u[wall]=0):
+//   du/dk|wall = (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60 + O(h⁶)
+//   Bottom: u₁=u[k=4], u₂=u[k=5], u₃=u[k=6], u₄=u[k=7], u₅=u[k=8], u₆=u[k=9]
+//   Top:    u₁=u[k=NZ6-5], ..., u₆=u[k=NZ6-10] (reversed sign)
 //
-//   Derivation: solve c₁·n + c₂·2n + c₃·3n + c₄·4n = f' with f'',f''',f'''' = 0
-//   Coefficients: c = {4, -3, 4/3, -1/4} → common denominator (48,-36,16,-3)/12
-//   Leading error: -(1/5)·h⁴·f⁽⁵⁾(0) (h=1 in computational space)
+//   Derivation: solve Σ cᵢ·iⁿ = δ_{n,1} for n=1..6 (with u(0)=0 known)
+//   Coefficients: (360, -450, 400, -225, 72, -10) / 60
+//   Leading error: O(h⁶) — Σ cᵢ·i⁷ ≠ 0 enters at h⁷
 //
-//   [v1 was 2nd-order: (4*u₁ - u₂)/2, error = -(1/3)·f'''(0), insufficient for Re≥700]
+//   [v1 was 2nd-order: (4*u₁ - u₂)/2, error = -(1/3)·h²·f'''(0), insufficient for Re≥700]
+//   [v2 was 4th-order: (48u₁ - 36u₂ + 16u₃ - 3u₄)/12, error = O(h⁴)]
 //
 // Wall density: rho_wall = rho[k=3] (zero normal pressure gradient, Imamura S3.2)
 
@@ -113,15 +114,11 @@ __device__ double ChapmanEnskogBC(
 
 
 // ════════════════════════════════════════════════════════════════════════════
-// Phase 1b: wall no-slip CE regularization (v3)
+// Phase 1b: wall no-slip CE regularization 
 // ════════════════════════════════════════════════════════════════════════════
-// v2: 全部 f_arr = f_eq(rho, u=0) → 消除假動量 ✓ 但丟失壁面剪應力 ✗
-//     壁面發出零應力分佈 → k=4 收不到正確 τ_w → L_inf ~ 6.5e-4
-//
-// v3（本版）: 全部 f_arr = CE 重建 W_q·ρ·(1+C_q)
-//   C_q 編碼壁面速度梯度 → 正確剪應力 f_neq
-//   Σ W_q·C_q = 0 (質量守恆)   Σ W_q·e_q·C_q = 0 (u=0 保持)
-//   消除假動量 ✓   保留壁面剪應力 ✓
+/*此版本特色為將19個編號邊界處理，但是缺點很明顯，19個方項的編號，皆為distribution 而非transformation distribution function 
+優點為質量必然守恆 
+*/
 __device__ __forceinline__ void WallCERegularize(
     double f_arr[19],
     double &mx_stream,

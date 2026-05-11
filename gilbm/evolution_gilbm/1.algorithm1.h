@@ -190,9 +190,9 @@ __device__ void algorithm1_step1_GTS(
         double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
         double w7 = w_out[idx7], w8 = w_out[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
-        du_dk = (4.0*u3 - u4) / 2.0;
-        dv_dk = (4.0*v3 - v4) / 2.0;
-        dw_dk = (4.0*w3 - w4) / 2.0;
+        du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
+        dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
+        dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
         rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
@@ -208,9 +208,9 @@ __device__ void algorithm1_step1_GTS(
         double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
         double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
-        du_dk = -(4.0*um1 - um2) / 2.0;
-        dv_dk = -(4.0*vm1 - vm2) / 2.0;
-        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+        du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
+        dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
+        dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
         rho_wall = rho_out_arr[idxm1];
     }
 
@@ -498,9 +498,9 @@ __device__ void algorithm1_step1_GTS_smem(
         double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
         double w7 = w_out[idx7], w8 = w_out[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
-        du_dk = (4.0*u3 - u4) / 2.0;
-        dv_dk = (4.0*v3 - v4) / 2.0;
-        dw_dk = (4.0*w3 - w4) / 2.0;
+        du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
+        dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
+        dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
         rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
@@ -516,9 +516,9 @@ __device__ void algorithm1_step1_GTS_smem(
         double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
         double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
-        du_dk = -(4.0*um1 - um2) / 2.0;
-        dv_dk = -(4.0*vm1 - vm2) / 2.0;
-        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+        du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
+        dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
+        dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
         rho_wall = rho_out_arr[idxm1];
     }
 
