@@ -90,8 +90,8 @@ _DEFAULT_SCALES_LAMINAR = {
     "U": 0.8, "V": 3.2,    # V = wall-normal; 3.2 = 0.8 * 4.0
 }
 _DEFAULT_SCALES_TURBULENT = {
-    "U": 0.8, "V": 0.8,    # turbulent: V 量級較大，不需額外放大
-    "uu": 30, "vv": 30, "uv": 60, "k": 20,
+    "U": 1.0, "V": 8.0,
+    "uu": 30, "vv": 30, "uv": 60, "k": 30,
 }
 
 # 層流：VTK 法向速度（v_inst / velocity_z / V_mean）是否再 ÷ variables.h 的 Uref
@@ -287,12 +287,12 @@ print(f"[INFO] Re = {Re}  {'(laminar mode)' if LAMINAR else '(turbulent mode)'}"
 # 層流: 100% (全部顯示)
 # 紊流: 使用者選擇每個 benchmark 的顯示密度 (%)
 _DEFAULT_DENSITY = {
-    'LESOCC':        80,   # DNS/LES — 中等密度
-    'MGLET':         80,   # DNS — 中等密度
-    'MGLET_Manhart': 80,   # LES — 中等密度
-    'Experiment':    60,   # PIV 數據點多，預設較稀疏
-    'LBM':           100,  # 層流/少量數據點
-    'ISLBM':         100,  # 層流/少量數據點
+    'LESOCC':        10,
+    'MGLET':         10,
+    'MGLET_Manhart': 10,
+    'Experiment':    10,
+    'LBM':           10,
+    'ISLBM':         10,
 }
 
 def subsample_uniform(y_arr, data_arr, density_pct):
@@ -465,23 +465,69 @@ def hill_function(Y):
 # VTK Parsing
 # ================================================================
 def parse_vtk(filepath):
-    """Read points, velocity, and scalar fields from ASCII STRUCTURED_GRID VTK.
+    """Read points, velocity, and scalar fields from legacy STRUCTURED_GRID VTK.
 
-    Streaming parser — reads line-by-line with numpy pre-allocation.
-    Avoids readlines() to keep memory usage ~O(npts) instead of O(file_size).
+    Supports both BINARY (big-endian) and ASCII format. Header is parsed via
+    readline(); BINARY data blocks are read as raw bytes and decoded with
+    numpy (>f8 for double, >f4 for float).
     """
     dims = None
     npts = 0
     npts_from_dims = 0
     points = np.empty((0, 3))
     scalars = {}
+    is_binary = False
 
-    with open(filepath, "r") as f:
-        while True:
-            line = f.readline()
-            if not line:                       # EOF
+    def _np_dtype(token):
+        t = token.lower()
+        if t == "double":
+            return ">f8", 8
+        if t == "float":
+            return ">f4", 4
+        if t == "int":
+            return ">i4", 4
+        return ">f8", 8
+
+    def _read_ascii_block(f, n, stop_tokens):
+        arr = np.empty(n, dtype=np.float64)
+        idx = 0
+        while idx < n:
+            dline = f.readline()
+            if not dline:
                 break
-            sline = line.strip()
+            sline = dline.decode("latin-1", errors="ignore").strip()
+            if not sline:
+                continue
+            first = sline.split()[0]
+            if first.startswith(stop_tokens):
+                # rewind not supported; caller handles by re-checking next line
+                return arr[:idx], dline
+            for v in sline.split():
+                if idx < n:
+                    arr[idx] = float(v)
+                    idx += 1
+        return arr[:idx], None
+
+    with open(filepath, "rb") as f:
+        pushback = None
+        while True:
+            if pushback is not None:
+                raw = pushback
+                pushback = None
+            else:
+                raw = f.readline()
+            if not raw:
+                break
+            sline = raw.decode("latin-1", errors="ignore").strip()
+            if not sline:
+                continue
+
+            if sline == "BINARY":
+                is_binary = True
+                continue
+            if sline == "ASCII":
+                is_binary = False
+                continue
 
             if sline.startswith("DIMENSIONS"):
                 dims = tuple(int(v) for v in sline.split()[1:4])
@@ -491,47 +537,37 @@ def parse_vtk(filepath):
                 npts = int(sline.split()[1])
 
             elif sline.startswith("POINTS"):
-                n = int(sline.split()[1])
+                parts = sline.split()
+                n = int(parts[1])
+                dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 if npts == 0:
                     npts = n
-                pts = np.empty(n * 3, dtype=np.float64)
-                pidx = 0
-                while pidx < n * 3:
-                    dline = f.readline()
-                    if not dline:
-                        break
-                    vals = dline.split()
-                    if not vals:
-                        continue
-                    if vals[0].startswith(("SCALARS", "VECTORS", "POINT_DATA")):
-                        break
-                    for v in vals:
-                        if pidx < n * 3:
-                            pts[pidx] = float(v)
-                            pidx += 1
-                points = pts[:pidx].reshape(-1, 3)
+                if is_binary:
+                    buf = f.read(n * 3 * esize)
+                    pts = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    points = pts.reshape(-1, 3)
+                    f.readline()  # consume trailing newline after binary block
+                else:
+                    pts, leftover = _read_ascii_block(
+                        f, n * 3, ("SCALARS", "VECTORS", "POINT_DATA"))
+                    points = pts.reshape(-1, 3)
+                    pushback = leftover
 
             elif sline.startswith("VECTORS"):
                 if npts == 0 and npts_from_dims > 0:
                     npts = npts_from_dims
                 parts = sline.split()
                 vec_name = parts[1] if len(parts) > 1 else "velocity"
-                vec = np.empty(npts * 3, dtype=np.float64)
-                vidx = 0
-                while vidx < npts * 3:
-                    dline = f.readline()
-                    if not dline:
-                        break
-                    vals = dline.split()
-                    if not vals:
-                        continue
-                    if vals[0].startswith(("SCALARS", "VECTORS", "POINT_DATA")):
-                        break
-                    for v in vals:
-                        if vidx < npts * 3:
-                            vec[vidx] = float(v)
-                            vidx += 1
-                if vidx == npts * 3:
+                dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
+                if is_binary:
+                    buf = f.read(npts * 3 * esize)
+                    vec = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    f.readline()
+                else:
+                    vec, leftover = _read_ascii_block(
+                        f, npts * 3, ("SCALARS", "VECTORS", "POINT_DATA"))
+                    pushback = leftover
+                if vec.size == npts * 3:
                     scalars[f"{vec_name}_x"] = vec[0::3].copy()
                     scalars[f"{vec_name}_y"] = vec[1::3].copy()
                     scalars[f"{vec_name}_z"] = vec[2::3].copy()
@@ -541,23 +577,17 @@ def parse_vtk(filepath):
                     npts = npts_from_dims
                 parts = sline.split()
                 name = parts[1]
+                dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 f.readline()           # skip LOOKUP_TABLE line
-                arr = np.empty(npts, dtype=np.float64)
-                count = 0
-                while count < npts:
-                    dline = f.readline()
-                    if not dline:
-                        break
-                    vals = dline.split()
-                    if not vals:
-                        continue
-                    if vals[0].startswith(("SCALARS", "VECTORS")):
-                        break
-                    for v in vals:
-                        if count < npts:
-                            arr[count] = float(v)
-                            count += 1
-                scalars[name] = arr[:count]
+                if is_binary:
+                    buf = f.read(npts * esize)
+                    arr = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    f.readline()
+                else:
+                    arr, leftover = _read_ascii_block(
+                        f, npts, ("SCALARS", "VECTORS"))
+                    pushback = leftover
+                scalars[name] = arr
 
     return dims, points, scalars
 
@@ -569,10 +599,10 @@ def check_vtk_completeness(filepath):
     total_lines = 0
     grid_npts = 0
 
-    with open(filepath, "r") as f:
-        for line in f:
+    with open(filepath, "rb") as f:
+        for raw in f:
             total_lines += 1
-            stripped = line.strip()
+            stripped = raw.decode("latin-1", errors="ignore").strip()
             if stripped.startswith("DIMENSIONS"):
                 markers["DIMENSIONS"] = True
                 parts = stripped.split()

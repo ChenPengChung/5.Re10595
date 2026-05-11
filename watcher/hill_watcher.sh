@@ -147,7 +147,7 @@ run_benchmark() {
     fi
 
     local src copied=""
-    for pat in benchmark_Umean_Re*.png benchmark_RS_Re*.png benchmark_all_Re*.png benchmark_all_Re*.pdf; do
+    for pat in fig_mean_u.png fig_mean_v.png fig_uu.png fig_vv.png fig_uv.png fig_k.png; do
         src=$(ls -t "$RESULT_DIR"/$pat 2>/dev/null | head -1 || true)
         if [[ -n "$src" ]] && [[ "$src" -nt "$before_marker" ]]; then
             cp -f "$src" "$LIVE_DIR/$(basename "$src")"; copied="$copied $(basename "$src")"
