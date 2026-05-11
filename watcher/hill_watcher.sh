@@ -2,7 +2,9 @@
 # hill_watcher.sh — Periodic Hill Re5600 watcher loop
 set -u
 
-PROJECT_DIR="/home/s8313697/5.Re10595/Edit3_5600newmesh"
+_SELF="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RESULT_DIR="$PROJECT_DIR/result"
 LIVE_DIR="$PROJECT_DIR/live"
 LOG_FILE="$LIVE_DIR/watcher.log"

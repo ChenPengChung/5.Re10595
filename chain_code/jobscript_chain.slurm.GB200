@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit3_Re5600newmesh
+#SBATCH --job-name=Edit3_test119regular_meshandrebuild
 #SBATCH --account=MST114348
 #SBATCH --partition=gb200-dev
 #SBATCH --nodes=2

@@ -3,12 +3,12 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/home/s8313697/5.Re10595/Edit3_5600newmesh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIVE_DIR="$PROJECT_DIR/live"
 LOG_FILE="$LIVE_DIR/watcher.log"
 PID_FILE="$LIVE_DIR/watcher.pid"
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WATCHER="$SCRIPT_DIR/hill_watcher.sh"
 
 [[ -x "$WATCHER" ]] || chmod +x "$WATCHER" 2>/dev/null || true
