@@ -113,15 +113,11 @@ __device__ double ChapmanEnskogBC(
 
 
 // ════════════════════════════════════════════════════════════════════════════
-// Phase 1b: wall no-slip CE regularization (v3)
+// Phase 1b: wall no-slip CE regularization 
 // ════════════════════════════════════════════════════════════════════════════
-// v2: 全部 f_arr = f_eq(rho, u=0) → 消除假動量 ✓ 但丟失壁面剪應力 ✗
-//     壁面發出零應力分佈 → k=4 收不到正確 τ_w → L_inf ~ 6.5e-4
-//
-// v3（本版）: 全部 f_arr = CE 重建 W_q·ρ·(1+C_q)
-//   C_q 編碼壁面速度梯度 → 正確剪應力 f_neq
-//   Σ W_q·C_q = 0 (質量守恆)   Σ W_q·e_q·C_q = 0 (u=0 保持)
-//   消除假動量 ✓   保留壁面剪應力 ✓
+/*此版本特色為將19個編號邊界處理，但是缺點很明顯，19個方項的編號，皆為distribution 而非transformation distribution function 
+優點為質量必然守恆 
+*/
 __device__ __forceinline__ void WallCERegularize(
     double f_arr[19],
     double &mx_stream,

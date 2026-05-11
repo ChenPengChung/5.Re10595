@@ -309,7 +309,7 @@ __global__ void periodicSW_macro(
 //   省掉: Step3 重複巨觀量計算
 //
 // 三層優化流水線:
-//   [P0 v3] Buffer-先行 (精簡版) + Interior-expanded：
+//    [P0 v3] Buffer-先行 (精簡版) + Interior-expanded：
 //     Phase 1: Buffer kernel 只算 MPI 需要的 6 行（省去 j=3, j=NYD6-4）
 //              獨佔 GPU → ~0.15-0.4 ms 完成 (vs v2: ~0.5 ms)
 //     Phase 2: Interior 3 launches (j=3, j=7..NYD6-8, j=NYD6-4) 與 MPI overlap
