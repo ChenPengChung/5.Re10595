@@ -1,0 +1,1498 @@
+[2026-05-11 18:38:53] ==========================================
+[2026-05-11 18:38:53] Periodic Hill Re5600 watcher started
+[2026-05-11 18:38:53]   pid=1286085  ppid=1  poll=30s
+[2026-05-11 18:38:53]   project  = /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild
+[2026-05-11 18:38:53]   conv     = /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/result/4.Ma_U_Time.py
+[2026-05-11 18:38:53]   bench    = /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/result/2.Benchmark.py
+[2026-05-11 18:38:53] ==========================================
+[2026-05-11 18:38:57] ──────────────────────────────────────
+[2026-05-11 18:38:57] PROCESS step=11950001  FTT=73.70  accu=599329
+[2026-05-11 18:38:57]   [Step 11950901 | FTT=73.70] Ub=0.014736  U*=0.9824  Re%=-1.76%  Force=2.61191E-06  F*=0.1045  Re=5501.5  Ma=0.0255  Ma_max=0.0485  Error=2.37e-05  [SIMPLE-PROP]
+[2026-05-11 18:39:03] CONV step=11950001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:39:03] BENCH skipped: FTT=73.70 < G2=80.000 (accu=599329, CV window not full)
+[2026-05-11 18:39:37] ──────────────────────────────────────
+[2026-05-11 18:39:37] PROCESS step=11956001  FTT=73.74  accu=606329
+[2026-05-11 18:39:37]   [Step 11957351 | FTT=73.74] Ub=0.014785  U*=0.9856  Re%=-1.44%  Force=2.76500E-06  F*=0.1106  Re=5519.6  Ma=0.0256  Ma_max=0.0443  Error=2.72e-05  [SIMPLE-PROP]
+[2026-05-11 18:39:42] CONV step=11956001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:39:42] BENCH skipped: FTT=73.74 < G2=80.000 (accu=606329, CV window not full)
+[2026-05-11 18:40:16] ──────────────────────────────────────
+[2026-05-11 18:40:16] PROCESS step=11963001  FTT=73.78  accu=613329
+[2026-05-11 18:40:16]   [Step 11964001 | FTT=73.78] Ub=0.014844  U*=0.9896  Re%=-1.04%  Force=2.88748E-06  F*=0.1155  Re=5541.6  Ma=0.0257  Ma_max=0.0475  Error=3.23e-05  [SIMPLE-PROP]
+[2026-05-11 18:40:21] CONV step=11963001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:40:21] BENCH skipped: FTT=73.78 < G2=80.000 (accu=613329, CV window not full)
+[2026-05-11 18:40:55] ──────────────────────────────────────
+[2026-05-11 18:40:55] PROCESS step=11970001  FTT=73.82  accu=619329
+[2026-05-11 18:40:55]   [Step 11970851 | FTT=73.82] Ub=0.014912  U*=0.9942  Re%=-0.58%  Force=2.97034E-06  F*=0.1188  Re=5567.3  Ma=0.0258  Ma_max=0.0424  Error=3.50e-05  [SIMPLE-PROP]
+[2026-05-11 18:41:00] CONV step=11970001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:41:00] BENCH skipped: FTT=73.82 < G2=80.000 (accu=619329, CV window not full)
+[2026-05-11 18:41:34] ──────────────────────────────────────
+[2026-05-11 18:41:34] PROCESS step=11976001  FTT=73.86  accu=626329
+[2026-05-11 18:41:34]   [Step 11977001 | FTT=73.86] Ub=0.014980  U*=0.9986  Re%=-0.14%  Force=3.00319E-06  F*=0.1201  Re=5592.4  Ma=0.0259  Ma_max=0.0431  Error=3.79e-05  [SIMPLE-PROP]
+[2026-05-11 18:41:40] CONV step=11976001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:41:40] BENCH skipped: FTT=73.86 < G2=80.000 (accu=626329, CV window not full)
+[2026-05-11 18:42:14] ──────────────────────────────────────
+[2026-05-11 18:42:14] PROCESS step=11983001  FTT=73.91  accu=633329
+[2026-05-11 18:42:14]   [Step 11984001 | FTT=73.91] Ub=0.015061  U*=1.0041  Re%=0.41%  Force=2.98904E-06  F*=0.1196  Re=5622.7  Ma=0.0261  Ma_max=0.0452  Error=3.90e-05  [SIMPLE-PROP]
+[2026-05-11 18:42:20] CONV step=11983001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:42:20] BENCH skipped: FTT=73.91 < G2=80.000 (accu=633329, CV window not full)
+[2026-05-11 18:42:54] ──────────────────────────────────────
+[2026-05-11 18:42:54] PROCESS step=11990001  FTT=73.95  accu=640329
+[2026-05-11 18:42:54]   [Step 11991001 | FTT=73.95] Ub=0.015142  U*=1.0095  Re%=0.95%  Force=2.91852E-06  F*=0.1167  Re=5653.0  Ma=0.0262  Ma_max=0.0435  Error=3.73e-05  [SIMPLE-PROP]
+[2026-05-11 18:43:01] CONV step=11990001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:43:01] BENCH skipped: FTT=73.95 < G2=80.000 (accu=640329, CV window not full)
+[2026-05-11 18:43:35] ──────────────────────────────────────
+[2026-05-11 18:43:35] PROCESS step=11997001  FTT=73.99  accu=647329
+[2026-05-11 18:43:35]   [Step 11998001 | FTT=73.99] Ub=0.015220  U*=1.0147  Re%=1.47%  Force=2.79287E-06  F*=0.1117  Re=5682.2  Ma=0.0264  Ma_max=0.0435  Error=3.56e-05  [SIMPLE-PROP]
+[2026-05-11 18:43:42] CONV step=11997001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:43:42] BENCH skipped: FTT=73.99 < G2=80.000 (accu=647329, CV window not full)
+[2026-05-11 18:44:15] ──────────────────────────────────────
+[2026-05-11 18:44:15] PROCESS step=12004001  FTT=74.04  accu=654329
+[2026-05-11 18:44:15]   [Step 12005001 | FTT=74.04] Ub=0.015291  U*=1.0194  Re%=1.94%  Force=2.61522E-06  F*=0.1046  Re=5708.7  Ma=0.0265  Ma_max=0.0444  Error=3.09e-05  [SIMPLE-PROP]
+[2026-05-11 18:44:22] CONV step=12004001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:44:22] BENCH skipped: FTT=74.04 < G2=80.000 (accu=654329, CV window not full)
+[2026-05-11 18:44:56] ──────────────────────────────────────
+[2026-05-11 18:44:56] PROCESS step=12011001  FTT=74.08  accu=660329
+[2026-05-11 18:44:56]   [Step 12011801 | FTT=74.08] Ub=0.015350  U*=1.0233  Re%=2.33%  Force=2.39899E-06  F*=0.0960  Re=5730.7  Ma=0.0266  Ma_max=0.0433  Error=2.48e-05  [SIMPLE-PROP]
+[2026-05-11 18:45:01] CONV step=12011001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:45:01] BENCH skipped: FTT=74.08 < G2=80.000 (accu=660329, CV window not full)
+[2026-05-11 18:46:06] ──────────────────────────────────────
+[2026-05-11 18:46:06] PROCESS step=12023001  FTT=74.15  accu=672329
+[2026-05-11 18:46:06]   [Step 12023751 | FTT=74.15] Ub=0.015417  U*=1.0278  Re%=2.78%  Force=1.94114E-06  F*=0.0776  Re=5755.7  Ma=0.0267  Ma_max=0.0433  Error=1.19e-05  [SIMPLE-PROP]
+[2026-05-11 18:46:12] CONV step=12023001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:46:12] BENCH skipped: FTT=74.15 < G2=80.000 (accu=672329, CV window not full)
+[2026-05-11 18:47:20] ──────────────────────────────────────
+[2026-05-11 18:47:20] PROCESS step=12035001  FTT=74.23  accu=685329
+[2026-05-11 18:47:20]   [Step 12036101 | FTT=74.23] Ub=0.015434  U*=1.0289  Re%=2.89%  Force=1.41634E-06  F*=0.0567  Re=5762.1  Ma=0.0267  Ma_max=0.0445  Error=2.15e-06  [SIMPLE-PROP]
+[2026-05-11 18:47:27] CONV step=12035001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:47:27] BENCH skipped: FTT=74.23 < G2=80.000 (accu=685329, CV window not full)
+[2026-05-11 18:48:32] ──────────────────────────────────────
+[2026-05-11 18:48:32] PROCESS step=12048001  FTT=74.31  accu=697329
+[2026-05-11 18:48:32]   [Step 12048951 | FTT=74.31] Ub=0.015399  U*=1.0266  Re%=2.66%  Force=8.81460E-07  F*=0.0353  Re=5749.1  Ma=0.0267  Ma_max=0.0421  Error=1.59e-05  [SIMPLE-PROP]
+[2026-05-11 18:48:38] CONV step=12048001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:48:38] BENCH skipped: FTT=74.31 < G2=80.000 (accu=697329, CV window not full)
+[2026-05-11 18:49:12] ──────────────────────────────────────
+[2026-05-11 18:49:12] PROCESS step=12055001  FTT=74.35  accu=704329
+[2026-05-11 18:49:12]   [Step 12055651 | FTT=74.35] Ub=0.015360  U*=1.0240  Re%=2.40%  Force=6.29458E-07  F*=0.0252  Re=5734.4  Ma=0.0266  Ma_max=0.0441  Error=2.20e-05  [SIMPLE-PROP]
+[2026-05-11 18:49:18] CONV step=12055001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:49:19] BENCH skipped: FTT=74.35 < G2=80.000 (accu=704329, CV window not full)
+[2026-05-11 18:50:26] ──────────────────────────────────────
+[2026-05-11 18:50:26] PROCESS step=12067001  FTT=74.42  accu=717329
+[2026-05-11 18:50:26]   [Step 12068001 | FTT=74.42] Ub=0.015252  U*=1.0168  Re%=1.68%  Force=2.52140E-07  F*=0.0101  Re=5694.1  Ma=0.0264  Ma_max=0.0436  Error=3.42e-05  [SIMPLE-PROP]
+[2026-05-11 18:50:32] CONV step=12067001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:50:32] BENCH skipped: FTT=74.42 < G2=80.000 (accu=717329, CV window not full)
+[2026-05-11 18:51:06] ──────────────────────────────────────
+[2026-05-11 18:51:06] PROCESS step=12074001  FTT=74.47  accu=724329
+[2026-05-11 18:51:06]   [Step 12075001 | FTT=74.47] Ub=0.015173  U*=1.0116  Re%=1.16%  Force=1.04604E-07  F*=0.0042  Re=5664.8  Ma=0.0263  Ma_max=0.0422  Error=3.93e-05  [SIMPLE-PROP]
+[2026-05-11 18:51:13] CONV step=12074001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:51:13] BENCH skipped: FTT=74.47 < G2=80.000 (accu=724329, CV window not full)
+[2026-05-11 18:51:47] ──────────────────────────────────────
+[2026-05-11 18:51:47] PROCESS step=12081001  FTT=74.51  accu=731329
+[2026-05-11 18:51:47]   [Step 12082001 | FTT=74.51] Ub=0.015084  U*=1.0056  Re%=0.56%  Force=1.53302E-08  F*=0.0006  Re=5631.5  Ma=0.0261  Ma_max=0.0411  Error=4.32e-05  [SIMPLE-PROP]
+[2026-05-11 18:51:55] CONV step=12081001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:51:55] BENCH skipped: FTT=74.51 < G2=80.000 (accu=731329, CV window not full)
+[2026-05-11 18:52:28] ──────────────────────────────────────
+[2026-05-11 18:52:28] PROCESS step=12088001  FTT=74.55  accu=738329
+[2026-05-11 18:52:28]   [Step 12089001 | FTT=74.55] Ub=0.014990  U*=0.9993  Re%=-0.07%  Force=-1.05269E-08  F*=-0.0004  Re=5596.4  Ma=0.0260  Ma_max=0.0405  Error=4.57e-05  [SIMPLE-PROP]
+[2026-05-11 18:52:34] CONV step=12088001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:52:34] BENCH skipped: FTT=74.55 < G2=80.000 (accu=738329, CV window not full)
+[2026-05-11 18:53:08] ──────────────────────────────────────
+[2026-05-11 18:53:08] PROCESS step=12095001  FTT=74.60  accu=745329
+[2026-05-11 18:53:08]   [Step 12096001 | FTT=74.60] Ub=0.014895  U*=0.9930  Re%=-0.70%  Force=2.95278E-08  F*=0.0012  Re=5560.7  Ma=0.0258  Ma_max=0.0407  Error=4.53e-05  [SIMPLE-PROP]
+[2026-05-11 18:53:13] CONV step=12095001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:53:13] BENCH skipped: FTT=74.60 < G2=80.000 (accu=745329, CV window not full)
+[2026-05-11 18:54:20] ──────────────────────────────────────
+[2026-05-11 18:54:20] PROCESS step=12107001  FTT=74.67  accu=757329
+[2026-05-11 18:54:21]   [Step 12108001 | FTT=74.67] Ub=0.014743  U*=0.9828  Re%=-1.72%  Force=2.47160E-07  F*=0.0099  Re=5503.9  Ma=0.0255  Ma_max=0.0412  Error=4.02e-05  [SIMPLE-PROP]
+[2026-05-11 18:54:26] CONV step=12107001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:54:26] BENCH skipped: FTT=74.67 < G2=80.000 (accu=757329, CV window not full)
+[2026-05-11 18:54:59] ──────────────────────────────────────
+[2026-05-11 18:54:59] PROCESS step=12113001  FTT=74.71  accu=763329
+[2026-05-11 18:54:59]   [Step 12114001 | FTT=74.71] Ub=0.014677  U*=0.9784  Re%=-2.16%  Force=4.19991E-07  F*=0.0168  Re=5479.2  Ma=0.0254  Ma_max=0.0439  Error=3.49e-05  [SIMPLE-PROP]
+[2026-05-11 18:55:05] CONV step=12113001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:55:05] BENCH skipped: FTT=74.71 < G2=80.000 (accu=763329, CV window not full)
+[2026-05-11 18:55:38] ──────────────────────────────────────
+[2026-05-11 18:55:38] PROCESS step=12120001  FTT=74.75  accu=769329
+[2026-05-11 18:55:38]   [Step 12120851 | FTT=74.75] Ub=0.014613  U*=0.9742  Re%=-2.58%  Force=6.61448E-07  F*=0.0265  Re=5455.4  Ma=0.0253  Ma_max=0.0394  Error=2.82e-05  [SIMPLE-PROP]
+[2026-05-11 18:55:43] CONV step=12120001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:55:44] BENCH skipped: FTT=74.75 < G2=80.000 (accu=769329, CV window not full)
+[2026-05-11 18:56:17] ──────────────────────────────────────
+[2026-05-11 18:56:17] PROCESS step=12126001  FTT=74.79  accu=776329
+[2026-05-11 18:56:17]   [Step 12127001 | FTT=74.79] Ub=0.014568  U*=0.9712  Re%=-2.88%  Force=9.11088E-07  F*=0.0364  Re=5438.7  Ma=0.0252  Ma_max=0.0407  Error=2.18e-05  [SIMPLE-PROP]
+[2026-05-11 18:56:23] CONV step=12126001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:56:23] BENCH skipped: FTT=74.79 < G2=80.000 (accu=776329, CV window not full)
+[2026-05-11 18:57:30] ──────────────────────────────────────
+[2026-05-11 18:57:30] PROCESS step=12138001  FTT=74.86  accu=788329
+[2026-05-11 18:57:30]   [Step 12139001 | FTT=74.86] Ub=0.014520  U*=0.9680  Re%=-3.20%  Force=1.45747E-06  F*=0.0583  Re=5420.9  Ma=0.0252  Ma_max=0.0414  Error=5.21e-06  [SIMPLE-PROP]
+[2026-05-11 18:57:36] CONV step=12138001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:57:36] BENCH skipped: FTT=74.86 < G2=80.000 (accu=788329, CV window not full)
+[2026-05-11 18:58:43] ──────────────────────────────────────
+[2026-05-11 18:58:43] PROCESS step=12150001  FTT=74.94  accu=800329
+[2026-05-11 18:58:43]   [Step 12151001 | FTT=74.94] Ub=0.014536  U*=0.9691  Re%=-3.09%  Force=2.02379E-06  F*=0.0810  Re=5426.9  Ma=0.0252  Ma_max=0.0411  Error=1.50e-05  [SIMPLE-PROP]
+[2026-05-11 18:58:49] CONV step=12150001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:58:49] BENCH skipped: FTT=74.94 < G2=80.000 (accu=800329, CV window not full)
+[2026-05-11 18:59:23] ──────────────────────────────────────
+[2026-05-11 18:59:23] PROCESS step=12156001  FTT=74.97  accu=806329
+[2026-05-11 18:59:23]   [Step 12157151 | FTT=74.97] Ub=0.014572  U*=0.9714  Re%=-2.86%  Force=2.29558E-06  F*=0.0918  Re=5440.1  Ma=0.0252  Ma_max=0.0418  Error=2.43e-05  [SIMPLE-PROP]
+[2026-05-11 18:59:28] CONV step=12156001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 18:59:28] BENCH skipped: FTT=74.97 < G2=80.000 (accu=806329, CV window not full)
+[2026-05-11 19:00:02] ──────────────────────────────────────
+[2026-05-11 19:00:02] PROCESS step=12163001  FTT=75.02  accu=813329
+[2026-05-11 19:00:02]   [Step 12164001 | FTT=75.02] Ub=0.014629  U*=0.9752  Re%=-2.48%  Force=2.56705E-06  F*=0.1027  Re=5461.4  Ma=0.0253  Ma_max=0.0403  Error=3.20e-05  [SIMPLE-PROP]
+[2026-05-11 19:00:07] CONV step=12163001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:00:07] BENCH skipped: FTT=75.02 < G2=80.000 (accu=813329, CV window not full)
+[2026-05-11 19:00:41] ──────────────────────────────────────
+[2026-05-11 19:00:41] PROCESS step=12169001  FTT=75.05  accu=819329
+[2026-05-11 19:00:41]   [Step 12170001 | FTT=75.05] Ub=0.014689  U*=0.9793  Re%=-2.07%  Force=2.76965E-06  F*=0.1108  Re=5483.9  Ma=0.0254  Ma_max=0.0416  Error=3.67e-05  [SIMPLE-PROP]
+[2026-05-11 19:00:46] CONV step=12169001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:00:46] BENCH skipped: FTT=75.05 < G2=80.000 (accu=819329, CV window not full)
+[2026-05-11 19:01:20] ──────────────────────────────────────
+[2026-05-11 19:01:20] PROCESS step=12176001  FTT=75.09  accu=825329
+[2026-05-11 19:01:20]   [Step 12176701 | FTT=75.09] Ub=0.014765  U*=0.9843  Re%=-1.57%  Force=2.95068E-06  F*=0.1180  Re=5512.1  Ma=0.0256  Ma_max=0.0415  Error=3.99e-05  [SIMPLE-PROP]
+[2026-05-11 19:01:25] CONV step=12176001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:01:25] BENCH skipped: FTT=75.09 < G2=80.000 (accu=825329, CV window not full)
+[2026-05-11 19:01:59] ──────────────────────────────────────
+[2026-05-11 19:01:59] PROCESS step=12182001  FTT=75.13  accu=832329
+[2026-05-11 19:01:59]   [Step 12183001 | FTT=75.13] Ub=0.014841  U*=0.9894  Re%=-1.06%  Force=3.07355E-06  F*=0.1229  Re=5540.6  Ma=0.0257  Ma_max=0.0403  Error=4.23e-05  [SIMPLE-PROP]
+[2026-05-11 19:02:04] CONV step=12182001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:02:05] BENCH skipped: FTT=75.13 < G2=80.000 (accu=832329, CV window not full)
+[2026-05-11 19:03:36] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/slurm_47312.log
+[2026-05-11 19:03:36] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-11 19:03:39] ──────────────────────────────────────
+[2026-05-11 19:03:39] PROCESS step=12198001  FTT=75.2271  accu=847329
+[2026-05-11 19:03:39]   [Step 12198251 | FTT=75.23] Ub=0.015038  U*=1.0025  Re%=0.25%  Force=3.16547E-06  F*=0.1266  Re=5614.3  Ma=0.0260  Ma_max=0.0409  Error=4.37e-05  [SIMPLE-PROP]
+[2026-05-11 19:03:44] CONV step=12198001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:03:44] BENCH skipped: FTT=75.2271 < G2=80.000 (accu=847329, CV window not full)
+[2026-05-11 19:04:14] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/slurm_47332.log
+[2026-05-11 19:04:15] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-11 19:04:49] ──────────────────────────────────────
+[2026-05-11 19:04:49] PROCESS step=12201001  FTT=75.25  accu=851329
+[2026-05-11 19:04:49]   [Step 12202001 | FTT=75.25] Ub=0.015087  U*=1.0058  Re%=0.58%  Force=3.14211E-06  F*=0.1257  Re=5632.5  Ma=0.0261  Ma_max=0.0431  Error=4.22e-05  [SIMPLE-PROP]
+[2026-05-11 19:04:54] CONV step=12201001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:04:54] BENCH skipped: FTT=75.25 < G2=80.000 (accu=851329, CV window not full)
+[2026-05-11 19:05:04] watcher exiting (pid=1286085)
+[2026-05-11 19:40:27] ==========================================
+[2026-05-11 19:40:27] Periodic Hill Re5600 watcher started
+[2026-05-11 19:40:27]   pid=1531248  ppid=1  poll=30s
+[2026-05-11 19:40:27]   project  = /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild
+[2026-05-11 19:40:27]   conv     = /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/result/4.Ma_U_Time.py
+[2026-05-11 19:40:27]   bench    = /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/result/2.Benchmark.py
+[2026-05-11 19:40:27] ==========================================
+[2026-05-11 19:40:30] ──────────────────────────────────────
+[2026-05-11 19:40:30] PROCESS step=12255001  FTT=75.59  accu=0
+[2026-05-11 19:40:30]   [Step 12256601 | FTT=75.59] Ub=0.015448  U*=1.0299  Re%=2.99%  Force=1.29540E-06  F*=0.0518  Re=5767.2  Ma=0.0268  Ma_max=0.0437  Error=7.16e-06  [SIMPLE-PROP]
+[2026-05-11 19:40:36] CONV step=12255001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:40:36] BENCH skipped: FTT=75.59 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:41:10] ──────────────────────────────────────
+[2026-05-11 19:41:10] PROCESS step=12265001  FTT=75.65  accu=0
+[2026-05-11 19:41:10]   [Step 12266451 | FTT=75.65] Ub=0.015412  U*=1.0275  Re%=2.75%  Force=8.74966E-07  F*=0.0350  Re=5753.7  Ma=0.0267  Ma_max=0.0429  Error=1.56e-05  [SIMPLE-PROP]
+[2026-05-11 19:41:14] CONV step=12265001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:41:15] BENCH skipped: FTT=75.65 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:41:48] ──────────────────────────────────────
+[2026-05-11 19:41:48] PROCESS step=12275001  FTT=75.71  accu=0
+[2026-05-11 19:41:48]   [Step 12276001 | FTT=75.71] Ub=0.015351  U*=1.0234  Re%=2.34%  Force=5.13142E-07  F*=0.0205  Re=5731.0  Ma=0.0266  Ma_max=0.0409  Error=2.41e-05  [SIMPLE-PROP]
+[2026-05-11 19:41:53] CONV step=12275001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:41:53] BENCH skipped: FTT=75.71 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:42:57] ──────────────────────────────────────
+[2026-05-11 19:42:57] PROCESS step=12292001  FTT=75.81  accu=0
+[2026-05-11 19:42:57]   [Step 12293201 | FTT=75.81] Ub=0.015189  U*=1.0126  Re%=1.26%  Force=4.61594E-08  F*=0.0018  Re=5670.7  Ma=0.0263  Ma_max=0.0390  Error=3.62e-05  [SIMPLE-PROP]
+[2026-05-11 19:43:03] CONV step=12292001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:43:03] BENCH skipped: FTT=75.81 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:43:36] ──────────────────────────────────────
+[2026-05-11 19:43:36] PROCESS step=12302001  FTT=75.87  accu=0
+[2026-05-11 19:43:36]   [Step 12303001 | FTT=75.87] Ub=0.015075  U*=1.0050  Re%=0.50%  Force=-8.24040E-08  F*=-0.0033  Re=5627.9  Ma=0.0261  Ma_max=0.0411  Error=4.06e-05  [SIMPLE-PROP]
+[2026-05-11 19:43:41] CONV step=12302001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:43:41] BENCH skipped: FTT=75.87 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:44:48] ──────────────────────────────────────
+[2026-05-11 19:44:48] PROCESS step=12320001  FTT=75.98  accu=0
+[2026-05-11 19:44:48]   [Step 12321151 | FTT=75.98] Ub=0.014854  U*=0.9902  Re%=-0.98%  Force=-1.57308E-08  F*=-0.0006  Re=5545.4  Ma=0.0257  Ma_max=0.0444  Error=3.89e-05  [SIMPLE-PROP]
+[2026-05-11 19:44:53] CONV step=12320001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:44:53] BENCH skipped: FTT=75.98 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:45:26] ──────────────────────────────────────
+[2026-05-11 19:45:26] PROCESS step=12330001  FTT=76.05  accu=0
+[2026-05-11 19:45:27]   [Step 12331001 | FTT=76.05] Ub=0.014744  U*=0.9829  Re%=-1.71%  Force=1.81534E-07  F*=0.0073  Re=5504.3  Ma=0.0255  Ma_max=0.0397  Error=3.51e-05  [SIMPLE-PROP]
+[2026-05-11 19:45:32] CONV step=12330001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:45:32] BENCH skipped: FTT=76.05 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:46:36] ──────────────────────────────────────
+[2026-05-11 19:46:36] PROCESS step=12347001  FTT=76.15  accu=0
+[2026-05-11 19:46:36]   [Step 12348351 | FTT=76.15] Ub=0.014606  U*=0.9737  Re%=-2.63%  Force=7.52440E-07  F*=0.0301  Re=5453.0  Ma=0.0253  Ma_max=0.0401  Error=1.75e-05  [SIMPLE-PROP]
+[2026-05-11 19:46:41] CONV step=12347001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:46:42] BENCH skipped: FTT=76.15 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:47:15] ──────────────────────────────────────
+[2026-05-11 19:47:15] PROCESS step=12357001  FTT=76.21  accu=0
+[2026-05-11 19:47:15]   [Step 12358001 | FTT=76.21] Ub=0.014574  U*=0.9716  Re%=-2.84%  Force=1.14604E-06  F*=0.0458  Re=5440.8  Ma=0.0252  Ma_max=0.0407  Error=5.79e-06  [SIMPLE-PROP]
+[2026-05-11 19:47:22] CONV step=12357001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:47:22] BENCH skipped: FTT=76.21 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:47:56] ──────────────────────────────────────
+[2026-05-11 19:47:56] PROCESS step=12367001  FTT=76.27  accu=0
+[2026-05-11 19:47:56]   [Step 12368051 | FTT=76.27] Ub=0.014570  U*=0.9714  Re%=-2.86%  Force=1.57344E-06  F*=0.0629  Re=5439.6  Ma=0.0252  Ma_max=0.0415  Error=3.21e-06  [SIMPLE-PROP]
+[2026-05-11 19:48:01] CONV step=12367001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:48:01] BENCH skipped: FTT=76.27 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:48:35] ──────────────────────────────────────
+[2026-05-11 19:48:35] PROCESS step=12377001  FTT=76.34  accu=0
+[2026-05-11 19:48:35]   [Step 12378001 | FTT=76.34] Ub=0.014595  U*=0.9730  Re%=-2.70%  Force=1.98646E-06  F*=0.0795  Re=5448.6  Ma=0.0253  Ma_max=0.0422  Error=1.32e-05  [SIMPLE-PROP]
+[2026-05-11 19:48:40] CONV step=12377001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:48:40] BENCH skipped: FTT=76.34 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:49:47] ──────────────────────────────────────
+[2026-05-11 19:49:47] PROCESS step=12395001  FTT=76.45  accu=0
+[2026-05-11 19:49:47]   [Step 12396001 | FTT=76.45] Ub=0.014706  U*=0.9804  Re%=-1.96%  Force=2.62010E-06  F*=0.1048  Re=5490.3  Ma=0.0255  Ma_max=0.0471  Error=2.74e-05  [SIMPLE-PROP]
+[2026-05-11 19:49:53] CONV step=12395001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:49:53] BENCH skipped: FTT=76.45 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:50:27] ──────────────────────────────────────
+[2026-05-11 19:50:27] PROCESS step=12405001  FTT=76.51  accu=0
+[2026-05-11 19:50:27]   [Step 12406001 | FTT=76.51] Ub=0.014795  U*=0.9863  Re%=-1.37%  Force=2.86759E-06  F*=0.1147  Re=5523.5  Ma=0.0256  Ma_max=0.0442  Error=3.23e-05  [SIMPLE-PROP]
+[2026-05-11 19:50:33] CONV step=12405001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:50:33] BENCH skipped: FTT=76.51 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:51:38] ──────────────────────────────────────
+[2026-05-11 19:51:38] PROCESS step=12422001  FTT=76.61  accu=0
+[2026-05-11 19:51:38]   [Step 12423151 | FTT=76.61] Ub=0.014981  U*=0.9987  Re%=-0.13%  Force=3.06065E-06  F*=0.1224  Re=5592.9  Ma=0.0259  Ma_max=0.0441  Error=3.73e-05  [SIMPLE-PROP]
+[2026-05-11 19:51:43] CONV step=12422001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:51:43] BENCH skipped: FTT=76.61 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:52:17] ──────────────────────────────────────
+[2026-05-11 19:52:17] PROCESS step=12432001  FTT=76.67  accu=0
+[2026-05-11 19:52:17]   [Step 12433001 | FTT=76.67] Ub=0.015091  U*=1.0061  Re%=0.61%  Force=3.02518E-06  F*=0.1210  Re=5633.9  Ma=0.0261  Ma_max=0.0463  Error=3.60e-05  [SIMPLE-PROP]
+[2026-05-11 19:52:22] CONV step=12432001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:52:23] BENCH skipped: FTT=76.67 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:52:56] ──────────────────────────────────────
+[2026-05-11 19:52:56] PROCESS step=12441001  FTT=76.73  accu=0
+[2026-05-11 19:52:56]   [Step 12442751 | FTT=76.73] Ub=0.015192  U*=1.0128  Re%=1.28%  Force=2.88787E-06  F*=0.1155  Re=5671.6  Ma=0.0263  Ma_max=0.0402  Error=3.23e-05  [SIMPLE-PROP]
+[2026-05-11 19:53:02] CONV step=12441001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:53:02] BENCH skipped: FTT=76.73 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:53:36] ──────────────────────────────────────
+[2026-05-11 19:53:36] PROCESS step=12451001  FTT=76.79  accu=0
+[2026-05-11 19:53:36]   [Step 12452101 | FTT=76.79] Ub=0.015278  U*=1.0185  Re%=1.85%  Force=2.66934E-06  F*=0.1068  Re=5703.9  Ma=0.0265  Ma_max=0.0405  Error=2.74e-05  [SIMPLE-PROP]
+[2026-05-11 19:53:42] CONV step=12451001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:53:42] BENCH skipped: FTT=76.79 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:54:15] ──────────────────────────────────────
+[2026-05-11 19:54:15] PROCESS step=12461001  FTT=76.85  accu=0
+[2026-05-11 19:54:15]   [Step 12462001 | FTT=76.85] Ub=0.015350  U*=1.0233  Re%=2.33%  Force=2.35978E-06  F*=0.0944  Re=5730.7  Ma=0.0266  Ma_max=0.0407  Error=1.94e-05  [SIMPLE-PROP]
+[2026-05-11 19:54:21] CONV step=12461001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:54:21] BENCH skipped: FTT=76.85 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:54:55] ──────────────────────────────────────
+[2026-05-11 19:54:55] PROCESS step=12470001  FTT=76.91  accu=0
+[2026-05-11 19:54:55]   [Step 12471751 | FTT=76.91] Ub=0.015394  U*=1.0262  Re%=2.62%  Force=1.99888E-06  F*=0.0800  Re=5746.9  Ma=0.0267  Ma_max=0.0426  Error=1.00e-05  [SIMPLE-PROP]
+[2026-05-11 19:55:01] CONV step=12470001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:55:01] BENCH skipped: FTT=76.91 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:55:34] ──────────────────────────────────────
+[2026-05-11 19:55:34] PROCESS step=12480001  FTT=76.97  accu=0
+[2026-05-11 19:55:34]   [Step 12481101 | FTT=76.97] Ub=0.015405  U*=1.0270  Re%=2.70%  Force=1.62763E-06  F*=0.0651  Re=5751.1  Ma=0.0267  Ma_max=0.0415  Error=1.20e-06  [SIMPLE-PROP]
+[2026-05-11 19:55:39] CONV step=12480001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:55:39] BENCH skipped: FTT=76.97 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:56:13] ──────────────────────────────────────
+[2026-05-11 19:56:13] PROCESS step=12489001  FTT=77.03  accu=0
+[2026-05-11 19:56:13]   [Step 12490801 | FTT=77.03] Ub=0.015384  U*=1.0256  Re%=2.56%  Force=1.24701E-06  F*=0.0499  Re=5743.4  Ma=0.0266  Ma_max=0.0445  Error=1.16e-05  [SIMPLE-PROP]
+[2026-05-11 19:56:17] CONV step=12489001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:56:17] BENCH skipped: FTT=77.03 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:56:51] ──────────────────────────────────────
+[2026-05-11 19:56:51] PROCESS step=12499001  FTT=77.09  accu=0
+[2026-05-11 19:56:51]   [Step 12500151 | FTT=77.09] Ub=0.015339  U*=1.0226  Re%=2.26%  Force=9.11358E-07  F*=0.0365  Re=5726.6  Ma=0.0266  Ma_max=0.0422  Error=1.90e-05  [SIMPLE-PROP]
+[2026-05-11 19:56:56] CONV step=12499001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:56:56] BENCH skipped: FTT=77.09 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:57:30] ──────────────────────────────────────
+[2026-05-11 19:57:30] PROCESS step=12509001  FTT=77.15  accu=0
+[2026-05-11 19:57:30]   [Step 12510001 | FTT=77.15] Ub=0.015269  U*=1.0179  Re%=1.79%  Force=6.13862E-07  F*=0.0246  Re=5700.4  Ma=0.0264  Ma_max=0.0428  Error=2.73e-05  [SIMPLE-PROP]
+[2026-05-11 19:57:35] CONV step=12509001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:57:35] BENCH skipped: FTT=77.15 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:58:09] ──────────────────────────────────────
+[2026-05-11 19:58:09] PROCESS step=12518001  FTT=77.21  accu=0
+[2026-05-11 19:58:09]   [Step 12520001 | FTT=77.21] Ub=0.015178  U*=1.0118  Re%=1.18%  Force=3.92117E-07  F*=0.0157  Re=5666.3  Ma=0.0263  Ma_max=0.0418  Error=3.30e-05  [SIMPLE-PROP]
+[2026-05-11 19:58:15] CONV step=12518001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:58:15] BENCH skipped: FTT=77.21 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:58:49] ──────────────────────────────────────
+[2026-05-11 19:58:49] PROCESS step=12528001  FTT=77.27  accu=0
+[2026-05-11 19:58:49]   [Step 12529751 | FTT=77.27] Ub=0.015077  U*=1.0052  Re%=0.52%  Force=2.69146E-07  F*=0.0108  Re=5628.9  Ma=0.0261  Ma_max=0.0430  Error=3.51e-05  [SIMPLE-PROP]
+[2026-05-11 19:58:55] CONV step=12528001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:58:55] BENCH skipped: FTT=77.27 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 19:59:29] ──────────────────────────────────────
+[2026-05-11 19:59:29] PROCESS step=12538001  FTT=77.33  accu=0
+[2026-05-11 19:59:29]   [Step 12539501 | FTT=77.33] Ub=0.014976  U*=0.9984  Re%=-0.16%  Force=2.44101E-07  F*=0.0098  Re=5591.1  Ma=0.0259  Ma_max=0.0404  Error=3.35e-05  [SIMPLE-PROP]
+[2026-05-11 19:59:35] CONV step=12538001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 19:59:35] BENCH skipped: FTT=77.33 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:00:09] ──────────────────────────────────────
+[2026-05-11 20:00:09] PROCESS step=12548001  FTT=77.39  accu=0
+[2026-05-11 20:00:09]   [Step 12549301 | FTT=77.39] Ub=0.014884  U*=0.9922  Re%=-0.78%  Force=3.13218E-07  F*=0.0125  Re=5556.6  Ma=0.0258  Ma_max=0.0417  Error=2.94e-05  [SIMPLE-PROP]
+[2026-05-11 20:00:15] CONV step=12548001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:00:15] BENCH skipped: FTT=77.39 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:00:48] ──────────────────────────────────────
+[2026-05-11 20:00:48] PROCESS step=12558001  FTT=77.45  accu=0
+[2026-05-11 20:00:48]   [Step 12559001 | FTT=77.45] Ub=0.014807  U*=0.9871  Re%=-1.29%  Force=4.62927E-07  F*=0.0185  Re=5528.0  Ma=0.0256  Ma_max=0.0408  Error=2.39e-05  [SIMPLE-PROP]
+[2026-05-11 20:00:53] CONV step=12558001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:00:54] BENCH skipped: FTT=77.45 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:01:28] ──────────────────────────────────────
+[2026-05-11 20:01:28] PROCESS step=12568001  FTT=77.51  accu=0
+[2026-05-11 20:01:28]   [Step 12569001 | FTT=77.51] Ub=0.014746  U*=0.9831  Re%=-1.69%  Force=6.85403E-07  F*=0.0274  Re=5505.3  Ma=0.0255  Ma_max=0.0409  Error=1.69e-05  [SIMPLE-PROP]
+[2026-05-11 20:01:32] CONV step=12568001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:01:33] BENCH skipped: FTT=77.51 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:02:06] ──────────────────────────────────────
+[2026-05-11 20:02:06] PROCESS step=12577001  FTT=77.57  accu=0
+[2026-05-11 20:02:06]   [Step 12578751 | FTT=77.57] Ub=0.014708  U*=0.9805  Re%=-1.95%  Force=9.49940E-07  F*=0.0380  Re=5491.1  Ma=0.0255  Ma_max=0.0404  Error=1.01e-05  [SIMPLE-PROP]
+[2026-05-11 20:02:11] CONV step=12577001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:02:11] BENCH skipped: FTT=77.57 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:02:45] ──────────────────────────────────────
+[2026-05-11 20:02:45] PROCESS step=12587001  FTT=77.63  accu=0
+[2026-05-11 20:02:45]   [Step 12588001 | FTT=77.63] Ub=0.014694  U*=0.9796  Re%=-2.04%  Force=1.22520E-06  F*=0.0490  Re=5485.6  Ma=0.0255  Ma_max=0.0384  Error=1.29e-06  [SIMPLE-PROP]
+[2026-05-11 20:02:50] CONV step=12587001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:02:50] BENCH skipped: FTT=77.63 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:03:54] ──────────────────────────────────────
+[2026-05-11 20:03:54] PROCESS step=12604001  FTT=77.74  accu=0
+[2026-05-11 20:03:54]   [Step 12605151 | FTT=77.74] Ub=0.014720  U*=0.9813  Re%=-1.87%  Force=1.73053E-06  F*=0.0692  Re=5495.5  Ma=0.0255  Ma_max=0.0414  Error=1.14e-05  [SIMPLE-PROP]
+[2026-05-11 20:03:59] CONV step=12604001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:03:59] BENCH skipped: FTT=77.74 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:04:33] ──────────────────────────────────────
+[2026-05-11 20:04:33] PROCESS step=12614001  FTT=77.80  accu=0
+[2026-05-11 20:04:33]   [Step 12615001 | FTT=77.80] Ub=0.014760  U*=0.9840  Re%=-1.60%  Force=1.98466E-06  F*=0.0794  Re=5510.5  Ma=0.0256  Ma_max=0.0408  Error=1.65e-05  [SIMPLE-PROP]
+[2026-05-11 20:04:38] CONV step=12614001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:04:38] BENCH skipped: FTT=77.80 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:05:12] ──────────────────────────────────────
+[2026-05-11 20:05:12] PROCESS step=12623001  FTT=77.86  accu=0
+[2026-05-11 20:05:12]   [Step 12624551 | FTT=77.86] Ub=0.014811  U*=0.9874  Re%=-1.26%  Force=2.18747E-06  F*=0.0875  Re=5529.4  Ma=0.0257  Ma_max=0.0390  Error=1.95e-05  [SIMPLE-PROP]
+[2026-05-11 20:05:17] CONV step=12623001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:05:18] BENCH skipped: FTT=77.86 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:05:51] ──────────────────────────────────────
+[2026-05-11 20:05:51] PROCESS step=12633001  FTT=77.92  accu=0
+[2026-05-11 20:05:51]   [Step 12634201 | FTT=77.92] Ub=0.014871  U*=0.9914  Re%=-0.86%  Force=2.33931E-06  F*=0.0936  Re=5551.9  Ma=0.0258  Ma_max=0.0412  Error=2.13e-05  [SIMPLE-PROP]
+[2026-05-11 20:05:57] CONV step=12633001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:05:57] BENCH skipped: FTT=77.92 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:06:31] ──────────────────────────────────────
+[2026-05-11 20:06:31] PROCESS step=12643001  FTT=77.98  accu=0
+[2026-05-11 20:06:31]   [Step 12644101 | FTT=77.98] Ub=0.014934  U*=0.9956  Re%=-0.44%  Force=2.43446E-06  F*=0.0974  Re=5575.4  Ma=0.0259  Ma_max=0.0387  Error=2.13e-05  [SIMPLE-PROP]
+[2026-05-11 20:06:37] CONV step=12643001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:06:37] BENCH skipped: FTT=77.98 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:07:11] ──────────────────────────────────────
+[2026-05-11 20:07:11] PROCESS step=12653001  FTT=78.04  accu=0
+[2026-05-11 20:07:11]   [Step 12654001 | FTT=78.04] Ub=0.014997  U*=0.9998  Re%=-0.02%  Force=2.46779E-06  F*=0.0987  Re=5598.9  Ma=0.0260  Ma_max=0.0403  Error=2.11e-05  [SIMPLE-PROP]
+[2026-05-11 20:07:16] CONV step=12653001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:07:16] BENCH skipped: FTT=78.04 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:07:50] ──────────────────────────────────────
+[2026-05-11 20:07:50] PROCESS step=12663001  FTT=78.10  accu=0
+[2026-05-11 20:07:50]   [Step 12664001 | FTT=78.10] Ub=0.015059  U*=1.0039  Re%=0.39%  Force=2.43985E-06  F*=0.0976  Re=5621.9  Ma=0.0261  Ma_max=0.0405  Error=2.08e-05  [SIMPLE-PROP]
+[2026-05-11 20:07:55] CONV step=12663001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:07:55] BENCH skipped: FTT=78.10 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:08:29] ──────────────────────────────────────
+[2026-05-11 20:08:29] PROCESS step=12672001  FTT=78.16  accu=0
+[2026-05-11 20:08:29]   [Step 12673601 | FTT=78.16] Ub=0.015114  U*=1.0076  Re%=0.76%  Force=2.35725E-06  F*=0.0943  Re=5642.7  Ma=0.0262  Ma_max=0.0442  Error=1.91e-05  [SIMPLE-PROP]
+[2026-05-11 20:08:34] CONV step=12672001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:08:34] BENCH skipped: FTT=78.16 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:09:08] ──────────────────────────────────────
+[2026-05-11 20:09:08] PROCESS step=12682001  FTT=78.22  accu=0
+[2026-05-11 20:09:08]   [Step 12683251 | FTT=78.22] Ub=0.015163  U*=1.0108  Re%=1.08%  Force=2.22406E-06  F*=0.0890  Re=5660.7  Ma=0.0263  Ma_max=0.0423  Error=1.46e-05  [SIMPLE-PROP]
+[2026-05-11 20:09:13] CONV step=12682001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:09:13] BENCH skipped: FTT=78.22 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:09:47] ──────────────────────────────────────
+[2026-05-11 20:09:47] PROCESS step=12692001  FTT=78.28  accu=0
+[2026-05-11 20:09:47]   [Step 12693051 | FTT=78.28] Ub=0.015200  U*=1.0133  Re%=1.33%  Force=2.04746E-06  F*=0.0819  Re=5674.8  Ma=0.0263  Ma_max=0.0426  Error=9.81e-06  [SIMPLE-PROP]
+[2026-05-11 20:09:54] CONV step=12692001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:09:54] BENCH skipped: FTT=78.28 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:10:27] ──────────────────────────────────────
+[2026-05-11 20:10:27] PROCESS step=12702001  FTT=78.34  accu=0
+[2026-05-11 20:10:27]   [Step 12703001 | FTT=78.34] Ub=0.015229  U*=1.0152  Re%=1.52%  Force=1.83585E-06  F*=0.0734  Re=5685.3  Ma=0.0264  Ma_max=0.0409  Error=6.95e-06  [SIMPLE-PROP]
+[2026-05-11 20:10:34] CONV step=12702001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:10:34] BENCH skipped: FTT=78.34 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:11:08] ──────────────────────────────────────
+[2026-05-11 20:11:08] PROCESS step=12712001  FTT=78.40  accu=0
+[2026-05-11 20:11:08]   [Step 12713001 | FTT=78.40] Ub=0.015245  U*=1.0164  Re%=1.64%  Force=1.60059E-06  F*=0.0640  Re=5691.6  Ma=0.0264  Ma_max=0.0399  Error=3.77e-06  [SIMPLE-PROP]
+[2026-05-11 20:11:13] CONV step=12712001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:11:13] BENCH skipped: FTT=78.40 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:11:47] ──────────────────────────────────────
+[2026-05-11 20:11:47] PROCESS step=12722001  FTT=78.46  accu=0
+[2026-05-11 20:11:47]   [Step 12723001 | FTT=78.46] Ub=0.015250  U*=1.0167  Re%=1.67%  Force=1.35454E-06  F*=0.0542  Re=5693.4  Ma=0.0264  Ma_max=0.0427  Error=1.72e-07  [SIMPLE-PROP]
+[2026-05-11 20:11:53] CONV step=12722001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:11:53] BENCH skipped: FTT=78.46 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:13:00] ──────────────────────────────────────
+[2026-05-11 20:13:00] PROCESS step=12740001  FTT=78.57  accu=0
+[2026-05-11 20:13:01]   [Step 12741001 | FTT=78.57] Ub=0.015226  U*=1.0151  Re%=1.51%  Force=9.24437E-07  F*=0.0370  Re=5684.4  Ma=0.0264  Ma_max=0.0397  Error=8.24e-06  [SIMPLE-PROP]
+[2026-05-11 20:13:06] CONV step=12740001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:13:06] BENCH skipped: FTT=78.57 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:14:13] ──────────────────────────────────────
+[2026-05-11 20:14:13] PROCESS step=12758001  FTT=78.69  accu=0
+[2026-05-11 20:14:13]   [Step 12759001 | FTT=78.69] Ub=0.015152  U*=1.0102  Re%=1.02%  Force=5.80530E-07  F*=0.0232  Re=5656.9  Ma=0.0262  Ma_max=0.0399  Error=1.78e-05  [SIMPLE-PROP]
+[2026-05-11 20:14:18] CONV step=12758001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:14:18] BENCH skipped: FTT=78.69 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:15:22] ──────────────────────────────────────
+[2026-05-11 20:15:22] PROCESS step=12775001  FTT=78.79  accu=0
+[2026-05-11 20:15:22]   [Step 12776051 | FTT=78.79] Ub=0.015039  U*=1.0026  Re%=0.26%  Force=4.14341E-07  F*=0.0166  Re=5614.5  Ma=0.0260  Ma_max=0.0409  Error=2.52e-05  [SIMPLE-PROP]
+[2026-05-11 20:15:27] CONV step=12775001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:15:27] BENCH skipped: FTT=78.79 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:16:31] ──────────────────────────────────────
+[2026-05-11 20:16:31] PROCESS step=12792001  FTT=78.90  accu=0
+[2026-05-11 20:16:31]   [Step 12793101 | FTT=78.90] Ub=0.014908  U*=0.9939  Re%=-0.61%  Force=4.60215E-07  F*=0.0184  Re=5565.8  Ma=0.0258  Ma_max=0.0420  Error=2.45e-05  [SIMPLE-PROP]
+[2026-05-11 20:16:36] CONV step=12792001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:16:36] BENCH skipped: FTT=78.90 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:17:10] ──────────────────────────────────────
+[2026-05-11 20:17:10] PROCESS step=12802001  FTT=78.96  accu=0
+[2026-05-11 20:17:10]   [Step 12803001 | FTT=78.96] Ub=0.014842  U*=0.9895  Re%=-1.05%  Force=5.83311E-07  F*=0.0233  Re=5541.1  Ma=0.0257  Ma_max=0.0409  Error=2.13e-05  [SIMPLE-PROP]
+[2026-05-11 20:17:16] CONV step=12802001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:17:16] BENCH skipped: FTT=78.96 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:18:23] ──────────────────────────────────────
+[2026-05-11 20:18:23] PROCESS step=12820001  FTT=79.07  accu=0
+[2026-05-11 20:18:23]   [Step 12821001 | FTT=79.07] Ub=0.014754  U*=0.9836  Re%=-1.64%  Force=9.50596E-07  F*=0.0380  Re=5508.3  Ma=0.0256  Ma_max=0.0380  Error=1.12e-05  [SIMPLE-PROP]
+[2026-05-11 20:18:28] CONV step=12820001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:18:28] BENCH skipped: FTT=79.07 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:19:32] ──────────────────────────────────────
+[2026-05-11 20:19:32] PROCESS step=12837001  FTT=79.17  accu=0
+[2026-05-11 20:19:32]   [Step 12838151 | FTT=79.17] Ub=0.014735  U*=0.9823  Re%=-1.77%  Force=1.39302E-06  F*=0.0557  Re=5501.1  Ma=0.0255  Ma_max=0.0372  Error=2.74e-06  [SIMPLE-PROP]
+[2026-05-11 20:19:37] CONV step=12837001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:19:37] BENCH skipped: FTT=79.17 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:20:44] ──────────────────────────────────────
+[2026-05-11 20:20:44] PROCESS step=12855001  FTT=79.28  accu=0
+[2026-05-11 20:20:44]   [Step 12856001 | FTT=79.28] Ub=0.014780  U*=0.9853  Re%=-1.47%  Force=1.83013E-06  F*=0.0732  Re=5517.8  Ma=0.0256  Ma_max=0.0389  Error=1.40e-05  [SIMPLE-PROP]
+[2026-05-11 20:20:50] CONV step=12855001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:20:50] BENCH skipped: FTT=79.28 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:21:24] ──────────────────────────────────────
+[2026-05-11 20:21:24] PROCESS step=12865001  FTT=79.35  accu=0
+[2026-05-11 20:21:24]   [Step 12866001 | FTT=79.35] Ub=0.014829  U*=0.9886  Re%=-1.14%  Force=2.02483E-06  F*=0.0810  Re=5536.1  Ma=0.0257  Ma_max=0.0382  Error=1.91e-05  [SIMPLE-PROP]
+[2026-05-11 20:21:29] CONV step=12865001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:21:29] BENCH skipped: FTT=79.35 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:22:34] ──────────────────────────────────────
+[2026-05-11 20:22:34] PROCESS step=12882001  FTT=79.45  accu=0
+[2026-05-11 20:22:34]   [Step 12883001 | FTT=79.45] Ub=0.014935  U*=0.9957  Re%=-0.43%  Force=2.22561E-06  F*=0.0890  Re=5575.7  Ma=0.0259  Ma_max=0.0384  Error=2.28e-05  [SIMPLE-PROP]
+[2026-05-11 20:22:39] CONV step=12882001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:22:39] BENCH skipped: FTT=79.45 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:23:14] ──────────────────────────────────────
+[2026-05-11 20:23:14] PROCESS step=12892001  FTT=79.51  accu=0
+[2026-05-11 20:23:14]   [Step 12893001 | FTT=79.51] Ub=0.015003  U*=1.0002  Re%=0.02%  Force=2.25589E-06  F*=0.0902  Re=5601.2  Ma=0.0260  Ma_max=0.0383  Error=2.19e-05  [SIMPLE-PROP]
+[2026-05-11 20:23:18] CONV step=12892001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:23:18] BENCH skipped: FTT=79.51 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:23:52] ──────────────────────────────────────
+[2026-05-11 20:23:52] PROCESS step=12900001  FTT=79.56  accu=0
+[2026-05-11 20:23:52]   [Step 12901401 | FTT=79.56] Ub=0.015057  U*=1.0038  Re%=0.38%  Force=2.23049E-06  F*=0.0892  Re=5621.4  Ma=0.0261  Ma_max=0.0376  Error=2.10e-05  [SIMPLE-PROP]
+[2026-05-11 20:23:57] CONV step=12900001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:23:57] BENCH skipped: FTT=79.56 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:24:31] ──────────────────────────────────────
+[2026-05-11 20:24:31] PROCESS step=12910001  FTT=79.62  accu=0
+[2026-05-11 20:24:31]   [Step 12911001 | FTT=79.62] Ub=0.015113  U*=1.0075  Re%=0.75%  Force=2.14929E-06  F*=0.0860  Re=5642.0  Ma=0.0262  Ma_max=0.0387  Error=1.79e-05  [SIMPLE-PROP]
+[2026-05-11 20:24:36] CONV step=12910001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:24:36] BENCH skipped: FTT=79.62 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:25:40] ──────────────────────────────────────
+[2026-05-11 20:25:40] PROCESS step=12927001  FTT=79.73  accu=0
+[2026-05-11 20:25:40]   [Step 12928101 | FTT=79.73] Ub=0.015186  U*=1.0124  Re%=1.24%  Force=1.89208E-06  F*=0.0757  Re=5669.3  Ma=0.0263  Ma_max=0.0382  Error=9.77e-06  [SIMPLE-PROP]
+[2026-05-11 20:25:45] CONV step=12927001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:25:45] BENCH skipped: FTT=79.73 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:26:20] ──────────────────────────────────────
+[2026-05-11 20:26:20] PROCESS step=12937001  FTT=79.79  accu=0
+[2026-05-11 20:26:20]   [Step 12938001 | FTT=79.79] Ub=0.015208  U*=1.0139  Re%=1.39%  Force=1.69839E-06  F*=0.0679  Re=5677.6  Ma=0.0263  Ma_max=0.0405  Error=5.67e-06  [SIMPLE-PROP]
+[2026-05-11 20:26:25] CONV step=12937001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:26:25] BENCH skipped: FTT=79.79 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:27:29] ──────────────────────────────────────
+[2026-05-11 20:27:29] PROCESS step=12954001  FTT=79.90  accu=0
+[2026-05-11 20:27:29]   [Step 12955351 | FTT=79.90] Ub=0.015212  U*=1.0141  Re%=1.41%  Force=1.33154E-06  F*=0.0533  Re=5679.0  Ma=0.0263  Ma_max=0.0394  Error=4.70e-06  [SIMPLE-PROP]
+[2026-05-11 20:27:36] CONV step=12954001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:27:36] BENCH skipped: FTT=79.90 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:28:10] ──────────────────────────────────────
+[2026-05-11 20:28:10] PROCESS step=12964001  FTT=79.96  accu=0
+[2026-05-11 20:28:10]   [Step 12965301 | FTT=79.96] Ub=0.015191  U*=1.0127  Re%=1.27%  Force=1.13268E-06  F*=0.0453  Re=5671.3  Ma=0.0263  Ma_max=0.0400  Error=9.54e-06  [SIMPLE-PROP]
+[2026-05-11 20:28:15] CONV step=12964001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:28:16] BENCH skipped: FTT=79.96 < G2=90.000 (accu=0, CV window not full)
+[2026-05-11 20:28:49] ──────────────────────────────────────
+[2026-05-11 20:28:49] PROCESS step=12973001  FTT=80.01  accu=1804
+[2026-05-11 20:28:49]   [Step 12974201 | FTT=80.01] Ub=0.015163  U*=1.0108  Re%=1.08%  Force=9.76967E-07  F*=0.0391  Re=5660.7  Ma=0.0263  Ma_max=0.0392  Error=1.17e-05  [SIMPLE-PROP]
+[2026-05-11 20:28:56] CONV step=12973001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:28:56] BENCH skipped: FTT=80.01 < G2=90.000 (accu=1804, CV window not full)
+[2026-05-11 20:29:30] ──────────────────────────────────────
+[2026-05-11 20:29:30] PROCESS step=12980001  FTT=80.05  accu=8804
+[2026-05-11 20:29:30]   [Step 12981051 | FTT=80.05] Ub=0.015137  U*=1.0091  Re%=0.91%  Force=8.75538E-07  F*=0.0350  Re=5651.2  Ma=0.0262  Ma_max=0.0416  Error=1.27e-05  [SIMPLE-PROP]
+[2026-05-11 20:29:37] CONV step=12980001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:29:37] BENCH skipped: FTT=80.05 < G2=90.000 (accu=8804, CV window not full)
+[2026-05-11 20:30:11] ──────────────────────────────────────
+[2026-05-11 20:30:11] PROCESS step=12987001  FTT=80.10  accu=15804
+[2026-05-11 20:30:11]   [Step 12988001 | FTT=80.10] Ub=0.015110  U*=1.0073  Re%=0.73%  Force=7.90717E-07  F*=0.0316  Re=5641.0  Ma=0.0262  Ma_max=0.0409  Error=1.30e-05  [SIMPLE-PROP]
+[2026-05-11 20:30:17] CONV step=12987001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:30:17] BENCH skipped: FTT=80.10 < G2=90.000 (accu=15804, CV window not full)
+[2026-05-11 20:30:51] ──────────────────────────────────────
+[2026-05-11 20:30:51] PROCESS step=12994001  FTT=80.14  accu=22804
+[2026-05-11 20:30:51]   [Step 12995001 | FTT=80.14] Ub=0.015082  U*=1.0055  Re%=0.55%  Force=7.24313E-07  F*=0.0290  Re=5630.7  Ma=0.0261  Ma_max=0.0390  Error=1.33e-05  [SIMPLE-PROP]
+[2026-05-11 20:30:57] CONV step=12994001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:30:57] BENCH skipped: FTT=80.14 < G2=90.000 (accu=22804, CV window not full)
+[2026-05-11 20:31:31] ──────────────────────────────────────
+[2026-05-11 20:31:32] PROCESS step=13001001  FTT=80.18  accu=28804
+[2026-05-11 20:31:32]   [Step 13001851 | FTT=80.18] Ub=0.015056  U*=1.0037  Re%=0.37%  Force=6.77644E-07  F*=0.0271  Re=5620.9  Ma=0.0261  Ma_max=0.0387  Error=1.23e-05  [SIMPLE-PROP]
+[2026-05-11 20:31:38] CONV step=13001001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:31:38] BENCH skipped: FTT=80.18 < G2=90.000 (accu=28804, CV window not full)
+[2026-05-11 20:32:12] ──────────────────────────────────────
+[2026-05-11 20:32:12] PROCESS step=13007001  FTT=80.22  accu=35804
+[2026-05-11 20:32:12]   [Step 13008151 | FTT=80.22] Ub=0.015032  U*=1.0021  Re%=0.21%  Force=6.50318E-07  F*=0.0260  Re=5611.9  Ma=0.0260  Ma_max=0.0387  Error=1.27e-05  [SIMPLE-PROP]
+[2026-05-11 20:32:18] CONV step=13007001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:32:18] BENCH skipped: FTT=80.22 < G2=90.000 (accu=35804, CV window not full)
+[2026-05-11 20:32:52] ──────────────────────────────────────
+[2026-05-11 20:32:52] PROCESS step=13014001  FTT=80.26  accu=42804
+[2026-05-11 20:32:52]   [Step 13015001 | FTT=80.26] Ub=0.015006  U*=1.0004  Re%=0.04%  Force=6.37587E-07  F*=0.0255  Re=5602.1  Ma=0.0260  Ma_max=0.0400  Error=1.28e-05  [SIMPLE-PROP]
+[2026-05-11 20:32:58] CONV step=13014001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:32:58] BENCH skipped: FTT=80.26 < G2=90.000 (accu=42804, CV window not full)
+[2026-05-11 20:33:32] ──────────────────────────────────────
+[2026-05-11 20:33:32] PROCESS step=13021001  FTT=80.31  accu=49804
+[2026-05-11 20:33:32]   [Step 13022001 | FTT=80.31] Ub=0.014979  U*=0.9986  Re%=-0.14%  Force=6.43006E-07  F*=0.0257  Re=5592.0  Ma=0.0259  Ma_max=0.0390  Error=1.33e-05  [SIMPLE-PROP]
+[2026-05-11 20:33:38] CONV step=13021001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:33:38] BENCH skipped: FTT=80.31 < G2=90.000 (accu=49804, CV window not full)
+[2026-05-11 20:34:12] ──────────────────────────────────────
+[2026-05-11 20:34:12] PROCESS step=13028001  FTT=80.35  accu=55804
+[2026-05-11 20:34:12]   [Step 13028801 | FTT=80.35] Ub=0.014952  U*=0.9968  Re%=-0.32%  Force=6.66372E-07  F*=0.0267  Re=5582.2  Ma=0.0259  Ma_max=0.0397  Error=1.25e-05  [SIMPLE-PROP]
+[2026-05-11 20:34:18] CONV step=13028001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:34:19] BENCH skipped: FTT=80.35 < G2=90.000 (accu=55804, CV window not full)
+[2026-05-11 20:34:52] ──────────────────────────────────────
+[2026-05-11 20:34:52] PROCESS step=13034001  FTT=80.39  accu=62804
+[2026-05-11 20:34:52]   [Step 13035201 | FTT=80.39] Ub=0.014929  U*=0.9953  Re%=-0.47%  Force=7.04043E-07  F*=0.0282  Re=5573.4  Ma=0.0259  Ma_max=0.0394  Error=1.22e-05  [SIMPLE-PROP]
+[2026-05-11 20:34:58] CONV step=13034001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:34:58] BENCH skipped: FTT=80.39 < G2=90.000 (accu=62804, CV window not full)
+[2026-05-11 20:35:32] ──────────────────────────────────────
+[2026-05-11 20:35:32] PROCESS step=13041001  FTT=80.43  accu=69804
+[2026-05-11 20:35:32]   [Step 13042001 | FTT=80.43] Ub=0.014905  U*=0.9937  Re%=-0.63%  Force=7.60053E-07  F*=0.0304  Re=5564.6  Ma=0.0258  Ma_max=0.0376  Error=1.11e-05  [SIMPLE-PROP]
+[2026-05-11 20:35:38] CONV step=13041001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:35:38] BENCH skipped: FTT=80.43 < G2=90.000 (accu=69804, CV window not full)
+[2026-05-11 20:36:12] ──────────────────────────────────────
+[2026-05-11 20:36:12] PROCESS step=13045001  FTT=80.448984539744075  accu=72804
+[2026-05-11 20:36:17] CONV step=13045001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:36:17] BENCH skipped: FTT=80.448984539744075 < G2=90.000 (accu=72804, CV window not full)
+[2026-05-11 20:37:55] ──────────────────────────────────────
+[2026-05-11 20:37:55] PROCESS step=13061001  FTT=80.55  accu=89804
+[2026-05-11 20:37:55]   [Step 13062001 | FTT=80.55] Ub=0.014848  U*=0.9899  Re%=-1.01%  Force=1.00762E-06  F*=0.0403  Re=5543.3  Ma=0.0257  Ma_max=0.0402  Error=7.31e-06  [SIMPLE-PROP]
+[2026-05-11 20:38:01] CONV step=13061001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:38:01] BENCH skipped: FTT=80.55 < G2=90.000 (accu=89804, CV window not full)
+[2026-05-11 20:38:34] ──────────────────────────────────────
+[2026-05-11 20:38:34] PROCESS step=13068001  FTT=80.60  accu=96804
+[2026-05-11 20:38:34]   [Step 13069001 | FTT=80.60] Ub=0.014835  U*=0.9890  Re%=-1.10%  Force=1.11758E-06  F*=0.0447  Re=5538.4  Ma=0.0257  Ma_max=0.0417  Error=5.17e-06  [SIMPLE-PROP]
+[2026-05-11 20:38:40] CONV step=13068001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:38:40] BENCH skipped: FTT=80.60 < G2=90.000 (accu=96804, CV window not full)
+[2026-05-11 20:39:14] ──────────────────────────────────────
+[2026-05-11 20:39:14] PROCESS step=13075001  FTT=80.64  accu=102804
+[2026-05-11 20:39:14]   [Step 13075801 | FTT=80.64] Ub=0.014827  U*=0.9885  Re%=-1.15%  Force=1.23141E-06  F*=0.0493  Re=5535.5  Ma=0.0257  Ma_max=0.0418  Error=1.95e-06  [SIMPLE-PROP]
+[2026-05-11 20:39:20] CONV step=13075001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:39:20] BENCH skipped: FTT=80.64 < G2=90.000 (accu=102804, CV window not full)
+[2026-05-11 20:40:25] ──────────────────────────────────────
+[2026-05-11 20:40:25] PROCESS step=13087001  FTT=80.71  accu=114804
+[2026-05-11 20:40:25]   [Step 13087701 | FTT=80.71] Ub=0.014829  U*=0.9886  Re%=-1.14%  Force=1.43515E-06  F*=0.0574  Re=5536.1  Ma=0.0257  Ma_max=0.0387  Error=2.25e-06  [SIMPLE-PROP]
+[2026-05-11 20:40:30] CONV step=13087001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:40:30] BENCH skipped: FTT=80.71 < G2=90.000 (accu=114804, CV window not full)
+[2026-05-11 20:41:04] ──────────────────────────────────────
+[2026-05-11 20:41:04] PROCESS step=13093001  FTT=80.75  accu=121804
+[2026-05-11 20:41:04]   [Step 13094101 | FTT=80.75] Ub=0.014836  U*=0.9890  Re%=-1.10%  Force=1.54131E-06  F*=0.0617  Re=5538.6  Ma=0.0257  Ma_max=0.0390  Error=4.32e-06  [SIMPLE-PROP]
+[2026-05-11 20:41:10] CONV step=13093001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:41:10] BENCH skipped: FTT=80.75 < G2=90.000 (accu=121804, CV window not full)
+[2026-05-11 20:41:44] ──────────────────────────────────────
+[2026-05-11 20:41:44] PROCESS step=13100001  FTT=80.79  accu=128804
+[2026-05-11 20:41:44]   [Step 13101001 | FTT=80.79] Ub=0.014847  U*=0.9898  Re%=-1.02%  Force=1.64998E-06  F*=0.0660  Re=5542.7  Ma=0.0257  Ma_max=0.0416  Error=6.44e-06  [SIMPLE-PROP]
+[2026-05-11 20:41:50] CONV step=13100001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:41:50] BENCH skipped: FTT=80.79 < G2=90.000 (accu=128804, CV window not full)
+[2026-05-11 20:42:24] ──────────────────────────────────────
+[2026-05-11 20:42:24] PROCESS step=13107001  FTT=80.84  accu=135804
+[2026-05-11 20:42:24]   [Step 13108001 | FTT=80.84] Ub=0.014862  U*=0.9908  Re%=-0.92%  Force=1.75088E-06  F*=0.0700  Re=5548.6  Ma=0.0257  Ma_max=0.0396  Error=8.42e-06  [SIMPLE-PROP]
+[2026-05-11 20:42:30] CONV step=13107001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:42:30] BENCH skipped: FTT=80.84 < G2=90.000 (accu=135804, CV window not full)
+[2026-05-11 20:43:04] ──────────────────────────────────────
+[2026-05-11 20:43:04] PROCESS step=13114001  FTT=80.88  accu=141804
+[2026-05-11 20:43:04]   [Step 13114751 | FTT=80.88] Ub=0.014879  U*=0.9920  Re%=-0.80%  Force=1.83711E-06  F*=0.0735  Re=5555.0  Ma=0.0258  Ma_max=0.0399  Error=9.02e-06  [SIMPLE-PROP]
+[2026-05-11 20:43:09] CONV step=13114001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:43:09] BENCH skipped: FTT=80.88 < G2=90.000 (accu=141804, CV window not full)
+[2026-05-11 20:43:43] ──────────────────────────────────────
+[2026-05-11 20:43:43] PROCESS step=13120001  FTT=80.92  accu=148804
+[2026-05-11 20:43:43]   [Step 13121051 | FTT=80.92] Ub=0.014898  U*=0.9932  Re%=-0.68%  Force=1.90647E-06  F*=0.0763  Re=5561.8  Ma=0.0258  Ma_max=0.0433  Error=1.01e-05  [SIMPLE-PROP]
+[2026-05-11 20:43:49] CONV step=13120001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:43:49] BENCH skipped: FTT=80.92 < G2=90.000 (accu=148804, CV window not full)
+[2026-05-11 20:44:23] ──────────────────────────────────────
+[2026-05-11 20:44:23] PROCESS step=13127001  FTT=80.96  accu=155804
+[2026-05-11 20:44:23]   [Step 13128001 | FTT=80.96] Ub=0.014920  U*=0.9947  Re%=-0.53%  Force=1.96920E-06  F*=0.0788  Re=5570.1  Ma=0.0258  Ma_max=0.0404  Error=1.03e-05  [SIMPLE-PROP]
+[2026-05-11 20:44:28] CONV step=13127001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:44:28] BENCH skipped: FTT=80.96 < G2=90.000 (accu=155804, CV window not full)
+[2026-05-11 20:45:02] ──────────────────────────────────────
+[2026-05-11 20:45:02] PROCESS step=13134001  FTT=81.00  accu=162804
+[2026-05-11 20:45:02]   [Step 13135001 | FTT=81.00] Ub=0.014941  U*=0.9961  Re%=-0.39%  Force=2.01702E-06  F*=0.0807  Re=5578.1  Ma=0.0259  Ma_max=0.0400  Error=9.94e-06  [SIMPLE-PROP]
+[2026-05-11 20:45:08] CONV step=13134001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:45:08] BENCH skipped: FTT=81.00 < G2=90.000 (accu=162804, CV window not full)
+[2026-05-11 20:46:15] ──────────────────────────────────────
+[2026-05-11 20:46:15] PROCESS step=13146001  FTT=81.08  accu=174804
+[2026-05-11 20:46:15]   [Step 13147001 | FTT=81.08] Ub=0.014977  U*=0.9984  Re%=-0.16%  Force=2.06546E-06  F*=0.0826  Re=5591.2  Ma=0.0259  Ma_max=0.0415  Error=9.33e-06  [SIMPLE-PROP]
+[2026-05-11 20:46:21] CONV step=13146001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:46:21] BENCH skipped: FTT=81.08 < G2=90.000 (accu=174804, CV window not full)
+[2026-05-11 20:46:54] ──────────────────────────────────────
+[2026-05-11 20:46:54] PROCESS step=13153001  FTT=81.12  accu=181804
+[2026-05-11 20:46:54]   [Step 13154001 | FTT=81.12] Ub=0.014997  U*=0.9998  Re%=-0.02%  Force=2.07480E-06  F*=0.0830  Re=5598.7  Ma=0.0260  Ma_max=0.0421  Error=9.94e-06  [SIMPLE-PROP]
+[2026-05-11 20:47:00] CONV step=13153001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:47:00] BENCH skipped: FTT=81.12 < G2=90.000 (accu=181804, CV window not full)
+[2026-05-11 20:48:07] ──────────────────────────────────────
+[2026-05-11 20:48:07] PROCESS step=13165001  FTT=81.20  accu=193804
+[2026-05-11 20:48:07]   [Step 13166001 | FTT=81.20] Ub=0.015032  U*=1.0022  Re%=0.22%  Force=2.05840E-06  F*=0.0823  Re=5612.1  Ma=0.0260  Ma_max=0.0404  Error=1.08e-05  [SIMPLE-PROP]
+[2026-05-11 20:48:13] CONV step=13165001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:48:14] BENCH skipped: FTT=81.20 < G2=90.000 (accu=193804, CV window not full)
+[2026-05-11 20:48:47] ──────────────────────────────────────
+[2026-05-11 20:48:47] PROCESS step=13172001  FTT=81.24  accu=200804
+[2026-05-11 20:48:47]   [Step 13173001 | FTT=81.24] Ub=0.015056  U*=1.0037  Re%=0.37%  Force=2.02784E-06  F*=0.0811  Re=5621.0  Ma=0.0261  Ma_max=0.0419  Error=1.18e-05  [SIMPLE-PROP]
+[2026-05-11 20:48:53] CONV step=13172001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:48:53] BENCH skipped: FTT=81.24 < G2=90.000 (accu=200804, CV window not full)
+[2026-05-11 20:50:00] ──────────────────────────────────────
+[2026-05-11 20:50:00] PROCESS step=13184001  FTT=81.31  accu=212804
+[2026-05-11 20:50:01]   [Step 13185001 | FTT=81.31] Ub=0.015102  U*=1.0068  Re%=0.68%  Force=1.93451E-06  F*=0.0774  Re=5637.9  Ma=0.0262  Ma_max=0.0427  Error=1.30e-05  [SIMPLE-PROP]
+[2026-05-11 20:50:06] CONV step=13184001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:50:06] BENCH skipped: FTT=81.31 < G2=90.000 (accu=212804, CV window not full)
+[2026-05-11 20:50:41] ──────────────────────────────────────
+[2026-05-11 20:50:41] PROCESS step=13191001  FTT=81.36  accu=219804
+[2026-05-11 20:50:41]   [Step 13192001 | FTT=81.36] Ub=0.015129  U*=1.0086  Re%=0.86%  Force=1.85486E-06  F*=0.0742  Re=5648.1  Ma=0.0262  Ma_max=0.0396  Error=1.26e-05  [SIMPLE-PROP]
+[2026-05-11 20:50:46] CONV step=13191001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:50:46] BENCH skipped: FTT=81.36 < G2=90.000 (accu=219804, CV window not full)
+[2026-05-11 20:51:20] ──────────────────────────────────────
+[2026-05-11 20:51:20] PROCESS step=13198001  FTT=81.40  accu=226804
+[2026-05-11 20:51:20]   [Step 13199001 | FTT=81.40] Ub=0.015155  U*=1.0103  Re%=1.03%  Force=1.75655E-06  F*=0.0703  Re=5657.8  Ma=0.0262  Ma_max=0.0397  Error=1.22e-05  [SIMPLE-PROP]
+[2026-05-11 20:51:26] CONV step=13198001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:51:26] BENCH skipped: FTT=81.40 < G2=90.000 (accu=226804, CV window not full)
+[2026-05-11 20:51:59] ──────────────────────────────────────
+[2026-05-11 20:51:59] PROCESS step=13204001  FTT=81.44  accu=232804
+[2026-05-11 20:52:00]   [Step 13205201 | FTT=81.44] Ub=0.015176  U*=1.0117  Re%=1.17%  Force=1.65508E-06  F*=0.0662  Re=5665.6  Ma=0.0263  Ma_max=0.0402  Error=9.82e-06  [SIMPLE-PROP]
+[2026-05-11 20:52:05] CONV step=13204001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:52:05] BENCH skipped: FTT=81.44 < G2=90.000 (accu=232804, CV window not full)
+[2026-05-11 20:52:39] ──────────────────────────────────────
+[2026-05-11 20:52:39] PROCESS step=13211001  FTT=81.48  accu=239804
+[2026-05-11 20:52:39]   [Step 13212001 | FTT=81.48] Ub=0.015193  U*=1.0129  Re%=1.29%  Force=1.53080E-06  F*=0.0612  Re=5672.1  Ma=0.0263  Ma_max=0.0393  Error=7.30e-06  [SIMPLE-PROP]
+[2026-05-11 20:52:45] CONV step=13211001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:52:45] BENCH skipped: FTT=81.48 < G2=90.000 (accu=239804, CV window not full)
+[2026-05-11 20:53:19] ──────────────────────────────────────
+[2026-05-11 20:53:19] PROCESS step=13218001  FTT=81.52  accu=246804
+[2026-05-11 20:53:19]   [Step 13219001 | FTT=81.52] Ub=0.015204  U*=1.0136  Re%=1.36%  Force=1.39297E-06  F*=0.0557  Re=5676.0  Ma=0.0263  Ma_max=0.0412  Error=2.84e-06  [SIMPLE-PROP]
+[2026-05-11 20:53:24] CONV step=13218001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:53:24] BENCH skipped: FTT=81.52 < G2=90.000 (accu=246804, CV window not full)
+[2026-05-11 20:53:58] ──────────────────────────────────────
+[2026-05-11 20:53:58] PROCESS step=13225001  FTT=81.56  accu=252804
+[2026-05-11 20:53:58]   [Step 13225601 | FTT=81.56] Ub=0.015206  U*=1.0137  Re%=1.37%  Force=1.25905E-06  F*=0.0504  Re=5676.8  Ma=0.0263  Ma_max=0.0422  Error=8.80e-07  [SIMPLE-PROP]
+[2026-05-11 20:54:04] CONV step=13225001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:54:04] BENCH skipped: FTT=81.56 < G2=90.000 (accu=252804, CV window not full)
+[2026-05-11 20:54:38] ──────────────────────────────────────
+[2026-05-11 20:54:38] PROCESS step=13231001  FTT=81.60  accu=259804
+[2026-05-11 20:54:38]   [Step 13232001 | FTT=81.60] Ub=0.015200  U*=1.0133  Re%=1.33%  Force=1.13039E-06  F*=0.0452  Re=5674.5  Ma=0.0263  Ma_max=0.0428  Error=4.80e-06  [SIMPLE-PROP]
+[2026-05-11 20:54:43] CONV step=13231001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:54:43] BENCH skipped: FTT=81.60 < G2=90.000 (accu=259804, CV window not full)
+[2026-05-11 20:55:17] ──────────────────────────────────────
+[2026-05-11 20:55:17] PROCESS step=13238001  FTT=81.65  accu=266804
+[2026-05-11 20:55:17]   [Step 13239001 | FTT=81.65] Ub=0.015185  U*=1.0124  Re%=1.24%  Force=9.96757E-07  F*=0.0399  Re=5669.2  Ma=0.0263  Ma_max=0.0392  Error=8.97e-06  [SIMPLE-PROP]
+[2026-05-11 20:55:22] CONV step=13238001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:55:22] BENCH skipped: FTT=81.65 < G2=90.000 (accu=266804, CV window not full)
+[2026-05-11 20:56:29] ──────────────────────────────────────
+[2026-05-11 20:56:29] PROCESS step=13250001  FTT=81.72  accu=278804
+[2026-05-11 20:56:29]   [Step 13251001 | FTT=81.72] Ub=0.015141  U*=1.0094  Re%=0.94%  Force=8.00867E-07  F*=0.0320  Re=5652.8  Ma=0.0262  Ma_max=0.0409  Error=1.48e-05  [SIMPLE-PROP]
+[2026-05-11 20:56:35] CONV step=13250001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:56:36] BENCH skipped: FTT=81.72 < G2=90.000 (accu=278804, CV window not full)
+[2026-05-11 20:57:09] ──────────────────────────────────────
+[2026-05-11 20:57:09] PROCESS step=13257001  FTT=81.76  accu=285804
+[2026-05-11 20:57:09]   [Step 13258001 | FTT=81.76] Ub=0.015107  U*=1.0071  Re%=0.71%  Force=7.14919E-07  F*=0.0286  Re=5639.8  Ma=0.0262  Ma_max=0.0390  Error=1.75e-05  [SIMPLE-PROP]
+[2026-05-11 20:57:15] CONV step=13257001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:57:16] BENCH skipped: FTT=81.76 < G2=90.000 (accu=285804, CV window not full)
+[2026-05-11 20:57:49] ──────────────────────────────────────
+[2026-05-11 20:57:49] PROCESS step=13264001  FTT=81.81  accu=292804
+[2026-05-11 20:57:49]   [Step 13265001 | FTT=81.81] Ub=0.015068  U*=1.0046  Re%=0.46%  Force=6.54404E-07  F*=0.0262  Re=5625.5  Ma=0.0261  Ma_max=0.0402  Error=1.87e-05  [SIMPLE-PROP]
+[2026-05-11 20:57:55] CONV step=13264001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:57:55] BENCH skipped: FTT=81.81 < G2=90.000 (accu=292804, CV window not full)
+[2026-05-11 20:59:02] ──────────────────────────────────────
+[2026-05-11 20:59:02] PROCESS step=13276001  FTT=81.88  accu=304804
+[2026-05-11 20:59:02]   [Step 13277001 | FTT=81.88] Ub=0.014994  U*=0.9996  Re%=-0.04%  Force=6.16140E-07  F*=0.0246  Re=5597.8  Ma=0.0260  Ma_max=0.0399  Error=2.27e-05  [SIMPLE-PROP]
+[2026-05-11 20:59:09] CONV step=13276001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:59:09] BENCH skipped: FTT=81.88 < G2=90.000 (accu=304804, CV window not full)
+[2026-05-11 20:59:42] ──────────────────────────────────────
+[2026-05-11 20:59:43] PROCESS step=13283001  FTT=81.92  accu=311804
+[2026-05-11 20:59:43]   [Step 13284001 | FTT=81.92] Ub=0.014946  U*=0.9964  Re%=-0.36%  Force=6.37096E-07  F*=0.0255  Re=5579.7  Ma=0.0259  Ma_max=0.0450  Error=2.27e-05  [SIMPLE-PROP]
+[2026-05-11 20:59:48] CONV step=13283001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 20:59:48] BENCH skipped: FTT=81.92 < G2=90.000 (accu=311804, CV window not full)
+[2026-05-11 21:00:56] ──────────────────────────────────────
+[2026-05-11 21:00:56] PROCESS step=13295001  FTT=82.00  accu=323804
+[2026-05-11 21:00:56]   [Step 13296001 | FTT=82.00] Ub=0.014865  U*=0.9910  Re%=-0.90%  Force=7.50153E-07  F*=0.0300  Re=5549.6  Ma=0.0257  Ma_max=0.0415  Error=2.11e-05  [SIMPLE-PROP]
+[2026-05-11 21:01:01] CONV step=13295001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:01:01] BENCH skipped: FTT=82.00 < G2=90.000 (accu=323804, CV window not full)
+[2026-05-11 21:01:35] ──────────────────────────────────────
+[2026-05-11 21:01:35] PROCESS step=13302001  FTT=82.04  accu=330804
+[2026-05-11 21:01:35]   [Step 13303001 | FTT=82.04] Ub=0.014823  U*=0.9882  Re%=-1.18%  Force=8.58489E-07  F*=0.0343  Re=5533.8  Ma=0.0257  Ma_max=0.0421  Error=1.97e-05  [SIMPLE-PROP]
+[2026-05-11 21:01:41] CONV step=13302001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:01:41] BENCH skipped: FTT=82.04 < G2=90.000 (accu=330804, CV window not full)
+[2026-05-11 21:03:19] ──────────────────────────────────────
+[2026-05-11 21:03:19] PROCESS step=13319001  FTT=82.14  accu=347804
+[2026-05-11 21:03:19]   [Step 13320001 | FTT=82.14] Ub=0.014751  U*=0.9834  Re%=-1.66%  Force=1.22494E-06  F*=0.0490  Re=5506.9  Ma=0.0255  Ma_max=0.0415  Error=9.27e-06  [SIMPLE-PROP]
+[2026-05-11 21:03:24] CONV step=13319001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:03:24] BENCH skipped: FTT=82.14 < G2=90.000 (accu=347804, CV window not full)
+[2026-05-11 21:03:58] ──────────────────────────────────────
+[2026-05-11 21:03:58] PROCESS step=13326001  FTT=82.19  accu=353804
+[2026-05-11 21:03:58]   [Step 13326801 | FTT=82.19] Ub=0.014738  U*=0.9826  Re%=-1.74%  Force=1.39736E-06  F*=0.0559  Re=5502.3  Ma=0.0255  Ma_max=0.0416  Error=3.28e-06  [SIMPLE-PROP]
+[2026-05-11 21:04:03] CONV step=13326001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:04:03] BENCH skipped: FTT=82.19 < G2=90.000 (accu=353804, CV window not full)
+[2026-05-11 21:04:37] ──────────────────────────────────────
+[2026-05-11 21:04:37] PROCESS step=13332001  FTT=82.23  accu=360804
+[2026-05-11 21:04:37]   [Step 13333001 | FTT=82.23] Ub=0.014737  U*=0.9825  Re%=-1.75%  Force=1.55864E-06  F*=0.0623  Re=5501.8  Ma=0.0255  Ma_max=0.0416  Error=2.11e-06  [SIMPLE-PROP]
+[2026-05-11 21:04:43] CONV step=13332001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:04:43] BENCH skipped: FTT=82.23 < G2=90.000 (accu=360804, CV window not full)
+[2026-05-11 21:05:17] ──────────────────────────────────────
+[2026-05-11 21:05:17] PROCESS step=13339001  FTT=82.27  accu=367804
+[2026-05-11 21:05:17]   [Step 13340001 | FTT=82.27] Ub=0.014746  U*=0.9831  Re%=-1.69%  Force=1.73784E-06  F*=0.0695  Re=5505.3  Ma=0.0255  Ma_max=0.0422  Error=6.48e-06  [SIMPLE-PROP]
+[2026-05-11 21:05:23] CONV step=13339001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:05:23] BENCH skipped: FTT=82.27 < G2=90.000 (accu=367804, CV window not full)
+[2026-05-11 21:05:57] ──────────────────────────────────────
+[2026-05-11 21:05:57] PROCESS step=13346001  FTT=82.31  accu=373804
+[2026-05-11 21:05:57]   [Step 13346901 | FTT=82.31] Ub=0.014765  U*=0.9843  Re%=-1.57%  Force=1.90503E-06  F*=0.0762  Re=5512.1  Ma=0.0256  Ma_max=0.0410  Error=1.07e-05  [SIMPLE-PROP]
+[2026-05-11 21:06:02] CONV step=13346001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:06:02] BENCH skipped: FTT=82.31 < G2=90.000 (accu=373804, CV window not full)
+[2026-05-11 21:06:36] ──────────────────────────────────────
+[2026-05-11 21:06:36] PROCESS step=13352001  FTT=82.35  accu=380804
+[2026-05-11 21:06:36]   [Step 13353151 | FTT=82.35] Ub=0.014787  U*=0.9858  Re%=-1.42%  Force=2.04368E-06  F*=0.0817  Re=5520.6  Ma=0.0256  Ma_max=0.0396  Error=1.39e-05  [SIMPLE-PROP]
+[2026-05-11 21:06:42] CONV step=13352001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:06:42] BENCH skipped: FTT=82.35 < G2=90.000 (accu=380804, CV window not full)
+[2026-05-11 21:07:16] ──────────────────────────────────────
+[2026-05-11 21:07:16] PROCESS step=13359001  FTT=82.39  accu=387804
+[2026-05-11 21:07:16]   [Step 13360001 | FTT=82.39] Ub=0.014818  U*=0.9879  Re%=-1.21%  Force=2.17755E-06  F*=0.0871  Re=5532.0  Ma=0.0257  Ma_max=0.0397  Error=1.66e-05  [SIMPLE-PROP]
+[2026-05-11 21:07:23] CONV step=13359001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:07:23] BENCH skipped: FTT=82.39 < G2=90.000 (accu=387804, CV window not full)
+[2026-05-11 21:07:57] ──────────────────────────────────────
+[2026-05-11 21:07:57] PROCESS step=13366001  FTT=82.43  accu=394804
+[2026-05-11 21:07:57]   [Step 13367001 | FTT=82.43] Ub=0.014854  U*=0.9903  Re%=-0.97%  Force=2.29103E-06  F*=0.0916  Re=5545.7  Ma=0.0257  Ma_max=0.0388  Error=1.81e-05  [SIMPLE-PROP]
+[2026-05-11 21:08:02] CONV step=13366001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:08:02] BENCH skipped: FTT=82.43 < G2=90.000 (accu=394804, CV window not full)
+[2026-05-11 21:08:36] ──────────────────────────────────────
+[2026-05-11 21:08:36] PROCESS step=13373001  FTT=82.48  accu=400804
+[2026-05-11 21:08:36]   [Step 13373751 | FTT=82.48] Ub=0.014892  U*=0.9928  Re%=-0.72%  Force=2.37560E-06  F*=0.0950  Re=5559.8  Ma=0.0258  Ma_max=0.0385  Error=2.00e-05  [SIMPLE-PROP]
+[2026-05-11 21:08:42] CONV step=13373001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:08:42] BENCH skipped: FTT=82.48 < G2=90.000 (accu=400804, CV window not full)
+[2026-05-11 21:09:16] ──────────────────────────────────────
+[2026-05-11 21:09:16] PROCESS step=13379001  FTT=82.51  accu=407804
+[2026-05-11 21:09:16]   [Step 13380001 | FTT=82.51] Ub=0.014930  U*=0.9954  Re%=-0.46%  Force=2.43039E-06  F*=0.0972  Re=5574.0  Ma=0.0259  Ma_max=0.0378  Error=2.08e-05  [SIMPLE-PROP]
+[2026-05-11 21:09:21] CONV step=13379001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:09:21] BENCH skipped: FTT=82.51 < G2=90.000 (accu=407804, CV window not full)
+[2026-05-11 21:09:55] ──────────────────────────────────────
+[2026-05-11 21:09:55] PROCESS step=13386001  FTT=82.56  accu=414804
+[2026-05-11 21:09:55]   [Step 13387001 | FTT=82.56] Ub=0.014976  U*=0.9984  Re%=-0.16%  Force=2.46298E-06  F*=0.0985  Re=5590.9  Ma=0.0259  Ma_max=0.0391  Error=2.19e-05  [SIMPLE-PROP]
+[2026-05-11 21:10:01] CONV step=13386001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:10:01] BENCH skipped: FTT=82.56 < G2=90.000 (accu=414804, CV window not full)
+[2026-05-11 21:11:08] ──────────────────────────────────────
+[2026-05-11 21:11:08] PROCESS step=13398001  FTT=82.63  accu=426804
+[2026-05-11 21:11:08]   [Step 13399001 | FTT=82.63] Ub=0.015059  U*=1.0039  Re%=0.39%  Force=2.44296E-06  F*=0.0977  Re=5622.1  Ma=0.0261  Ma_max=0.0397  Error=2.37e-05  [SIMPLE-PROP]
+[2026-05-11 21:11:14] CONV step=13398001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:11:14] BENCH skipped: FTT=82.63 < G2=90.000 (accu=426804, CV window not full)
+[2026-05-11 21:11:48] ──────────────────────────────────────
+[2026-05-11 21:11:48] PROCESS step=13405001  FTT=82.67  accu=433804
+[2026-05-11 21:11:48]   [Step 13406001 | FTT=82.68] Ub=0.015111  U*=1.0074  Re%=0.74%  Force=2.38420E-06  F*=0.0954  Re=5641.3  Ma=0.0262  Ma_max=0.0409  Error=2.43e-05  [SIMPLE-PROP]
+[2026-05-11 21:11:54] CONV step=13405001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:11:54] BENCH skipped: FTT=82.67 < G2=90.000 (accu=433804, CV window not full)
+[2026-05-11 21:12:27] ──────────────────────────────────────
+[2026-05-11 21:12:28] PROCESS step=13411001  FTT=82.71  accu=439804
+[2026-05-11 21:12:28]   [Step 13412101 | FTT=82.71] Ub=0.015155  U*=1.0103  Re%=1.03%  Force=2.30402E-06  F*=0.0922  Re=5657.9  Ma=0.0262  Ma_max=0.0388  Error=2.37e-05  [SIMPLE-PROP]
+[2026-05-11 21:12:33] CONV step=13411001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:12:33] BENCH skipped: FTT=82.71 < G2=90.000 (accu=439804, CV window not full)
+[2026-05-11 21:13:07] ──────────────────────────────────────
+[2026-05-11 21:13:07] PROCESS step=13418001  FTT=82.76  accu=446804
+[2026-05-11 21:13:07]   [Step 13419001 | FTT=82.76] Ub=0.015203  U*=1.0135  Re%=1.35%  Force=2.18172E-06  F*=0.0873  Re=5675.7  Ma=0.0263  Ma_max=0.0428  Error=2.18e-05  [SIMPLE-PROP]
+[2026-05-11 21:13:13] CONV step=13418001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:13:13] BENCH skipped: FTT=82.76 < G2=90.000 (accu=446804, CV window not full)
+[2026-05-11 21:14:20] ──────────────────────────────────────
+[2026-05-11 21:14:20] PROCESS step=13430001  FTT=82.83  accu=458804
+[2026-05-11 21:14:20]   [Step 13431001 | FTT=82.83] Ub=0.015268  U*=1.0179  Re%=1.79%  Force=1.89945E-06  F*=0.0760  Re=5700.1  Ma=0.0264  Ma_max=0.0401  Error=1.35e-05  [SIMPLE-PROP]
+[2026-05-11 21:14:26] CONV step=13430001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:14:26] BENCH skipped: FTT=82.83 < G2=90.000 (accu=458804, CV window not full)
+[2026-05-11 21:15:00] ──────────────────────────────────────
+[2026-05-11 21:15:00] PROCESS step=13437001  FTT=82.87  accu=464804
+[2026-05-11 21:15:00]   [Step 13437751 | FTT=82.87] Ub=0.015291  U*=1.0194  Re%=1.94%  Force=1.71213E-06  F*=0.0685  Re=5708.8  Ma=0.0265  Ma_max=0.0412  Error=8.45e-06  [SIMPLE-PROP]
+[2026-05-11 21:15:06] CONV step=13437001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:15:06] BENCH skipped: FTT=82.87 < G2=90.000 (accu=464804, CV window not full)
+[2026-05-11 21:15:40] ──────────────────────────────────────
+[2026-05-11 21:15:40] PROCESS step=13443001  FTT=82.91  accu=471804
+[2026-05-11 21:15:40]   [Step 13444001 | FTT=82.91] Ub=0.015302  U*=1.0201  Re%=2.01%  Force=1.52834E-06  F*=0.0611  Re=5712.6  Ma=0.0265  Ma_max=0.0407  Error=2.14e-06  [SIMPLE-PROP]
+[2026-05-11 21:15:46] CONV step=13443001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:15:46] BENCH skipped: FTT=82.91 < G2=90.000 (accu=471804, CV window not full)
+[2026-05-11 21:16:20] ──────────────────────────────────────
+[2026-05-11 21:16:20] PROCESS step=13450001  FTT=82.95  accu=478804
+[2026-05-11 21:16:20]   [Step 13451001 | FTT=82.95] Ub=0.015300  U*=1.0200  Re%=2.00%  Force=1.31957E-06  F*=0.0528  Re=5712.0  Ma=0.0265  Ma_max=0.0428  Error=3.69e-06  [SIMPLE-PROP]
+[2026-05-11 21:16:25] CONV step=13450001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:16:25] BENCH skipped: FTT=82.95 < G2=90.000 (accu=478804, CV window not full)
+[2026-05-11 21:18:34] ──────────────────────────────────────
+[2026-05-11 21:18:34] PROCESS step=13472001  FTT=83.09  accu=500804
+[2026-05-11 21:18:34]   [Step 13473001 | FTT=83.09] Ub=0.015210  U*=1.0140  Re%=1.40%  Force=7.44107E-07  F*=0.0298  Re=5678.6  Ma=0.0263  Ma_max=0.0428  Error=2.12e-05  [SIMPLE-PROP]
+[2026-05-11 21:18:40] CONV step=13472001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:18:40] BENCH skipped: FTT=83.09 < G2=90.000 (accu=500804, CV window not full)
+[2026-05-11 21:19:14] ──────────────────────────────────────
+[2026-05-11 21:19:14] PROCESS step=13479001  FTT=83.13  accu=506804
+[2026-05-11 21:19:14]   [Step 13479801 | FTT=83.13] Ub=0.015164  U*=1.0109  Re%=1.09%  Force=6.18243E-07  F*=0.0247  Re=5661.2  Ma=0.0263  Ma_max=0.0434  Error=2.36e-05  [SIMPLE-PROP]
+[2026-05-11 21:19:20] CONV step=13479001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:19:20] BENCH skipped: FTT=83.13 < G2=90.000 (accu=506804, CV window not full)
+[2026-05-11 21:19:54] ──────────────────────────────────────
+[2026-05-11 21:19:54] PROCESS step=13485001  FTT=83.17  accu=513804
+[2026-05-11 21:19:54]   [Step 13486001 | FTT=83.17] Ub=0.015120  U*=1.0080  Re%=0.80%  Force=5.31415E-07  F*=0.0213  Re=5644.8  Ma=0.0262  Ma_max=0.0409  Error=2.34e-05  [SIMPLE-PROP]
+[2026-05-11 21:19:59] CONV step=13485001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:19:59] BENCH skipped: FTT=83.17 < G2=90.000 (accu=513804, CV window not full)
+[2026-05-11 21:20:33] ──────────────────────────────────────
+[2026-05-11 21:20:33] PROCESS step=13492001  FTT=83.21  accu=520804
+[2026-05-11 21:20:33]   [Step 13493001 | FTT=83.21] Ub=0.015071  U*=1.0047  Re%=0.47%  Force=4.65576E-07  F*=0.0186  Re=5626.4  Ma=0.0261  Ma_max=0.0439  Error=2.34e-05  [SIMPLE-PROP]
+[2026-05-11 21:20:39] CONV step=13492001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:20:39] BENCH skipped: FTT=83.21 < G2=90.000 (accu=520804, CV window not full)
+[2026-05-11 21:21:13] ──────────────────────────────────────
+[2026-05-11 21:21:13] PROCESS step=13498001  FTT=83.25  accu=526804
+[2026-05-11 21:21:13]   [Step 13499001 | FTT=83.25] Ub=0.015028  U*=1.0019  Re%=0.19%  Force=4.36328E-07  F*=0.0175  Re=5610.6  Ma=0.0260  Ma_max=0.0431  Error=2.36e-05  [SIMPLE-PROP]
+[2026-05-11 21:21:19] CONV step=13498001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:21:19] BENCH skipped: FTT=83.25 < G2=90.000 (accu=526804, CV window not full)
+[2026-05-11 21:21:52] ──────────────────────────────────────
+[2026-05-11 21:21:52] PROCESS step=13505001  FTT=83.29  accu=533804
+[2026-05-11 21:21:53]   [Step 13506001 | FTT=83.29] Ub=0.014979  U*=0.9986  Re%=-0.14%  Force=4.33720E-07  F*=0.0173  Re=5592.3  Ma=0.0259  Ma_max=0.0412  Error=2.29e-05  [SIMPLE-PROP]
+[2026-05-11 21:21:58] CONV step=13505001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:21:58] BENCH skipped: FTT=83.29 < G2=90.000 (accu=533804, CV window not full)
+[2026-05-11 21:22:32] ──────────────────────────────────────
+[2026-05-11 21:22:32] PROCESS step=13511001  FTT=83.33  accu=539804
+[2026-05-11 21:22:32]   [Step 13512001 | FTT=83.33] Ub=0.014939  U*=0.9959  Re%=-0.41%  Force=4.58173E-07  F*=0.0183  Re=5577.1  Ma=0.0259  Ma_max=0.0397  Error=2.30e-05  [SIMPLE-PROP]
+[2026-05-11 21:22:38] CONV step=13511001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:22:38] BENCH skipped: FTT=83.33 < G2=90.000 (accu=539804, CV window not full)
+[2026-05-11 21:23:12] ──────────────────────────────────────
+[2026-05-11 21:23:12] PROCESS step=13518001  FTT=83.37  accu=546804
+[2026-05-11 21:23:12]   [Step 13519001 | FTT=83.37] Ub=0.014893  U*=0.9928  Re%=-0.72%  Force=5.16798E-07  F*=0.0207  Re=5560.0  Ma=0.0258  Ma_max=0.0404  Error=2.09e-05  [SIMPLE-PROP]
+[2026-05-11 21:23:18] CONV step=13518001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:23:18] BENCH skipped: FTT=83.37 < G2=90.000 (accu=546804, CV window not full)
+[2026-05-11 21:24:25] ──────────────────────────────────────
+[2026-05-11 21:24:25] PROCESS step=13530001  FTT=83.45  accu=558804
+[2026-05-11 21:24:25]   [Step 13531001 | FTT=83.45] Ub=0.014819  U*=0.9880  Re%=-1.20%  Force=6.88204E-07  F*=0.0275  Re=5532.6  Ma=0.0257  Ma_max=0.0392  Error=1.92e-05  [SIMPLE-PROP]
+[2026-05-11 21:24:32] CONV step=13530001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:24:32] BENCH skipped: FTT=83.45 < G2=90.000 (accu=558804, CV window not full)
+[2026-05-11 21:25:05] ──────────────────────────────────────
+[2026-05-11 21:25:05] PROCESS step=13537001  FTT=83.49  accu=564804
+[2026-05-11 21:25:05]   [Step 13537951 | FTT=83.49] Ub=0.014782  U*=0.9855  Re%=-1.45%  Force=8.25411E-07  F*=0.0330  Re=5518.6  Ma=0.0256  Ma_max=0.0392  Error=1.67e-05  [SIMPLE-PROP]
+[2026-05-11 21:25:11] CONV step=13537001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:25:11] BENCH skipped: FTT=83.49 < G2=90.000 (accu=564804, CV window not full)
+[2026-05-11 21:25:45] ──────────────────────────────────────
+[2026-05-11 21:25:45] PROCESS step=13543001  FTT=83.53  accu=571804
+[2026-05-11 21:25:45]   [Step 13544001 | FTT=83.53] Ub=0.014755  U*=0.9837  Re%=-1.63%  Force=9.64211E-07  F*=0.0386  Re=5508.5  Ma=0.0256  Ma_max=0.0413  Error=1.35e-05  [SIMPLE-PROP]
+[2026-05-11 21:25:51] CONV step=13543001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:25:51] BENCH skipped: FTT=83.53 < G2=90.000 (accu=571804, CV window not full)
+[2026-05-11 21:26:25] ──────────────────────────────────────
+[2026-05-11 21:26:25] PROCESS step=13550001  FTT=83.57  accu=578804
+[2026-05-11 21:26:25]   [Step 13551001 | FTT=83.57] Ub=0.014732  U*=0.9821  Re%=-1.79%  Force=1.14229E-06  F*=0.0457  Re=5499.9  Ma=0.0255  Ma_max=0.0401  Error=8.41e-06  [SIMPLE-PROP]
+[2026-05-11 21:26:31] CONV step=13550001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:26:31] BENCH skipped: FTT=83.57 < G2=90.000 (accu=578804, CV window not full)
+[2026-05-11 21:27:38] ──────────────────────────────────────
+[2026-05-11 21:27:38] PROCESS step=13562001  FTT=83.64  accu=590804
+[2026-05-11 21:27:38]   [Step 13563001 | FTT=83.64] Ub=0.014716  U*=0.9810  Re%=-1.90%  Force=1.47292E-06  F*=0.0589  Re=5493.9  Ma=0.0255  Ma_max=0.0428  Error=6.74e-07  [SIMPLE-PROP]
+[2026-05-11 21:27:44] CONV step=13562001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:27:45] BENCH skipped: FTT=83.64 < G2=90.000 (accu=590804, CV window not full)
+[2026-05-11 21:28:18] ──────────────────────────────────────
+[2026-05-11 21:28:18] PROCESS step=13569001  FTT=83.69  accu=596804
+[2026-05-11 21:28:18]   [Step 13569951 | FTT=83.69] Ub=0.014721  U*=0.9814  Re%=-1.86%  Force=1.66692E-06  F*=0.0667  Re=5495.9  Ma=0.0255  Ma_max=0.0411  Error=5.48e-06  [SIMPLE-PROP]
+[2026-05-11 21:28:25] CONV step=13569001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:28:25] BENCH skipped: FTT=83.69 < G2=90.000 (accu=596804, CV window not full)
+[2026-05-11 21:28:58] ──────────────────────────────────────
+[2026-05-11 21:28:58] PROCESS step=13575001  FTT=83.72  accu=603804
+[2026-05-11 21:28:58]   [Step 13576101 | FTT=83.72] Ub=0.014735  U*=0.9823  Re%=-1.77%  Force=1.83251E-06  F*=0.0733  Re=5501.1  Ma=0.0255  Ma_max=0.0402  Error=9.70e-06  [SIMPLE-PROP]
+[2026-05-11 21:29:05] CONV step=13575001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:29:05] BENCH skipped: FTT=83.72 < G2=90.000 (accu=603804, CV window not full)
+[2026-05-11 21:29:39] ──────────────────────────────────────
+[2026-05-11 21:29:39] PROCESS step=13582001  FTT=83.77  accu=610804
+[2026-05-11 21:29:39]   [Step 13583001 | FTT=83.77] Ub=0.014760  U*=0.9840  Re%=-1.60%  Force=2.00499E-06  F*=0.0802  Re=5510.4  Ma=0.0256  Ma_max=0.0421  Error=1.42e-05  [SIMPLE-PROP]
+[2026-05-11 21:29:45] CONV step=13582001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:29:46] BENCH skipped: FTT=83.77 < G2=90.000 (accu=610804, CV window not full)
+[2026-05-11 21:30:19] ──────────────────────────────────────
+[2026-05-11 21:30:19] PROCESS step=13589001  FTT=83.81  accu=617804
+[2026-05-11 21:30:19]   [Step 13590001 | FTT=83.81] Ub=0.014794  U*=0.9862  Re%=-1.38%  Force=2.15971E-06  F*=0.0864  Re=5523.0  Ma=0.0256  Ma_max=0.0421  Error=1.80e-05  [SIMPLE-PROP]
+[2026-05-11 21:30:26] CONV step=13589001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:30:26] BENCH skipped: FTT=83.81 < G2=90.000 (accu=617804, CV window not full)
+[2026-05-11 21:30:59] ──────────────────────────────────────
+[2026-05-11 21:30:59] PROCESS step=13595001  FTT=83.85  accu=623804
+[2026-05-11 21:30:59]   [Step 13596151 | FTT=83.85] Ub=0.014831  U*=0.9887  Re%=-1.13%  Force=2.27402E-06  F*=0.0910  Re=5536.8  Ma=0.0257  Ma_max=0.0408  Error=2.21e-05  [SIMPLE-PROP]
+[2026-05-11 21:31:05] CONV step=13595001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:31:06] BENCH skipped: FTT=83.85 < G2=90.000 (accu=623804, CV window not full)
+[2026-05-11 21:31:39] ──────────────────────────────────────
+[2026-05-11 21:31:39] PROCESS step=13602001  FTT=83.89  accu=630804
+[2026-05-11 21:31:39]   [Step 13603001 | FTT=83.89] Ub=0.014879  U*=0.9919  Re%=-0.81%  Force=2.37260E-06  F*=0.0949  Re=5554.7  Ma=0.0258  Ma_max=0.0399  Error=2.47e-05  [SIMPLE-PROP]
+[2026-05-11 21:31:46] CONV step=13602001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:31:46] BENCH skipped: FTT=83.89 < G2=90.000 (accu=630804, CV window not full)
+[2026-05-11 21:32:19] ──────────────────────────────────────
+[2026-05-11 21:32:19] PROCESS step=13609001  FTT=83.93  accu=637804
+[2026-05-11 21:32:19]   [Step 13610001 | FTT=83.93] Ub=0.014933  U*=0.9955  Re%=-0.45%  Force=2.43780E-06  F*=0.0975  Re=5574.9  Ma=0.0259  Ma_max=0.0401  Error=2.63e-05  [SIMPLE-PROP]
+[2026-05-11 21:32:25] CONV step=13609001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:32:25] BENCH skipped: FTT=83.93 < G2=90.000 (accu=637804, CV window not full)
+[2026-05-11 21:32:59] ──────────────────────────────────────
+[2026-05-11 21:32:59] PROCESS step=13616001  FTT=83.98  accu=644804
+[2026-05-11 21:32:59]   [Step 13617001 | FTT=83.98] Ub=0.014989  U*=0.9993  Re%=-0.07%  Force=2.46486E-06  F*=0.0986  Re=5595.8  Ma=0.0260  Ma_max=0.0409  Error=2.65e-05  [SIMPLE-PROP]
+[2026-05-11 21:33:05] CONV step=13616001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:33:05] BENCH skipped: FTT=83.98 < G2=90.000 (accu=644804, CV window not full)
+[2026-05-11 21:33:39] ──────────────────────────────────────
+[2026-05-11 21:33:39] PROCESS step=13623001  FTT=84.02  accu=650804
+[2026-05-11 21:33:39]   [Step 13623851 | FTT=84.02] Ub=0.015043  U*=1.0029  Re%=0.29%  Force=2.45391E-06  F*=0.0982  Re=5616.1  Ma=0.0261  Ma_max=0.0406  Error=2.67e-05  [SIMPLE-PROP]
+[2026-05-11 21:33:45] CONV step=13623001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:33:45] BENCH skipped: FTT=84.02 < G2=90.000 (accu=650804, CV window not full)
+[2026-05-11 21:34:52] ──────────────────────────────────────
+[2026-05-11 21:34:53] PROCESS step=13635001  FTT=84.09  accu=663804
+[2026-05-11 21:34:53]   [Step 13636001 | FTT=84.09] Ub=0.015133  U*=1.0089  Re%=0.89%  Force=2.34633E-06  F*=0.0939  Re=5649.8  Ma=0.0262  Ma_max=0.0406  Error=2.24e-05  [SIMPLE-PROP]
+[2026-05-11 21:34:58] CONV step=13635001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:34:58] BENCH skipped: FTT=84.09 < G2=90.000 (accu=663804, CV window not full)
+[2026-05-11 21:35:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/slurm_47381.log
+[2026-05-11 21:35:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-11 21:35:32] ──────────────────────────────────────
+[2026-05-11 21:35:32] PROCESS step=13638001  FTT=  accu=
+[2026-05-11 21:35:38] CONV step=13638001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:35:38] BENCH skipped: FTT= < G2=90.000 (accu=, CV window not full)
+[2026-05-11 21:36:39] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/slurm_47400.log
+[2026-05-11 21:36:39] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-11 21:37:43] ──────────────────────────────────────
+[2026-05-11 21:37:44] PROCESS step=13642001  FTT=84.14  accu=670804
+[2026-05-11 21:37:44]   [Step 13643001 | FTT=84.14] Ub=0.015178  U*=1.0118  Re%=1.18%  Force=2.23821E-06  F*=0.0895  Re=5666.3  Ma=0.0263  Ma_max=0.0427  Error=1.85e-05  [SIMPLE-PROP]
+[2026-05-11 21:37:50] CONV step=13642001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:37:50] BENCH skipped: FTT=84.14 < G2=90.000 (accu=670804, CV window not full)
+[2026-05-11 21:38:23] ──────────────────────────────────────
+[2026-05-11 21:38:23] PROCESS step=13649001  FTT=84.18  accu=676804
+[2026-05-11 21:38:23]   [Step 13650001 | FTT=84.18] Ub=0.015213  U*=1.0142  Re%=1.42%  Force=2.10273E-06  F*=0.0841  Re=5679.4  Ma=0.0263  Ma_max=0.0410  Error=1.43e-05  [SIMPLE-PROP]
+[2026-05-11 21:38:30] CONV step=13649001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:38:30] BENCH skipped: FTT=84.18 < G2=90.000 (accu=676804, CV window not full)
+[2026-05-11 21:39:03] ──────────────────────────────────────
+[2026-05-11 21:39:03] PROCESS step=13656001  FTT=84.22  accu=683804
+[2026-05-11 21:39:03]   [Step 13656651 | FTT=84.22] Ub=0.015236  U*=1.0158  Re%=1.58%  Force=1.95453E-06  F*=0.0782  Re=5688.3  Ma=0.0264  Ma_max=0.0412  Error=9.32e-06  [SIMPLE-PROP]
+[2026-05-11 21:39:10] CONV step=13656001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:39:10] BENCH skipped: FTT=84.22 < G2=90.000 (accu=683804, CV window not full)
+[2026-05-11 21:40:17] ──────────────────────────────────────
+[2026-05-11 21:40:17] PROCESS step=13668001  FTT=84.30  accu=696804
+[2026-05-11 21:40:17]   [Step 13669001 | FTT=84.30] Ub=0.015257  U*=1.0171  Re%=1.71%  Force=1.65040E-06  F*=0.0660  Re=5696.0  Ma=0.0264  Ma_max=0.0392  Error=1.91e-06  [SIMPLE-PROP]
+[2026-05-11 21:40:23] CONV step=13668001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:40:23] BENCH skipped: FTT=84.30 < G2=90.000 (accu=696804, CV window not full)
+[2026-05-11 21:40:57] ──────────────────────────────────────
+[2026-05-11 21:40:57] PROCESS step=13675001  FTT=84.34  accu=703804
+[2026-05-11 21:40:57]   [Step 13676001 | FTT=84.34] Ub=0.015257  U*=1.0171  Re%=1.71%  Force=1.47221E-06  F*=0.0589  Re=5695.8  Ma=0.0264  Ma_max=0.0391  Error=2.31e-06  [SIMPLE-PROP]
+[2026-05-11 21:41:03] CONV step=13675001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:41:03] BENCH skipped: FTT=84.34 < G2=90.000 (accu=703804, CV window not full)
+[2026-05-11 21:41:37] ──────────────────────────────────────
+[2026-05-11 21:41:37] PROCESS step=13682001  FTT=84.38  accu=710804
+[2026-05-11 21:41:37]   [Step 13683001 | FTT=84.38] Ub=0.015249  U*=1.0166  Re%=1.66%  Force=1.29686E-06  F*=0.0519  Re=5693.0  Ma=0.0264  Ma_max=0.0420  Error=5.14e-06  [SIMPLE-PROP]
+[2026-05-11 21:41:44] CONV step=13682001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:41:44] BENCH skipped: FTT=84.38 < G2=90.000 (accu=710804, CV window not full)
+[2026-05-11 21:42:17] ──────────────────────────────────────
+[2026-05-11 21:42:17] PROCESS step=13689001  FTT=84.43  accu=717804
+[2026-05-11 21:42:17]   [Step 13690001 | FTT=84.43] Ub=0.015235  U*=1.0157  Re%=1.57%  Force=1.12909E-06  F*=0.0452  Re=5687.7  Ma=0.0264  Ma_max=0.0410  Error=8.53e-06  [SIMPLE-PROP]
+[2026-05-11 21:42:24] CONV step=13689001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:42:24] BENCH skipped: FTT=84.43 < G2=90.000 (accu=717804, CV window not full)
+[2026-05-11 21:42:58] ──────────────────────────────────────
+[2026-05-11 21:42:58] PROCESS step=13696001  FTT=84.47  accu=724804
+[2026-05-11 21:42:58]   [Step 13697001 | FTT=84.47] Ub=0.015215  U*=1.0143  Re%=1.43%  Force=9.73432E-07  F*=0.0389  Re=5680.1  Ma=0.0264  Ma_max=0.0423  Error=1.06e-05  [SIMPLE-PROP]
+[2026-05-11 21:43:04] CONV step=13696001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:43:04] BENCH skipped: FTT=84.47 < G2=90.000 (accu=724804, CV window not full)
+[2026-05-11 21:43:38] ──────────────────────────────────────
+[2026-05-11 21:43:38] PROCESS step=13703001  FTT=84.51  accu=731804
+[2026-05-11 21:43:38]   [Step 13704001 | FTT=84.51] Ub=0.015190  U*=1.0127  Re%=1.27%  Force=8.33480E-07  F*=0.0333  Re=5670.9  Ma=0.0263  Ma_max=0.0430  Error=1.19e-05  [SIMPLE-PROP]
+[2026-05-11 21:43:44] CONV step=13703001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:43:44] BENCH skipped: FTT=84.51 < G2=90.000 (accu=731804, CV window not full)
+[2026-05-11 21:44:18] ──────────────────────────────────────
+[2026-05-11 21:44:18] PROCESS step=13710001  FTT=84.55  accu=737804
+[2026-05-11 21:44:18]   [Step 13710651 | FTT=84.55] Ub=0.015162  U*=1.0108  Re%=1.08%  Force=7.17465E-07  F*=0.0287  Re=5660.6  Ma=0.0263  Ma_max=0.0424  Error=1.45e-05  [SIMPLE-PROP]
+[2026-05-11 21:44:23] CONV step=13710001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:44:24] BENCH skipped: FTT=84.55 < G2=90.000 (accu=737804, CV window not full)
+[2026-05-11 21:45:31] ──────────────────────────────────────
+[2026-05-11 21:45:31] PROCESS step=13722001  FTT=84.63  accu=750804
+[2026-05-11 21:45:31]   [Step 13723001 | FTT=84.63] Ub=0.015102  U*=1.0068  Re%=0.68%  Force=5.55235E-07  F*=0.0222  Re=5638.0  Ma=0.0262  Ma_max=0.0423  Error=1.79e-05  [SIMPLE-PROP]
+[2026-05-11 21:45:37] CONV step=13722001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:45:37] BENCH skipped: FTT=84.63 < G2=90.000 (accu=750804, CV window not full)
+[2026-05-11 21:46:11] ──────────────────────────────────────
+[2026-05-11 21:46:11] PROCESS step=13729001  FTT=84.67  accu=757804
+[2026-05-11 21:46:11]   [Step 13730001 | FTT=84.67] Ub=0.015063  U*=1.0042  Re%=0.42%  Force=4.98409E-07  F*=0.0199  Re=5623.4  Ma=0.0261  Ma_max=0.0404  Error=1.86e-05  [SIMPLE-PROP]
+[2026-05-11 21:46:16] CONV step=13729001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:46:16] BENCH skipped: FTT=84.67 < G2=90.000 (accu=757804, CV window not full)
+[2026-05-11 21:46:50] ──────────────────────────────────────
+[2026-05-11 21:46:50] PROCESS step=13736001  FTT=84.72  accu=764804
+[2026-05-11 21:46:50]   [Step 13737001 | FTT=84.72] Ub=0.015022  U*=1.0015  Re%=0.15%  Force=4.69019E-07  F*=0.0188  Re=5608.3  Ma=0.0260  Ma_max=0.0412  Error=1.89e-05  [SIMPLE-PROP]
+[2026-05-11 21:46:56] CONV step=13736001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:46:56] BENCH skipped: FTT=84.72 < G2=90.000 (accu=764804, CV window not full)
+[2026-05-11 21:47:31] ──────────────────────────────────────
+[2026-05-11 21:47:31] PROCESS step=13743001  FTT=84.76  accu=771804
+[2026-05-11 21:47:31]   [Step 13744001 | FTT=84.76] Ub=0.014980  U*=0.9987  Re%=-0.13%  Force=4.68071E-07  F*=0.0187  Re=5592.5  Ma=0.0259  Ma_max=0.0401  Error=2.14e-05  [SIMPLE-PROP]
+[2026-05-11 21:47:37] CONV step=13743001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:47:37] BENCH skipped: FTT=84.76 < G2=90.000 (accu=771804, CV window not full)
+[2026-05-11 21:48:10] ──────────────────────────────────────
+[2026-05-11 21:48:10] PROCESS step=13750001  FTT=84.80  accu=778804
+[2026-05-11 21:48:10]   [Step 13751001 | FTT=84.80] Ub=0.014934  U*=0.9956  Re%=-0.44%  Force=4.97708E-07  F*=0.0199  Re=5575.5  Ma=0.0259  Ma_max=0.0399  Error=2.15e-05  [SIMPLE-PROP]
+[2026-05-11 21:48:17] CONV step=13750001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:48:17] BENCH skipped: FTT=84.80 < G2=90.000 (accu=778804, CV window not full)
+[2026-05-11 21:48:50] ──────────────────────────────────────
+[2026-05-11 21:48:50] PROCESS step=13757001  FTT=84.85  accu=784804
+[2026-05-11 21:48:50]   [Step 13757951 | FTT=84.85] Ub=0.014888  U*=0.9925  Re%=-0.75%  Force=5.58692E-07  F*=0.0223  Re=5558.3  Ma=0.0258  Ma_max=0.0396  Error=2.23e-05  [SIMPLE-PROP]
+[2026-05-11 21:48:57] CONV step=13757001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:48:57] BENCH skipped: FTT=84.85 < G2=90.000 (accu=784804, CV window not full)
+[2026-05-11 21:49:31] ──────────────────────────────────────
+[2026-05-11 21:49:31] PROCESS step=13764001  FTT=84.89  accu=791804
+[2026-05-11 21:49:31]   [Step 13764801 | FTT=84.89] Ub=0.014845  U*=0.9897  Re%=-1.03%  Force=6.49233E-07  F*=0.0260  Re=5542.3  Ma=0.0257  Ma_max=0.0396  Error=1.94e-05  [SIMPLE-PROP]
+[2026-05-11 21:49:37] CONV step=13764001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:49:37] BENCH skipped: FTT=84.89 < G2=90.000 (accu=791804, CV window not full)
+[2026-05-11 21:50:44] ──────────────────────────────────────
+[2026-05-11 21:50:44] PROCESS step=13776001  FTT=84.96  accu=804804
+[2026-05-11 21:50:44]   [Step 13777001 | FTT=84.96] Ub=0.014782  U*=0.9855  Re%=-1.45%  Force=8.75549E-07  F*=0.0350  Re=5518.8  Ma=0.0256  Ma_max=0.0409  Error=1.46e-05  [SIMPLE-PROP]
+[2026-05-11 21:50:50] CONV step=13776001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:50:50] BENCH skipped: FTT=84.96 < G2=90.000 (accu=804804, CV window not full)
+[2026-05-11 21:51:23] ──────────────────────────────────────
+[2026-05-11 21:51:23] PROCESS step=13783001  FTT=85.01  accu=811804
+[2026-05-11 21:51:24]   [Step 13784001 | FTT=85.01] Ub=0.014757  U*=0.9838  Re%=-1.62%  Force=1.03530E-06  F*=0.0414  Re=5509.3  Ma=0.0256  Ma_max=0.0402  Error=1.07e-05  [SIMPLE-PROP]
+[2026-05-11 21:51:29] CONV step=13783001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:51:29] BENCH skipped: FTT=85.01 < G2=90.000 (accu=811804, CV window not full)
+[2026-05-11 21:52:03] ──────────────────────────────────────
+[2026-05-11 21:52:03] PROCESS step=13790001  FTT=85.05  accu=818804
+[2026-05-11 21:52:03]   [Step 13791001 | FTT=85.05] Ub=0.014740  U*=0.9827  Re%=-1.73%  Force=1.20981E-06  F*=0.0484  Re=5503.0  Ma=0.0255  Ma_max=0.0396  Error=5.68e-06  [SIMPLE-PROP]
+[2026-05-11 21:52:08] CONV step=13790001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:52:09] BENCH skipped: FTT=85.05 < G2=90.000 (accu=818804, CV window not full)
+[2026-05-11 21:52:42] ──────────────────────────────────────
+[2026-05-11 21:52:42] PROCESS step=13797001  FTT=85.09  accu=824804
+[2026-05-11 21:52:42]   [Step 13797651 | FTT=85.09] Ub=0.014733  U*=0.9822  Re%=-1.78%  Force=1.38339E-06  F*=0.0553  Re=5500.3  Ma=0.0255  Ma_max=0.0403  Error=1.43e-06  [SIMPLE-PROP]
+[2026-05-11 21:52:48] CONV step=13797001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:52:48] BENCH skipped: FTT=85.09 < G2=90.000 (accu=824804, CV window not full)
+[2026-05-11 21:53:55] ──────────────────────────────────────
+[2026-05-11 21:53:55] PROCESS step=13809001  FTT=85.17  accu=837804
+[2026-05-11 21:53:55]   [Step 13810001 | FTT=85.17] Ub=0.014740  U*=0.9826  Re%=-1.74%  Force=1.70780E-06  F*=0.0683  Re=5502.8  Ma=0.0255  Ma_max=0.0403  Error=5.68e-06  [SIMPLE-PROP]
+[2026-05-11 21:54:01] CONV step=13809001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:54:01] BENCH skipped: FTT=85.17 < G2=90.000 (accu=837804, CV window not full)
+[2026-05-11 21:54:35] ──────────────────────────────────────
+[2026-05-11 21:54:35] PROCESS step=13816001  FTT=85.21  accu=844804
+[2026-05-11 21:54:35]   [Step 13817001 | FTT=85.21] Ub=0.014754  U*=0.9836  Re%=-1.64%  Force=1.88334E-06  F*=0.0753  Re=5508.2  Ma=0.0256  Ma_max=0.0436  Error=8.54e-06  [SIMPLE-PROP]
+[2026-05-11 21:54:40] CONV step=13816001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:54:40] BENCH skipped: FTT=85.21 < G2=90.000 (accu=844804, CV window not full)
+[2026-05-11 21:55:14] ──────────────────────────────────────
+[2026-05-11 21:55:14] PROCESS step=13823001  FTT=85.25  accu=851804
+[2026-05-11 21:55:14]   [Step 13824001 | FTT=85.25] Ub=0.014777  U*=0.9851  Re%=-1.49%  Force=2.04608E-06  F*=0.0818  Re=5516.6  Ma=0.0256  Ma_max=0.0396  Error=1.34e-05  [SIMPLE-PROP]
+[2026-05-11 21:55:19] CONV step=13823001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:55:19] BENCH skipped: FTT=85.25 < G2=90.000 (accu=851804, CV window not full)
+[2026-05-11 21:55:53] ──────────────────────────────────────
+[2026-05-11 21:55:53] PROCESS step=13829001  FTT=85.29  accu=857804
+[2026-05-11 21:55:53]   [Step 13830051 | FTT=85.29] Ub=0.014803  U*=0.9869  Re%=-1.31%  Force=2.17190E-06  F*=0.0869  Re=5526.6  Ma=0.0256  Ma_max=0.0391  Error=1.61e-05  [SIMPLE-PROP]
+[2026-05-11 21:55:59] CONV step=13829001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:55:59] BENCH skipped: FTT=85.29 < G2=90.000 (accu=857804, CV window not full)
+[2026-05-11 21:56:33] ──────────────────────────────────────
+[2026-05-11 21:56:33] PROCESS step=13836001  FTT=85.33  accu=864804
+[2026-05-11 21:56:33]   [Step 13837001 | FTT=85.33] Ub=0.014840  U*=0.9894  Re%=-1.06%  Force=2.29458E-06  F*=0.0918  Re=5540.4  Ma=0.0257  Ma_max=0.0407  Error=2.00e-05  [SIMPLE-PROP]
+[2026-05-11 21:56:39] CONV step=13836001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:56:39] BENCH skipped: FTT=85.33 < G2=90.000 (accu=864804, CV window not full)
+[2026-05-11 21:57:13] ──────────────────────────────────────
+[2026-05-11 21:57:13] PROCESS step=13843001  FTT=85.38  accu=871804
+[2026-05-11 21:57:13]   [Step 13844001 | FTT=85.38] Ub=0.014885  U*=0.9924  Re%=-0.76%  Force=2.38968E-06  F*=0.0956  Re=5557.2  Ma=0.0258  Ma_max=0.0406  Error=2.28e-05  [SIMPLE-PROP]
+[2026-05-11 21:57:19] CONV step=13843001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:57:19] BENCH skipped: FTT=85.38 < G2=90.000 (accu=871804, CV window not full)
+[2026-05-11 21:57:53] ──────────────────────────────────────
+[2026-05-11 21:57:53] PROCESS step=13850001  FTT=85.42  accu=878804
+[2026-05-11 21:57:53]   [Step 13851001 | FTT=85.42] Ub=0.014935  U*=0.9957  Re%=-0.43%  Force=2.45181E-06  F*=0.0981  Re=5575.9  Ma=0.0259  Ma_max=0.0404  Error=2.48e-05  [SIMPLE-PROP]
+[2026-05-11 21:57:59] CONV step=13850001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:57:59] BENCH skipped: FTT=85.42 < G2=90.000 (accu=878804, CV window not full)
+[2026-05-11 21:59:06] ──────────────────────────────────────
+[2026-05-11 21:59:06] PROCESS step=13862001  FTT=85.49  accu=890804
+[2026-05-11 21:59:06]   [Step 13863001 | FTT=85.49] Ub=0.015028  U*=1.0019  Re%=0.19%  Force=2.47364E-06  F*=0.0989  Re=5610.5  Ma=0.0260  Ma_max=0.0424  Error=2.56e-05  [SIMPLE-PROP]
+[2026-05-11 21:59:11] CONV step=13862001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:59:11] BENCH skipped: FTT=85.49 < G2=90.000 (accu=890804, CV window not full)
+[2026-05-11 21:59:45] ──────────────────────────────────────
+[2026-05-11 21:59:45] PROCESS step=13869001  FTT=85.54  accu=897804
+[2026-05-11 21:59:45]   [Step 13870001 | FTT=85.54] Ub=0.015083  U*=1.0055  Re%=0.55%  Force=2.43500E-06  F*=0.0974  Re=5630.9  Ma=0.0261  Ma_max=0.0406  Error=2.57e-05  [SIMPLE-PROP]
+[2026-05-11 21:59:51] CONV step=13869001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 21:59:51] BENCH skipped: FTT=85.54 < G2=90.000 (accu=897804, CV window not full)
+[2026-05-11 22:00:24] ──────────────────────────────────────
+[2026-05-11 22:00:24] PROCESS step=13876001  FTT=85.58  accu=903804
+[2026-05-11 22:00:25]   [Step 13876851 | FTT=85.58] Ub=0.015132  U*=1.0088  Re%=0.88%  Force=2.36188E-06  F*=0.0945  Re=5649.3  Ma=0.0262  Ma_max=0.0403  Error=2.22e-05  [SIMPLE-PROP]
+[2026-05-11 22:00:30] CONV step=13876001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:00:30] BENCH skipped: FTT=85.58 < G2=90.000 (accu=903804, CV window not full)
+[2026-05-11 22:01:37] ──────────────────────────────────────
+[2026-05-11 22:01:37] PROCESS step=13888001  FTT=85.65  accu=916804
+[2026-05-11 22:01:37]   [Step 13889001 | FTT=85.65] Ub=0.015208  U*=1.0138  Re%=1.38%  Force=2.15599E-06  F*=0.0862  Re=5677.5  Ma=0.0263  Ma_max=0.0426  Error=1.75e-05  [SIMPLE-PROP]
+[2026-05-11 22:01:43] CONV step=13888001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:01:43] BENCH skipped: FTT=85.65 < G2=90.000 (accu=916804, CV window not full)
+[2026-05-11 22:02:17] ──────────────────────────────────────
+[2026-05-11 22:02:17] PROCESS step=13895001  FTT=85.70  accu=923804
+[2026-05-11 22:02:17]   [Step 13896001 | FTT=85.70] Ub=0.015239  U*=1.0159  Re%=1.59%  Force=2.00086E-06  F*=0.0800  Re=5689.2  Ma=0.0264  Ma_max=0.0417  Error=1.26e-05  [SIMPLE-PROP]
+[2026-05-11 22:02:23] CONV step=13895001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:02:23] BENCH skipped: FTT=85.70 < G2=90.000 (accu=923804, CV window not full)
+[2026-05-11 22:02:56] ──────────────────────────────────────
+[2026-05-11 22:02:56] PROCESS step=13902001  FTT=85.74  accu=930804
+[2026-05-11 22:02:56]   [Step 13903001 | FTT=85.74] Ub=0.015260  U*=1.0173  Re%=1.73%  Force=1.82761E-06  F*=0.0731  Re=5696.9  Ma=0.0264  Ma_max=0.0413  Error=6.78e-06  [SIMPLE-PROP]
+[2026-05-11 22:03:02] CONV step=13902001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:03:02] BENCH skipped: FTT=85.74 < G2=90.000 (accu=930804, CV window not full)
+[2026-05-11 22:03:36] ──────────────────────────────────────
+[2026-05-11 22:03:36] PROCESS step=13909001  FTT=85.78  accu=936804
+[2026-05-11 22:03:36]   [Step 13909701 | FTT=85.78] Ub=0.015267  U*=1.0178  Re%=1.78%  Force=1.65237E-06  F*=0.0661  Re=5699.9  Ma=0.0264  Ma_max=0.0440  Error=1.29e-06  [SIMPLE-PROP]
+[2026-05-11 22:03:43] CONV step=13909001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:03:43] BENCH skipped: FTT=85.78 < G2=90.000 (accu=936804, CV window not full)
+[2026-05-11 22:04:50] ──────────────────────────────────────
+[2026-05-11 22:04:50] PROCESS step=13921001  FTT=85.86  accu=949804
+[2026-05-11 22:04:50]   [Step 13922151 | FTT=85.86] Ub=0.015252  U*=1.0168  Re%=1.68%  Force=1.32872E-06  F*=0.0531  Re=5694.2  Ma=0.0264  Ma_max=0.0439  Error=9.13e-06  [SIMPLE-PROP]
+[2026-05-11 22:04:56] CONV step=13921001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:04:56] BENCH skipped: FTT=85.86 < G2=90.000 (accu=949804, CV window not full)
+[2026-05-11 22:05:30] ──────────────────────────────────────
+[2026-05-11 22:05:30] PROCESS step=13928001  FTT=85.90  accu=956804
+[2026-05-11 22:05:30]   [Step 13929001 | FTT=85.90] Ub=0.015229  U*=1.0153  Re%=1.53%  Force=1.16537E-06  F*=0.0466  Re=5685.5  Ma=0.0264  Ma_max=0.0412  Error=1.28e-05  [SIMPLE-PROP]
+[2026-05-11 22:05:35] CONV step=13928001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:05:36] BENCH skipped: FTT=85.90 < G2=90.000 (accu=956804, CV window not full)
+[2026-05-11 22:06:09] ──────────────────────────────────────
+[2026-05-11 22:06:09] PROCESS step=13935001  FTT=85.94  accu=963804
+[2026-05-11 22:06:09]   [Step 13936001 | FTT=85.94] Ub=0.015197  U*=1.0131  Re%=1.31%  Force=1.01787E-06  F*=0.0407  Re=5673.4  Ma=0.0263  Ma_max=0.0447  Error=1.67e-05  [SIMPLE-PROP]
+[2026-05-11 22:06:15] CONV step=13935001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:06:15] BENCH skipped: FTT=85.94 < G2=90.000 (accu=963804, CV window not full)
+[2026-05-11 22:06:49] ──────────────────────────────────────
+[2026-05-11 22:06:49] PROCESS step=13942001  FTT=85.99  accu=970804
+[2026-05-11 22:06:49]   [Step 13943001 | FTT=85.99] Ub=0.015158  U*=1.0106  Re%=1.06%  Force=8.94867E-07  F*=0.0358  Re=5659.1  Ma=0.0263  Ma_max=0.0451  Error=1.87e-05  [SIMPLE-PROP]
+[2026-05-11 22:06:54] CONV step=13942001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:06:54] BENCH skipped: FTT=85.99 < G2=90.000 (accu=970804, CV window not full)
+[2026-05-11 22:08:02] ──────────────────────────────────────
+[2026-05-11 22:08:02] PROCESS step=13954001  FTT=86.06  accu=982804
+[2026-05-11 22:08:02]   [Step 13955001 | FTT=86.06] Ub=0.015084  U*=1.0056  Re%=0.56%  Force=7.50583E-07  F*=0.0300  Re=5631.4  Ma=0.0261  Ma_max=0.0454  Error=2.12e-05  [SIMPLE-PROP]
+[2026-05-11 22:08:08] CONV step=13954001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:08:08] BENCH skipped: FTT=86.06 < G2=90.000 (accu=982804, CV window not full)
+[2026-05-11 22:08:42] ──────────────────────────────────────
+[2026-05-11 22:08:42] PROCESS step=13961001  FTT=86.10  accu=989804
+[2026-05-11 22:08:42]   [Step 13962001 | FTT=86.10] Ub=0.015041  U*=1.0028  Re%=0.28%  Force=7.07394E-07  F*=0.0283  Re=5615.5  Ma=0.0261  Ma_max=0.0434  Error=1.96e-05  [SIMPLE-PROP]
+[2026-05-11 22:08:48] CONV step=13961001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:08:48] BENCH skipped: FTT=86.10 < G2=90.000 (accu=989804, CV window not full)
+[2026-05-11 22:09:22] ──────────────────────────────────────
+[2026-05-11 22:09:22] PROCESS step=13968001  FTT=86.15  accu=996804
+[2026-05-11 22:09:22]   [Step 13969001 | FTT=86.15] Ub=0.015003  U*=1.0002  Re%=0.02%  Force=6.92391E-07  F*=0.0277  Re=5601.3  Ma=0.0260  Ma_max=0.0420  Error=1.63e-05  [SIMPLE-PROP]
+[2026-05-11 22:09:27] CONV step=13968001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:09:27] BENCH skipped: FTT=86.15 < G2=90.000 (accu=996804, CV window not full)
+[2026-05-11 22:10:01] ──────────────────────────────────────
+[2026-05-11 22:10:01] PROCESS step=13975001  FTT=86.19  accu=1002804
+[2026-05-11 22:10:01]   [Step 13975851 | FTT=86.19] Ub=0.014973  U*=0.9982  Re%=-0.18%  Force=7.00930E-07  F*=0.0280  Re=5589.8  Ma=0.0259  Ma_max=0.0407  Error=1.37e-05  [SIMPLE-PROP]
+[2026-05-11 22:10:06] CONV step=13975001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:10:06] BENCH skipped: FTT=86.19 < G2=90.000 (accu=1002804, CV window not full)
+[2026-05-11 22:10:40] ──────────────────────────────────────
+[2026-05-11 22:10:40] PROCESS step=13981001  FTT=86.23  accu=1009804
+[2026-05-11 22:10:40]   [Step 13982051 | FTT=86.23] Ub=0.014949  U*=0.9966  Re%=-0.34%  Force=7.25298E-07  F*=0.0290  Re=5580.8  Ma=0.0259  Ma_max=0.0415  Error=1.22e-05  [SIMPLE-PROP]
+[2026-05-11 22:10:45] CONV step=13981001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:10:45] BENCH skipped: FTT=86.23 < G2=90.000 (accu=1009804, CV window not full)
+[2026-05-11 22:11:19] ──────────────────────────────────────
+[2026-05-11 22:11:19] PROCESS step=13988001  FTT=86.27  accu=1016804
+[2026-05-11 22:11:19]   [Step 13989001 | FTT=86.27] Ub=0.014927  U*=0.9951  Re%=-0.49%  Force=7.68314E-07  F*=0.0307  Re=5572.7  Ma=0.0259  Ma_max=0.0416  Error=9.69e-06  [SIMPLE-PROP]
+[2026-05-11 22:11:24] CONV step=13988001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:11:24] BENCH skipped: FTT=86.27 < G2=90.000 (accu=1016804, CV window not full)
+[2026-05-11 22:11:58] ──────────────────────────────────────
+[2026-05-11 22:11:58] PROCESS step=13995001  FTT=86.31  accu=1022804
+[2026-05-11 22:11:58]   [Step 13995901 | FTT=86.31] Ub=0.014906  U*=0.9937  Re%=-0.63%  Force=8.25428E-07  F*=0.0330  Re=5565.0  Ma=0.0258  Ma_max=0.0412  Error=9.62e-06  [SIMPLE-PROP]
+[2026-05-11 22:12:03] CONV step=13995001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:12:03] BENCH skipped: FTT=86.31 < G2=90.000 (accu=1022804, CV window not full)
+[2026-05-11 22:12:37] ──────────────────────────────────────
+[2026-05-11 22:12:37] PROCESS step=14001001  FTT=86.35  accu=1029804
+[2026-05-11 22:12:37]   [Step 14002151 | FTT=86.35] Ub=0.014890  U*=0.9927  Re%=-0.73%  Force=8.88479E-07  F*=0.0355  Re=5558.9  Ma=0.0258  Ma_max=0.0423  Error=7.98e-06  [SIMPLE-PROP]
+[2026-05-11 22:12:42] CONV step=14001001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:12:42] BENCH skipped: FTT=86.35 < G2=90.000 (accu=1029804, CV window not full)
+[2026-05-11 22:13:16] ──────────────────────────────────────
+[2026-05-11 22:13:16] PROCESS step=14008001  FTT=86.39  accu=1036804
+[2026-05-11 22:13:16]   [Step 14009001 | FTT=86.39] Ub=0.014873  U*=0.9915  Re%=-0.85%  Force=9.68714E-07  F*=0.0387  Re=5552.7  Ma=0.0258  Ma_max=0.0444  Error=8.14e-06  [SIMPLE-PROP]
+[2026-05-11 22:13:21] CONV step=14008001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:13:21] BENCH skipped: FTT=86.39 < G2=90.000 (accu=1036804, CV window not full)
+[2026-05-11 22:14:28] ──────────────────────────────────────
+[2026-05-11 22:14:28] PROCESS step=14020001  FTT=86.47  accu=1048804
+[2026-05-11 22:14:28]   [Step 14021051 | FTT=86.47] Ub=0.014848  U*=0.9899  Re%=-1.01%  Force=1.13507E-06  F*=0.0454  Re=5543.2  Ma=0.0257  Ma_max=0.0438  Error=6.33e-06  [SIMPLE-PROP]
+[2026-05-11 22:14:33] CONV step=14020001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:14:33] BENCH skipped: FTT=86.47 < G2=90.000 (accu=1048804, CV window not full)
+[2026-05-11 22:15:07] ──────────────────────────────────────
+[2026-05-11 22:15:07] PROCESS step=14027001  FTT=86.51  accu=1055804
+[2026-05-11 22:15:07]   [Step 14028001 | FTT=86.51] Ub=0.014834  U*=0.9889  Re%=-1.11%  Force=1.24425E-06  F*=0.0498  Re=5538.0  Ma=0.0257  Ma_max=0.0454  Error=7.01e-06  [SIMPLE-PROP]
+[2026-05-11 22:15:12] CONV step=14027001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:15:12] BENCH skipped: FTT=86.51 < G2=90.000 (accu=1055804, CV window not full)
+[2026-05-11 22:15:46] ──────────────────────────────────────
+[2026-05-11 22:15:46] PROCESS step=14034001  FTT=86.55  accu=1061804
+[2026-05-11 22:15:46]   [Step 14034851 | FTT=86.55] Ub=0.014823  U*=0.9882  Re%=-1.18%  Force=1.36058E-06  F*=0.0544  Re=5533.9  Ma=0.0257  Ma_max=0.0475  Error=5.30e-06  [SIMPLE-PROP]
+[2026-05-11 22:15:51] CONV step=14034001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:15:51] BENCH skipped: FTT=86.55 < G2=90.000 (accu=1061804, CV window not full)
+[2026-05-11 22:16:55] ──────────────────────────────────────
+[2026-05-11 22:16:55] PROCESS step=14046001  FTT=86.63  accu=1073804
+[2026-05-11 22:16:55]   [Step 14046701 | FTT=86.63] Ub=0.014811  U*=0.9874  Re%=-1.26%  Force=1.57608E-06  F*=0.0630  Re=5529.4  Ma=0.0257  Ma_max=0.0472  Error=7.79e-07  [SIMPLE-PROP]
+[2026-05-11 22:17:01] CONV step=14046001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:17:01] BENCH skipped: FTT=86.63 < G2=90.000 (accu=1073804, CV window not full)
+[2026-05-11 22:17:34] ──────────────────────────────────────
+[2026-05-11 22:17:34] PROCESS step=14052001  FTT=86.67  accu=1080804
+[2026-05-11 22:17:34]   [Step 14053101 | FTT=86.67] Ub=0.014811  U*=0.9874  Re%=-1.26%  Force=1.69584E-06  F*=0.0678  Re=5529.6  Ma=0.0257  Ma_max=0.0461  Error=2.03e-06  [SIMPLE-PROP]
+[2026-05-11 22:17:41] CONV step=14052001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:17:41] BENCH skipped: FTT=86.67 < G2=90.000 (accu=1080804, CV window not full)
+[2026-05-11 22:18:15] ──────────────────────────────────────
+[2026-05-11 22:18:15] PROCESS step=14059001  FTT=86.71  accu=1087804
+[2026-05-11 22:18:15]   [Step 14060001 | FTT=86.71] Ub=0.014819  U*=0.9880  Re%=-1.20%  Force=1.82212E-06  F*=0.0729  Re=5532.6  Ma=0.0257  Ma_max=0.0461  Error=5.77e-06  [SIMPLE-PROP]
+[2026-05-11 22:18:20] CONV step=14059001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:18:20] BENCH skipped: FTT=86.71 < G2=90.000 (accu=1087804, CV window not full)
+[2026-05-11 22:18:54] ──────────────────────────────────────
+[2026-05-11 22:18:54] PROCESS step=14066001  FTT=86.75  accu=1094804
+[2026-05-11 22:18:54]   [Step 14067001 | FTT=86.75] Ub=0.014834  U*=0.9889  Re%=-1.11%  Force=1.94219E-06  F*=0.0777  Re=5538.1  Ma=0.0257  Ma_max=0.0448  Error=7.64e-06  [SIMPLE-PROP]
+[2026-05-11 22:18:59] CONV step=14066001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:18:59] BENCH skipped: FTT=86.75 < G2=90.000 (accu=1094804, CV window not full)
+[2026-05-11 22:19:33] ──────────────────────────────────────
+[2026-05-11 22:19:33] PROCESS step=14073001  FTT=86.79  accu=1100804
+[2026-05-11 22:19:33]   [Step 14073701 | FTT=86.79] Ub=0.014852  U*=0.9901  Re%=-0.99%  Force=2.04639E-06  F*=0.0819  Re=5544.6  Ma=0.0257  Ma_max=0.0421  Error=1.00e-05  [SIMPLE-PROP]
+[2026-05-11 22:19:38] CONV step=14073001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:19:38] BENCH skipped: FTT=86.79 < G2=90.000 (accu=1100804, CV window not full)
+[2026-05-11 22:20:12] ──────────────────────────────────────
+[2026-05-11 22:20:12] PROCESS step=14079001  FTT=86.83  accu=1107804
+[2026-05-11 22:20:12]   [Step 14080151 | FTT=86.83] Ub=0.014872  U*=0.9915  Re%=-0.85%  Force=2.13460E-06  F*=0.0854  Re=5552.2  Ma=0.0258  Ma_max=0.0420  Error=1.10e-05  [SIMPLE-PROP]
+[2026-05-11 22:20:17] CONV step=14079001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:20:17] BENCH skipped: FTT=86.83 < G2=90.000 (accu=1107804, CV window not full)
+[2026-05-11 22:20:50] ──────────────────────────────────────
+[2026-05-11 22:20:51] PROCESS step=14086001  FTT=86.88  accu=1114804
+[2026-05-11 22:20:51]   [Step 14087001 | FTT=86.88] Ub=0.014894  U*=0.9930  Re%=-0.70%  Force=2.21375E-06  F*=0.0885  Re=5560.6  Ma=0.0258  Ma_max=0.0436  Error=1.12e-05  [SIMPLE-PROP]
+[2026-05-11 22:20:56] CONV step=14086001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:20:56] BENCH skipped: FTT=86.88 < G2=90.000 (accu=1114804, CV window not full)
+[2026-05-11 22:21:29] ──────────────────────────────────────
+[2026-05-11 22:21:29] PROCESS step=14093001  FTT=86.92  accu=1121804
+[2026-05-11 22:21:29]   [Step 14094001 | FTT=86.92] Ub=0.014918  U*=0.9945  Re%=-0.55%  Force=2.27849E-06  F*=0.0911  Re=5569.4  Ma=0.0258  Ma_max=0.0421  Error=1.10e-05  [SIMPLE-PROP]
+[2026-05-11 22:21:35] CONV step=14093001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:21:35] BENCH skipped: FTT=86.92 < G2=90.000 (accu=1121804, CV window not full)
+[2026-05-11 22:22:09] ──────────────────────────────────────
+[2026-05-11 22:22:09] PROCESS step=14099001  FTT=86.96  accu=1127804
+[2026-05-11 22:22:09]   [Step 14100001 | FTT=86.96] Ub=0.014936  U*=0.9957  Re%=-0.43%  Force=2.32154E-06  F*=0.0929  Re=5576.2  Ma=0.0259  Ma_max=0.0427  Error=9.19e-06  [SIMPLE-PROP]
+[2026-05-11 22:22:14] CONV step=14099001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:22:14] BENCH skipped: FTT=86.96 < G2=90.000 (accu=1127804, CV window not full)
+[2026-05-11 22:22:48] ──────────────────────────────────────
+[2026-05-11 22:22:48] PROCESS step=14106001  FTT=87.00  accu=1134804
+[2026-05-11 22:22:48]   [Step 14107001 | FTT=87.00] Ub=0.014958  U*=0.9972  Re%=-0.28%  Force=2.35824E-06  F*=0.0943  Re=5584.3  Ma=0.0259  Ma_max=0.0446  Error=1.15e-05  [SIMPLE-PROP]
+[2026-05-11 22:22:53] CONV step=14106001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:22:53] BENCH skipped: FTT=87.00 < G2=90.000 (accu=1134804, CV window not full)
+[2026-05-11 22:23:27] ──────────────────────────────────────
+[2026-05-11 22:23:27] PROCESS step=14113001  FTT=87.04  accu=1140804
+[2026-05-11 22:23:27]   [Step 14113951 | FTT=87.04] Ub=0.014981  U*=0.9987  Re%=-0.13%  Force=2.37918E-06  F*=0.0952  Re=5592.9  Ma=0.0259  Ma_max=0.0440  Error=1.07e-05  [SIMPLE-PROP]
+[2026-05-11 22:23:32] CONV step=14113001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:23:32] BENCH skipped: FTT=87.04 < G2=90.000 (accu=1140804, CV window not full)
+[2026-05-11 22:24:40] ──────────────────────────────────────
+[2026-05-11 22:24:40] PROCESS step=14125001  FTT=87.12  accu=1153804
+[2026-05-11 22:24:40]   [Step 14126001 | FTT=87.12] Ub=0.015020  U*=1.0014  Re%=0.14%  Force=2.37795E-06  F*=0.0951  Re=5607.6  Ma=0.0260  Ma_max=0.0445  Error=9.97e-06  [SIMPLE-PROP]
+[2026-05-11 22:24:45] CONV step=14125001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:24:45] BENCH skipped: FTT=87.12 < G2=90.000 (accu=1153804, CV window not full)
+[2026-05-11 22:25:19] ──────────────────────────────────────
+[2026-05-11 22:25:19] PROCESS step=14132001  FTT=87.16  accu=1160804
+[2026-05-11 22:25:19]   [Step 14133001 | FTT=87.16] Ub=0.015040  U*=1.0027  Re%=0.27%  Force=2.35692E-06  F*=0.0943  Re=5614.8  Ma=0.0260  Ma_max=0.0465  Error=9.43e-06  [SIMPLE-PROP]
+[2026-05-11 22:25:24] CONV step=14132001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:25:24] BENCH skipped: FTT=87.16 < G2=90.000 (accu=1160804, CV window not full)
+[2026-05-11 22:25:58] ──────────────────────────────────────
+[2026-05-11 22:25:58] PROCESS step=14139001  FTT=87.20  accu=1167804
+[2026-05-11 22:25:58]   [Step 14140001 | FTT=87.20] Ub=0.015058  U*=1.0039  Re%=0.39%  Force=2.32282E-06  F*=0.0929  Re=5621.7  Ma=0.0261  Ma_max=0.0473  Error=7.62e-06  [SIMPLE-PROP]
+[2026-05-11 22:26:03] CONV step=14139001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:26:03] BENCH skipped: FTT=87.20 < G2=90.000 (accu=1167804, CV window not full)
+[2026-05-11 22:27:10] ──────────────────────────────────────
+[2026-05-11 22:27:10] PROCESS step=14151001  FTT=87.28  accu=1179804
+[2026-05-11 22:27:10]   [Step 14152001 | FTT=87.28] Ub=0.015091  U*=1.0060  Re%=0.60%  Force=2.23468E-06  F*=0.0894  Re=5633.9  Ma=0.0261  Ma_max=0.0477  Error=1.01e-05  [SIMPLE-PROP]
+[2026-05-11 22:27:15] CONV step=14151001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:27:15] BENCH skipped: FTT=87.28 < G2=90.000 (accu=1179804, CV window not full)
+[2026-05-11 22:27:49] ──────────────────────────────────────
+[2026-05-11 22:27:49] PROCESS step=14158001  FTT=87.32  accu=1186804
+[2026-05-11 22:27:49]   [Step 14159001 | FTT=87.32] Ub=0.015112  U*=1.0074  Re%=0.74%  Force=2.16478E-06  F*=0.0866  Re=5641.7  Ma=0.0262  Ma_max=0.0470  Error=9.69e-06  [SIMPLE-PROP]
+[2026-05-11 22:27:56] CONV step=14158001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:27:56] BENCH skipped: FTT=87.32 < G2=90.000 (accu=1186804, CV window not full)
+[2026-05-11 22:28:30] ──────────────────────────────────────
+[2026-05-11 22:28:30] PROCESS step=14165001  FTT=87.36  accu=1193804
+[2026-05-11 22:28:30]   [Step 14166001 | FTT=87.36] Ub=0.015136  U*=1.0090  Re%=0.90%  Force=2.07941E-06  F*=0.0832  Re=5650.6  Ma=0.0262  Ma_max=0.0455  Error=1.22e-05  [SIMPLE-PROP]
+[2026-05-11 22:28:35] CONV step=14165001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:28:35] BENCH skipped: FTT=87.36 < G2=90.000 (accu=1193804, CV window not full)
+[2026-05-11 22:29:09] ──────────────────────────────────────
+[2026-05-11 22:29:09] PROCESS step=14172001  FTT=87.41  accu=1200804
+[2026-05-11 22:29:09]   [Step 14173001 | FTT=87.41] Ub=0.015159  U*=1.0106  Re%=1.06%  Force=1.97726E-06  F*=0.0791  Re=5659.5  Ma=0.0263  Ma_max=0.0463  Error=1.00e-05  [SIMPLE-PROP]
+[2026-05-11 22:29:14] CONV step=14172001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:29:14] BENCH skipped: FTT=87.41 < G2=90.000 (accu=1200804, CV window not full)
+[2026-05-11 22:30:21] ──────────────────────────────────────
+[2026-05-11 22:30:21] PROCESS step=14184001  FTT=87.48  accu=1212804
+[2026-05-11 22:30:21]   [Step 14185051 | FTT=87.48] Ub=0.015189  U*=1.0126  Re%=1.26%  Force=1.76797E-06  F*=0.0707  Re=5670.6  Ma=0.0263  Ma_max=0.0455  Error=4.74e-06  [SIMPLE-PROP]
+[2026-05-11 22:30:26] CONV step=14184001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:30:26] BENCH skipped: FTT=87.48 < G2=90.000 (accu=1212804, CV window not full)
+[2026-05-11 22:31:00] ──────────────────────────────────────
+[2026-05-11 22:31:00] PROCESS step=14191001  FTT=87.52  accu=1219804
+[2026-05-11 22:31:00]   [Step 14192001 | FTT=87.52] Ub=0.015197  U*=1.0131  Re%=1.31%  Force=1.63512E-06  F*=0.0654  Re=5673.5  Ma=0.0263  Ma_max=0.0454  Error=3.46e-06  [SIMPLE-PROP]
+[2026-05-11 22:31:05] CONV step=14191001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:31:05] BENCH skipped: FTT=87.52 < G2=90.000 (accu=1219804, CV window not full)
+[2026-05-11 22:31:39] ──────────────────────────────────────
+[2026-05-11 22:31:39] PROCESS step=14198001  FTT=87.56  accu=1225804
+[2026-05-11 22:31:39]   [Step 14198901 | FTT=87.57] Ub=0.015199  U*=1.0133  Re%=1.33%  Force=1.49972E-06  F*=0.0600  Re=5674.4  Ma=0.0263  Ma_max=0.0444  Error=6.97e-07  [SIMPLE-PROP]
+[2026-05-11 22:31:44] CONV step=14198001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:31:44] BENCH skipped: FTT=87.56 < G2=90.000 (accu=1225804, CV window not full)
+[2026-05-11 22:32:49] ──────────────────────────────────────
+[2026-05-11 22:32:49] PROCESS step=14210001  FTT=87.64  accu=1237804
+[2026-05-11 22:32:49]   [Step 14210651 | FTT=87.64] Ub=0.015194  U*=1.0129  Re%=1.29%  Force=1.27061E-06  F*=0.0508  Re=5672.3  Ma=0.0263  Ma_max=0.0442  Error=1.92e-06  [SIMPLE-PROP]
+[2026-05-11 22:32:54] CONV step=14210001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:32:54] BENCH skipped: FTT=87.64 < G2=90.000 (accu=1237804, CV window not full)
+[2026-05-11 22:33:28] ──────────────────────────────────────
+[2026-05-11 22:33:28] PROCESS step=14216001  FTT=87.68  accu=1244804
+[2026-05-11 22:33:28]   [Step 14217001 | FTT=87.68] Ub=0.015186  U*=1.0124  Re%=1.24%  Force=1.15127E-06  F*=0.0461  Re=5669.4  Ma=0.0263  Ma_max=0.0444  Error=6.46e-06  [SIMPLE-PROP]
+[2026-05-11 22:33:33] CONV step=14216001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:33:33] BENCH skipped: FTT=87.68 < G2=90.000 (accu=1244804, CV window not full)
+[2026-05-11 22:34:07] ──────────────────────────────────────
+[2026-05-11 22:34:07] PROCESS step=14223001  FTT=87.72  accu=1251804
+[2026-05-11 22:34:07]   [Step 14224001 | FTT=87.72] Ub=0.015168  U*=1.0112  Re%=1.12%  Force=1.02840E-06  F*=0.0411  Re=5662.8  Ma=0.0263  Ma_max=0.0424  Error=9.49e-06  [SIMPLE-PROP]
+[2026-05-11 22:34:12] CONV step=14223001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:34:13] BENCH skipped: FTT=87.72 < G2=90.000 (accu=1251804, CV window not full)
+[2026-05-11 22:34:43] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit3_test119regular_meshandrebuild/slurm_47400.log
+[2026-05-11 22:34:43] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-11 22:34:46] ──────────────────────────────────────
+[2026-05-11 22:34:46] PROCESS step=14228001  FTT=87.7485  accu=1255804
+[2026-05-11 22:34:46]   [Step 14228601 | FTT=87.75] Ub=0.015151  U*=1.0101  Re%=1.01%  Force=9.55677E-07  F*=0.0382  Re=5656.4  Ma=0.0262  Ma_max=0.0433  Error=1.32e-05  [SIMPLE-PROP]
+[2026-05-11 22:34:52] CONV step=14228001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:34:52] BENCH skipped: FTT=87.7485 < G2=90.000 (accu=1255804, CV window not full)
+[2026-05-11 22:35:26] ──────────────────────────────────────
+[2026-05-11 22:35:26] PROCESS step=14229001  FTT=87.76  accu=1257804
+[2026-05-11 22:35:26]   [Step 14230001 | FTT=87.76] Ub=0.015145  U*=1.0097  Re%=0.97%  Force=9.35204E-07  F*=0.0374  Re=5654.2  Ma=0.0262  Ma_max=0.0435  Error=1.51e-05  [SIMPLE-PROP]
+[2026-05-11 22:35:31] CONV step=14229001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:35:31] BENCH skipped: FTT=87.76 < G2=90.000 (accu=1257804, CV window not full)
+[2026-05-11 22:36:05] ──────────────────────────────────────
+[2026-05-11 22:36:05] PROCESS step=14236001  FTT=87.80  accu=1264804
+[2026-05-11 22:36:05]   [Step 14237001 | FTT=87.80] Ub=0.015108  U*=1.0072  Re%=0.72%  Force=8.47361E-07  F*=0.0339  Re=5640.1  Ma=0.0262  Ma_max=0.0431  Error=1.90e-05  [SIMPLE-PROP]
+[2026-05-11 22:36:10] CONV step=14236001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:36:10] BENCH skipped: FTT=87.80 < G2=90.000 (accu=1264804, CV window not full)
+[2026-05-11 22:37:17] ──────────────────────────────────────
+[2026-05-11 22:37:17] PROCESS step=14248001  FTT=87.87  accu=1276804
+[2026-05-11 22:37:17]   [Step 14249001 | FTT=87.87] Ub=0.015028  U*=1.0019  Re%=0.19%  Force=7.65649E-07  F*=0.0306  Re=5610.5  Ma=0.0260  Ma_max=0.0454  Error=2.43e-05  [SIMPLE-PROP]
+[2026-05-11 22:37:23] CONV step=14248001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:37:24] BENCH skipped: FTT=87.87 < G2=90.000 (accu=1276804, CV window not full)
+[2026-05-11 22:37:57] ──────────────────────────────────────
+[2026-05-11 22:37:57] PROCESS step=14255001  FTT=87.92  accu=1283804
+[2026-05-11 22:37:57]   [Step 14256001 | FTT=87.92] Ub=0.014976  U*=0.9984  Re%=-0.16%  Force=7.64187E-07  F*=0.0306  Re=5591.1  Ma=0.0259  Ma_max=0.0450  Error=2.47e-05  [SIMPLE-PROP]
+[2026-05-11 22:38:02] CONV step=14255001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:38:03] BENCH skipped: FTT=87.92 < G2=90.000 (accu=1283804, CV window not full)
+[2026-05-11 22:38:36] ──────────────────────────────────────
+[2026-05-11 22:38:36] PROCESS step=14262001  FTT=87.96  accu=1290804
+[2026-05-11 22:38:36]   [Step 14263001 | FTT=87.96] Ub=0.014922  U*=0.9948  Re%=-0.52%  Force=7.99540E-07  F*=0.0320  Re=5571.0  Ma=0.0258  Ma_max=0.0442  Error=2.61e-05  [SIMPLE-PROP]
+[2026-05-11 22:38:43] CONV step=14262001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:38:43] BENCH skipped: FTT=87.96 < G2=90.000 (accu=1290804, CV window not full)
+[2026-05-11 22:39:17] ──────────────────────────────────────
+[2026-05-11 22:39:17] PROCESS step=14269001  FTT=88.00  accu=1297804
+[2026-05-11 22:39:17]   [Step 14270001 | FTT=88.00] Ub=0.014870  U*=0.9913  Re%=-0.87%  Force=8.71683E-07  F*=0.0349  Re=5551.4  Ma=0.0258  Ma_max=0.0498  Error=2.36e-05  [SIMPLE-PROP]
+[2026-05-11 22:39:22] CONV step=14269001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:39:22] BENCH skipped: FTT=88.00 < G2=90.000 (accu=1297804, CV window not full)
+[2026-05-11 22:39:56] ──────────────────────────────────────
+[2026-05-11 22:39:56] PROCESS step=14276001  FTT=88.04  accu=1303804
+[2026-05-11 22:39:56]   [Step 14276701 | FTT=88.04] Ub=0.014824  U*=0.9883  Re%=-1.17%  Force=9.73453E-07  F*=0.0389  Re=5534.3  Ma=0.0257  Ma_max=0.0432  Error=2.25e-05  [SIMPLE-PROP]
+[2026-05-11 22:40:01] CONV step=14276001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:40:01] BENCH skipped: FTT=88.04 < G2=90.000 (accu=1303804, CV window not full)
+[2026-05-11 22:40:35] ──────────────────────────────────────
+[2026-05-11 22:40:35] PROCESS step=14282001  FTT=88.08  accu=1310804
+[2026-05-11 22:40:35]   [Step 14283001 | FTT=88.08] Ub=0.014788  U*=0.9859  Re%=-1.41%  Force=1.09455E-06  F*=0.0438  Re=5520.9  Ma=0.0256  Ma_max=0.0464  Error=1.73e-05  [SIMPLE-PROP]
+[2026-05-11 22:40:40] CONV step=14282001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:40:40] BENCH skipped: FTT=88.08 < G2=90.000 (accu=1310804, CV window not full)
+[2026-05-11 22:41:47] ──────────────────────────────────────
+[2026-05-11 22:41:47] PROCESS step=14294001  FTT=88.16  accu=1322804
+[2026-05-11 22:41:47]   [Step 14295051 | FTT=88.16] Ub=0.014743  U*=0.9829  Re%=-1.71%  Force=1.37678E-06  F*=0.0551  Re=5504.2  Ma=0.0255  Ma_max=0.0522  Error=9.13e-06  [SIMPLE-PROP]
+[2026-05-11 22:41:52] CONV step=14294001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:41:52] BENCH skipped: FTT=88.16 < G2=90.000 (accu=1322804, CV window not full)
+[2026-05-11 22:42:26] ──────────────────────────────────────
+[2026-05-11 22:42:26] PROCESS step=14301001  FTT=88.20  accu=1329804
+[2026-05-11 22:42:26]   [Step 14302001 | FTT=88.20] Ub=0.014733  U*=0.9822  Re%=-1.78%  Force=1.55726E-06  F*=0.0623  Re=5500.3  Ma=0.0255  Ma_max=0.0455  Error=1.59e-06  [SIMPLE-PROP]
+[2026-05-11 22:42:31] CONV step=14301001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:42:32] BENCH skipped: FTT=88.20 < G2=90.000 (accu=1329804, CV window not full)
+[2026-05-11 22:43:05] ──────────────────────────────────────
+[2026-05-11 22:43:05] PROCESS step=14308001  FTT=88.24  accu=1336804
+[2026-05-11 22:43:05]   [Step 14309001 | FTT=88.24] Ub=0.014734  U*=0.9823  Re%=-1.77%  Force=1.74235E-06  F*=0.0697  Re=5500.7  Ma=0.0255  Ma_max=0.0461  Error=2.41e-06  [SIMPLE-PROP]
+[2026-05-11 22:43:11] CONV step=14308001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:43:11] BENCH skipped: FTT=88.24 < G2=90.000 (accu=1336804, CV window not full)
+[2026-05-11 22:43:45] ──────────────────────────────────────
+[2026-05-11 22:43:45] PROCESS step=14315001  FTT=88.28  accu=1342804
+[2026-05-11 22:43:45]   [Step 14315651 | FTT=88.29] Ub=0.014746  U*=0.9831  Re%=-1.69%  Force=1.91372E-06  F*=0.0765  Re=5505.2  Ma=0.0255  Ma_max=0.0444  Error=9.58e-06  [SIMPLE-PROP]
+[2026-05-11 22:43:50] CONV step=14315001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:43:50] BENCH skipped: FTT=88.28 < G2=90.000 (accu=1342804, CV window not full)
+[2026-05-11 22:44:24] ──────────────────────────────────────
+[2026-05-11 22:44:24] PROCESS step=14321001  FTT=88.32  accu=1349804
+[2026-05-11 22:44:24]   [Step 14322151 | FTT=88.33] Ub=0.014768  U*=0.9845  Re%=-1.55%  Force=2.07015E-06  F*=0.0828  Re=5513.4  Ma=0.0256  Ma_max=0.0446  Error=1.27e-05  [SIMPLE-PROP]
+[2026-05-11 22:44:29] CONV step=14321001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:44:29] BENCH skipped: FTT=88.32 < G2=90.000 (accu=1349804, CV window not full)
+[2026-05-11 22:45:03] ──────────────────────────────────────
+[2026-05-11 22:45:03] PROCESS step=14328001  FTT=88.37  accu=1356804
+[2026-05-11 22:45:03]   [Step 14329001 | FTT=88.37] Ub=0.014798  U*=0.9866  Re%=-1.34%  Force=2.21718E-06  F*=0.0887  Re=5524.7  Ma=0.0256  Ma_max=0.0436  Error=1.71e-05  [SIMPLE-PROP]
+[2026-05-11 22:45:08] CONV step=14328001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:45:08] BENCH skipped: FTT=88.37 < G2=90.000 (accu=1356804, CV window not full)
+[2026-05-11 22:45:42] ──────────────────────────────────────
+[2026-05-11 22:45:42] PROCESS step=14335001  FTT=88.41  accu=1362804
+[2026-05-11 22:45:42]   [Step 14335851 | FTT=88.41] Ub=0.014835  U*=0.9890  Re%=-1.10%  Force=2.34146E-06  F*=0.0937  Re=5538.4  Ma=0.0257  Ma_max=0.0441  Error=1.86e-05  [SIMPLE-PROP]
+[2026-05-11 22:45:47] CONV step=14335001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:45:47] BENCH skipped: FTT=88.41 < G2=90.000 (accu=1362804, CV window not full)
+[2026-05-11 22:46:21] ──────────────────────────────────────
+[2026-05-11 22:46:21] PROCESS step=14341001  FTT=88.45  accu=1369804
+[2026-05-11 22:46:21]   [Step 14342201 | FTT=88.45] Ub=0.014875  U*=0.9917  Re%=-0.83%  Force=2.43256E-06  F*=0.0973  Re=5553.4  Ma=0.0258  Ma_max=0.0428  Error=2.32e-05  [SIMPLE-PROP]
+[2026-05-11 22:46:26] CONV step=14341001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:46:26] BENCH skipped: FTT=88.45 < G2=90.000 (accu=1369804, CV window not full)
+[2026-05-11 22:47:00] ──────────────────────────────────────
+[2026-05-11 22:47:00] PROCESS step=14348001  FTT=88.49  accu=1376804
+[2026-05-11 22:47:00]   [Step 14349001 | FTT=88.49] Ub=0.014924  U*=0.9949  Re%=-0.51%  Force=2.50024E-06  F*=0.1000  Re=5571.6  Ma=0.0258  Ma_max=0.0425  Error=2.48e-05  [SIMPLE-PROP]
+[2026-05-11 22:47:05] CONV step=14348001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:47:05] BENCH skipped: FTT=88.49 < G2=90.000 (accu=1376804, CV window not full)
+[2026-05-11 22:47:39] ──────────────────────────────────────
+[2026-05-11 22:47:39] PROCESS step=14355001  FTT=88.53  accu=1383804
+[2026-05-11 22:47:39]   [Step 14356001 | FTT=88.53] Ub=0.014976  U*=0.9984  Re%=-0.16%  Force=2.53476E-06  F*=0.1014  Re=5591.1  Ma=0.0259  Ma_max=0.0417  Error=2.61e-05  [SIMPLE-PROP]
+[2026-05-11 22:47:45] CONV step=14355001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:47:46] BENCH skipped: FTT=88.53 < G2=90.000 (accu=1383804, CV window not full)
+[2026-05-11 22:48:19] ──────────────────────────────────────
+[2026-05-11 22:48:19] PROCESS step=14362001  FTT=88.58  accu=1389804
+[2026-05-11 22:48:19]   [Step 14362901 | FTT=88.58] Ub=0.015030  U*=1.0020  Re%=0.20%  Force=2.53249E-06  F*=0.1013  Re=5611.2  Ma=0.0260  Ma_max=0.0419  Error=2.51e-05  [SIMPLE-PROP]
+[2026-05-11 22:48:24] CONV step=14362001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:48:24] BENCH skipped: FTT=88.58 < G2=90.000 (accu=1389804, CV window not full)
+[2026-05-11 22:48:58] ──────────────────────────────────────
+[2026-05-11 22:48:58] PROCESS step=14368001  FTT=88.61  accu=1396804
+[2026-05-11 22:48:58]   [Step 14369001 | FTT=88.61] Ub=0.015074  U*=1.0050  Re%=0.50%  Force=2.50079E-06  F*=0.1000  Re=5627.7  Ma=0.0261  Ma_max=0.0410  Error=2.29e-05  [SIMPLE-PROP]
+[2026-05-11 22:49:03] CONV step=14368001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:49:03] BENCH skipped: FTT=88.61 < G2=90.000 (accu=1396804, CV window not full)
+[2026-05-11 22:49:37] ──────────────────────────────────────
+[2026-05-11 22:49:37] PROCESS step=14375001  FTT=88.66  accu=1403804
+[2026-05-11 22:49:37]   [Step 14376001 | FTT=88.66] Ub=0.015123  U*=1.0082  Re%=0.82%  Force=2.43224E-06  F*=0.0973  Re=5645.9  Ma=0.0262  Ma_max=0.0505  Error=2.25e-05  [SIMPLE-PROP]
+[2026-05-11 22:49:42] CONV step=14375001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:49:42] BENCH skipped: FTT=88.66 < G2=90.000 (accu=1403804, CV window not full)
+[2026-05-11 22:50:16] ──────────────────────────────────────
+[2026-05-11 22:50:16] PROCESS step=14382001  FTT=88.70  accu=1409804
+[2026-05-11 22:50:16]   [Step 14382701 | FTT=88.70] Ub=0.015164  U*=1.0109  Re%=1.09%  Force=2.33681E-06  F*=0.0935  Re=5661.2  Ma=0.0263  Ma_max=0.0492  Error=1.76e-05  [SIMPLE-PROP]
+[2026-05-11 22:50:21] CONV step=14382001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:50:21] BENCH skipped: FTT=88.70 < G2=90.000 (accu=1409804, CV window not full)
+[2026-05-11 22:50:55] ──────────────────────────────────────
+[2026-05-11 22:50:55] PROCESS step=14388001  FTT=88.74  accu=1416804
+[2026-05-11 22:50:55]   [Step 14389151 | FTT=88.74] Ub=0.015197  U*=1.0131  Re%=1.31%  Force=2.22154E-06  F*=0.0889  Re=5673.5  Ma=0.0263  Ma_max=0.0431  Error=1.68e-05  [SIMPLE-PROP]
+[2026-05-11 22:51:00] CONV step=14388001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:51:00] BENCH skipped: FTT=88.74 < G2=90.000 (accu=1416804, CV window not full)
+[2026-05-11 22:51:34] ──────────────────────────────────────
+[2026-05-11 22:51:34] PROCESS step=14395001  FTT=88.78  accu=1423804
+[2026-05-11 22:51:34]   [Step 14396001 | FTT=88.78] Ub=0.015226  U*=1.0150  Re%=1.50%  Force=2.07802E-06  F*=0.0831  Re=5684.3  Ma=0.0264  Ma_max=0.0415  Error=1.20e-05  [SIMPLE-PROP]
+[2026-05-11 22:51:39] CONV step=14395001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:51:39] BENCH skipped: FTT=88.78 < G2=90.000 (accu=1423804, CV window not full)
+[2026-05-11 22:52:13] ──────────────────────────────────────
+[2026-05-11 22:52:13] PROCESS step=14402001  FTT=88.82  accu=1429804
+[2026-05-11 22:52:13]   [Step 14402751 | FTT=88.82] Ub=0.015248  U*=1.0165  Re%=1.65%  Force=1.91947E-06  F*=0.0768  Re=5692.7  Ma=0.0264  Ma_max=0.0405  Error=9.65e-06  [SIMPLE-PROP]
+[2026-05-11 22:52:18] CONV step=14402001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:52:18] BENCH skipped: FTT=88.82 < G2=90.000 (accu=1429804, CV window not full)
+[2026-05-11 22:52:52] ──────────────────────────────────────
+[2026-05-11 22:52:52] PROCESS step=14408001  FTT=88.86  accu=1436804
+[2026-05-11 22:52:52]   [Step 14409001 | FTT=88.86] Ub=0.015262  U*=1.0175  Re%=1.75%  Force=1.76156E-06  F*=0.0705  Re=5697.9  Ma=0.0264  Ma_max=0.0424  Error=4.82e-06  [SIMPLE-PROP]
+[2026-05-11 22:52:57] CONV step=14408001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:52:57] BENCH skipped: FTT=88.86 < G2=90.000 (accu=1436804, CV window not full)
+[2026-05-11 22:53:31] ──────────────────────────────────────
+[2026-05-11 22:53:31] PROCESS step=14415001  FTT=88.90  accu=1443804
+[2026-05-11 22:53:31]   [Step 14416001 | FTT=88.90] Ub=0.015270  U*=1.0180  Re%=1.80%  Force=1.57716E-06  F*=0.0631  Re=5700.9  Ma=0.0264  Ma_max=0.0432  Error=3.23e-06  [SIMPLE-PROP]
+[2026-05-11 22:53:36] CONV step=14415001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:53:36] BENCH skipped: FTT=88.90 < G2=90.000 (accu=1443804, CV window not full)
+[2026-05-11 22:55:13] ──────────────────────────────────────
+[2026-05-11 22:55:13] PROCESS step=14432001  FTT=89.01  accu=1460804
+[2026-05-11 22:55:13]   [Step 14433001 | FTT=89.01] Ub=0.015250  U*=1.0166  Re%=1.66%  Force=1.13234E-06  F*=0.0453  Re=5693.2  Ma=0.0264  Ma_max=0.0416  Error=1.05e-05  [SIMPLE-PROP]
+[2026-05-11 22:55:18] CONV step=14432001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:55:19] BENCH skipped: FTT=89.01 < G2=90.000 (accu=1460804, CV window not full)
+[2026-05-11 22:55:52] ──────────────────────────────────────
+[2026-05-11 22:55:52] PROCESS step=14439001  FTT=89.05  accu=1467804
+[2026-05-11 22:55:52]   [Step 14440001 | FTT=89.05] Ub=0.015224  U*=1.0149  Re%=1.49%  Force=9.68072E-07  F*=0.0387  Re=5683.6  Ma=0.0264  Ma_max=0.0411  Error=1.40e-05  [SIMPLE-PROP]
+[2026-05-11 22:55:58] CONV step=14439001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:55:58] BENCH skipped: FTT=89.05 < G2=90.000 (accu=1467804, CV window not full)
+[2026-05-11 22:56:31] ──────────────────────────────────────
+[2026-05-11 22:56:31] PROCESS step=14446001  FTT=89.09  accu=1473804
+[2026-05-11 22:56:31]   [Step 14446701 | FTT=89.09] Ub=0.015189  U*=1.0126  Re%=1.26%  Force=8.30995E-07  F*=0.0332  Re=5670.5  Ma=0.0263  Ma_max=0.0418  Error=2.03e-05  [SIMPLE-PROP]
+[2026-05-11 22:56:37] CONV step=14446001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:56:37] BENCH skipped: FTT=89.09 < G2=90.000 (accu=1473804, CV window not full)
+[2026-05-11 22:57:11] ──────────────────────────────────────
+[2026-05-11 22:57:11] PROCESS step=14452001  FTT=89.13  accu=1480804
+[2026-05-11 22:57:11]   [Step 14453001 | FTT=89.13] Ub=0.015147  U*=1.0098  Re%=0.98%  Force=7.26233E-07  F*=0.0290  Re=5654.9  Ma=0.0262  Ma_max=0.0421  Error=2.27e-05  [SIMPLE-PROP]
+[2026-05-11 22:57:16] CONV step=14452001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:57:16] BENCH skipped: FTT=89.13 < G2=90.000 (accu=1480804, CV window not full)
+[2026-05-11 22:57:50] ──────────────────────────────────────
+[2026-05-11 22:57:50] PROCESS step=14459001  FTT=89.18  accu=1487804
+[2026-05-11 22:57:50]   [Step 14460001 | FTT=89.18] Ub=0.015093  U*=1.0062  Re%=0.62%  Force=6.42852E-07  F*=0.0257  Re=5634.8  Ma=0.0261  Ma_max=0.0462  Error=2.77e-05  [SIMPLE-PROP]
+[2026-05-11 22:57:56] CONV step=14459001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:57:56] BENCH skipped: FTT=89.18 < G2=90.000 (accu=1487804, CV window not full)
+[2026-05-11 22:58:30] ──────────────────────────────────────
+[2026-05-11 22:58:30] PROCESS step=14466001  FTT=89.22  accu=1494804
+[2026-05-11 22:58:30]   [Step 14467001 | FTT=89.22] Ub=0.015034  U*=1.0023  Re%=0.23%  Force=5.98739E-07  F*=0.0239  Re=5612.7  Ma=0.0260  Ma_max=0.0429  Error=2.85e-05  [SIMPLE-PROP]
+[2026-05-11 22:58:35] CONV step=14466001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:58:35] BENCH skipped: FTT=89.22 < G2=90.000 (accu=1494804, CV window not full)
+[2026-05-11 22:59:09] ──────────────────────────────────────
+[2026-05-11 22:59:09] PROCESS step=14473001  FTT=89.26  accu=1500804
+[2026-05-11 22:59:09]   [Step 14473751 | FTT=89.26] Ub=0.014973  U*=0.9982  Re%=-0.18%  Force=5.96417E-07  F*=0.0239  Re=5589.9  Ma=0.0259  Ma_max=0.0445  Error=3.16e-05  [SIMPLE-PROP]
+[2026-05-11 22:59:14] CONV step=14473001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:59:14] BENCH skipped: FTT=89.26 < G2=90.000 (accu=1500804, CV window not full)
+[2026-05-11 22:59:48] ──────────────────────────────────────
+[2026-05-11 22:59:48] PROCESS step=14479001  FTT=89.30  accu=1507804
+[2026-05-11 22:59:48]   [Step 14480051 | FTT=89.30] Ub=0.014916  U*=0.9944  Re%=-0.56%  Force=6.31220E-07  F*=0.0252  Re=5568.7  Ma=0.0258  Ma_max=0.0448  Error=2.79e-05  [SIMPLE-PROP]
+[2026-05-11 22:59:53] CONV step=14479001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 22:59:53] BENCH skipped: FTT=89.30 < G2=90.000 (accu=1507804, CV window not full)
+[2026-05-11 23:00:27] ──────────────────────────────────────
+[2026-05-11 23:00:27] PROCESS step=14486001  FTT=89.34  accu=1514804
+[2026-05-11 23:00:27]   [Step 14487001 | FTT=89.34] Ub=0.014861  U*=0.9907  Re%=-0.93%  Force=7.08408E-07  F*=0.0283  Re=5548.0  Ma=0.0257  Ma_max=0.0444  Error=2.56e-05  [SIMPLE-PROP]
+[2026-05-11 23:00:32] CONV step=14486001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 23:00:32] BENCH skipped: FTT=89.34 < G2=90.000 (accu=1514804, CV window not full)
+[2026-05-11 23:01:06] ──────────────────────────────────────
+[2026-05-11 23:01:06] PROCESS step=14493001  FTT=89.38  accu=1520804
+[2026-05-11 23:01:06]   [Step 14493751 | FTT=89.38] Ub=0.014815  U*=0.9877  Re%=-1.23%  Force=8.17152E-07  F*=0.0327  Re=5531.0  Ma=0.0257  Ma_max=0.0427  Error=1.92e-05  [SIMPLE-PROP]
+[2026-05-11 23:01:12] CONV step=14493001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 23:01:12] BENCH skipped: FTT=89.38 < G2=90.000 (accu=1520804, CV window not full)
+[2026-05-11 23:01:45] ──────────────────────────────────────
+[2026-05-11 23:01:45] PROCESS step=14499001  FTT=89.42  accu=1527804
+[2026-05-11 23:01:45]   [Step 14500101 | FTT=89.42] Ub=0.014781  U*=0.9854  Re%=-1.46%  Force=9.44270E-07  F*=0.0378  Re=5518.4  Ma=0.0256  Ma_max=0.0426  Error=1.65e-05  [SIMPLE-PROP]
+[2026-05-11 23:01:51] CONV step=14499001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 23:01:51] BENCH skipped: FTT=89.42 < G2=90.000 (accu=1527804, CV window not full)
+[2026-05-11 23:02:24] ──────────────────────────────────────
+[2026-05-11 23:02:24] PROCESS step=14506001  FTT=89.47  accu=1534804
+[2026-05-11 23:02:24]   [Step 14507001 | FTT=89.47] Ub=0.014754  U*=0.9836  Re%=-1.64%  Force=1.10348E-06  F*=0.0441  Re=5508.0  Ma=0.0256  Ma_max=0.0435  Error=1.06e-05  [SIMPLE-PROP]
+[2026-05-11 23:02:30] CONV step=14506001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 23:02:30] BENCH skipped: FTT=89.47 < G2=90.000 (accu=1534804, CV window not full)
+[2026-05-11 23:03:03] ──────────────────────────────────────
+[2026-05-11 23:03:03] PROCESS step=14513001  FTT=89.51  accu=1541804
+[2026-05-11 23:03:03]   [Step 14514001 | FTT=89.51] Ub=0.014737  U*=0.9825  Re%=-1.75%  Force=1.28019E-06  F*=0.0512  Re=5502.0  Ma=0.0255  Ma_max=0.0426  Error=5.65e-06  [SIMPLE-PROP]
+[2026-05-11 23:03:09] CONV step=14513001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-11 23:03:09] BENCH skipped: FTT=89.51 < G2=90.000 (accu=1541804, CV window not full)
