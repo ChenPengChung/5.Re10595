@@ -112,30 +112,4 @@ __device__ double ChapmanEnskogBC(
     return f_eq_atwall * (1.0 + C_alpha);
 }
 
-
-// ════════════════════════════════════════════════════════════════════════════
-// Phase 1b: wall no-slip CE regularization 
-// ════════════════════════════════════════════════════════════════════════════
-/*此版本特色為將19個編號邊界處理，但是缺點很明顯，19個方項的編號，皆為distribution 而非transformation distribution function 
-優點為質量必然守恆 
-*/
-__device__ __forceinline__ void WallCERegularize(
-    double f_arr[19],
-    double &mx_stream,
-    double &my_stream,
-    double &mz_stream,
-    double &rho_stream,
-    double rho_wall,
-    double du_dk, double dv_dk, double dw_dk,
-    double zeta_y_val, double zeta_z_val,
-    double omega_global, double dt_global
-) {
-    for (int q = 0; q < 19; q++)
-        f_arr[q] = ChapmanEnskogBC(q, rho_wall, du_dk, dv_dk, dw_dk,
-                                    zeta_y_val, zeta_z_val, omega_global, dt_global);
-    rho_stream = rho_wall;
-    mx_stream = 0.0;
-    my_stream = 0.0;
-    mz_stream = 0.0;
-}
 #endif

@@ -367,20 +367,6 @@ __device__ void algorithm1_step1_GTS(
         mz_stream  += GILBM_e[q][2] * f_streamed;
     }
 
-
-    const bool is_wall = (is_bottom || is_top);
-
-    // ── Wall CE regularization (v3) ──
-#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
-    if (is_wall) {
-        WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
-                         rho_stream, rho_wall,
-                         du_dk, dv_dk, dw_dk,
-                         zeta_y_val, zeta_z_val,
-                         omega_global, dt_global);
-    }
-#endif
-
     // ── STEP 1.5: Macroscopic (mass correction) ──
     if (i < NX6 - 4 && j < NYD6 - 4) {
         rho_stream += rho_modify[0];
@@ -401,6 +387,7 @@ __device__ void algorithm1_step1_GTS(
 #endif
 
     // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+    const bool is_wall = (is_bottom || is_top);
 #ifndef DISABLE_WALL_MOMENTUM_CORRECTION
     if (is_wall) {
         u_local = 0.0;
@@ -721,20 +708,6 @@ __device__ void algorithm1_step1_GTS_smem(
 
     if (!valid) return;
 
-
-    const bool is_wall = (is_bottom || is_top);
-
-    // ── Wall CE regularization (v3) ──
-#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
-    if (is_wall) {
-        WallCERegularize(f_arr, mx_stream, my_stream, mz_stream,
-                         rho_stream, rho_wall,
-                         du_dk, dv_dk, dw_dk,
-                         zeta_y_val, zeta_z_val,
-                         omega_global, dt_global);
-    }
-#endif
-
     // ── STEP 1.5: Macroscopic (mass correction) ──
     if (i < NX6 - 4 && j < NYD6 - 4) {
         rho_stream += rho_modify[0];
@@ -755,6 +728,7 @@ __device__ void algorithm1_step1_GTS_smem(
 #endif
 
     // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+    const bool is_wall = (is_bottom || is_top);
 #ifndef DISABLE_WALL_MOMENTUM_CORRECTION
     if (is_wall) {
         u_local = 0.0;

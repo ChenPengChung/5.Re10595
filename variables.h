@@ -181,8 +181,8 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     70.0    // 統計量開始累積
-#define     FTT_STOP            130.0   // 模擬結束
+#define     FTT_STATS_START     90.0    // 統計量開始累積
+#define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
 // 0 = 基本 (13 SCALARS): 瞬時速度(3)+渦度(3)+U_mean+V_mean+RS(3)+k_TKE+P_mean
