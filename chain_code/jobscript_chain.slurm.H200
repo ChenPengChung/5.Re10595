@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit3_test119regular_meshandrebuild
+#SBATCH --job-name=Edit4_test2_transbound
 #SBATCH --account=MST114348
 #SBATCH --partition=dev
 #SBATCH --nodes=1
