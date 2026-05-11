@@ -798,9 +798,11 @@ def convergence_epsilon(label_mgr, ax, ftt, values, text_y=0.55,
 #  6. FTT Start Marker
 # ═══════════════════════════════════════════════════════════════
 
-def mark_ftt_start(ax, ftt_val, current_ftt):
+def mark_ftt_start(ax, ftt_val, current_ftt, ftt_cv_gate=None):
     """
     Draw vertical reference line at FTT accumulation start.
+    ftt_cv_gate is accepted for API compatibility but NOT drawn (per convention:
+    G1/G2 gates are internal scheduling rules, not user-facing markers).
 
     Accumulate label display rules (§3):
       - The label appears ONLY when current_ftt > ftt_val, meaning
@@ -1115,7 +1117,7 @@ def build_ma_panel(ax, data):
     _panel_label(ax, '(a)')
 
 
-def build_ub_fstar_panel(ax, data, Re, ftt_stats_start):
+def build_ub_fstar_panel(ax, data, Re, ftt_stats_start, ftt_cv_gate=None):
     """
     Middle panel: Ub/Uref (blue, LEFT y-axis) + F* (green, RIGHT y-axis).
 
@@ -1416,9 +1418,12 @@ def build_rs_tke_panel(ax, data, ftt_stats_start, panel_label='(d)'):
 
     label_mgr = LabelManager(ax, min_gap_frac=0.08)
 
-    # §5: strictly post-accumulation data only
+    # §5: strictly post-accumulation data only.
+    # uu_RS check-point may be transiently negative during G1→G2 window
+    # (subtraction cancellation with few samples) — keep them to show the
+    # full convergence trajectory rather than hiding the panel.
     mask_valid = np.isfinite(uu) & np.isfinite(k)
-    mask_stats = mask_valid & (ftt >= ftt_stats_start) & (uu > 0)
+    mask_stats = mask_valid & (ftt >= ftt_stats_start)
 
     if not np.any(mask_stats):
         return
@@ -1619,6 +1624,9 @@ def main():
     Re   = args.Re if args.Re is not None else (int(vh['Re']) if vh['Re'] else 700)
     Uref = vh['Uref'] if vh['Uref'] else 0.0583
     ftt_stats_start = vh['FTT_STATS_START']
+    cv_window_ftt   = vh['CV_WINDOW_FTT']
+    # G2 = sample accumulation + CV window full → CV/RS panel visible
+    ftt_rs_gate     = ftt_stats_start + cv_window_ftt
 
     # ── §1: Flow regime classification ──
     regime_str = "LAMINAR" if is_laminar(Re) else "TURBULENT"
@@ -1706,22 +1714,25 @@ def main():
     has_accumulated = current_ftt > ftt_stats_start
 
     # ── §2/§6: RS/TKE panel visibility ──
-    # The RS/TKE panel is ONLY shown when ALL of these hold:
-    #   (a) Flow is turbulent (Re > 150)           — §1
-    #   (b) Data file has 7 columns (RS/TKE cols)  — format check
-    #   (c) FTT > FTT_STATS_START                  — §2 accumulation started
-    #   (d) Valid RS data exists in accumulated range
-    # If ANY condition fails: no panel, no placeholder, no empty chart (§2).
+    # Panel shows uu/k time-series as soon as FTT > FTT_STATS_START (G1).
+    # CV statistics inside the panel are computed only over FTT > G2 internally
+    # (handled by convergence_cv); panel itself does NOT gate at G2.
+    #   (a) Flow is turbulent (Re > 150)
+    #   (b) Data file has 7 columns (RS/TKE cols)
+    #   (c) FTT > FTT_STATS_START (sample accumulation has started)
+    #   (d) Valid RS data exists
     show_rs = (should_show_turbulence_panel(Re)
                and data['has_rs']
                and has_accumulated)
 
     if show_rs:
+        # Plot uu/k as soon as FTT >= FTT_STATS_START. Do NOT filter on uu>0:
+        # the check-point uu can be transiently negative in low-sample-count
+        # window between G1 and G2 (subtraction cancellation, expected).
         mask_acc = ((ftt_all >= ftt_stats_start)
-                    & np.isfinite(data['uu_RS'])
-                    & (data['uu_RS'] > 0))
+                    & np.isfinite(data['uu_RS']))
         if not np.any(mask_acc):
-            print(f"[INFO] No valid RS data after FTT={ftt_stats_start:.0f}"
+            print(f"[INFO] No RS rows after FTT={ftt_stats_start:.0f}"
                   f" — RS/TKE panel hidden")
             show_rs = False
 
@@ -1805,14 +1816,20 @@ def main():
     # Upper panels (Ma, Ub/F*, ρ): full FTT range.
     # RS/TKE panel: independent x-axis starting at accu_start_ftt.
     #
-    # [需求1] Detect actual accumulation start from accu_count
-    accu_start_ftt = ftt_stats_start  # fallback
+    # [需求1] Detect actual accumulation start from accu_count.
+    # Bound by current ftt_stats_start (variables.h) so historical data from
+    # earlier runs with different FTT_STATS_START is ignored — the panel
+    # always reflects the current solver gate, not stale append-history.
+    accu_start_ftt = ftt_stats_start  # fallback / lower bound
     if data['has_rs']:
         accu = data['accu_count']
         for ii in range(len(accu)):
-            if np.isfinite(accu[ii]) and accu[ii] > 0:
-                accu_start_ftt = float(ftt_all[ii])
-                print(f"[INFO] [需求1] Detected accu_count > 0 at FTT = {accu_start_ftt:.4f}")
+            ftt_i = float(ftt_all[ii])
+            if (np.isfinite(accu[ii]) and accu[ii] > 0
+                    and ftt_i >= ftt_stats_start):
+                accu_start_ftt = ftt_i
+                print(f"[INFO] [需求1] Detected accu_count > 0 at FTT = {accu_start_ftt:.4f}"
+                      f" (>= FTT_STATS_START={ftt_stats_start:.1f})")
                 break
 
     # Find the index of the last upper-group panel (before rs_tke)

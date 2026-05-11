@@ -22,6 +22,9 @@ MIN_VTK_BYTES=1048576
 
 mkdir -p "$LIVE_DIR"
 
+# Redirect all stdout/stderr to LOG_FILE so callers can use `> /dev/null` safely.
+exec >>"$LOG_FILE" 2>&1
+
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
 if [[ -f "$PID_FILE" ]]; then
@@ -67,6 +70,20 @@ get_accu_count() {
     slurm_log=$(ls -t "$PROJECT_DIR"/slurm_*.log 2>/dev/null | head -1)
     [[ -n "$slurm_log" ]] || { echo 0; return; }
     grep -oP 'accu=\K[0-9]+' "$slurm_log" | tail -1 || echo 0
+}
+
+# Parse FTT_STATS_START + CV_WINDOW_FTT from variables.h once.
+# BENCH gate (G2): FTT >= G1 + CV window full → CV/RS statistics valid.
+get_bench_gate_ftt() {
+    local vh="$PROJECT_DIR/variables.h"
+    [[ -f "$vh" ]] || { echo "0.0"; return; }
+    awk '
+        /^[[:space:]]*#define[[:space:]]+FTT_STATS_START[[:space:]]/ { gsub(/\/\/.*/,""); a=$3 }
+        /^[[:space:]]*#define[[:space:]]+CV_WINDOW_FTT[[:space:]]/   { gsub(/\/\/.*/,""); b=$3 }
+        END {
+            if (a == "" || b == "") print "0.0";
+            else printf "%.3f\n", a + b;
+        }' "$vh"
 }
 
 get_latest_ftt() {
@@ -189,14 +206,18 @@ while :; do
 
             run_convergence "$step" || true
 
-            if (( accu > 0 )); then
+            # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
+            # — only fire benchmark figures once CV window has filled,
+            #   otherwise RS fields are too noisy (statistics not yet meaningful).
+            bench_gate=$(get_bench_gate_ftt)
+            if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
                 if [[ "$last_bench_step" != "$step" ]]; then
-                    log "BENCH trigger: accu=$accu > 0"
+                    log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
                     last_bench_step="$step"
                 fi
             else
-                log "BENCH skipped: accu=0 (FTT=$ftt, waiting for FTT>=40.0)"
+                log "BENCH skipped: FTT=$ftt < G2=$bench_gate (accu=$accu, CV window not full)"
             fi
 
             last_processed="$vtk"

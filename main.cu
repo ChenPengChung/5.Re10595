@@ -1045,13 +1045,51 @@ int main(int argc, char *argv[])
                        FTT_restart, FTT_STATS_START, accu_count);
             accu_count = 0;
             stage1_announced = false;
+
+            // Zero all 33 MeanVars+MeanDerivatives arrays (LOAD block overwrites memory.h zeros)
+            if ((int)TBSWITCH) {
+                CHECK_CUDA( cudaMemset(U,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(V,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(W,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(P,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PP, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UVW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDZ2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDZ2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDZ2, 0, tavg_bytes_gate) );
+            }
+            // Tavg mirrors (host + device)
             memset(u_tavg_h, 0, tavg_bytes_gate);
             memset(v_tavg_h, 0, tavg_bytes_gate);
             memset(w_tavg_h, 0, tavg_bytes_gate);
             CHECK_CUDA( cudaMemset(u_tavg_d, 0, tavg_bytes_gate) );
             CHECK_CUDA( cudaMemset(v_tavg_d, 0, tavg_bytes_gate) );
             CHECK_CUDA( cudaMemset(w_tavg_d, 0, tavg_bytes_gate) );
-            // Also clear vorticity mean
+            // Vorticity (host + device)
             if (ox_tavg_h) {
                 memset(ox_tavg_h, 0, tavg_bytes_gate);
                 memset(oy_tavg_h, 0, tavg_bytes_gate);
@@ -1060,7 +1098,6 @@ int main(int argc, char *argv[])
                 CHECK_CUDA( cudaMemset(oy_tavg_d, 0, tavg_bytes_gate) );
                 CHECK_CUDA( cudaMemset(oz_tavg_d, 0, tavg_bytes_gate) );
             }
-            // TBSWITCH arrays already cudaMemset'd to 0 in AllocateMemory
         }
     }
 
