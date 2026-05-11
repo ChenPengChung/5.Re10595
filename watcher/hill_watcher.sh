@@ -2,7 +2,7 @@
 # hill_watcher.sh — Periodic Hill Re10595 watcher loop
 set -u
 
-PROJECT_DIR="/home/s8313697/5.Re10595/Edit2_restart"
+PROJECT_DIR="/home/s8313697/5.Re10595/Edit2_test119regular"
 RESULT_DIR="$PROJECT_DIR/result"
 LIVE_DIR="$PROJECT_DIR/live"
 LOG_FILE="$LIVE_DIR/watcher.log"

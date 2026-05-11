@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit2_restart
+#SBATCH --job-name=Edit2_test119regular
 #SBATCH --account=MST114348
 #SBATCH --partition=gb200-dev
 #SBATCH --nodes=4

@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/home/s8313697/5.Re10595/Edit2_restart"
+PROJECT_DIR="/home/s8313697/5.Re10595/Edit2_test119regular"
 LIVE_DIR="$PROJECT_DIR/live"
 LOG_FILE="$LIVE_DIR/watcher.log"
 PID_FILE="$LIVE_DIR/watcher.pid"
