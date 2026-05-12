@@ -39883,3 +39883,2496 @@
   [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
   [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
 [2026-05-12 19:07:24] BENCH skipped: FTT=36.61 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:07:58] ──────────────────────────────────────
+[2026-05-12 19:07:58] PROCESS step=15477001  FTT=36.64  accu=0
+[2026-05-12 19:07:58]   [Step 15478001 | FTT=36.64] Ub=0.022797  U*=1.5198  Re%=51.98%  Force=3.89830E-05  F*=1.5593  Re=8511.0  Ma=0.0395  Ma_max=0.0950  Error=2.30e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:08:03] CONV step=15477001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:08:03] MASS step=15477001    目前 drift:   -7.074132e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:08:04
+============================================================
+  步數:    1 ~ 15479201  (154792 records)
+  FTT:     0.0000 ~ 36.6406
+  目前 drift:   -7.076364e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9565e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.6  (還需 14.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.6  (還需 475.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2556.1  (還需 2519.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:08:06] BENCH skipped: FTT=36.64 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:08:40] ──────────────────────────────────────
+[2026-05-12 19:08:40] PROCESS step=15487001  FTT=36.66  accu=0
+[2026-05-12 19:08:40]   [Step 15488551 | FTT=36.66] Ub=0.023759  U*=1.5840  Re%=58.40%  Force=3.03292E-05  F*=1.2132  Re=8870.2  Ma=0.0412  Ma_max=0.0906  Error=1.70e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:08:46] CONV step=15487001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:08:47] MASS step=15487001    目前 drift:   -7.084909e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:08:47
+============================================================
+  步數:    1 ~ 15490001  (154900 records)
+  FTT:     0.0000 ~ 36.6661
+  目前 drift:   -7.085135e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9566e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.6  (還需 14.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.5  (還需 474.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2555.9  (還需 2519.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:08:51] BENCH skipped: FTT=36.66 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:09:25] ──────────────────────────────────────
+[2026-05-12 19:09:25] PROCESS step=15498001  FTT=36.69  accu=0
+[2026-05-12 19:09:25]   [Step 15499801 | FTT=36.69] Ub=0.024468  U*=1.6312  Re%=63.12%  Force=2.01626E-05  F*=0.8065  Re=9134.6  Ma=0.0424  Ma_max=0.0900  Error=1.01e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:09:29] CONV step=15498001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:09:30] MASS step=15498001    目前 drift:   -7.039773e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:09:30
+============================================================
+  步數:    1 ~ 15500901  (155009 records)
+  FTT:     0.0000 ~ 36.6919
+  目前 drift:   -7.039773e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9567e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.8  (還需 15.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.8  (還需 475.1 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2556.0  (還需 2519.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:09:33] BENCH skipped: FTT=36.69 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:10:07] ──────────────────────────────────────
+[2026-05-12 19:10:07] PROCESS step=15509001  FTT=36.71  accu=0
+[2026-05-12 19:10:07]   [Step 15510001 | FTT=36.71] Ub=0.024809  U*=1.6539  Re%=65.39%  Force=1.04202E-05  F*=0.4168  Re=9261.9  Ma=0.0430  Ma_max=0.0939  Error=4.17e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:10:12] CONV step=15509001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:10:12] MASS step=15509001    目前 drift:   -7.016192e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:10:12
+============================================================
+  步數:    1 ~ 15511601  (155116 records)
+  FTT:     0.0000 ~ 36.7173
+  目前 drift:   -7.017744e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9567e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.0  (還需 15.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.9  (還需 475.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2556.1  (還需 2519.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:10:15] BENCH skipped: FTT=36.71 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:10:49] ──────────────────────────────────────
+[2026-05-12 19:10:49] PROCESS step=15519001  FTT=36.74  accu=0
+[2026-05-12 19:10:49]   [Step 15520751 | FTT=36.74] Ub=0.024897  U*=1.6598  Re%=65.98%  Force=-7.46786E-08  F*=-0.0030  Re=9295.0  Ma=0.0431  Ma_max=0.1032  Error=1.12e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:10:53] CONV step=15519001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:10:54] MASS step=15519001    目前 drift:   -7.116198e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:10:54
+============================================================
+  步數:    1 ~ 15521901  (155219 records)
+  FTT:     0.0000 ~ 36.7416
+  目前 drift:   -7.116198e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9569e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.5  (還需 14.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.4  (還需 474.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2555.5  (還需 2518.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:10:57] BENCH skipped: FTT=36.74 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:11:30] ──────────────────────────────────────
+[2026-05-12 19:11:30] PROCESS step=15530001  FTT=36.76  accu=0
+[2026-05-12 19:11:30]   [Step 15531001 | FTT=36.76] Ub=0.024704  U*=1.6469  Re%=64.69%  Force=-1.00319E-05  F*=-0.4013  Re=9222.9  Ma=0.0428  Ma_max=0.1182  Error=7.88e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:11:35] CONV step=15530001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:11:36] MASS step=15530001    目前 drift:   -7.287019e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:11:36
+============================================================
+  步數:    1 ~ 15532601  (155326 records)
+  FTT:     0.0000 ~ 36.7670
+  目前 drift:   -7.288661e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9578e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.6  (還需 13.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 510.3  (還需 473.5 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2553.4  (還需 2516.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:11:39] BENCH skipped: FTT=36.76 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:12:13] ──────────────────────────────────────
+[2026-05-12 19:12:13] PROCESS step=15540001  FTT=36.79  accu=0
+[2026-05-12 19:12:13]   [Step 15541851 | FTT=36.79] Ub=0.024066  U*=1.6044  Re%=60.44%  Force=-2.01344E-05  F*=-0.8054  Re=8984.8  Ma=0.0417  Ma_max=0.1235  Error=1.70e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:12:17] CONV step=15540001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:12:18] MASS step=15540001    目前 drift:   -7.261493e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:12:18
+============================================================
+  步數:    1 ~ 15542901  (155429 records)
+  FTT:     0.0000 ~ 36.7914
+  目前 drift:   -7.261493e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9591e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.8  (還需 14.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 510.2  (還需 473.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2551.9  (還需 2515.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:12:21] BENCH skipped: FTT=36.79 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:12:55] ──────────────────────────────────────
+[2026-05-12 19:12:55] PROCESS step=15551001  FTT=36.81  accu=0
+[2026-05-12 19:12:55]   [Step 15552151 | FTT=36.81] Ub=0.023076  U*=1.5384  Re%=53.84%  Force=-2.88813E-05  F*=-1.1553  Re=8614.9  Ma=0.0400  Ma_max=0.1102  Error=2.44e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:13:00] CONV step=15551001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:13:00] MASS step=15551001    目前 drift:   -6.989890e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:13:00
+============================================================
+  步數:    1 ~ 15553901  (155539 records)
+  FTT:     0.0000 ~ 36.8174
+  目前 drift:   -6.986071e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9597e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.2  (還需 15.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.4  (還需 474.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2552.5  (還需 2515.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:13:03] BENCH skipped: FTT=36.81 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:13:37] ──────────────────────────────────────
+[2026-05-12 19:13:37] PROCESS step=15562001  FTT=36.84  accu=0
+[2026-05-12 19:13:37]   [Step 15563001 | FTT=36.84] Ub=0.021806  U*=1.4537  Re%=45.37%  Force=-3.68638E-05  F*=-1.4746  Re=8140.7  Ma=0.0378  Ma_max=0.1095  Error=2.91e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:13:42] CONV step=15562001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:13:42] MASS step=15562001    目前 drift:   -6.880721e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:13:42
+============================================================
+  步數:    1 ~ 15564001  (155640 records)
+  FTT:     0.0000 ~ 36.8413
+  目前 drift:   -6.880136e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9595e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.8  (還需 15.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 512.1  (還需 475.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2553.4  (還需 2516.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:13:45] BENCH skipped: FTT=36.84 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:14:19] ──────────────────────────────────────
+[2026-05-12 19:14:19] PROCESS step=15572001  FTT=36.86  accu=0
+[2026-05-12 19:14:19]   [Step 15573201 | FTT=36.86] Ub=0.020465  U*=1.3643  Re%=36.43%  Force=-4.30453E-05  F*=-1.7218  Re=7640.3  Ma=0.0354  Ma_max=0.0983  Error=3.30e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:14:24] CONV step=15572001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:14:24] MASS step=15572001    目前 drift:   -6.938042e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:14:25
+============================================================
+  步數:    1 ~ 15574901  (155749 records)
+  FTT:     0.0000 ~ 36.8671
+  目前 drift:   -6.938042e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9592e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.5  (還需 15.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.9  (還需 475.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2553.5  (還需 2516.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:14:27] BENCH skipped: FTT=36.86 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:15:01] ──────────────────────────────────────
+[2026-05-12 19:15:01] PROCESS step=15583001  FTT=36.89  accu=0
+[2026-05-12 19:15:01]   [Step 15584001 | FTT=36.89] Ub=0.018855  U*=1.2570  Re%=25.70%  Force=-4.80322E-05  F*=-1.9213  Re=7039.4  Ma=0.0327  Ma_max=0.1058  Error=4.17e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:15:06] CONV step=15583001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:15:06] MASS step=15583001    目前 drift:   -7.138517e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:15:07
+============================================================
+  步數:    1 ~ 15585301  (155853 records)
+  FTT:     0.0000 ~ 36.8917
+  目前 drift:   -7.144407e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9596e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.5  (還需 14.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 510.7  (還需 473.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2552.0  (還需 2515.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:15:09] BENCH skipped: FTT=36.89 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:15:43] ──────────────────────────────────────
+[2026-05-12 19:15:43] PROCESS step=15593001  FTT=36.91  accu=0
+[2026-05-12 19:15:43]   [Step 15594501 | FTT=36.91] Ub=0.017063  U*=1.1375  Re%=13.75%  Force=-5.11125E-05  F*=-2.0445  Re=6370.2  Ma=0.0296  Ma_max=0.1043  Error=5.12e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-12 19:15:48] CONV step=15593001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:15:48] MASS step=15593001    目前 drift:   -7.359469e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:15:49
+============================================================
+  步數:    1 ~ 15595901  (155959 records)
+  FTT:     0.0000 ~ 36.9168
+  目前 drift:   -7.359469e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9612e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.4  (還需 13.5 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 509.3  (還需 472.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2548.8  (還需 2511.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:15:51] BENCH skipped: FTT=36.91 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:16:25] ──────────────────────────────────────
+[2026-05-12 19:16:25] PROCESS step=15604001  FTT=36.94  accu=0
+[2026-05-12 19:16:25]   [Step 15605001 | FTT=36.94] Ub=0.015180  U*=1.0120  Re%=1.20%  Force=-5.22639E-05  F*=-2.0906  Re=5667.1  Ma=0.0263  Ma_max=0.1115  Error=5.49e-04  [SIMPLE-PROP]
+[2026-05-12 19:16:30] CONV step=15604001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:16:30] MASS step=15604001    目前 drift:   -7.372955e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:16:30
+============================================================
+  步數:    1 ~ 15606401  (156064 records)
+  FTT:     0.0000 ~ 36.9417
+  目前 drift:   -7.373511e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9633e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.3  (還需 13.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 508.7  (還需 471.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2546.1  (還需 2509.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:16:33] BENCH skipped: FTT=36.94 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:17:07] ──────────────────────────────────────
+[2026-05-12 19:17:07] PROCESS step=15614001  FTT=36.96  accu=0
+[2026-05-12 19:17:07]   [Step 15615501 | FTT=36.96] Ub=0.013429  U*=0.8953  Re%=-10.47%  Force=-5.15350E-05  F*=-2.0614  Re=5013.6  Ma=0.0233  Ma_max=0.0966  Error=5.75e-04  [SIMPLE-PROP]
+[2026-05-12 19:17:11] CONV step=15614001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:17:12] MASS step=15614001    目前 drift:   -7.311620e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:17:12
+============================================================
+  步數:    1 ~ 15616901  (156169 records)
+  FTT:     0.0000 ~ 36.9665
+  目前 drift:   -7.311620e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9653e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.6  (還需 13.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 508.6  (還需 471.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2543.9  (還需 2506.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:17:15] BENCH skipped: FTT=36.96 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:17:49] ──────────────────────────────────────
+[2026-05-12 19:17:49] PROCESS step=15625001  FTT=36.99  accu=0
+[2026-05-12 19:17:49]   [Step 15626001 | FTT=36.99] Ub=0.011867  U*=0.7911  Re%=-20.89%  Force=-4.90955E-05  F*=-1.9638  Re=4430.3  Ma=0.0206  Ma_max=0.0901  Error=6.17e-04  [SIMPLE-PROP]
+[2026-05-12 19:17:55] CONV step=15625001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:17:55] MASS step=15625001    目前 drift:   -7.193312e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:17:56
+============================================================
+  步數:    1 ~ 15627901  (156279 records)
+  FTT:     0.0000 ~ 36.9926
+  目前 drift:   -7.192507e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9670e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.3  (還需 14.3 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 508.8  (還需 471.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2542.3  (還需 2505.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:17:59] BENCH skipped: FTT=36.99 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:18:33] ──────────────────────────────────────
+[2026-05-12 19:18:33] PROCESS step=15636001  FTT=37.01  accu=0
+[2026-05-12 19:18:33]   [Step 15637001 | FTT=37.01] Ub=0.010389  U*=0.6926  Re%=-30.74%  Force=-4.48807E-05  F*=-1.7952  Re=3878.4  Ma=0.0180  Ma_max=0.0973  Error=6.44e-04  [SIMPLE-PROP]
+[2026-05-12 19:18:38] CONV step=15636001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:18:39] MASS step=15636001    目前 drift:   -7.072876e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:18:39
+============================================================
+  步數:    1 ~ 15638901  (156389 records)
+  FTT:     0.0000 ~ 37.0186
+  目前 drift:   -7.071527e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9682e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.9  (還需 14.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 509.2  (還需 472.1 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2541.5  (還需 2504.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:18:42] BENCH skipped: FTT=37.01 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:19:49] ──────────────────────────────────────
+[2026-05-12 19:19:49] PROCESS step=15655001  FTT=37.06  accu=0
+[2026-05-12 19:19:49]   [Step 15656051 | FTT=37.06] Ub=0.008313  U*=0.5542  Re%=-44.58%  Force=-3.41274E-05  F*=-1.3651  Re=3103.6  Ma=0.0144  Ma_max=0.1165  Error=5.41e-04  [SIMPLE-PROP]
+[2026-05-12 19:19:54] CONV step=15655001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:19:54] MASS step=15655001    目前 drift:   -6.713118e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:19:55
+============================================================
+  步數:    1 ~ 15657801  (156578 records)
+  FTT:     0.0000 ~ 37.0633
+  目前 drift:   -6.706976e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9684e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.8  (還需 16.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 511.0  (還需 473.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2543.1  (還需 2506.0 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:19:57] BENCH skipped: FTT=37.06 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:21:01] ──────────────────────────────────────
+[2026-05-12 19:21:01] PROCESS step=15673001  FTT=37.10  accu=0
+[2026-05-12 19:21:01]   [Step 15674151 | FTT=37.10] Ub=0.006995  U*=0.4663  Re%=-53.37%  Force=-2.08712E-05  F*=-0.8348  Re=2611.6  Ma=0.0121  Ma_max=0.0877  Error=3.48e-04  [SIMPLE-PROP]
+[2026-05-12 19:21:06] CONV step=15673001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:21:06] MASS step=15673001    目前 drift:   -6.524746e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:21:07
+============================================================
+  步數:    1 ~ 15675001  (156750 records)
+  FTT:     0.0000 ~ 37.1040
+  目前 drift:   -6.524746e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9658e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.8  (還需 17.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 512.6  (還需 475.5 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2547.4  (還需 2510.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:21:09] BENCH skipped: FTT=37.10 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:21:43] ──────────────────────────────────────
+[2026-05-12 19:21:43] PROCESS step=15683001  FTT=37.13  accu=0
+[2026-05-12 19:21:43]   [Step 15684001 | FTT=37.13] Ub=0.006626  U*=0.4418  Re%=-55.82%  Force=-1.28996E-05  F*=-0.5160  Re=2473.8  Ma=0.0115  Ma_max=0.1035  Error=2.79e-04  [SIMPLE-PROP]
+[2026-05-12 19:21:48] CONV step=15683001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:21:49] MASS step=15683001    目前 drift:   -6.462437e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:21:49
+============================================================
+  步數:    1 ~ 15685701  (156857 records)
+  FTT:     0.0000 ~ 37.1294
+  目前 drift:   -6.460560e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9637e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.2  (還需 18.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 513.5  (還需 476.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2550.4  (還需 2513.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:21:52] BENCH skipped: FTT=37.13 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:22:25] ──────────────────────────────────────
+[2026-05-12 19:22:25] PROCESS step=15685001  FTT=37.127717038490857  accu=0
+[2026-05-12 19:22:30] CONV step=15685001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:22:31] MASS step=15685001    目前 drift:   -6.466183e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:22:31
+============================================================
+  步數:    1 ~ 15685201  (156852 records)
+  FTT:     0.0000 ~ 37.1282
+  目前 drift:   -6.465250e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9638e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.1  (還需 18.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 513.4  (還需 476.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2550.2  (還需 2513.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:22:34] BENCH skipped: FTT=37.127717038490857 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:23:07] ──────────────────────────────────────
+[2026-05-12 19:23:07] PROCESS step=15693001  FTT=37.15  accu=0
+[2026-05-12 19:23:07]   [Step 15694401 | FTT=37.15] Ub=0.006463  U*=0.4308  Re%=-56.92%  Force=-4.19124E-06  F*=-0.1676  Re=2412.7  Ma=0.0112  Ma_max=0.0923  Error=1.11e-04  [SIMPLE-PROP]
+[2026-05-12 19:23:12] CONV step=15693001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:23:13] MASS step=15693001    目前 drift:   -6.367207e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:23:13
+============================================================
+  步數:    1 ~ 15695901  (156959 records)
+  FTT:     0.0000 ~ 37.1535
+  目前 drift:   -6.367207e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9614e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.7  (還需 18.5 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 514.5  (還需 477.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2553.9  (還需 2516.8 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:23:15] BENCH skipped: FTT=37.15 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:23:49] ──────────────────────────────────────
+[2026-05-12 19:23:49] PROCESS step=15704001  FTT=37.18  accu=0
+[2026-05-12 19:23:49]   [Step 15705001 | FTT=37.18] Ub=0.006543  U*=0.4362  Re%=-56.38%  Force=4.74281E-06  F*=0.1897  Re=2442.8  Ma=0.0113  Ma_max=0.0953  Error=1.13e-04  [SIMPLE-PROP]
+[2026-05-12 19:23:54] CONV step=15704001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:23:54] MASS step=15704001    目前 drift:   -6.335631e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:23:55
+============================================================
+  步數:    1 ~ 15706201  (157062 records)
+  FTT:     0.0000 ~ 37.1779
+  目前 drift:   -6.334881e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9585e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.9  (還需 18.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 515.4  (還需 478.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2557.8  (還需 2520.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:23:57] BENCH skipped: FTT=37.18 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:24:31] ──────────────────────────────────────
+[2026-05-12 19:24:31] PROCESS step=15714001  FTT=37.20  accu=0
+[2026-05-12 19:24:31]   [Step 15715251 | FTT=37.20] Ub=0.006863  U*=0.4575  Re%=-54.25%  Force=1.31808E-05  F*=0.5272  Re=2562.1  Ma=0.0119  Ma_max=0.0888  Error=3.13e-04  [SIMPLE-PROP]
+[2026-05-12 19:24:36] CONV step=15714001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:24:37] MASS step=15714001    目前 drift:   -6.326595e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:24:37
+============================================================
+  步數:    1 ~ 15716901  (157169 records)
+  FTT:     0.0000 ~ 37.2032
+  目前 drift:   -6.326325e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9554e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.0  (還需 18.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 516.3  (還需 479.1 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2561.9  (還需 2524.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:24:40] BENCH skipped: FTT=37.20 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:25:44] ──────────────────────────────────────
+[2026-05-12 19:25:44] PROCESS step=15732001  FTT=37.24  accu=0
+[2026-05-12 19:25:44]   [Step 15733201 | FTT=37.24] Ub=0.007874  U*=0.5250  Re%=-47.50%  Force=2.68017E-05  F*=1.0721  Re=2939.8  Ma=0.0136  Ma_max=0.0827  Error=4.67e-04  [SIMPLE-PROP]
+[2026-05-12 19:25:49] CONV step=15732001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:25:49] MASS step=15732001    目前 drift:   -6.337928e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:25:50
+============================================================
+  步數:    1 ~ 15734901  (157349 records)
+  FTT:     0.0000 ~ 37.2458
+  目前 drift:   -6.337928e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9496e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.0  (還需 18.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 517.7  (還需 480.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2569.3  (還需 2532.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:25:52] BENCH skipped: FTT=37.24 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:26:59] ──────────────────────────────────────
+[2026-05-12 19:26:59] PROCESS step=15751001  FTT=37.29  accu=0
+[2026-05-12 19:26:59]   [Step 15752001 | FTT=37.29] Ub=0.009579  U*=0.6386  Re%=-36.14%  Force=3.85291E-05  F*=1.5412  Re=3576.1  Ma=0.0166  Ma_max=0.0792  Error=5.11e-04  [SIMPLE-PROP]
+[2026-05-12 19:27:04] CONV step=15751001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:27:05] MASS step=15751001    目前 drift:   -6.323956e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:27:05
+============================================================
+  步數:    1 ~ 15753601  (157536 records)
+  FTT:     0.0000 ~ 37.2901
+  目前 drift:   -6.323711e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9435e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.2  (還需 18.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 519.3  (還需 482.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2577.4  (還需 2540.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:27:08] BENCH skipped: FTT=37.29 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:28:12] ──────────────────────────────────────
+[2026-05-12 19:28:12] PROCESS step=15769001  FTT=37.33  accu=0
+[2026-05-12 19:28:12]   [Step 15770101 | FTT=37.33] Ub=0.011603  U*=0.7735  Re%=-22.65%  Force=4.64693E-05  F*=1.8588  Re=4331.8  Ma=0.0201  Ma_max=0.0765  Error=5.53e-04  [SIMPLE-PROP]
+[2026-05-12 19:28:18] CONV step=15769001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:28:18] MASS step=15769001    目前 drift:   -6.331578e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:28:19
+============================================================
+  步數:    1 ~ 15771901  (157719 records)
+  FTT:     0.0000 ~ 37.3334
+  目前 drift:   -6.331578e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9377e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.3  (還需 18.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 520.7  (還需 483.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2585.0  (還需 2547.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:28:23] BENCH skipped: FTT=37.33 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:28:56] ──────────────────────────────────────
+[2026-05-12 19:28:56] PROCESS step=15780001  FTT=37.36  accu=0
+[2026-05-12 19:28:56]   [Step 15781151 | FTT=37.36] Ub=0.013004  U*=0.8669  Re%=-13.31%  Force=4.94041E-05  F*=1.9762  Re=4854.9  Ma=0.0225  Ma_max=0.0760  Error=5.15e-04  [SIMPLE-PROP]
+[2026-05-12 19:29:01] CONV step=15780001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:29:02] MASS step=15780001    目前 drift:   -6.382691e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:29:02
+============================================================
+  步數:    1 ~ 15782901  (157829 records)
+  FTT:     0.0000 ~ 37.3595
+  目前 drift:   -6.384421e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9345e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.0  (還需 18.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 521.3  (還需 483.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2589.0  (還需 2551.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:29:05] BENCH skipped: FTT=37.36 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:30:09] ──────────────────────────────────────
+[2026-05-12 19:30:09] PROCESS step=15798001  FTT=37.40  accu=0
+[2026-05-12 19:30:09]   [Step 15799401 | FTT=37.40] Ub=0.015490  U*=1.0327  Re%=3.27%  Force=5.07652E-05  F*=2.0306  Re=5782.9  Ma=0.0268  Ma_max=0.0775  Error=4.24e-04  [SIMPLE-PROP]
+[2026-05-12 19:30:14] CONV step=15798001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:30:14] MASS step=15798001    目前 drift:   -6.576140e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:30:15
+============================================================
+  步數:    1 ~ 15800901  (158009 records)
+  FTT:     0.0000 ~ 37.4021
+  目前 drift:   -6.576140e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9302e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.1  (還需 17.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 521.4  (還需 484.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2593.7  (還需 2556.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:30:17] BENCH skipped: FTT=37.40 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:30:51] ──────────────────────────────────────
+[2026-05-12 19:30:51] PROCESS step=15809001  FTT=37.42  accu=0
+[2026-05-12 19:30:51]   [Step 15810001 | FTT=37.42] Ub=0.016937  U*=1.1291  Re%=12.91%  Force=4.95036E-05  F*=1.9801  Re=6323.1  Ma=0.0293  Ma_max=0.0772  Error=4.00e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-12 19:30:56] CONV step=15809001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:30:56] MASS step=15809001    目前 drift:   -6.712460e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:30:57
+============================================================
+  步數:    1 ~ 15811301  (158113 records)
+  FTT:     0.0000 ~ 37.4267
+  目前 drift:   -6.713276e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9284e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.5  (還需 17.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 521.2  (還需 483.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2595.4  (還需 2557.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:30:59] BENCH skipped: FTT=37.42 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:31:33] ──────────────────────────────────────
+[2026-05-12 19:31:33] PROCESS step=15819001  FTT=37.45  accu=0
+[2026-05-12 19:31:33]   [Step 15820401 | FTT=37.45] Ub=0.018289  U*=1.2193  Re%=21.93%  Force=4.68239E-05  F*=1.8730  Re=6828.0  Ma=0.0317  Ma_max=0.0755  Error=3.61e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:31:38] CONV step=15819001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:31:38] MASS step=15819001    目前 drift:   -6.790544e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:31:39
+============================================================
+  步數:    1 ~ 15821901  (158219 records)
+  FTT:     0.0000 ~ 37.4518
+  目前 drift:   -6.790544e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9271e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.1  (還需 16.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 521.1  (還需 483.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2596.8  (還需 2559.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:31:41] BENCH skipped: FTT=37.45 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:32:15] ──────────────────────────────────────
+[2026-05-12 19:32:15] PROCESS step=15830001  FTT=37.47  accu=0
+[2026-05-12 19:32:15]   [Step 15831001 | FTT=37.47] Ub=0.019564  U*=1.3043  Re%=30.43%  Force=4.27041E-05  F*=1.7082  Re=7303.9  Ma=0.0339  Ma_max=0.0761  Error=3.14e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:32:20] CONV step=15830001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:32:20] MASS step=15830001    目前 drift:   -6.752225e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:32:20
+============================================================
+  步數:    1 ~ 15832201  (158322 records)
+  FTT:     0.0000 ~ 37.4762
+  目前 drift:   -6.751049e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9258e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.3  (還需 16.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 521.7  (還需 484.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2598.7  (還需 2561.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:32:23] BENCH skipped: FTT=37.47 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:32:57] ──────────────────────────────────────
+[2026-05-12 19:32:57] PROCESS step=15840001  FTT=37.50  accu=0
+[2026-05-12 19:32:57]   [Step 15841501 | FTT=37.50] Ub=0.020683  U*=1.3789  Re%=37.89%  Force=3.73673E-05  F*=1.4947  Re=7721.8  Ma=0.0358  Ma_max=0.0769  Error=2.56e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:33:02] CONV step=15840001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:33:02] MASS step=15840001    目前 drift:   -6.614841e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:33:02
+============================================================
+  步數:    1 ~ 15842901  (158429 records)
+  FTT:     0.0000 ~ 37.5015
+  目前 drift:   -6.614841e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9241e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.1  (還需 17.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 522.8  (還需 485.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2601.7  (還需 2564.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:33:05] BENCH skipped: FTT=37.50 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:33:39] ──────────────────────────────────────
+[2026-05-12 19:33:39] PROCESS step=15851001  FTT=37.52  accu=0
+[2026-05-12 19:33:39]   [Step 15852001 | FTT=37.52] Ub=0.021626  U*=1.4417  Re%=44.17%  Force=3.09486E-05  F*=1.2379  Re=8073.8  Ma=0.0375  Ma_max=0.0805  Error=1.91e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:33:44] CONV step=15851001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:33:44] MASS step=15851001    目前 drift:   -6.450678e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:33:44
+============================================================
+  步數:    1 ~ 15853201  (158532 records)
+  FTT:     0.0000 ~ 37.5259
+  目前 drift:   -6.448375e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9219e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.0  (還需 18.5 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 524.3  (還需 486.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2605.6  (還需 2568.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:33:47] BENCH skipped: FTT=37.52 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:34:21] ──────────────────────────────────────
+[2026-05-12 19:34:21] PROCESS step=15861001  FTT=37.55  accu=0
+[2026-05-12 19:34:21]   [Step 15862351 | FTT=37.55] Ub=0.022356  U*=1.4904  Re%=49.04%  Force=2.37626E-05  F*=0.9505  Re=8346.2  Ma=0.0387  Ma_max=0.0847  Error=1.24e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:34:25] CONV step=15861001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:34:26] MASS step=15861001    目前 drift:   -6.341602e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:34:26
+============================================================
+  步數:    1 ~ 15863901  (158639 records)
+  FTT:     0.0000 ~ 37.5512
+  目前 drift:   -6.341602e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9190e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.6  (還需 19.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 525.6  (還需 488.1 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2610.1  (還需 2572.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:34:29] BENCH skipped: FTT=37.55 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:35:02] ──────────────────────────────────────
+[2026-05-12 19:35:02] PROCESS step=15872001  FTT=37.57  accu=0
+[2026-05-12 19:35:02]   [Step 15873001 | FTT=37.57] Ub=0.022878  U*=1.5252  Re%=52.52%  Force=1.57133E-05  F*=0.6285  Re=8541.1  Ma=0.0396  Ma_max=0.0868  Error=6.48e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:35:07] CONV step=15872001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:35:08] MASS step=15872001    目前 drift:   -6.338251e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:35:08
+============================================================
+  步數:    1 ~ 15874101  (158741 records)
+  FTT:     0.0000 ~ 37.5753
+  目前 drift:   -6.337915e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9160e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.7  (還需 19.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.4  (還需 488.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2614.0  (還需 2576.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:35:11] BENCH skipped: FTT=37.57 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:35:44] ──────────────────────────────────────
+[2026-05-12 19:35:44] PROCESS step=15882001  FTT=37.60  accu=0
+[2026-05-12 19:35:44]   [Step 15883301 | FTT=37.60] Ub=0.023152  U*=1.5435  Re%=54.35%  Force=7.53526E-06  F*=0.3014  Re=8643.6  Ma=0.0401  Ma_max=0.0896  Error=1.60e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:35:49] CONV step=15882001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:35:50] MASS step=15882001    目前 drift:   -6.400502e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:35:50
+============================================================
+  步數:    1 ~ 15884901  (158849 records)
+  FTT:     0.0000 ~ 37.6009
+  目前 drift:   -6.400502e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9130e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.4  (還需 18.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.9  (還需 489.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2617.8  (還需 2580.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:35:53] BENCH skipped: FTT=37.60 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:36:26] ──────────────────────────────────────
+[2026-05-12 19:36:26] PROCESS step=15893001  FTT=37.62  accu=0
+[2026-05-12 19:36:26]   [Step 15894001 | FTT=37.62] Ub=0.023181  U*=1.5454  Re%=54.54%  Force=-1.11149E-06  F*=-0.0445  Re=8654.1  Ma=0.0402  Ma_max=0.0902  Error=2.89e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:36:31] CONV step=15893001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:36:32] MASS step=15893001    目前 drift:   -6.521957e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:36:32
+============================================================
+  步數:    1 ~ 15895101  (158951 records)
+  FTT:     0.0000 ~ 37.6250
+  目前 drift:   -6.523210e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9105e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.8  (還需 18.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.9  (還需 489.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2620.6  (還需 2583.0 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:36:35] BENCH skipped: FTT=37.62 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:37:09] ──────────────────────────────────────
+[2026-05-12 19:37:09] PROCESS step=15903001  FTT=37.65  accu=0
+[2026-05-12 19:37:09]   [Step 15904101 | FTT=37.65] Ub=0.022972  U*=1.5315  Re%=53.15%  Force=-9.17417E-06  F*=-0.3670  Re=8576.2  Ma=0.0398  Ma_max=0.0938  Error=6.01e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:37:13] CONV step=15903001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:37:14] MASS step=15903001    目前 drift:   -6.624201e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:37:14
+============================================================
+  步數:    1 ~ 15905801  (159058 records)
+  FTT:     0.0000 ~ 37.6504
+  目前 drift:   -6.625448e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9082e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.3  (還需 17.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 527.0  (還需 489.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2623.2  (還需 2585.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:37:18] BENCH skipped: FTT=37.65 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:37:52] ──────────────────────────────────────
+[2026-05-12 19:37:52] PROCESS step=15914001  FTT=37.67  accu=0
+[2026-05-12 19:37:52]   [Step 15915001 | FTT=37.67] Ub=0.022498  U*=1.4999  Re%=49.99%  Force=-1.75151E-05  F*=-0.7006  Re=8399.2  Ma=0.0390  Ma_max=0.0963  Error=1.08e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:37:58] CONV step=15914001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:37:58] MASS step=15914001    目前 drift:   -6.734756e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:37:59
+============================================================
+  步數:    1 ~ 15916901  (159169 records)
+  FTT:     0.0000 ~ 37.6766
+  目前 drift:   -6.736784e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9061e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.8  (還需 17.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 527.0  (還需 489.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2625.4  (還需 2587.8 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:38:02] BENCH skipped: FTT=37.67 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:38:36] ──────────────────────────────────────
+[2026-05-12 19:38:36] PROCESS step=15925001  FTT=37.70  accu=0
+[2026-05-12 19:38:36]   [Step 15926001 | FTT=37.70] Ub=0.021759  U*=1.4506  Re%=45.06%  Force=-2.52784E-05  F*=-1.0111  Re=8123.3  Ma=0.0377  Ma_max=0.0972  Error=1.61e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:38:42] CONV step=15925001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:38:42] MASS step=15925001    目前 drift:   -6.869762e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:38:43
+============================================================
+  步數:    1 ~ 15927901  (159279 records)
+  FTT:     0.0000 ~ 37.7027
+  目前 drift:   -6.871099e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9046e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.1  (還需 16.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.7  (還需 489.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2626.8  (還需 2589.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:38:47] BENCH skipped: FTT=37.70 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:39:20] ──────────────────────────────────────
+[2026-05-12 19:39:20] PROCESS step=15936001  FTT=37.72  accu=0
+[2026-05-12 19:39:20]   [Step 15937001 | FTT=37.72] Ub=0.020775  U*=1.3850  Re%=38.50%  Force=-3.21116E-05  F*=-1.2845  Re=7756.0  Ma=0.0360  Ma_max=0.0967  Error=2.23e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:39:25] CONV step=15936001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:39:26] MASS step=15936001    目前 drift:   -6.973276e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:39:26
+============================================================
+  步數:    1 ~ 15938601  (159386 records)
+  FTT:     0.0000 ~ 37.7280
+  目前 drift:   -6.974034e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9037e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.6  (還需 15.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.4  (還需 488.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2627.6  (還需 2589.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:39:29] BENCH skipped: FTT=37.72 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:40:02] ──────────────────────────────────────
+[2026-05-12 19:40:02] PROCESS step=15946001  FTT=37.75  accu=0
+[2026-05-12 19:40:02]   [Step 15947801 | FTT=37.75] Ub=0.019575  U*=1.3050  Re%=30.50%  Force=-3.76608E-05  F*=-1.5064  Re=7307.9  Ma=0.0339  Ma_max=0.0945  Error=2.97e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:40:07] CONV step=15946001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:40:08] MASS step=15946001    目前 drift:   -7.028931e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:40:08
+============================================================
+  步數:    1 ~ 15948901  (159489 records)
+  FTT:     0.0000 ~ 37.7524
+  目前 drift:   -7.028931e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9030e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.4  (還需 15.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.3  (還需 488.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2628.3  (還需 2590.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:40:10] BENCH skipped: FTT=37.75 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:40:44] ──────────────────────────────────────
+[2026-05-12 19:40:44] PROCESS step=15957001  FTT=37.77  accu=0
+[2026-05-12 19:40:44]   [Step 15958001 | FTT=37.77] Ub=0.018236  U*=1.2157  Re%=21.57%  Force=-4.16256E-05  F*=-1.6650  Re=6808.1  Ma=0.0316  Ma_max=0.0934  Error=3.90e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:40:49] CONV step=15957001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:40:49] MASS step=15957001    目前 drift:   -7.102566e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:40:50
+============================================================
+  步數:    1 ~ 15959601  (159596 records)
+  FTT:     0.0000 ~ 37.7777
+  目前 drift:   -7.104347e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9025e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.0  (還需 15.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.0  (還需 488.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2628.5  (還需 2590.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:40:52] BENCH skipped: FTT=37.77 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:41:57] ──────────────────────────────────────
+[2026-05-12 19:41:57] PROCESS step=15975001  FTT=37.82  accu=0
+[2026-05-12 19:41:57]   [Step 15976201 | FTT=37.82] Ub=0.015531  U*=1.0354  Re%=3.54%  Force=-4.50486E-05  F*=-1.8019  Re=5798.2  Ma=0.0269  Ma_max=0.0959  Error=4.99e-04  [SIMPLE-PROP]
+[2026-05-12 19:42:02] CONV step=15975001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:42:02] MASS step=15975001    目前 drift:   -7.205871e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:42:02
+============================================================
+  步數:    1 ~ 15977901  (159779 records)
+  FTT:     0.0000 ~ 37.8210
+  目前 drift:   -7.205593e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9024e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.5  (還需 14.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 525.6  (還需 487.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2628.2  (還需 2590.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:42:05] BENCH skipped: FTT=37.82 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:43:09] ──────────────────────────────────────
+[2026-05-12 19:43:09] PROCESS step=15993001  FTT=37.86  accu=0
+[2026-05-12 19:43:09]   [Step 15994251 | FTT=37.86] Ub=0.012767  U*=0.8511  Re%=-14.89%  Force=-4.34953E-05  F*=-1.7398  Re=4766.2  Ma=0.0221  Ma_max=0.0929  Error=5.65e-04  [SIMPLE-PROP]
+[2026-05-12 19:43:14] CONV step=15993001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:43:14] MASS step=15993001    目前 drift:   -7.001612e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:43:15
+============================================================
+  步數:    1 ~ 15995901  (159959 records)
+  FTT:     0.0000 ~ 37.8636
+  目前 drift:   -7.000703e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9017e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.6  (還需 15.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.9  (還需 489.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2630.2  (還需 2592.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:43:17] BENCH skipped: FTT=37.86 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:43:51] ──────────────────────────────────────
+[2026-05-12 19:43:51] PROCESS step=16004001  FTT=37.89  accu=0
+[2026-05-12 19:43:51]   [Step 16005001 | FTT=37.89] Ub=0.011272  U*=0.7515  Re%=-24.85%  Force=-4.03271E-05  F*=-1.6131  Re=4208.3  Ma=0.0195  Ma_max=0.0984  Error=6.03e-04  [SIMPLE-PROP]
+[2026-05-12 19:43:56] CONV step=16004001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:43:57] MASS step=16004001    目前 drift:   -6.883741e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:43:57
+============================================================
+  步數:    1 ~ 16006601  (160066 records)
+  FTT:     0.0000 ~ 37.8890
+  目前 drift:   -6.882511e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.9005e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.3  (還需 16.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 527.9  (還需 490.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2632.6  (還需 2594.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:44:00] BENCH skipped: FTT=37.89 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:44:33] ──────────────────────────────────────
+[2026-05-12 19:44:33] PROCESS step=16014001  FTT=37.91  accu=0
+[2026-05-12 19:44:34]   [Step 16015701 | FTT=37.91] Ub=0.009935  U*=0.6623  Re%=-33.77%  Force=-3.56698E-05  F*=-1.4268  Re=3709.1  Ma=0.0172  Ma_max=0.0887  Error=6.19e-04  [SIMPLE-PROP]
+[2026-05-12 19:44:38] CONV step=16014001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:44:39] MASS step=16014001    目前 drift:   -6.808494e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:44:39
+============================================================
+  步數:    1 ~ 16016901  (160169 records)
+  FTT:     0.0000 ~ 37.9134
+  目前 drift:   -6.808494e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8990e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.7  (還需 16.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 528.7  (還需 490.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2635.0  (還需 2597.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:44:42] BENCH skipped: FTT=37.91 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:45:15] ──────────────────────────────────────
+[2026-05-12 19:45:15] PROCESS step=16025001  FTT=37.93  accu=0
+[2026-05-12 19:45:15]   [Step 16026001 | FTT=37.93] Ub=0.008812  U*=0.5875  Re%=-41.25%  Force=-2.99278E-05  F*=-1.1971  Re=3289.8  Ma=0.0153  Ma_max=0.0861  Error=6.08e-04  [SIMPLE-PROP]
+[2026-05-12 19:45:20] CONV step=16025001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:45:21] MASS step=16025001    目前 drift:   -6.752717e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:45:21
+============================================================
+  步數:    1 ~ 16027701  (160277 records)
+  FTT:     0.0000 ~ 37.9389
+  目前 drift:   -6.752507e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8971e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.1  (還需 17.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.5  (還需 491.5 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2637.9  (還需 2600.0 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:45:24] BENCH skipped: FTT=37.93 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:46:28] ──────────────────────────────────────
+[2026-05-12 19:46:28] PROCESS step=16043001  FTT=37.98  accu=0
+[2026-05-12 19:46:28]   [Step 16044051 | FTT=37.98] Ub=0.007299  U*=0.4866  Re%=-51.34%  Force=-1.74316E-05  F*=-0.6973  Re=2725.0  Ma=0.0126  Ma_max=0.0766  Error=3.95e-04  [SIMPLE-PROP]
+[2026-05-12 19:46:33] CONV step=16043001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:46:33] MASS step=16043001    目前 drift:   -6.774606e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:46:34
+============================================================
+  步數:    1 ~ 16045801  (160458 records)
+  FTT:     0.0000 ~ 37.9818
+  目前 drift:   -6.774680e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8939e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.0  (還需 17.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.2  (還需 492.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2642.3  (還需 2604.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:46:36] BENCH skipped: FTT=37.98 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:47:10] ──────────────────────────────────────
+[2026-05-12 19:47:10] PROCESS step=16054001  FTT=38.00  accu=0
+[2026-05-12 19:47:10]   [Step 16055001 | FTT=38.00] Ub=0.006744  U*=0.4496  Re%=-55.04%  Force=-8.77496E-06  F*=-0.3510  Re=2517.8  Ma=0.0117  Ma_max=0.0798  Error=2.34e-04  [SIMPLE-PROP]
+[2026-05-12 19:47:15] CONV step=16054001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:47:16] MASS step=16054001    目前 drift:   -6.788869e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:47:16
+============================================================
+  步數:    1 ~ 16056301  (160563 records)
+  FTT:     0.0000 ~ 38.0066
+  目前 drift:   -6.788764e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8921e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.0  (還需 17.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.6  (還需 492.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2644.6  (還需 2606.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:47:21] BENCH skipped: FTT=38.00 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:47:55] ──────────────────────────────────────
+[2026-05-12 19:47:55] PROCESS step=16065001  FTT=38.03  accu=0
+[2026-05-12 19:47:55]   [Step 16066001 | FTT=38.03] Ub=0.006492  U*=0.4328  Re%=-56.72%  Force=3.55484E-07  F*=0.0142  Re=2423.5  Ma=0.0112  Ma_max=0.0809  Error=4.13e-05  [SIMPLE-PROP]
+[2026-05-12 19:48:00] CONV step=16065001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:48:00] MASS step=16065001    目前 drift:   -6.807459e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:48:01
+============================================================
+  步數:    1 ~ 16067601  (160676 records)
+  FTT:     0.0000 ~ 38.0334
+  目前 drift:   -6.807927e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8903e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.9  (還需 16.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 531.0  (還需 493.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2647.1  (還需 2609.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:48:03] BENCH skipped: FTT=38.03 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:49:08] ──────────────────────────────────────
+[2026-05-12 19:49:08] PROCESS step=16083001  FTT=38.07  accu=0
+[2026-05-12 19:49:08]   [Step 16084151 | FTT=38.07] Ub=0.006779  U*=0.4519  Re%=-54.81%  Force=1.54793E-05  F*=0.6192  Re=2530.8  Ma=0.0117  Ma_max=0.0788  Error=2.46e-04  [SIMPLE-PROP]
+[2026-05-12 19:49:12] CONV step=16083001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:49:13] MASS step=16083001    目前 drift:   -7.000656e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:49:13
+============================================================
+  步數:    1 ~ 16085801  (160858 records)
+  FTT:     0.0000 ~ 38.0764
+  目前 drift:   -7.003467e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8879e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.9  (還需 15.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.7  (還需 492.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2649.4  (還需 2611.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:49:16] BENCH skipped: FTT=38.07 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:50:23] ──────────────────────────────────────
+[2026-05-12 19:50:23] PROCESS step=16102001  FTT=38.12  accu=0
+[2026-05-12 19:50:23]   [Step 16103151 | FTT=38.12] Ub=0.007883  U*=0.5255  Re%=-47.45%  Force=2.99994E-05  F*=1.2000  Re=2943.0  Ma=0.0137  Ma_max=0.0819  Error=5.22e-04  [SIMPLE-PROP]
+[2026-05-12 19:50:28] CONV step=16102001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:50:28] MASS step=16102001    目前 drift:   -7.258687e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:50:29
+============================================================
+  步數:    1 ~ 16104901  (161049 records)
+  FTT:     0.0000 ~ 38.1217
+  目前 drift:   -7.259809e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8874e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.6  (還需 14.5 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.5  (還需 491.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2648.8  (還需 2610.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:50:31] BENCH skipped: FTT=38.12 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:51:05] ──────────────────────────────────────
+[2026-05-12 19:51:05] PROCESS step=16113001  FTT=38.14  accu=0
+[2026-05-12 19:51:05]   [Step 16114001 | FTT=38.14] Ub=0.008809  U*=0.5873  Re%=-41.27%  Force=3.71458E-05  F*=1.4858  Re=3288.7  Ma=0.0153  Ma_max=0.0805  Error=5.69e-04  [SIMPLE-PROP]
+[2026-05-12 19:51:10] CONV step=16113001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:51:10] MASS step=16113001    目前 drift:   -7.328152e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:51:11
+============================================================
+  步數:    1 ~ 16115301  (161153 records)
+  FTT:     0.0000 ~ 38.1463
+  目前 drift:   -7.330595e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8877e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.3  (還需 14.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.1  (還需 490.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2648.1  (還需 2609.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:51:13] BENCH skipped: FTT=38.14 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:51:47] ──────────────────────────────────────
+[2026-05-12 19:51:47] PROCESS step=16123001  FTT=38.17  accu=0
+[2026-05-12 19:51:47]   [Step 16124301 | FTT=38.17] Ub=0.009879  U*=0.6586  Re%=-34.14%  Force=4.29051E-05  F*=1.7162  Re=3688.2  Ma=0.0171  Ma_max=0.0764  Error=5.77e-04  [SIMPLE-PROP]
+[2026-05-12 19:51:52] CONV step=16123001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:51:53] MASS step=16123001    目前 drift:   -7.437259e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:51:53
+============================================================
+  步數:    1 ~ 16125901  (161259 records)
+  FTT:     0.0000 ~ 38.1714
+  目前 drift:   -7.437259e-04
+  最大|drift|:  7.442355e-04
+  漂移速率:     -1.8884e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.7  (還需 13.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 528.3  (還需 490.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2646.6  (還需 2608.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:51:56] BENCH skipped: FTT=38.17 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:52:30] ──────────────────────────────────────
+[2026-05-12 19:52:30] PROCESS step=16134001  FTT=38.19  accu=0
+[2026-05-12 19:52:30]   [Step 16135001 | FTT=38.19] Ub=0.011168  U*=0.7445  Re%=-25.55%  Force=4.76349E-05  F*=1.9054  Re=4169.3  Ma=0.0193  Ma_max=0.0727  Error=5.56e-04  [SIMPLE-PROP]
+[2026-05-12 19:52:35] CONV step=16134001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:52:35] MASS step=16134001    目前 drift:   -7.568534e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:52:36
+============================================================
+  步數:    1 ~ 16136701  (161367 records)
+  FTT:     0.0000 ~ 38.1969
+  目前 drift:   -7.571423e-04
+  最大|drift|:  7.571423e-04
+  漂移速率:     -1.8896e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.0  (還需 12.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 527.3  (還需 489.1 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2644.2  (還需 2606.0 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:52:38] BENCH skipped: FTT=38.19 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:53:12] ──────────────────────────────────────
+[2026-05-12 19:53:12] PROCESS step=16144001  FTT=38.22  accu=0
+[2026-05-12 19:53:12]   [Step 16145801 | FTT=38.22] Ub=0.012580  U*=0.8387  Re%=-16.13%  Force=5.09637E-05  F*=2.0385  Re=4696.6  Ma=0.0218  Ma_max=0.0783  Error=5.12e-04  [SIMPLE-PROP]
+[2026-05-12 19:53:17] CONV step=16144001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:53:17] MASS step=16144001    目前 drift:   -7.659615e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:53:18
+============================================================
+  步數:    1 ~ 16146901  (161469 records)
+  FTT:     0.0000 ~ 38.2211
+  目前 drift:   -7.659615e-04
+  最大|drift|:  7.659615e-04
+  漂移速率:     -1.8913e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.6  (還需 12.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.5  (還需 488.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2641.4  (還需 2603.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:53:20] BENCH skipped: FTT=38.22 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:53:54] ──────────────────────────────────────
+[2026-05-12 19:53:54] PROCESS step=16155001  FTT=38.24  accu=0
+[2026-05-12 19:53:54]   [Step 16156001 | FTT=38.24] Ub=0.013998  U*=0.9332  Re%=-6.68%  Force=5.26875E-05  F*=2.1075  Re=5225.7  Ma=0.0242  Ma_max=0.0772  Error=4.79e-04  [SIMPLE-PROP]
+[2026-05-12 19:53:59] CONV step=16155001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:54:00] MASS step=16155001    目前 drift:   -7.654309e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:54:00
+============================================================
+  步數:    1 ~ 16157901  (161579 records)
+  FTT:     0.0000 ~ 38.2471
+  目前 drift:   -7.653052e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8934e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 50.6  (還需 12.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.0  (還需 487.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2638.6  (還需 2600.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:54:03] BENCH skipped: FTT=38.24 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:55:07] ──────────────────────────────────────
+[2026-05-12 19:55:07] PROCESS step=16173001  FTT=38.29  accu=0
+[2026-05-12 19:55:07]   [Step 16174101 | FTT=38.29] Ub=0.016630  U*=1.1087  Re%=10.87%  Force=5.21431E-05  F*=2.0857  Re=6208.5  Ma=0.0288  Ma_max=0.0870  Error=4.65e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-12 19:55:13] CONV step=16173001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:55:13] MASS step=16173001    目前 drift:   -7.507182e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:55:13
+============================================================
+  步數:    1 ~ 16175901  (161759 records)
+  FTT:     0.0000 ~ 38.2897
+  目前 drift:   -7.507182e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8963e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 51.4  (還需 13.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 526.0  (還需 487.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2635.4  (還需 2597.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:55:16] BENCH skipped: FTT=38.29 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:55:50] ──────────────────────────────────────
+[2026-05-12 19:55:50] PROCESS step=16184001  FTT=38.31  accu=0
+[2026-05-12 19:55:50]   [Step 16185001 | FTT=38.31] Ub=0.018214  U*=1.2142  Re%=21.42%  Force=4.95225E-05  F*=1.9809  Re=6799.8  Ma=0.0315  Ma_max=0.0963  Error=4.09e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:55:55] CONV step=16184001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:55:55] MASS step=16184001    目前 drift:   -7.292122e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:55:55
+============================================================
+  步數:    1 ~ 16186301  (161863 records)
+  FTT:     0.0000 ~ 38.3143
+  目前 drift:   -7.290645e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8972e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.6  (還需 14.3 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 527.0  (還需 488.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2635.3  (還需 2597.0 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:55:58] BENCH skipped: FTT=38.31 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:56:32] ──────────────────────────────────────
+[2026-05-12 19:56:32] PROCESS step=16194001  FTT=38.34  accu=0
+[2026-05-12 19:56:32]   [Step 16195451 | FTT=38.34] Ub=0.019659  U*=1.3106  Re%=31.06%  Force=4.54340E-05  F*=1.8174  Re=7339.5  Ma=0.0341  Ma_max=0.1046  Error=3.44e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:56:37] CONV step=16194001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:56:37] MASS step=16194001    目前 drift:   -7.107914e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:56:38
+============================================================
+  步數:    1 ~ 16196901  (161969 records)
+  FTT:     0.0000 ~ 38.3394
+  目前 drift:   -7.107914e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8973e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.6  (還需 15.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 527.9  (還需 489.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2636.1  (還需 2597.8 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:56:40] BENCH skipped: FTT=38.34 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:57:14] ──────────────────────────────────────
+[2026-05-12 19:57:14] PROCESS step=16205001  FTT=38.36  accu=0
+[2026-05-12 19:57:14]   [Step 16206001 | FTT=38.36] Ub=0.020988  U*=1.3992  Re%=39.92%  Force=3.98527E-05  F*=1.5941  Re=7835.4  Ma=0.0364  Ma_max=0.1063  Error=2.74e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:57:19] CONV step=16205001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:57:20] MASS step=16205001    目前 drift:   -6.950727e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:57:21
+============================================================
+  步數:    1 ~ 16207801  (162078 records)
+  FTT:     0.0000 ~ 38.3652
+  目前 drift:   -6.948836e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8968e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.5  (還需 16.1 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 528.9  (還需 490.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2637.7  (還需 2599.3 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:57:25] BENCH skipped: FTT=38.36 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:57:59] ──────────────────────────────────────
+[2026-05-12 19:57:59] PROCESS step=16216001  FTT=38.39  accu=0
+[2026-05-12 19:57:59]   [Step 16217151 | FTT=38.39] Ub=0.022189  U*=1.4793  Re%=47.93%  Force=3.25575E-05  F*=1.3023  Re=8284.0  Ma=0.0384  Ma_max=0.1021  Error=2.07e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:58:04] CONV step=16216001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:58:04] MASS step=16216001    目前 drift:   -6.820741e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:58:05
+============================================================
+  步數:    1 ~ 16218901  (162189 records)
+  FTT:     0.0000 ~ 38.3915
+  目前 drift:   -6.820389e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8958e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.2  (還需 16.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.9  (還需 491.5 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2639.9  (還需 2601.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:58:07] BENCH skipped: FTT=38.39 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 19:59:14] ──────────────────────────────────────
+[2026-05-12 19:59:14] PROCESS step=16235001  FTT=38.43  accu=0
+[2026-05-12 19:59:14]   [Step 16236001 | FTT=38.43] Ub=0.023648  U*=1.5765  Re%=57.65%  Force=1.76832E-05  F*=0.7073  Re=8828.6  Ma=0.0410  Ma_max=0.1093  Error=1.18e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 19:59:19] CONV step=16235001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 19:59:20] MASS step=16235001    目前 drift:   -6.861586e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 19:59:20
+============================================================
+  步數:    1 ~ 16237701  (162377 records)
+  FTT:     0.0000 ~ 38.4360
+  目前 drift:   -6.861899e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8936e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.0  (還需 16.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.3  (還需 491.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2642.6  (還需 2604.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 19:59:23] BENCH skipped: FTT=38.43 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:00:27] ──────────────────────────────────────
+[2026-05-12 20:00:27] PROCESS step=16253001  FTT=38.48  accu=0
+[2026-05-12 20:00:27]   [Step 16254251 | FTT=38.48] Ub=0.024101  U*=1.6067  Re%=60.67%  Force=1.52155E-06  F*=0.0609  Re=8997.6  Ma=0.0417  Ma_max=0.1010  Error=6.20e-06  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:00:32] CONV step=16253001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:00:32] MASS step=16253001    目前 drift:   -6.911720e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:00:33
+============================================================
+  步數:    1 ~ 16255901  (162559 records)
+  FTT:     0.0000 ~ 38.4791
+  目前 drift:   -6.911720e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8920e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.8  (還需 16.3 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.5  (還需 492.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2644.7  (還需 2606.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:00:35] BENCH skipped: FTT=38.48 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:01:09] ──────────────────────────────────────
+[2026-05-12 20:01:09] PROCESS step=16264001  FTT=38.50  accu=0
+[2026-05-12 20:01:09]   [Step 16265001 | FTT=38.50] Ub=0.023897  U*=1.5931  Re%=59.31%  Force=-8.08133E-06  F*=-0.3233  Re=8921.5  Ma=0.0414  Ma_max=0.1039  Error=8.00e-05  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:01:14] CONV step=16264001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:01:15] MASS step=16264001    目前 drift:   -6.912866e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:01:15
+============================================================
+  步數:    1 ~ 16266301  (162663 records)
+  FTT:     0.0000 ~ 38.5037
+  目前 drift:   -6.912235e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8910e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.8  (還需 16.3 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.8  (還需 492.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2646.0  (還需 2607.5 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:01:18] BENCH skipped: FTT=38.50 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:01:51] ──────────────────────────────────────
+[2026-05-12 20:01:51] PROCESS step=16274001  FTT=38.53  accu=0
+[2026-05-12 20:01:51]   [Step 16275551 | FTT=38.53] Ub=0.023401  U*=1.5601  Re%=56.01%  Force=-1.71296E-05  F*=-0.6852  Re=8736.5  Ma=0.0405  Ma_max=0.1111  Error=1.43e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:01:56] CONV step=16274001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:01:57] MASS step=16274001    目前 drift:   -6.877799e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:01:57
+============================================================
+  步數:    1 ~ 16276901  (162769 records)
+  FTT:     0.0000 ~ 38.5288
+  目前 drift:   -6.877799e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8899e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.0  (還需 16.5 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 531.3  (還需 492.7 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2647.8  (還需 2609.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:02:00] BENCH skipped: FTT=38.53 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:02:34] ──────────────────────────────────────
+[2026-05-12 20:02:34] PROCESS step=16285001  FTT=38.55  accu=0
+[2026-05-12 20:02:34]   [Step 16286001 | FTT=38.55] Ub=0.022644  U*=1.5096  Re%=50.96%  Force=-2.54330E-05  F*=-1.0173  Re=8453.8  Ma=0.0392  Ma_max=0.1154  Error=2.03e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:02:39] CONV step=16285001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:02:39] MASS step=16285001    目前 drift:   -6.882840e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:02:39
+============================================================
+  步數:    1 ~ 16287501  (162875 records)
+  FTT:     0.0000 ~ 38.5539
+  目前 drift:   -6.882155e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8887e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.1  (還需 16.5 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 531.6  (還需 493.0 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2649.5  (還需 2610.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:02:42] BENCH skipped: FTT=38.55 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:03:16] ──────────────────────────────────────
+[2026-05-12 20:03:16] PROCESS step=16295001  FTT=38.58  accu=0
+[2026-05-12 20:03:16]   [Step 16296551 | FTT=38.58] Ub=0.021630  U*=1.4420  Re%=44.20%  Force=-3.28817E-05  F*=-1.3153  Re=8075.0  Ma=0.0375  Ma_max=0.1073  Error=2.54e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:03:21] CONV step=16295001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:03:21] MASS step=16295001    目前 drift:   -6.951153e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:03:21
+============================================================
+  步數:    1 ~ 16297901  (162979 records)
+  FTT:     0.0000 ~ 38.5785
+  目前 drift:   -6.951153e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8876e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.7  (還需 16.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 531.5  (還需 492.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2650.6  (還需 2612.0 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:03:24] BENCH skipped: FTT=38.58 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:03:58] ──────────────────────────────────────
+[2026-05-12 20:03:58] PROCESS step=16306001  FTT=38.60  accu=0
+[2026-05-12 20:03:58]   [Step 16307001 | FTT=38.60] Ub=0.020406  U*=1.3604  Re%=36.04%  Force=-3.90957E-05  F*=-1.5638  Re=7618.2  Ma=0.0353  Ma_max=0.1006  Error=3.01e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:04:03] CONV step=16306001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:04:03] MASS step=16306001    目前 drift:   -7.118066e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:04:04
+============================================================
+  步數:    1 ~ 16308501  (163085 records)
+  FTT:     0.0000 ~ 38.6036
+  目前 drift:   -7.121623e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8869e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.9  (還需 15.3 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.8  (還需 492.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2650.7  (還需 2612.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:04:06] BENCH skipped: FTT=38.60 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:04:40] ──────────────────────────────────────
+[2026-05-12 20:04:40] PROCESS step=16316001  FTT=38.63  accu=0
+[2026-05-12 20:04:40]   [Step 16317601 | FTT=38.63] Ub=0.018992  U*=1.2661  Re%=26.61%  Force=-4.40167E-05  F*=-1.7607  Re=7090.3  Ma=0.0329  Ma_max=0.0993  Error=3.51e-04  [SIMPLE-PROP] [OVERSHOOT!]
+[2026-05-12 20:04:45] CONV step=16316001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:04:45] MASS step=16316001    目前 drift:   -7.321012e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:04:46
+============================================================
+  步數:    1 ~ 16318901  (163189 records)
+  FTT:     0.0000 ~ 38.6282
+  目前 drift:   -7.321012e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8869e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.8  (還需 14.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.8  (還需 491.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2649.7  (還需 2611.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:04:48] BENCH skipped: FTT=38.63 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:05:22] ──────────────────────────────────────
+[2026-05-12 20:05:22] PROCESS step=16327001  FTT=38.65  accu=0
+[2026-05-12 20:05:22]   [Step 16328001 | FTT=38.65] Ub=0.017474  U*=1.1649  Re%=16.49%  Force=-4.73439E-05  F*=-1.8938  Re=6523.5  Ma=0.0303  Ma_max=0.0985  Error=4.11e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-12 20:05:27] CONV step=16327001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:05:27] MASS step=16327001    目前 drift:   -7.406426e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:05:28
+============================================================
+  步數:    1 ~ 16329501  (163295 records)
+  FTT:     0.0000 ~ 38.6533
+  目前 drift:   -7.407300e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8872e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.4  (還需 13.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.3  (還需 490.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2648.8  (還需 2610.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:05:31] BENCH skipped: FTT=38.65 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:06:04] ──────────────────────────────────────
+[2026-05-12 20:06:04] PROCESS step=16337001  FTT=38.67  accu=0
+[2026-05-12 20:06:04]   [Step 16338701 | FTT=38.68] Ub=0.015823  U*=1.0548  Re%=5.48%  Force=-4.90967E-05  F*=-1.9639  Re=5907.1  Ma=0.0274  Ma_max=0.1003  Error=4.81e-04  [SIMPLE-PROP] [OVERSHOOT]
+[2026-05-12 20:06:09] CONV step=16337001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:06:10] MASS step=16337001    目前 drift:   -7.395071e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:06:10
+============================================================
+  步數:    1 ~ 16339901  (163399 records)
+  FTT:     0.0000 ~ 38.6779
+  目前 drift:   -7.395071e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8876e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 52.5  (還需 13.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 529.3  (還需 490.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2648.4  (還需 2609.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:06:12] BENCH skipped: FTT=38.67 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:06:46] ──────────────────────────────────────
+[2026-05-12 20:06:46] PROCESS step=16348001  FTT=38.70  accu=0
+[2026-05-12 20:06:46]   [Step 16349001 | FTT=38.70] Ub=0.014213  U*=0.9475  Re%=-5.25%  Force=-4.91227E-05  F*=-1.9649  Re=5306.2  Ma=0.0246  Ma_max=0.1060  Error=5.49e-04  [SIMPLE-PROP]
+[2026-05-12 20:06:51] CONV step=16348001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:06:52] MASS step=16348001    目前 drift:   -7.190967e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:06:52
+============================================================
+  步數:    1 ~ 16350401  (163504 records)
+  FTT:     0.0000 ~ 38.7028
+  目前 drift:   -7.186902e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8874e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 53.6  (還需 14.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 530.5  (還需 491.8 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2649.8  (還需 2611.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:06:54] BENCH skipped: FTT=38.70 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:07:28] ──────────────────────────────────────
+[2026-05-12 20:07:28] PROCESS step=16358001  FTT=38.72  accu=0
+[2026-05-12 20:07:28]   [Step 16359601 | FTT=38.72] Ub=0.012627  U*=0.8418  Re%=-15.82%  Force=-4.74663E-05  F*=-1.8987  Re=4714.1  Ma=0.0219  Ma_max=0.1163  Error=5.90e-04  [SIMPLE-PROP]
+[2026-05-12 20:07:35] CONV step=16358001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:07:35] MASS step=16358001    目前 drift:   -6.986963e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:07:35
+============================================================
+  步數:    1 ~ 16361201  (163612 records)
+  FTT:     0.0000 ~ 38.7283
+  目前 drift:   -6.983567e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8861e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 54.7  (還需 16.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 531.9  (還需 493.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2652.6  (還需 2613.9 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:07:39] BENCH skipped: FTT=38.72 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:08:13] ──────────────────────────────────────
+[2026-05-12 20:08:13] PROCESS step=16370001  FTT=38.75  accu=0
+[2026-05-12 20:08:13]   [Step 16371001 | FTT=38.75] Ub=0.011076  U*=0.7384  Re%=-26.16%  Force=-4.39072E-05  F*=-1.7563  Re=4135.0  Ma=0.0192  Ma_max=0.0935  Error=6.02e-04  [SIMPLE-PROP]
+[2026-05-12 20:08:19] CONV step=16370001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:08:20] MASS step=16370001    目前 drift:   -6.870440e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:08:20
+============================================================
+  步數:    1 ~ 16372801  (163728 records)
+  FTT:     0.0000 ~ 38.7558
+  目前 drift:   -6.868968e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8839e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.4  (還需 16.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 533.1  (還需 494.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2656.4  (還需 2617.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:08:24] BENCH skipped: FTT=38.75 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:08:58] ──────────────────────────────────────
+[2026-05-12 20:08:58] PROCESS step=16381001  FTT=38.78  accu=0
+[2026-05-12 20:08:58]   [Step 16382001 | FTT=38.78] Ub=0.009773  U*=0.6515  Re%=-34.85%  Force=-3.89180E-05  F*=-1.5567  Re=3648.6  Ma=0.0169  Ma_max=0.0914  Error=5.96e-04  [SIMPLE-PROP]
+[2026-05-12 20:09:03] CONV step=16381001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:09:03] MASS step=16381001    目前 drift:   -6.828563e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:09:04
+============================================================
+  步數:    1 ~ 16383401  (163834 records)
+  FTT:     0.0000 ~ 38.7809
+  目前 drift:   -6.827831e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8813e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 55.6  (還需 16.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 534.0  (還需 495.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2660.2  (還需 2621.4 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:09:06] BENCH skipped: FTT=38.78 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:09:40] ──────────────────────────────────────
+[2026-05-12 20:09:40] PROCESS step=16391001  FTT=38.80  accu=0
+[2026-05-12 20:09:40]   [Step 16392651 | FTT=38.80] Ub=0.008701  U*=0.5800  Re%=-42.00%  Force=-3.28320E-05  F*=-1.3133  Re=3248.2  Ma=0.0151  Ma_max=0.0891  Error=5.65e-04  [SIMPLE-PROP]
+[2026-05-12 20:09:45] CONV step=16391001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:09:45] MASS step=16391001    目前 drift:   -6.776925e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:09:46
+============================================================
+  步數:    1 ~ 16393901  (163939 records)
+  FTT:     0.0000 ~ 38.8057
+  目前 drift:   -6.776925e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8785e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.0  (還需 17.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 535.1  (還需 496.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2664.4  (還需 2625.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:09:48] BENCH skipped: FTT=38.80 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:10:22] ──────────────────────────────────────
+[2026-05-12 20:10:22] PROCESS step=16402001  FTT=38.83  accu=0
+[2026-05-12 20:10:22]   [Step 16403001 | FTT=38.83] Ub=0.007843  U*=0.5229  Re%=-47.71%  Force=-2.59223E-05  F*=-1.0369  Re=2928.0  Ma=0.0136  Ma_max=0.0971  Error=4.84e-04  [SIMPLE-PROP]
+[2026-05-12 20:10:27] CONV step=16402001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:10:27] MASS step=16402001    目前 drift:   -6.700504e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:10:27
+============================================================
+  步數:    1 ~ 16404601  (164046 records)
+  FTT:     0.0000 ~ 38.8311
+  目前 drift:   -6.698132e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8752e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.4  (還需 17.6 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 536.4  (還需 497.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2669.5  (還需 2630.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:10:30] BENCH skipped: FTT=38.83 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:11:04] ──────────────────────────────────────
+[2026-05-12 20:11:04] PROCESS step=16410001  FTT=38.85  accu=0
+[2026-05-12 20:11:04]   [Step 16411451 | FTT=38.85] Ub=0.007276  U*=0.4850  Re%=-51.50%  Force=-1.96900E-05  F*=-0.7876  Re=2716.2  Ma=0.0126  Ma_max=0.1002  Error=3.52e-04  [SIMPLE-PROP]
+[2026-05-12 20:11:09] CONV step=16410001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:11:09] MASS step=16410001    目前 drift:   -6.653335e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:11:10
+============================================================
+  步數:    1 ~ 16412901  (164129 records)
+  FTT:     0.0000 ~ 38.8507
+  目前 drift:   -6.653335e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8724e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.7  (還需 17.9 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 537.4  (還需 498.5 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2673.6  (還需 2634.8 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:11:12] BENCH skipped: FTT=38.85 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:11:46] ──────────────────────────────────────
+[2026-05-12 20:11:46] PROCESS step=16421001  FTT=38.87  accu=0
+[2026-05-12 20:11:46]   [Step 16422001 | FTT=38.87] Ub=0.006777  U*=0.4518  Re%=-54.82%  Force=-1.13588E-05  F*=-0.4544  Re=2530.0  Ma=0.0117  Ma_max=0.0981  Error=2.23e-04  [SIMPLE-PROP]
+[2026-05-12 20:11:51] CONV step=16421001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:11:52] MASS step=16421001    目前 drift:   -6.634623e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:11:52
+============================================================
+  步數:    1 ~ 16423501  (164235 records)
+  FTT:     0.0000 ~ 38.8758
+  目前 drift:   -6.634380e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8687e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 56.9  (還需 18.0 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 538.5  (還需 499.6 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2679.0  (還需 2640.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:11:55] BENCH skipped: FTT=38.87 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:12:28] ──────────────────────────────────────
+[2026-05-12 20:12:28] PROCESS step=16431001  FTT=38.90  accu=0
+[2026-05-12 20:12:28]   [Step 16432701 | FTT=38.90] Ub=0.006513  U*=0.4342  Re%=-56.58%  Force=-2.51280E-06  F*=-0.1005  Re=2431.4  Ma=0.0113  Ma_max=0.0856  Error=7.92e-05  [SIMPLE-PROP]
+[2026-05-12 20:12:33] CONV step=16431001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:12:34] MASS step=16431001    目前 drift:   -6.594330e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:12:34
+============================================================
+  步數:    1 ~ 16433901  (164339 records)
+  FTT:     0.0000 ~ 38.9004
+  目前 drift:   -6.594330e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8649e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 57.2  (還需 18.3 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 539.8  (還需 500.9 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2684.6  (還需 2645.7 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:12:37] BENCH skipped: FTT=38.90 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:13:10] ──────────────────────────────────────
+[2026-05-12 20:13:10] PROCESS step=16442001  FTT=38.92  accu=0
+[2026-05-12 20:13:10]   [Step 16443001 | FTT=38.92] Ub=0.006498  U*=0.4332  Re%=-56.68%  Force=6.13986E-06  F*=0.2456  Re=2425.9  Ma=0.0113  Ma_max=0.0841  Error=5.81e-05  [SIMPLE-PROP]
+[2026-05-12 20:13:15] CONV step=16442001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:13:16] MASS step=16442001    目前 drift:   -6.508106e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:13:16
+============================================================
+  步數:    1 ~ 16444601  (164446 records)
+  FTT:     0.0000 ~ 38.9258
+  目前 drift:   -6.506028e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8607e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 57.7  (還需 18.8 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 541.4  (還需 502.5 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2691.1  (還需 2652.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:13:19] BENCH skipped: FTT=38.92 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:13:53] ──────────────────────────────────────
+[2026-05-12 20:13:53] PROCESS step=16452001  FTT=38.95  accu=0
+[2026-05-12 20:13:53]   [Step 16453751 | FTT=38.95] Ub=0.006743  U*=0.4495  Re%=-55.05%  Force=1.50530E-05  F*=0.6021  Re=2517.3  Ma=0.0117  Ma_max=0.0873  Error=2.19e-04  [SIMPLE-PROP]
+[2026-05-12 20:13:58] CONV step=16452001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:13:58] MASS step=16452001    目前 drift:   -6.398732e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:13:58
+============================================================
+  步數:    1 ~ 16454901  (164549 records)
+  FTT:     0.0000 ~ 38.9501
+  目前 drift:   -6.398732e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8563e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 58.4  (還需 19.4 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 543.2  (還需 504.2 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2698.1  (還需 2659.1 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:14:01] BENCH skipped: FTT=38.95 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:14:35] ──────────────────────────────────────
+[2026-05-12 20:14:35] PROCESS step=16463001  FTT=38.97  accu=0
+[2026-05-12 20:14:35]   [Step 16464001 | FTT=38.97] Ub=0.007231  U*=0.4821  Re%=-51.79%  Force=2.31850E-05  F*=0.9274  Re=2699.7  Ma=0.0125  Ma_max=0.0891  Error=3.63e-04  [SIMPLE-PROP]
+[2026-05-12 20:14:40] CONV step=16463001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:14:40] MASS step=16463001    目前 drift:   -6.264797e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:14:40
+============================================================
+  步數:    1 ~ 16465401  (164654 records)
+  FTT:     0.0000 ~ 38.9750
+  目前 drift:   -6.262035e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8512e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 59.2  (還需 20.2 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 545.3  (還需 506.4 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2706.1  (還需 2667.2 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:14:43] BENCH skipped: FTT=38.97 < G2=50.000 (accu=0, CV window not full)
+[2026-05-12 20:15:17] ──────────────────────────────────────
+[2026-05-12 20:15:17] PROCESS step=16473001  FTT=39.00  accu=0
+[2026-05-12 20:15:17]   [Step 16474651 | FTT=39.00] Ub=0.007994  U*=0.5329  Re%=-46.71%  Force=3.09850E-05  F*=1.2394  Re=2984.5  Ma=0.0138  Ma_max=0.0922  Error=4.89e-04  [SIMPLE-PROP]
+[2026-05-12 20:15:22] CONV step=16473001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-12 20:15:22] MASS step=16473001    目前 drift:   -6.184950e-04   狀態: 正常 (|drift| < 1e-02) 
+============================================================
+ Mass Drift Monitor @ 2026-05-12 20:15:23
+============================================================
+  步數:    1 ~ 16475901  (164759 records)
+  FTT:     0.0000 ~ 38.9998
+  目前 drift:   -6.184950e-04
+  最大|drift|:  7.675211e-04
+  漂移速率:     -1.8456e-05 / FTT
+
+  --- 外推預估 (線性) ---
+    |drift| = 1e-4 (minor): 已超過 或 方向反轉
+    |drift| = 1e-3 (caution): FTT ≈ 59.7  (還需 20.7 FTT)
+    |drift| = 1e-2 (WARNING): FTT ≈ 547.3  (還需 508.3 FTT)
+    |drift| = 5e-2 (DANGER): FTT ≈ 2714.6  (還需 2675.6 FTT)
+
+  --- 驗證 ---
+    Col6 全為 0: ✓
+    Col7 全為 1: ✓
+
+  狀態: 正常 (|drift| < 1e-02)
+============================================================
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.png
+  [plot] /home/s8313697/5.Re10595/Edit2_test119regular/live/mass_drift.pdf
+[2026-05-12 20:15:25] BENCH skipped: FTT=39.00 < G2=50.000 (accu=0, CV window not full)
