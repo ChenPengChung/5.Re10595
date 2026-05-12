@@ -82,6 +82,8 @@ if not os.environ.get('DISPLAY') and sys.platform != 'win32':
 import matplotlib.pyplot as plt
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else os.getcwd()
+sys.path.insert(0, SCRIPT_DIR)
+from plot_style import apply_style; apply_style()
 
 # ─── Convergence parameters (parsed from variables.h at startup) ───
 # These module-level defaults are OVERWRITTEN by parse_variables_h().

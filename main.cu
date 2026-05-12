@@ -1244,11 +1244,13 @@ int main(int argc, char *argv[])
             fprintf(fhdr, "# Col3: rho_target    — target density (always 1.0)\n");
             fprintf(fhdr, "# Col4: rho_avg       — global average density (full precision)\n");
             fprintf(fhdr, "# Col5: rho_drift     — rho_avg - 1.0 (positive = heavier than target)\n");
-            fprintf(fhdr, "# Col6: rho_correction— mass correction applied NEXT step (= -rho_drift)\n");
-            fprintf(fhdr, "# Col7: SKIP_MC       — 0=mass correction ON, 1=mid-step correction OFF\n");
-            fprintf(fhdr, "# NOTE: |Col5| == |Col6| is EXPECTED — both are computed from the same\n");
-            fprintf(fhdr, "#       density field. Col6 = -Col5 because the correction exactly\n");
-            fprintf(fhdr, "#       compensates the drift. Check Col5 trend for mass conservation.\n");
+            fprintf(fhdr, "# Col6: rho_correction— mass correction value passed to kernels\n");
+            // [SKIP_ALL_MASSCORR] BEGIN: checkrho header documents all-correction disable mode.
+            fprintf(fhdr, "# Col7: SKIP_MC       — 0=mass correction ON, 1=all mass correction OFF\n");
+            fprintf(fhdr, "# NOTE: with SKIP_MC=0, |Col5| == |Col6| is EXPECTED because Col6\n");
+            fprintf(fhdr, "#       compensates the drift. With SKIP_MC=1, Col6 stays 0 and\n");
+            fprintf(fhdr, "#       Col5 directly tracks uncorrected mass drift.\n");
+            // [SKIP_ALL_MASSCORR] END: checkrho writing remains active in both modes.
             fprintf(fhdr, "#\n");
             fflush(fhdr);
             fclose(fhdr);
@@ -1327,10 +1329,27 @@ int main(int argc, char *argv[])
         }
 
         // ===== Mid-step mass correction (between even and odd) =====
-        // 由 SKIP_MIDSTEP_MASSCORR 開關控制 (variables.h)
+        // 由 SKIP_ALL_MASSCORR / SKIP_MIDSTEP_MASSCORR 開關控制 (variables.h)
         // Mid-step mass correction 區塊
         // 包含: ReduceRhoSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
         // ★ 這是全域 MPI barrier, MPI_Wtime 計時可測量其實際開銷
+        // [SKIP_ALL_MASSCORR] BEGIN: disabled path keeps MPI/H2D update but forces zero correction.
+#if SKIP_ALL_MASSCORR
+        {
+#if USE_TIMING && TIMING_DETAIL
+            double t_mc_start = MPI_Wtime();
+#endif
+            if (myid == 0) {
+                rho_modify_h[0] = 0.0;
+            }
+            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
+
+#if USE_TIMING && TIMING_DETAIL
+            g_timing.last_masscorr_ms = (MPI_Wtime() - t_mc_start) * 1000.0;
+#endif
+        }
+#else // SKIP_ALL_MASSCORR
 #if !SKIP_MIDSTEP_MASSCORR
         {
 #if USE_TIMING && TIMING_DETAIL
@@ -1366,21 +1385,12 @@ int main(int argc, char *argv[])
 #else
         // SKIP_MIDSTEP_MASSCORR=1: 跳過 mid-step mass correction
         // 僅保留 NDTFRC 週期的主要修正 (Launch_ModifyForcingTerm)
-
-
-
-
-
-
-
-
-
-
-        
 #if USE_TIMING && TIMING_DETAIL
         g_timing.last_masscorr_ms = 0.0;
 #endif
 #endif // !SKIP_MIDSTEP_MASSCORR
+#endif // SKIP_ALL_MASSCORR
+        // [SKIP_ALL_MASSCORR] END: restore normal path by setting SKIP_ALL_MASSCORR to 0.
         // ===== Sub-step 2: odd step =====
         step += 1;
         accu_num += 1;
@@ -1865,6 +1875,16 @@ int main(int argc, char *argv[])
         // ===== Global Mass Conservation Modify (GPU reduction — no SendDataToCPU) =====
         cudaDeviceSynchronize();
         cudaMemcpy(Force_h, Force_d, sizeof(double), cudaMemcpyDeviceToHost);
+        // [SKIP_ALL_MASSCORR] BEGIN: disabled path skips reduction math but refreshes rho_modify_d = 0.
+#if SKIP_ALL_MASSCORR
+        {
+            if (myid == 0) {
+                rho_modify_h[0] = 0.0;
+            }
+            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
+        }
+#else // SKIP_ALL_MASSCORR
         {
             const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
             const int rho_threads = 256;
@@ -1888,6 +1908,8 @@ int main(int argc, char *argv[])
             MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
             cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
         }
+#endif // SKIP_ALL_MASSCORR
+        // [SKIP_ALL_MASSCORR] END: restore normal main-step correction by setting flag to 0.
 
         // ===== Mass Conservation Check + NaN early stop (every 100 steps, GPU reduction) =====
         if (step % 100 == 1) {
@@ -1908,10 +1930,26 @@ int main(int argc, char *argv[])
             int nan_flag = 0;
             if (myid == 0) {
                 double rho_avg_check = rho_GlobalSum_chk / (double)jp;
-                if (std::isnan(rho_avg_check) || std::isinf(rho_avg_check) || fabs(rho_avg_check - 1.0) > 0.01) {
+                double rho_drift_check = rho_avg_check - 1.0;
+                // [SKIP_ALL_MASSCORR] BEGIN: no-correction runs warn on finite drift instead of stopping.
+#if SKIP_ALL_MASSCORR
+                if (std::isnan(rho_avg_check) || std::isinf(rho_avg_check)) {
+                    printf("[FATAL] Divergence detected at step %d: rho_avg = %.6e, stopping.\n", step, rho_avg_check);
+                    nan_flag = 1;
+                } else if (fabs(rho_drift_check) > 0.05) {
+                    printf("[WARNING] SKIP_ALL_MASSCORR=1 at step %d: rho_avg = %.6e, drift = %+.6e exceeds relaxed threshold 5.0e-2; continuing without mass correction.\n",
+                           step, rho_avg_check, rho_drift_check);
+                } else if (fabs(rho_drift_check) > 0.01) {
+                    printf("[WARNING] SKIP_ALL_MASSCORR=1 at step %d: rho_avg = %.6e, drift = %+.6e exceeds normal threshold 1.0e-2; continuing without mass correction.\n",
+                           step, rho_avg_check, rho_drift_check);
+                }
+#else
+                if (std::isnan(rho_avg_check) || std::isinf(rho_avg_check) || fabs(rho_drift_check) > 0.01) {
                     printf("[FATAL] Divergence detected at step %d: rho_avg = %.6e, stopping.\n", step, rho_avg_check);
                     nan_flag = 1;
                 }
+#endif
+                // [SKIP_ALL_MASSCORR] END: normal mode keeps original fatal threshold.
             }
             MPI_Bcast(&nan_flag, 1, MPI_INT, 0, MPI_COMM_WORLD);
             if (nan_flag) {
@@ -1926,10 +1964,12 @@ int main(int argc, char *argv[])
                 double rho_avg_out = rho_GlobalSum_chk / (double)jp;
                 FILE *checkrho = fopen("checkrho.dat", "a");
                 // step  FTT  rho_target  rho_avg  rho_drift  rho_correction  SKIP_MC
-                // NOTE: rho_correction = -rho_drift (by definition), see header for details
+                // NOTE: SKIP_MC=1 keeps rho_correction at 0; see header for details.
+                // [SKIP_ALL_MASSCORR] BEGIN: report the all-correction switch in checkrho.dat.
                 fprintf(checkrho, "%d\t%.4f\t%.6f\t%.12e\t%+.6e\t%+.6e\t%d\n",
                         step, FTT_rho, 1.0, rho_avg_out,
-                        rho_avg_out - 1.0, rho_modify_h[0], SKIP_MIDSTEP_MASSCORR);
+                        rho_avg_out - 1.0, rho_modify_h[0], SKIP_ALL_MASSCORR);
+                // [SKIP_ALL_MASSCORR] END: checkrho.dat remains outside correction #if blocks.
                 fflush(checkrho);
                 fclose(checkrho);
             }

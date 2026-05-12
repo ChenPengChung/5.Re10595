@@ -12,6 +12,7 @@ PID_FILE="$LIVE_DIR/watcher.pid"
 
 CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
+MASS_MONITOR="$LIVE_DIR/mass_monitor.py"
 
 RE=5600
 POLL_SEC=30
@@ -205,6 +206,15 @@ while :; do
             [[ -n "$metrics" ]] && log "  $metrics"
 
             run_convergence "$step" || true
+
+            # MASS DRIFT monitor (SKIP_ALL_MASSCORR test)
+            if [[ -f "$MASS_MONITOR" ]]; then
+                mass_out=$(python3 "$MASS_MONITOR" --check-only 2>/dev/null | grep -E 'drift:|ALERT|狀態:' | head -3)
+                if [[ -n "$mass_out" ]]; then
+                    log "MASS step=$step  $(echo "$mass_out" | tr '\n' ' ')"
+                fi
+                python3 "$MASS_MONITOR" 2>/dev/null || log "MASS ALERT: drift exceeds threshold"
+            fi
 
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,

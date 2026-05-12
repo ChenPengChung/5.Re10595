@@ -14,6 +14,7 @@ import matplotlib
 matplotlib.use("Agg")          # 無 X display 也能用
 import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
+from plot_style import apply_style; apply_style()
 
 # ── 設定 ──
 VTK_FILE = None

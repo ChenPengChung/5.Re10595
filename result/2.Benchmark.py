@@ -52,6 +52,7 @@ try:
         mpl.use('Agg')
     import matplotlib.pyplot as plt
     from matplotlib.lines import Line2D
+    from plot_style import apply_style; apply_style()
     HAS_MPL = True
 except ImportError:
     HAS_MPL = False
@@ -1363,27 +1364,21 @@ if not HAS_MPL:
             print(f"[INFO] Exported {out}")
     sys.exit(0)
 
-# ── Matplotlib style ───────────────────────────────────────────
+# ── Matplotlib style (centralized in plot_style.py) ───────────
+# Font overrides specific to this dense benchmark figure:
 mpl.rcParams.update({
-    "font.family":       "serif",
-    "font.serif":        ["Times New Roman", "DejaVu Serif"],
-    "mathtext.fontset":  "stix",
     "font.size":         8,          # base (tick labels)
     "axes.labelsize":    9,          # axis labels
     "axes.titlesize":    10,         # (unused — no titles)
     "legend.fontsize":   7,          # legend text
     "xtick.labelsize":   8,          # tick labels
     "ytick.labelsize":   8,
-    "xtick.direction":   "in",
-    "ytick.direction":   "in",
     "xtick.major.size":  5,
     "ytick.major.size":  5,
     "xtick.minor.size":  3,
     "ytick.minor.size":  3,
     "xtick.minor.visible": True,
     "ytick.minor.visible": True,
-    "axes.linewidth":    0.8,
-    "lines.linewidth":   1.2,
     "savefig.dpi":       300,
 })
 

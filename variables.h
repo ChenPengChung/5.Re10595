@@ -78,10 +78,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      257         // 展向格點
-#define     NY      513         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      257         // 法向格點
-#define     jp      16           //   GPU 數量 (流向分割)
+#define     NX      129         // 展向格點
+#define     NY      257         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
+#define     NZ      129         // 法向格點
+#define     jp      8           //   GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -133,7 +133,7 @@
 // ================================================================
 //  §4. 物理參數
 // ================================================================
-#define     Re      10595       // Reynolds number (基於 H_HILL 和 Uref)
+#define     Re      5600        // Reynolds number (基於 H_HILL 和 Uref)
 #define     Uref    0.015       // 參考速度 (bulk velocity)
                                 // Re700:0.0583, Re1400/2800:0.0776
                                 // Re5600:0.0464, Re10595:0.0878
@@ -293,6 +293,12 @@
 //         USE_WENO7=1 時自動啟用所有 WENO 診斷功能。
 
 // ── 效能診斷 ──
+// [SKIP_ALL_MASSCORR] BEGIN: global switch for reversible no-correction runs.
+// SKIP_ALL_MASSCORR: 完全停用 mid-step 與 main-step mass correction
+//   0 = ON 正常修正, 1 = OFF 停用修正並保持 rho_modify_d = 0.0
+#define     SKIP_ALL_MASSCORR        1
+// [SKIP_ALL_MASSCORR] END: set back to 0 to restore normal mass correction.
+
 // SKIP_MIDSTEP_MASSCORR: 跳過 even/odd sub-step 間的 mid-step mass correction
 //   0 = 保留 (與 Edit8 相同), 1 = 跳過 (減少 MPI barrier)
 #define     SKIP_MIDSTEP_MASSCORR    0
