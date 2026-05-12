@@ -1,3 +1,0 @@
-[2026-05-11 22:58:28] [INFO] nan_monitor started for /home/s8313697/5.Re10595/Edit4_test2_transbound
-[2026-05-11 22:58:28] [INFO] Ma_max limit=0.15, poll=2.0s
-[2026-05-11 22:58:28] [INFO] Tailing: slurm_47417.log
