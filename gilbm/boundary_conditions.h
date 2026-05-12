@@ -106,7 +106,7 @@ __device__ double ChapmanEnskogBC(
 
     // CE 理論: f^neq ∝ -(τ-0.5)·Δt = -3ν (Navier-Stokes 一致)
     // omega_global = τ = 0.5 + 3ν/Δt, 因此 (τ-0.5)·Δt = 3ν
-    C_alpha *= -(omega_global - 0.5) * dt_global;
+    C_alpha *= -(omega_global) * dt_global;
     double f_eq_atwall = GILBM_W[alpha] * rho_wall;
     return f_eq_atwall * (1.0 + C_alpha);
 }
