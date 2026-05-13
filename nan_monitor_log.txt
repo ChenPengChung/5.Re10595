@@ -1,0 +1,5 @@
+[2026-05-14 02:06:34] [INFO] nan_monitor started for /home/s8313697/5.Re10595/Edit5_Rebuild
+[2026-05-14 02:06:34] [INFO] Ma_max limit=0.15, poll=2.0s
+[2026-05-14 02:06:34] [INFO] No slurm log found yet, waiting...
+[2026-05-14 02:06:44] [INFO] Tailing: slurm_49581.log
+[2026-05-14 02:06:48] [WARNING] mpirun exit with RC=3

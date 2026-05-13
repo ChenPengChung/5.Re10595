@@ -862,7 +862,7 @@ def _compute_PQ(metrics):
 
 
 def _poisson_solve(x_init, y_init, P, Q,
-                   n_iter=15000, omega=1.0, tol=1e-10, print_every=2000):
+                   n_iter=50000, omega=1.0, tol=1e-10, print_every=2000):
     """Row-vectorised Gauss-Seidel Poisson solver. Boundaries fixed."""
     nj, ni = x_init.shape
     x = x_init.copy()
@@ -1028,7 +1028,7 @@ def _resample_boundary(xb, yb, n_new):
 
 def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
                            gamma=0.0, alpha=0.5,
-                           poisson_iter=15000, poisson_tol=1e-10):
+                           poisson_iter=50000, poisson_tol=1e-10):
     """
     Full Steger-Sorenson adaptive grid generation.
 
@@ -1518,7 +1518,7 @@ def auto_generate(variables_h_path, script_dir=None):
     x_out, y_out, conv = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
         gamma=gamma, alpha=alpha,
-        poisson_iter=15000, poisson_tol=1e-12)
+        poisson_iter=50000, poisson_tol=1e-12)
 
     # ── Validate generated grid dimensions ──
     nj_out, ni_out = x_out.shape
@@ -1777,10 +1777,10 @@ if __name__ == "__main__":
         print()
         print("  Poisson solver iterations")
         print("    (more = more accurate, slower)")
-        print("    Typical: 10000~30000 for high accuracy")
-        POISSON_ITER = ask_int("Poisson iterations", default=15000, lo=1000, hi=100000)
+        print("    Typical: 30000~50000 for high accuracy")
+        POISSON_ITER = ask_int("Poisson iterations", default=50000, lo=1000, hi=100000)
     else:
-        POISSON_ITER = 15000
+        POISSON_ITER = 50000
 
     print()
     print(f"  -> Mode:  {'Zeta-only' if mode == 1 else 'Adaptive (Poisson + P,Q)'}")
