@@ -170,7 +170,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     40.0    // 統計量開始累積
+#define     FTT_STATS_START     80.0    // 統計量開始累積
 #define     FTT_STOP            130.0   // 模擬結束
 
 // VTK 輸出等級
@@ -296,7 +296,7 @@
 // [SKIP_ALL_MASSCORR] BEGIN: global switch for reversible no-correction runs.
 // SKIP_ALL_MASSCORR: 完全停用 mid-step 與 main-step mass correction
 //   0 = ON 正常修正, 1 = OFF 停用修正並保持 rho_modify_d = 0.0
-#define     SKIP_ALL_MASSCORR        1
+#define     SKIP_ALL_MASSCORR        0
 // [SKIP_ALL_MASSCORR] END: set back to 0 to restore normal mass correction.
 
 // SKIP_MIDSTEP_MASSCORR: 跳過 even/odd sub-step 間的 mid-step mass correction
