@@ -1,0 +1,880 @@
+#ifndef ALGORITHM1_H
+#define ALGORITHM1_H
+#include "0.shared_code.h"
+
+// ════════════════════════════════════════════════════════════════════════
+// §S  Shared Helpers — 消除 2D/3D/smem 路徑間的代碼重複
+//
+//   gilbm_rk2_displacement:       RK2 midpoint → (d_xi, delta_zeta_q)     ~35 lines × 3 copies → 1
+//   gilbm_ghost_zone_extrapolate: interp2[7] ghost Lagrange extrapolation (GHOST_EXTRAP_ORDER)  ~20 lines × 3 copies → 1
+//   gilbm_zeta_collapse:          ζ 7→1 (Lagrange or WENO7-Z)            ~20 lines × 3 copies → 1
+// ════════════════════════════════════════════════════════════════════════
+
+// ── RK2 midpoint method (Imamura 2005 Eq. 19-20) ──
+// 計算 ξ, ζ 方向的 full-step displacement: d_xi, delta_zeta
+// 7×7 Lagrange 插值 contravariant velocity at half-step position
+__device__ __forceinline__ void gilbm_rk2_displacement(
+    int j, int k, double ey, double ez, double dt_val,
+    double xi_y_val, double xi_z_val, double zeta_y_val, double zeta_z_val,
+    const double *xi_y_d, const double *xi_z_d,
+    const double *zeta_y_d, const double *zeta_z_d,
+    double &d_xi_out, double &delta_zeta_out )
+{
+    double e_txi_0   = ey * xi_y_val   + ez * xi_z_val;
+    double e_tzeta_0 = ey * zeta_y_val  + ez * zeta_z_val;
+    double j_half = (double)j - 0.5 * dt_val * e_txi_0;
+    double k_half = (double)k - 0.5 * dt_val * e_tzeta_0;
+    if (j_half < 0.0)                       j_half = 0.0;
+    if (j_half > (double)((int)NYD6 - 1))   j_half = (double)((int)NYD6 - 1);
+    if (k_half < 3.0)                       k_half = 3.0;
+    if (k_half > (double)((int)NZ6 - 4))    k_half = (double)((int)NZ6 - 4);
+    int sj_rk = (int)floor(j_half) - 3;
+    if (sj_rk < 0)                       sj_rk = 0;
+    if (sj_rk + 6 > (int)NYD6 - 1)      sj_rk = (int)NYD6 - 7;
+    double tj_rk = j_half - (double)sj_rk;
+    double aj_rk[7];
+    lagrange_7point_coeffs(tj_rk, aj_rk);
+    int sk_rk = (int)floor(k_half) - 3;
+    if (sk_rk < 0)                       sk_rk = 0;
+    if (sk_rk + 6 > (int)NZ6 - 1)       sk_rk = (int)NZ6 - 7;
+    double tk_rk = k_half - (double)sk_rk;
+    double ak_rk[7];
+    lagrange_7point_coeffs(tk_rk, ak_rk);
+    double e_txi_half = 0.0, e_tzeta_half = 0.0;
+    for (int mj = 0; mj < 7; mj++) {
+        int jj = sj_rk + mj;
+        double acc_xi = 0.0, acc_zeta = 0.0;
+        for (int mk = 0; mk < 7; mk++) {
+            int kk = sk_rk + mk;
+            int idx_rk = jj * (int)NZ6 + kk;
+            double w_mk = ak_rk[mk];
+            acc_xi   += w_mk * (ey * xi_y_d[idx_rk]   + ez * xi_z_d[idx_rk]);
+            acc_zeta += w_mk * (ey * zeta_y_d[idx_rk] + ez * zeta_z_d[idx_rk]);
+        }
+        e_txi_half   += aj_rk[mj] * acc_xi;
+        e_tzeta_half += aj_rk[mj] * acc_zeta;
+    }
+    d_xi_out       = dt_val * e_txi_half;
+    delta_zeta_out = dt_val * e_tzeta_half;
+}
+
+// ── Ghost zone Lagrange 外推 (GHOST_EXTRAP_ORDER 切換) ──
+// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部點 Lagrange 外推替代
+// 直接從內部點外推，不使用級聯（避免誤差累積）
+//   GHOST_EXTRAP_ORDER=2 (quadratic, 3-point): c0=(d+1)(d+2)/2, ...
+//   GHOST_EXTRAP_ORDER=3 (cubic, 4-point):     c0=(d+1)(d+2)(d+3)/6, ...
+//     k=3 壁面點有 4 個 stencil 內部點 → cubic 全域可用，無需降階
+__device__ __forceinline__ void gilbm_ghost_zone_extrapolate(double interp2[7], int bk_val)
+{
+    const int n_ghost_bot = (3 - bk_val > 0) ? (3 - bk_val) : 0;
+    const int n_ghost_top = (bk_val + 6 > (int)NZ6 - 4) ? (bk_val + 6 - ((int)NZ6 - 4)) : 0;
+    if (n_ghost_bot > 0) {
+        const int p0 = n_ghost_bot;
+        const int p1 = n_ghost_bot + 1;
+        const int p2 = n_ghost_bot + 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int p3 = n_ghost_bot + 3;
+#endif
+        for (int g = n_ghost_bot - 1; g >= 0; g--) {
+            const double d = (double)(p0 - g);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[p0] + c1 * interp2[p1]
+                       + c2 * interp2[p2] + c3 * interp2[p3];
+#else
+            const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
+            const double c1 = -d * (d + 2.0);
+            const double c2 = d * (d + 1.0) * 0.5;
+            interp2[g] = c0 * interp2[p0] + c1 * interp2[p1] + c2 * interp2[p2];
+#endif
+        }
+    }
+    if (n_ghost_top > 0) {
+        const int pN  = 6 - n_ghost_top;
+        const int pN1 = 6 - n_ghost_top - 1;
+        const int pN2 = 6 - n_ghost_top - 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int pN3 = 6 - n_ghost_top - 3;
+#endif
+        for (int g = pN + 1; g <= 6; g++) {
+            const double d = (double)(g - pN);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1]
+                       + c2 * interp2[pN2] + c3 * interp2[pN3];
+#else
+            const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
+            const double c1 = -d * (d + 2.0);
+            const double c2 = d * (d + 1.0) * 0.5;
+            interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1] + c2 * interp2[pN2];
+#endif
+        }
+    }
+}
+
+// ── ζ 方向 collapse: 7 stencil → 1 value (Lagrange or WENO7-Z) ──
+// i 參數用於寫入 per-point VTK activation contour g_weno_activation_count_zeta[k][j][i]
+__device__ __forceinline__ double gilbm_zeta_collapse(
+    const double interp2[7], const double L_zeta[7],
+    double t_zeta, int bk_val, int i, int j, int k,
+    const double *z_zeta_d, int q)
+{
+#if USE_WENO7 && USE_WENO7_PASS3
+    double sigma_zeta = t_zeta - 3.0;
+    double dz_min = 1.0e30, dz_max = 0.0;
+    for (int s = 0; s < 7; s++) {
+        int gk_s = bk_val + s;
+        if (gk_s < 3 || gk_s > (int)NZ6 - 4) continue;
+        double dz = fabs(z_zeta_d[j * NZ6 + gk_s]);
+        if (dz < dz_min) dz_min = dz;
+        if (dz > dz_max) dz_max = dz;
+    }
+    double R_zeta = (dz_min > 1.0e-20) ? dz_max / dz_min : 1.0;
+    gilbm_weno7::InterpResult wr = weno7_interp_1d_diag(
+        sigma_zeta,
+        interp2[0], interp2[1], interp2[2], interp2[3],
+        interp2[4], interp2[5], interp2[6], R_zeta);
+    if (wr.used_nonlinear) {
+        atomicAdd(&g_weno_diag_zeta[q][k], 1u);          // per-layer 統計 (printf 診斷)
+        g_weno_activation_count_zeta[k][j][i] += 1;       // per-point VTK contour (同一 thread 串行, 無 race)
+    }
+    return wr.value;
+#else
+    double result = 0.0;
+    for (int s = 0; s < 7; s++)
+        result += L_zeta[s] * interp2[s];
+    return result;
+#endif
+}
+
+// [方案B] Algorithm1_Step3Kernel_GTS 已移除 (2026-04)
+// 碰撞已融合進 Algorithm1_FusedKernel_GTS，f_streamed 留在 register 直接碰撞，
+// 省掉 19 f_new writes + 19 f_new reads + 重複巨觀量計算。
+
+// ★ 方案B: Step1+Step3 融合 — interpolation + collision 一氣呵成
+//   f_post_read  → 插值 → f_streamed[19] in register → 碰撞 → f_post_write
+//   省掉: 19 f_new writes + 19 f_new reads + 重複巨觀量計算
+//   Wall BC: 改讀 u_out/v_out/w_out/rho_out (前一步值), 省 4×19=76 → 4×4=16 reads
+__device__ void algorithm1_step1_GTS(
+    int i, int j, int k,
+    const double *f_post_read,   // [19 * GRID_SIZE] — 碰後分佈 (input, 上一步)
+    double *f_post_write,        // [19 * GRID_SIZE] — 碰後分佈 (output, 本步)
+    const double *zeta_z_d, const double *zeta_y_d,
+    const double *xi_y_d,   const double *xi_z_d,   // ★ 優化1: Jacobian 陣列
+    const int *bk_precomp_d,
+    const double *z_zeta_d, // ∂z/∂ζ for stretch_factor (WENO7 only, NULL when USE_WENO7=0)
+    double *u_out, double *v_out, double *w_out, double *rho_out_arr,
+    double *rho_modify,
+    const double *Force      // body force (streamwise, device pointer)
+) {
+    const int nface = NX6 * NZ6;
+    const int index = j * nface + k * NX6 + i;
+    const int idx_jk = j * NZ6 + k;
+
+    // ★ GTS: 從 __constant__ 載入 register（全域統一值）
+    const double dt_global    = GILBM_dt;
+    const double omega_global = GILBM_omega_global;
+
+    const int bi = i - 3;
+    const int bj = j - 3;
+    const int bk = bk_precomp_d[k];
+
+    // ★ 優化1: 讀 4 個 Jacobian 值 (2 次 DRAM read，register 重用於 18 個 q)
+    const double xi_y_val  = xi_y_d[idx_jk];
+    const double xi_z_val  = xi_z_d[idx_jk];
+
+    // ── Wall BC pre-computation (6th-order one-sided FD) ──
+    bool is_bottom = (k == 3);
+    bool is_top    = (k == NZ6 - 4);
+    double zeta_y_val = zeta_y_d[idx_jk];
+    double zeta_z_val = zeta_z_d[idx_jk];
+
+    // ── Wall BC: one-sided FD for velocity gradient (WALL_GRAD_ORDER 切換) ──
+    // ★ 方案B: 改讀 u_out/v_out/w_out/rho_out_arr (前一步值)
+    //   取代 compute_macroscopic_at(f_new_ptrs, ...) → 省 4×19=76 reads → 4×4=16 reads
+    //   時間精度不變: 原代碼也是讀前一步的 f_new (CUDA race → 實際讀 stale data)
+    double rho_wall = 0.0, du_dk = 0.0, dv_dk = 0.0, dw_dk = 0.0;
+    if (is_bottom) {
+        int idx3 = j * nface + 4 * NX6 + i;
+        int idx4 = j * nface + 5 * NX6 + i;
+        double u3 = u_out[idx3], u4 = u_out[idx4];
+        double v3 = v_out[idx3], v4 = v_out[idx4];
+        double w3 = w_out[idx3], w4 = w_out[idx4];
+#if WALL_GRAD_ORDER >= 6
+        int idx5 = j * nface + 6 * NX6 + i;
+        int idx6 = j * nface + 7 * NX6 + i;
+        int idx7 = j * nface + 8 * NX6 + i;
+        int idx8 = j * nface + 9 * NX6 + i;
+        double u5 = u_out[idx5], u6 = u_out[idx6], u7 = u_out[idx7], u8 = u_out[idx8];
+        double v5 = v_out[idx5], v6 = v_out[idx6], v7 = v_out[idx7], v8 = v_out[idx8];
+        double w5 = w_out[idx5], w6 = w_out[idx6], w7 = w_out[idx7], w8 = w_out[idx8];
+        du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
+        dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
+        dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
+#else
+        du_dk = (4.0*u3 - u4) / 2.0;
+        dv_dk = (4.0*v3 - v4) / 2.0;
+        dw_dk = (4.0*w3 - w4) / 2.0;
+#endif
+        rho_wall = rho_out_arr[idx3];
+    } else if (is_top) {
+        int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
+        int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
+        double um1 = u_out[idxm1], um2 = u_out[idxm2];
+        double vm1 = v_out[idxm1], vm2 = v_out[idxm2];
+        double wm1 = w_out[idxm1], wm2 = w_out[idxm2];
+#if WALL_GRAD_ORDER >= 6
+        int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
+        int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
+        int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
+        int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
+        double um3 = u_out[idxm3], um4 = u_out[idxm4], um5 = u_out[idxm5], um6 = u_out[idxm6];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4], vm5 = v_out[idxm5], vm6 = v_out[idxm6];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4], wm5 = w_out[idxm5], wm6 = w_out[idxm6];
+        du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
+        dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
+        dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
+#else
+        du_dk = -(4.0*um1 - um2) / 2.0;
+        dv_dk = -(4.0*vm1 - vm2) / 2.0;
+        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+#endif
+        rho_wall = rho_out_arr[idxm1];
+    }
+
+    // ── STEP 1: Interpolation + Streaming ──
+    // ★ 方案B: f_streamed 存入 f_arr[19] register 陣列, 不寫 DRAM
+    //   q-loop 結束後直接做碰撞 → 寫 f_post_write
+    double rho_stream = 0.0, mx_stream = 0.0, my_stream = 0.0, mz_stream = 0.0;
+    double f_arr[19];  // register buffer, 取代 f_new_ptrs 的 DRAM 寫入
+
+#if USE_WENO7
+    // Per-step reset: 歸零 per-point WENO activation counter
+    // 每步重新計數 [0..19]，VTK 輸出時讀到的是最後一步的瞬時快照
+    g_weno_activation_count_zeta[k][j][i] = 0;
+#endif
+
+    for (int q = 0; q < 19; q++) {
+        double f_streamed;
+
+        if (q == 0) {
+            // q=0: 靜止方向, departure point = center → 直接讀取自身
+            f_streamed = f_post_read[0 * GRID_SIZE + index];
+        } else {
+            bool need_bc = false;
+            if (is_bottom) need_bc = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, true);
+            else if (is_top) need_bc = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, false);
+            if (need_bc) {
+                f_streamed = ChapmanEnskogBC(q, rho_wall,
+                    du_dk, dv_dk, dw_dk,
+                    zeta_y_val, zeta_z_val,
+                    omega_global, dt_global);
+            } else {
+                // ── §3 優化: Per-Direction Specialized Loop ──
+                // ★ D3Q19 方向分組，按實際需要的插值維度特化迴圈:
+                //   1D (q=1,2):         ey=ez=0 → δξ=δζ=0 → 僅 η 方向 7-point (7 reads)
+                //   2D (q=3-6,15-18):   ex=0   → δη=0    → ξ×ζ 7×7 (49 reads)
+                //   3D (q=7-14):        ex≠0, ey/ez≠0    → 完整 7×7×7 (343 reads)
+                //   讀取量: 6,175 → 3,151 (↓49%)
+                const double ex = GILBM_e[q][0];
+                const double ey = GILBM_e[q][1];
+                const double ez = GILBM_e[q][2];
+                const int q_off = q * GRID_SIZE;
+
+                if (ey == 0.0 && ez == 0.0) {
+                    // ═══════════════════════════════════════════════════════
+                    // 1D: q=1,2 (±x) — 僅 η 方向 7-point interpolation
+                    //   δξ = dt·(ey·ξ_y + ez·ξ_z) = 0  (ey=ez=0)
+                    //   δζ = dt·(ey·ζ_y + ez·ζ_z) = 0  (ey=ez=0)
+                    //   ξ,ζ Lagrange 權重為 Kronecker delta → collapse to (gj=j, gk=k)
+                    //   每方向僅 7 次 DRAM read (連續記憶體, 1 條 cache line)
+                    // ═══════════════════════════════════════════════════════
+                    double delta_eta_q = dt_global * ex * GILBM_inv_dx;
+                    double t_eta = 3.0 - delta_eta_q;   // i - bi = 3 (always, bi = i-3)
+                    if (t_eta < 0.0) t_eta = 0.0;
+                    if (t_eta > 6.0) t_eta = 6.0;
+                    double L_eta[7];
+                    lagrange_7point_coeffs(t_eta, L_eta);
+
+                    int base_1d = q_off + j * nface + k * NX6 + bi;
+                    f_streamed = 0.0;
+                    for (int si = 0; si < 7; si++)
+                        f_streamed += L_eta[si] * f_post_read[base_1d + si];
+
+                } else {
+                    // ═══════════════════════════════════════════════════════
+                    // 2D / 3D 共用: RK2 midpoint + ξ,ζ Lagrange 權重
+                    // ═══════════════════════════════════════════════════════
+
+                    // ── RK2 midpoint → d_xi, delta_zeta_q ──
+                    double d_xi, delta_zeta_q;
+                    gilbm_rk2_displacement(j, k, ey, ez, dt_global,
+                        xi_y_val, xi_z_val, zeta_y_val, zeta_z_val,
+                        xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
+                        d_xi, delta_zeta_q);
+
+                    // ── ξ 方向 Lagrange 權重 ──
+                    double t_xi  = (double)(j - bj) - d_xi;
+                    if (t_xi  < 0.0) t_xi  = 0.0; if (t_xi  > 6.0) t_xi  = 6.0;
+                    double L_xi[7];
+                    lagrange_7point_coeffs(t_xi, L_xi);
+
+                    // ── ζ 方向 departure + Lagrange 權重 ──
+                    double up_k = (double)k - delta_zeta_q;
+                    if (up_k < 3.0)              up_k = 3.0;
+                    if (up_k > (double)(NZ6 - 4)) up_k = (double)(NZ6 - 4);
+                    double t_zeta = up_k - (double)bk;
+                    double L_zeta[7];
+                    lagrange_7point_coeffs(t_zeta, L_zeta);
+
+                    // ── f_post 插值: 2D vs 3D 路徑分離 ──
+                    double interp2[7];
+
+                    if (ex == 0.0) {
+                        // ═══════════════════════════════════════════════════════
+                        // 2D: q=3-6, 15-18 — ξ×ζ 插值, 跳過 η 方向
+                        //   δη = dt·ex·inv_dx = 0 (ex=0)
+                        //   t_eta = i - bi = 3 → L_eta = δ(si,3) → si=3 only
+                        //   每方向 49 次讀取 (vs 原本 343), 降幅 86%
+                        //   讀取位置: f_post[q_off + gj*nface + gk*NX6 + i]
+                        //   128 threads 讀 128 個連續 i → 完美 coalesced
+                        // ═══════════════════════════════════════════════════════
+                        for (int sk = 0; sk < 7; sk++) {
+                            double acc = 0.0;
+                            for (int sj = 0; sj < 7; sj++) {
+                                acc += L_xi[sj] * f_post_read[q_off + (bj + sj) * nface + (bk + sk) * NX6 + i];
+                            }
+                            interp2[sk] = acc;
+                        }
+                    } else {
+                        // ═══════════════════════════════════════════════════════
+                        // 3D: q=7-14 — 完整 η→ξ 維度分離, 7×7×7
+                        //   δη ≠ 0, δξ ≠ 0, δζ ≠ 0
+                        //   每方向 343 次讀取
+                        //
+                        // §4 Shared Memory (待 NX6 > NT 時啟用):
+                        //   當 NX6 > NT (e.g. NX=193 → NX6=199 > 128):
+                        //     smem[NT+6] cooperative load → 343 → ~51 reads/dir (↓85%)
+                        //   當 NX6 ≤ NT (目前 NX=33 → NX6=39 ≤ 128):
+                        //     L1 cache 已自動處理 η-row overlap → smem 無額外效益
+                        //     整條 η-row (39×8=312B) + 49 rows = 15KB << L1 24KB
+                        // ═══════════════════════════════════════════════════════
+                        double delta_eta_q = dt_global * ex * GILBM_inv_dx;
+                        double t_eta = 3.0 - delta_eta_q;   // i - bi = 3
+                        if (t_eta < 0.0) t_eta = 0.0;
+                        if (t_eta > 6.0) t_eta = 6.0;
+                        double L_eta[7];
+                        lagrange_7point_coeffs(t_eta, L_eta);
+
+                        for (int sk = 0; sk < 7; sk++) {
+                            double acc = 0.0;
+                            for (int sj = 0; sj < 7; sj++) {
+                                double row_val = 0.0;
+                                int base_idx = (bj + sj) * nface + (bk + sk) * NX6 + bi;
+                                for (int si = 0; si < 7; si++) {
+                                    row_val += L_eta[si] * f_post_read[q_off + base_idx + si];
+                                }
+                                acc += L_xi[sj] * row_val;
+                            }
+                            interp2[sk] = acc;
+                        }
+                    }
+
+                    gilbm_ghost_zone_extrapolate(interp2, bk);
+
+                    f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
+                        t_zeta, bk, i, j, k, z_zeta_d, q);
+                }  // end 2D/3D branch
+            }
+        }
+
+        f_arr[q] = f_streamed;     // ★ 方案B: 存入 register, 不寫 DRAM
+        rho_stream += f_streamed;
+        mx_stream  += GILBM_e[q][0] * f_streamed;
+        my_stream  += GILBM_e[q][1] * f_streamed;
+        mz_stream  += GILBM_e[q][2] * f_streamed;
+    }
+
+    // ── STEP 1.5: Macroscopic (mass correction) ──
+    if (i < NX6 - 4 && j < NYD6 - 4) {
+        rho_stream += rho_modify[0];
+        f_arr[0]   += rho_modify[0];   // ★ 方案B: 修正 register 中的 f_arr[0]
+    }
+    double rho_local = rho_stream;
+#if USE_GUO_FORCING
+    // 半力宏觀修正 (Guo 2002): ρu = Σf·c + δt·F/2
+    // F_body = (0, Force[0], 0) → 僅 v 方向有修正
+    const double half_Fdt = 0.5 * GILBM_dt * Force[0];
+    double u_local = mx_stream / rho_local;
+    double v_local = (my_stream + half_Fdt) / rho_local;
+    double w_local = mz_stream / rho_local;
+#else
+    double u_local = mx_stream / rho_local;
+    double v_local = my_stream / rho_local;
+    double w_local = mz_stream / rho_local;
+#endif
+
+    // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+    const bool is_wall = (is_bottom || is_top);
+#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
+    if (is_wall) {
+        u_local = 0.0;
+        v_local = 0.0;
+        w_local = 0.0;
+    }
+#endif
+
+    // ── STEP 2: Collision (MRT/BGK) — 直接在 register 做, 零 DRAM 往返 ──
+    // ★ 方案B: 原 Step3 kernel 的碰撞融合進來, 消除 f_new 的 19R+19W
+    double f_out[19];
+    gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
+
+    // ── Write: 碰後分佈 → f_post_write (唯一 DRAM 寫入) ──
+    for (int q = 0; q < 19; q++)
+        f_post_write[q * GRID_SIZE + index] = f_out[q];
+
+    // ── Write: 巨觀量 (統計/渦度 kernel 也讀取) ──
+    u_out[index]       = u_local;
+    v_out[index]       = v_local;
+    w_out[index]       = w_local;
+    rho_out_arr[index] = rho_local;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// §4 Shared Memory 版本 — 3D 方向 (q=7-14) η-row cooperative loading
+//
+//   Phase 2b Amortized: smem_eta[7][NT+6], 每 sk 一次 cooperative load
+//   每個 3D 方向 7 sk × 2 syncs = 14 syncs (vs 784 for Phase 2)
+//   DRAM reads: 343/dir → ~51/dir (↓85%)
+//
+//   valid = false 的 thread (out-of-bound) 仍參與 cooperative load 和 sync
+//   但跳過計算。這避免 __syncthreads() deadlock。
+// ════════════════════════════════════════════════════════════════════════
+__device__ void algorithm1_step1_GTS_smem(
+    int i, int j, int k,
+    bool valid,                  // false = OOB thread, 參與 sync 但不計算
+    double (*smem_eta)[NT + 6],  // __shared__ double smem_eta[7][NT+6], 由 __global__ 傳入
+    const double *f_post_read,
+    double *f_post_write,
+    const double *zeta_z_d, const double *zeta_y_d,
+    const double *xi_y_d,   const double *xi_z_d,
+    const int *bk_precomp_d,
+    const double *z_zeta_d,
+    double *u_out, double *v_out, double *w_out, double *rho_out_arr,
+    double *rho_modify,
+    const double *Force
+) {
+    const int nface = NX6 * NZ6;
+    const int index = j * nface + k * NX6 + i;
+    const int idx_jk = j * NZ6 + k;
+
+    const double dt_global    = GILBM_dt;
+    const double omega_global = GILBM_omega_global;
+
+    const int bi = i - 3;
+    const int bj = j - 3;
+    // bk 可以無條件讀取: 同一 block 所有 thread 共享相同 k (blockIdx.z),
+    // bk_precomp_d[k] 已對 [0, NZ6-1] 全部預計算, 讀取永遠安全
+    const int bk = bk_precomp_d[k];
+
+    // smem cooperative load 基準:
+    //   smem[sj][s] ↔ global η-index = global_eta_base + s
+    //   s = 0..NT+5 (134 values for NT=128)
+    //   thread t 的 bi = blockIdx.x*NT + t - 3, bi_min_in_block = blockIdx.x*NT - 3
+    //   bi - bi_min = threadIdx.x → 讀 smem[sj][ threadIdx.x + si ] 正確
+    const int global_eta_base = (int)blockIdx.x * NT - 3;  // bi_min_in_block
+
+    double xi_y_val  = 0.0, xi_z_val  = 0.0;
+    double zeta_y_val = 0.0, zeta_z_val = 0.0;
+    if (valid) {
+        xi_y_val  = xi_y_d[idx_jk];
+        xi_z_val  = xi_z_d[idx_jk];
+        zeta_y_val = zeta_y_d[idx_jk];
+        zeta_z_val = zeta_z_d[idx_jk];
+    }
+
+    bool is_bottom = valid && (k == 3);
+    bool is_top    = valid && (k == NZ6 - 4);
+
+    double rho_wall = 0.0, du_dk = 0.0, dv_dk = 0.0, dw_dk = 0.0;
+    if (is_bottom) {
+        int idx3 = j * nface + 4 * NX6 + i;
+        int idx4 = j * nface + 5 * NX6 + i;
+        double u3 = u_out[idx3], u4 = u_out[idx4];
+        double v3 = v_out[idx3], v4 = v_out[idx4];
+        double w3 = w_out[idx3], w4 = w_out[idx4];
+#if WALL_GRAD_ORDER >= 6
+        int idx5 = j * nface + 6 * NX6 + i;
+        int idx6 = j * nface + 7 * NX6 + i;
+        int idx7 = j * nface + 8 * NX6 + i;
+        int idx8 = j * nface + 9 * NX6 + i;
+        double u5 = u_out[idx5], u6 = u_out[idx6], u7 = u_out[idx7], u8 = u_out[idx8];
+        double v5 = v_out[idx5], v6 = v_out[idx6], v7 = v_out[idx7], v8 = v_out[idx8];
+        double w5 = w_out[idx5], w6 = w_out[idx6], w7 = w_out[idx7], w8 = w_out[idx8];
+        du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
+        dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
+        dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
+#else
+        du_dk = (4.0*u3 - u4) / 2.0;
+        dv_dk = (4.0*v3 - v4) / 2.0;
+        dw_dk = (4.0*w3 - w4) / 2.0;
+#endif
+        rho_wall = rho_out_arr[idx3];
+    } else if (is_top) {
+        int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
+        int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
+        double um1 = u_out[idxm1], um2 = u_out[idxm2];
+        double vm1 = v_out[idxm1], vm2 = v_out[idxm2];
+        double wm1 = w_out[idxm1], wm2 = w_out[idxm2];
+#if WALL_GRAD_ORDER >= 6
+        int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
+        int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
+        int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
+        int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
+        double um3 = u_out[idxm3], um4 = u_out[idxm4], um5 = u_out[idxm5], um6 = u_out[idxm6];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4], vm5 = v_out[idxm5], vm6 = v_out[idxm6];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4], wm5 = w_out[idxm5], wm6 = w_out[idxm6];
+        du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
+        dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
+        dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
+#else
+        du_dk = -(4.0*um1 - um2) / 2.0;
+        dv_dk = -(4.0*vm1 - vm2) / 2.0;
+        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+#endif
+        rho_wall = rho_out_arr[idxm1];
+    }
+
+    double rho_stream = 0.0, mx_stream = 0.0, my_stream = 0.0, mz_stream = 0.0;
+    double f_arr[19];
+
+#if USE_WENO7
+    // Per-step reset: 歸零 per-point WENO activation counter
+    // valid check: OOB threads 不寫入 (避免越界寫入 device global)
+    if (valid) g_weno_activation_count_zeta[k][j][i] = 0;
+#endif
+
+    for (int q = 0; q < 19; q++) {
+        double f_streamed = 0.0;
+
+        // ── 3D 方向 (q=7-14): 需要 __syncthreads → 即使 !valid 也必須走 ──
+        // 先判斷是否為 3D 方向 (ex≠0 且 (ey≠0 或 ez≠0))
+        bool is_3d_dir = (q >= 7 && q <= 14);
+
+        if (q == 0) {
+            if (valid) f_streamed = f_post_read[0 * GRID_SIZE + index];
+        } else if (!is_3d_dir) {
+            // ── 非 3D 方向: q=1-6, 15-18 (1D 和 2D) ──
+            // 無 __syncthreads，OOB thread 可安全跳過
+            if (valid) {
+                bool need_bc = false;
+                if (is_bottom) need_bc = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, true);
+                else if (is_top) need_bc = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, false);
+                if (need_bc) {
+                    f_streamed = ChapmanEnskogBC(q, rho_wall,
+                        du_dk, dv_dk, dw_dk,
+                        zeta_y_val, zeta_z_val,
+                        omega_global, dt_global);
+                } else {
+                    const double ex = GILBM_e[q][0];
+                    const double ey = GILBM_e[q][1];
+                    const double ez = GILBM_e[q][2];
+                    const int q_off = q * GRID_SIZE;
+
+                    if (ey == 0.0 && ez == 0.0) {
+                        // 1D: q=1,2
+                        double delta_eta_q = dt_global * ex * GILBM_inv_dx;
+                        double t_eta = 3.0 - delta_eta_q;
+                        if (t_eta < 0.0) t_eta = 0.0;
+                        if (t_eta > 6.0) t_eta = 6.0;
+                        double L_eta[7];
+                        lagrange_7point_coeffs(t_eta, L_eta);
+                        int base_1d = q_off + j * nface + k * NX6 + bi;
+                        f_streamed = 0.0;
+                        for (int si = 0; si < 7; si++)
+                            f_streamed += L_eta[si] * f_post_read[base_1d + si];
+                    } else {
+                        // 2D: q=3-6, 15-18 (ex==0) — RK2 + ξ×ζ interpolation
+                        double d_xi, delta_zeta_q;
+                        gilbm_rk2_displacement(j, k, ey, ez, dt_global,
+                            xi_y_val, xi_z_val, zeta_y_val, zeta_z_val,
+                            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
+                            d_xi, delta_zeta_q);
+                        double t_xi  = (double)(j - bj) - d_xi;
+                        if (t_xi  < 0.0) t_xi  = 0.0; if (t_xi  > 6.0) t_xi  = 6.0;
+                        double L_xi[7];
+                        lagrange_7point_coeffs(t_xi, L_xi);
+                        double up_k = (double)k - delta_zeta_q;
+                        if (up_k < 3.0)              up_k = 3.0;
+                        if (up_k > (double)(NZ6 - 4)) up_k = (double)(NZ6 - 4);
+                        double t_zeta = up_k - (double)bk;
+                        double L_zeta[7];
+                        lagrange_7point_coeffs(t_zeta, L_zeta);
+                        double interp2[7];
+                        const int q_off2 = q * GRID_SIZE;
+                        for (int sk = 0; sk < 7; sk++) {
+                            double acc = 0.0;
+                            for (int sj = 0; sj < 7; sj++)
+                                acc += L_xi[sj] * f_post_read[q_off2 + (bj + sj) * nface + (bk + sk) * NX6 + i];
+                            interp2[sk] = acc;
+                        }
+                        gilbm_ghost_zone_extrapolate(interp2, bk);
+                        f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
+                            t_zeta, bk, i, j, k, z_zeta_d, q);
+                    }
+                }
+            }
+        } else {
+            // ══════════════════════════════════════════════════════════════
+            // 3D 方向 (q=7-14): Shared Memory Cooperative η-Row Loading
+            //
+            //   所有 thread (包括 !valid 和 need_bc) 都參與:
+            //     1) cooperative load → smem_eta[7][NT+6]
+            //     2) __syncthreads()
+            //   只有 valid && !need_bc 的 thread 使用 smem 結果
+            //
+            //   Phase 2b Amortized: 每 sk 載入 7 條 η-row, 2 次 sync
+            //   8 directions × 7 sk × 2 syncs = 112 syncs total
+            // ══════════════════════════════════════════════════════════════
+
+            bool need_bc_3d = false;
+            if (valid) {
+                if (is_bottom) need_bc_3d = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, true);
+                else if (is_top) need_bc_3d = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, false);
+            }
+
+            // 只有 valid && !need_bc 的 thread 需要計算 RK2 和 Lagrange 權重
+            const double ex = GILBM_e[q][0];
+            const double ey = GILBM_e[q][1];
+            const double ez = GILBM_e[q][2];
+            const int q_off = q * GRID_SIZE;
+
+            double L_eta[7] = {0}, L_xi[7] = {0}, L_zeta[7] = {0};
+            double t_zeta_3d = 3.0;  // 預設居中 (only overwritten by valid && !need_bc_3d)
+            int bj_3d = bj, bk_3d = bk;
+
+            if (valid && !need_bc_3d) {
+                // RK2 midpoint → d_xi, delta_zeta_q
+                double d_xi, delta_zeta_q;
+                gilbm_rk2_displacement(j, k, ey, ez, dt_global,
+                    xi_y_val, xi_z_val, zeta_y_val, zeta_z_val,
+                    xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
+                    d_xi, delta_zeta_q);
+                double delta_eta_q  = dt_global * ex * GILBM_inv_dx;
+
+                double t_xi  = (double)(j - bj) - d_xi;
+                if (t_xi  < 0.0) t_xi  = 0.0; if (t_xi  > 6.0) t_xi  = 6.0;
+                lagrange_7point_coeffs(t_xi, L_xi);
+
+                double t_eta = 3.0 - delta_eta_q;
+                if (t_eta < 0.0) t_eta = 0.0;
+                if (t_eta > 6.0) t_eta = 6.0;
+                lagrange_7point_coeffs(t_eta, L_eta);
+
+                double up_k = (double)k - delta_zeta_q;
+                if (up_k < 3.0)              up_k = 3.0;
+                if (up_k > (double)(NZ6 - 4)) up_k = (double)(NZ6 - 4);
+                double t_zeta = up_k - (double)bk;
+                t_zeta_3d = t_zeta;  // 提升到外層 scope 供 WENO7 使用
+                lagrange_7point_coeffs(t_zeta, L_zeta);
+            }
+
+            // ── Shared Memory Cooperative Loading (Phase 2b Amortized) ──
+            // 每 sk: 載入 7 條 η-row 到 smem_eta[7][NT+6], 然後 η×ξ 插值
+            double interp2[7];
+
+            for (int sk = 0; sk < 7; sk++) {
+                // Phase A: Cooperative load 7 η-rows for this sk
+                for (int sj = 0; sj < 7; sj++) {
+                    int row_base = q_off + (bj_3d + sj) * nface + (bk_3d + sk) * NX6;
+                    int gaddr = row_base + global_eta_base + (int)threadIdx.x;
+                    // Bounds check: global_eta_base + threadIdx.x must be in [0, NX6)
+                    if (global_eta_base + (int)threadIdx.x >= 0 && global_eta_base + (int)threadIdx.x < NX6)
+                        smem_eta[sj][threadIdx.x] = f_post_read[gaddr];
+                    else
+                        smem_eta[sj][threadIdx.x] = 0.0;
+
+                    // Tail: first 6 threads load the extra 6 values
+                    if (threadIdx.x < 6) {
+                        int tail_idx = global_eta_base + NT + (int)threadIdx.x;
+                        if (tail_idx >= 0 && tail_idx < NX6)
+                            smem_eta[sj][NT + threadIdx.x] = f_post_read[row_base + tail_idx];
+                        else
+                            smem_eta[sj][NT + threadIdx.x] = 0.0;
+                    }
+                }
+                __syncthreads();
+
+                // Phase B: η×ξ interpolation from smem
+                if (valid && !need_bc_3d) {
+                    double acc = 0.0;
+                    for (int sj = 0; sj < 7; sj++) {
+                        double row_val = 0.0;
+                        for (int si = 0; si < 7; si++)
+                            row_val += L_eta[si] * smem_eta[sj][threadIdx.x + si];
+                        acc += L_xi[sj] * row_val;
+                    }
+                    interp2[sk] = acc;
+                }
+                __syncthreads();
+            }
+
+            // ── Post-interpolation: ghost zone + ζ contraction (valid threads only) ──
+            if (valid && !need_bc_3d) {
+                // Ghost zone extrapolation + ζ-collapse
+                gilbm_ghost_zone_extrapolate(interp2, bk_3d);
+                f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
+                    t_zeta_3d, bk_3d, i, j, k, z_zeta_d, q);
+            } else if (valid && need_bc_3d) {
+                f_streamed = ChapmanEnskogBC(q, rho_wall,
+                    du_dk, dv_dk, dw_dk,
+                    zeta_y_val, zeta_z_val,
+                    omega_global, dt_global);
+            }
+        } // end 3D branch
+
+        if (valid) {
+            f_arr[q] = f_streamed;
+            rho_stream += f_streamed;
+            mx_stream  += GILBM_e[q][0] * f_streamed;
+            my_stream  += GILBM_e[q][1] * f_streamed;
+            mz_stream  += GILBM_e[q][2] * f_streamed;
+        }
+    } // end q-loop
+
+    if (!valid) return;
+
+    // ── STEP 1.5: Macroscopic (mass correction) ──
+    if (i < NX6 - 4 && j < NYD6 - 4) {
+        rho_stream += rho_modify[0];
+        f_arr[0]   += rho_modify[0];
+    }
+    double rho_local = rho_stream;
+#if USE_GUO_FORCING
+    // 半力宏觀修正 (Guo 2002): ρu = Σf·c + δt·F/2
+    // F_body = (0, Force[0], 0) → 僅 v 方向有修正
+    const double half_Fdt = 0.5 * GILBM_dt * Force[0];
+    double u_local = mx_stream / rho_local;
+    double v_local = (my_stream + half_Fdt) / rho_local;
+    double w_local = mz_stream / rho_local;
+#else
+    double u_local = mx_stream / rho_local;
+    double v_local = my_stream / rho_local;
+    double w_local = mz_stream / rho_local;
+#endif
+
+    // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+    const bool is_wall = (is_bottom || is_top);
+#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
+    if (is_wall) {
+        u_local = 0.0;
+        v_local = 0.0;
+        w_local = 0.0;
+    }
+#endif
+
+    // ── STEP 2: Collision ──
+    double f_out[19];
+    gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
+                        GILBM_s_visc_global, GILBM_dt, Force[0]);
+
+    for (int q = 0; q < 19; q++)
+        f_post_write[q * GRID_SIZE + index] = f_out[q];
+
+    u_out[index]       = u_local;
+    v_out[index]       = v_local;
+    w_out[index]       = w_local;
+    rho_out_arr[index] = rho_local;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════
+// __global__ Wrappers
+// ════════════════════════════════════════════════════════════════════════
+
+// Buffer kernel (non-smem): 用於 P0v3 Phase 1 邊界行和單行 Interior launches
+//   blockDim = (NT, N_rows, 1),  N_rows = 1 or 3
+//   OOB threads 直接 return (無 syncthreads 需求)
+__global__ void Algorithm1_FusedKernel_GTS_Buffer(
+    const double *f_post_read, double *f_post_write,
+    const double *zeta_z_d, const double *zeta_y_d,
+    const double *xi_y_d,   const double *xi_z_d,
+    const int    *bk_precomp_d,
+    const double *z_zeta_d,
+    double *u_out, double *v_out, double *w_out, double *rho_out,
+    double *rho_modify, const double *Force,
+    int start_j)
+{
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int j = blockIdx.y * blockDim.y + threadIdx.y + start_j;
+    const int k = blockIdx.z;
+    if (i < 3 || i >= NX6 - 3 || j < 3 || j >= NYD6 - 3 || k < 3 || k >= NZ6 - 3) return;
+    algorithm1_step1_GTS(i, j, k,
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
+        u_out, v_out, w_out, rho_out, rho_modify, Force);
+}
+
+// Interior SMEM kernel: 用於 P0v3 Phase 2 主 Interior launch
+//   blockDim = (NT, 1, 1) — 必須 blockDim.y=1 (smem 不分 j-row)
+//   所有 thread 都進入 device function (包括 OOB) 以參與 __syncthreads
+//   valid flag 控制哪些 thread 做實際計算
+__global__ void Algorithm1_FusedKernel_GTS_Interior_SMEM(
+    const double *f_post_read, double *f_post_write,
+    const double *zeta_z_d, const double *zeta_y_d,
+    const double *xi_y_d,   const double *xi_z_d,
+    const int    *bk_precomp_d,
+    const double *z_zeta_d,
+    double *u_out, double *v_out, double *w_out, double *rho_out,
+    double *rho_modify, const double *Force,
+    int start_j)
+{
+    __shared__ double smem_eta[7][NT + 6];
+
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int j = blockIdx.y + start_j;
+    const int k = blockIdx.z;
+
+    // 不 early return! OOB thread 仍需參與 __syncthreads
+    bool valid = (i >= 3 && i < NX6 - 3 && j >= 3 && j < NYD6 - 3 && k >= 3 && k < NZ6 - 3);
+
+    algorithm1_step1_GTS_smem(i, j, k, valid, smem_eta,
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
+        u_out, v_out, w_out, rho_out, rho_modify, Force);
+}
+
+// Step0: fd[q][index] → f_post_d[q*GRID_SIZE + index] layout 轉換
+//   初始化階段一次性呼叫，將 19 個獨立 fd 陣列打包成 interleaved f_post
+__global__ void Algorithm1_Step0Kernel_GTS(
+    const double *f0,  const double *f1,  const double *f2,
+    const double *f3,  const double *f4,  const double *f5,
+    const double *f6,  const double *f7,  const double *f8,
+    const double *f9,  const double *f10, const double *f11,
+    const double *f12, const double *f13, const double *f14,
+    const double *f15, const double *f16, const double *f17,
+    const double *f18, double *f_post)
+{
+    const int i = blockIdx.x * blockDim.x + threadIdx.x;
+    const int j = blockIdx.y * blockDim.y + threadIdx.y;
+    const int k = blockIdx.z * blockDim.z + threadIdx.z;
+    if (i >= NX6 || j >= NYD6 || k >= NZ6) return;
+
+    const int index = j * NX6 * NZ6 + k * NX6 + i;
+    const double *fd[19] = {f0,f1,f2,f3,f4,f5,f6,f7,f8,f9,
+                            f10,f11,f12,f13,f14,f15,f16,f17,f18};
+    for (int q = 0; q < 19; q++)
+        f_post[q * GRID_SIZE + index] = fd[q][index];
+}
+
+#endif // ALGORITHM1_H
