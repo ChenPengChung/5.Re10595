@@ -130,6 +130,7 @@ result/monitor_convergence_*.{pdf,png}
 # -----------------------------------------------------------------------------
 phase2_generatecheckpoint/step_*/*.bin
 phase2_generatecheckpoint/step_*/__pycache__/
+phase2_generatecheckpoint/oldcheckpoint_*/*.bin
 
 # -----------------------------------------------------------------------------
 # 三大紀錄檔：原始 .dat 不追蹤（本地保留），壓縮 .dat.gz 追蹤推送

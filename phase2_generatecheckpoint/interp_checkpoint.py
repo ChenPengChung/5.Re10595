@@ -17,6 +17,8 @@ Pipeline:
   3. Read old checkpoint, compute macros (rho, ux, uy, uz)
   4. Interpolate macros old -> new according to --interp-mode:
        phys (default): physical-space remap; correct when GAMMA changes.
+         --interp-order 6 (default): 7-point Lagrange tensor product O(h^6).
+         --interp-order 2:          bilinear O(h^2) (legacy).
        comp:           legacy computational (j, k, i) remap for A/B tests.
   5. Reconstruct f_q for q = 0..18 according to --fneq-mode:
        chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
@@ -1143,6 +1145,164 @@ def interpolate_phys_3d(field_old, cfg_old, cfg_new,
 
 
 # ---------------------------------------------------------------
+# 6th-order 7-point Lagrange interpolation (O(h^6) tensor product)
+# ---------------------------------------------------------------
+# Uniform nodes {0,1,2,3,4,5,6}; fractional position t ∈ [0,1] within
+# the central cell (nodes 3,4).  Stencil: 3 nodes left + 3 nodes right
+# of the central pair.
+#
+# L_m(t) = ∏_{n=0,n≠m}^{6} (t+3-n) / (m-n)    for m=0..6
+#
+# where s = t + 3 maps the fraction into the stencil-local coordinate
+# so that node m corresponds to s = m.
+#
+# Polynomial exactness: reproduces degree-6 polynomials exactly.
+
+def lagrange7_weights(t):
+    """Compute 7-point Lagrange basis weights for fractional position t ∈ [0,1].
+
+    The stencil is centered on nodes 3 and 4: the interpolation point lies
+    at stencil coordinate s = t + 3.  Returns array of 7 weights.
+    """
+    s = t + 3.0
+    w = np.empty(7, dtype=np.float64)
+    for m in range(7):
+        val = 1.0
+        for n in range(7):
+            if n != m:
+                val *= (s - n) / (m - n)
+        w[m] = val
+    return w
+
+
+def lagrange7_weights_vectorized(t_arr):
+    """Vectorized: compute 7-point Lagrange weights for an array of t values.
+
+    t_arr : 1D array of fractional positions in [0,1].
+    Returns (len(t_arr), 7) weight matrix.
+    """
+    s = t_arr[:, np.newaxis] + 3.0   # (N, 1) stencil coordinates
+    nodes = np.arange(7, dtype=np.float64)[np.newaxis, :]  # (1, 7)
+
+    denom = np.empty(7, dtype=np.float64)
+    for m in range(7):
+        d = 1.0
+        for n in range(7):
+            if n != m:
+                d *= (m - n)
+        denom[m] = d
+
+    diff = s - nodes  # (N, 7): s_i - n for each node n
+    prod_all = np.prod(diff, axis=1, keepdims=True)  # (N, 1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        weights = prod_all / (diff * denom[np.newaxis, :])
+    mask = np.abs(diff) < 1e-15
+    if np.any(mask):
+        idx_i, idx_m = np.where(mask)
+        weights[idx_i, :] = 0.0
+        weights[idx_i, idx_m] = 1.0
+    return weights
+
+
+def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
+    """Interpolate one (NY6_old, NZ6_old, NX6_old) field using 7-point Lagrange.
+
+    Uses the same PhysMapping2D (j*, k*, xi, eta) as the bilinear version,
+    but applies 7x7 tensor product in the (j, k) plane and 7-point along i.
+
+    Stencil: for anchor cell (j*, k*), nodes j*-3..j*+3, k*-3..k*+3.
+    Node m=3 at j* corresponds to xi=0; node m=4 at j*+1 to xi=1.
+    """
+    cfg_old, cfg_new = mapping.cfg_old, mapping.cfg_new
+    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
+
+    i_o_arr = mapping.i_o_arr
+    xi_i_arr = mapping.xi_i_arr
+    NX_new = cfg_new.NX
+    NY6_old = cfg_old.NY6
+    NZ6_old = cfg_old.NZ6
+    NX6_old = cfg_old.NX6
+
+    i_weights = lagrange7_weights_vectorized(xi_i_arr)  # (NX, 7)
+
+    # Precompute i-stencil buffer indices for all NX_new points: (NX_new, 7)
+    # Stencil offsets: -3, -2, -1, 0, +1, +2, +3 relative to anchor i_o.
+    # Node m=3 at (BFR + i_o) corresponds to xi_i=0; node m=4 to xi_i=1.
+    # Ghost fill gives 3 valid layers on each side, so buf indices [0, NX6-1]
+    # cover the stencil.  Clamp handles the rare boundary case (where
+    # xi_i=0/1 makes the clamped-index weights exactly 0).
+    i_stencil = np.empty((NX_new, 7), dtype=np.int64)
+    for s in range(7):
+        buf_idx = BFR + i_o_arr + (s - 3)
+        i_stencil[:, s] = np.clip(buf_idx, 0, NX6_old - 1)
+
+    for j_n in range(cfg_new.NY):
+        for k_n in range(cfg_new.NZ):
+            j_o = int(mapping.jstar[j_n, k_n])
+            k_o = int(mapping.kstar[j_n, k_n])
+            xi  = float(mapping.xistar[j_n, k_n])
+            eta = float(mapping.etastar[j_n, k_n])
+
+            wj = lagrange7_weights(xi)
+            wk = lagrange7_weights(eta)
+
+            jb = BFR + j_o
+            kb = BFR + k_o
+
+            j_indices = np.clip(np.arange(jb - 3, jb + 4), 0, NY6_old - 1)
+            k_indices = np.clip(np.arange(kb - 3, kb + 4), 0, NZ6_old - 1)
+
+            # wjk[mj, mk] = wj[mj] * wk[mk], shape (7, 7)
+            wjk = np.outer(wj, wk)
+
+            # Gather stencil slab: field_old[j_indices, k_indices, i_stencil]
+            # → (7, 7, NX, 7) then contract with i_weights → (7, 7, NX)
+            slab = field_old[np.ix_(j_indices, k_indices)]  # (7, 7, NX6_old)
+            # For each (mj, mk) pair, gather the 7 i-stencil values for all NX points
+            # slab_i shape: (7, 7, NX, 7) — last dim is the i-stencil
+            slab_i = slab[:, :, i_stencil]  # (7, 7, NX, 7)
+            # Contract i-stencil with i_weights: sum over last dim
+            # i_weights shape (NX, 7) → broadcast
+            val_jk = np.einsum('jkni,ni->jkn', slab_i, i_weights)  # (7, 7, NX)
+            # Contract (j, k) with wjk
+            row = np.einsum('jk,jkn->n', wjk, val_jk)  # (NX,)
+
+            field_new[BFR + j_n, BFR + k_n, BFR:BFR + NX_new] = row
+
+    fill_ghost(field_new, cfg_new)
+    return field_new
+
+
+def apply_rho_mass_correction(rho, cfg):
+    """Global additive mass correction matching solver's ReduceRhoSum_Kernel.
+
+    Interior: i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
+      ni = NX6 - 7, nj = NY6 - 7, nk = NZ6 - 6
+      N_interior = ni * nj * nk
+      rho_modify = (N_interior * 1.0 - sum(rho[interior])) / N_interior
+      rho[interior] += rho_modify
+    """
+    ni = cfg.NX6 - 7
+    nj = cfg.NY6 - 7
+    nk = cfg.NZ6 - 6
+    N_interior = ni * nj * nk
+
+    interior = (slice(BFR, BFR + nj),
+                slice(BFR, BFR + nk),
+                slice(BFR, BFR + ni))
+
+    rho_sum = float(np.sum(rho[interior]))
+    rho_target = float(N_interior) * 1.0
+    rho_modify = (rho_target - rho_sum) / float(N_interior)
+
+    mean_before = rho_sum / float(N_interior)
+    rho[interior] += rho_modify
+    mean_after = float(np.sum(rho[interior])) / float(N_interior)
+
+    return rho_modify, mean_before, mean_after
+
+
+# ---------------------------------------------------------------
 # Equilibrium reconstruction (initialization.h:36-42)
 # ---------------------------------------------------------------
 def compute_feq_q(rho, ux, uy, uz, q):
@@ -1543,8 +1703,8 @@ def main():
                    help='fully automatic: detect phase2 origin checkpoint and phase1 oldgrid/newgrid files')
     p.add_argument('--old-dir', default=None,
                    help='old checkpoint directory (auto-detected from phase2_generatecheckpoint/step_*_origin* if omitted)')
-    p.add_argument('--step', type=int, default=1,
-                   help='new checkpoint step number written into metadata (default: 1)')
+    p.add_argument('--step', type=int, default=0,
+                   help='new checkpoint step number written into metadata (default: 0)')
     p.add_argument('--output-root', default='restart/checkpoint',
                    help='root directory for chain-compatible output step_%%08d (default: %(default)s)')
     p.add_argument('--new-dir', default=None,
@@ -1560,6 +1720,10 @@ def main():
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
                         '"comp" = legacy computational-space (j,k,i) index remap '
                         '(causes physical mis-placement when GAMMA differs).')
+    p.add_argument('--interp-order', type=int, choices=[2, 6], default=6,
+                   help='Interpolation order for macro fields in physical-space mode. '
+                        '6 = 7-point Lagrange tensor product O(h^6) (default). '
+                        '2 = bilinear O(h^2) (legacy).')
     p.add_argument('--metric-order', type=int, choices=[2, 6], default=6,
                    help='Order of FD for inverse metric used in CE f_neq reconstruction. '
                         '6 mirrors solver (j-central + k-adaptive Fornberg, '
@@ -1882,18 +2046,32 @@ def main():
     if args.interp_mode == 'phys':
         # OLD grid coords needed for physical-space inverse mapping
         _, y2d_old, z2d_old = build_grid_xyz(OLD)
+        interp_order = args.interp_order
+        interp_label = '7-point Lagrange O(h^6)' if interp_order == 6 else 'bilinear O(h^2)'
         print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space')
+        print('      interpolation order: {} ({})'.format(interp_order, interp_label))
         t = time.time()
         mapping = precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new, OLD, NEW)
         print('      mapping cache build: {:.1f}s'.format(time.time() - t))
-        t = time.time(); rho_new = interpolate_phys_3d_with_mapping(rho_g, mapping)
+
+        if interp_order == 6:
+            interp_fn = interpolate_lagrange7_3d_with_mapping
+        else:
+            interp_fn = interpolate_phys_3d_with_mapping
+
+        t = time.time(); rho_new = interp_fn(rho_g, mapping)
         print('      rho:  {:.1f}s'.format(time.time() - t))
-        t = time.time(); ux_new  = interpolate_phys_3d_with_mapping(ux_g,  mapping)
+        t = time.time(); ux_new  = interp_fn(ux_g,  mapping)
         print('      ux:   {:.1f}s'.format(time.time() - t))
-        t = time.time(); uy_new  = interpolate_phys_3d_with_mapping(uy_g,  mapping)
+        t = time.time(); uy_new  = interp_fn(uy_g,  mapping)
         print('      uy:   {:.1f}s'.format(time.time() - t))
-        t = time.time(); uz_new  = interpolate_phys_3d_with_mapping(uz_g,  mapping)
+        t = time.time(); uz_new  = interp_fn(uz_g,  mapping)
         print('      uz:   {:.1f}s'.format(time.time() - t))
+
+        # Mass correction for rho after Lagrange interpolation
+        rho_modify, mean_before, mean_after = apply_rho_mass_correction(rho_new, NEW)
+        print('      rho mass correction: rho_modify = {:.6e}'.format(rho_modify))
+        print('      rho mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
     else:
         if OLD.GAMMA != NEW.GAMMA:
             print('      WARN: GAMMA differs (OLD={}, NEW={}) but --interp-mode=comp:'.format(
@@ -2182,6 +2360,7 @@ def main():
         'interp_new_gamma': str(NEW.GAMMA),
         'interp_fneq_mode': args.fneq_mode,
         'interp_macro_mode': args.interp_mode,
+        'interp_macro_order': str(args.interp_order),
         'interp_metric_order': str(args.metric_order),
         'interp_cfl': str(args.cfl),
         'interp_dt_max_component': dt_max_component,
