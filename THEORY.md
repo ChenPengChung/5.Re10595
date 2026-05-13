@@ -10,7 +10,7 @@
 
 **程式裡演化的 `f` 就是變換後分布 $\bar f$；壁面 BC 直接套 Imamura Eq. (26)，係數是 $-\omega\Delta t$（無 $-1/2$），其中 `omega_global = τ`（Imamura 約定 = 無因次化鬆弛時間）。**
 
-任何把 `-0.5` 加回去的修改都是錯的——那個 `1/2` 已經在 He–Chen–Doolen 變換時吸收進 $\bar f$ 的定義裡。
+任何改回 NS-level 係數的修改都會和本專案演化的 $\bar f$ 不一致。
 
 ---
 
@@ -116,18 +116,19 @@ $$\nu = \frac{1}{6}(2\omega - 1)c^2\Delta t = c_s^2\big(\omega - \tfrac{1}{2}\bi
 
 ---
 
-## 4. 為什麼 `-(omega - 0.5)·dt` 是錯的
+## 4. 正確係數：直接使用 `-omega*dt`
 
-該寫法把 $-(\tau-\tfrac{1}{2})\Delta t = -3\nu$ 套到 $f^{(1)}$ 重建上。但 $-3\nu$ 是 **NS-level 應力張量** $\Pi^{(1)}_{\alpha\beta}$ 的係數，**不是** $f^{(1)}$ 本身的係數。
+本專案重建的是 LBE 演化中的 transformed distribution $\bar f$。壁面 CE 與
+checkpoint CE 重建都應直接使用 Imamura Eq. (26) 的 lattice-level 係數：
 
-| CE 層級 | 重建對象 | 係數 | 物理意義 |
-|---------|---------|------|----------|
-| **Lattice (Imamura A.9 / Eq. 26)** | $\bar f^{(1)}$ | $-\tau\Delta t = -\omega\Delta t$ | 給 LBE 演化壁面 BC 用 |
-| **NS (Lallemand–Luo)** | $\Pi^{(1)}_{\alpha\beta}$（應力張量）| $-(\tau-\tfrac{\Delta t}{2})\Delta t = -3\nu$ | 給 macroscopic stress 計算用 |
+$$-\omega\Delta t,\qquad \omega = 3\nu/\Delta t + 1/2$$
 
-把 NS-level 係數寫到壁面 $f$ 重建上，等效將 $f^{(1)}$ 縮小成 $\lambda/\tau = 1 - \omega_\text{rate}/2$ 倍 → 壁面剪應力被低估 → **看起來像是黏度上升 → 額外耗散**。
+其中 checkpoint 重建使用新網格的 `dt_global_new`，因此：
 
-實證上：早期版本用 `-(omega-0.5)*dt` 觀察到 L_inf 比 lattice 版高出一個 order，與理論預測一致。
+$$-\omega_\text{new}\Delta t_\text{new}
+= -(3\nu/\Delta t_\text{new} + 1/2)\Delta t_\text{new}$$
+
+這和 `main.cu` 中 runtime 計算 `omega_global` 的方式一致。
 
 ---
 
@@ -183,9 +184,9 @@ main.cu
 
 ## 7. 維護備忘錄
 
-1. **任何想把 `-0.5` 加回 ChapmanEnskogBC 的修改 → 拒絕**（除非有對應的 transformation 補做，但已證明結果相同，無實益）。
+1. **ChapmanEnskogBC 的係數固定為 `-(omega_global)*dt_global`**，不得改成 NS-level 應力係數。
 2. **omega_global 與 s_visc_global 不可混用**（互為倒數，但物理意義不同）。
-3. **`diagnostic_gilbm.h` 內若有 host-side CE 重算（驗證用），必須與 production 一致**——歷史上 L295 曾保留 `-(omega-0.5)*dt` 舊式，已於 [commit hash] 修正。
+3. **`diagnostic_gilbm.h` 內若有 host-side CE 重算（驗證用），必須與 production 一致**：使用 `-(omega_global)*dt_global`。
 4. **若擴充到非 channel 場景**：
    - 非 Poiseuille body-force（Hill, Couette）：`rho_wall` 的 0 階外推可能不足，需升階；
    - 高 Re (≥ 700)：壁面 du/dk 的 2 階 FD 不足，需升 4–6 階（標頭 L30–39 已記錄）。

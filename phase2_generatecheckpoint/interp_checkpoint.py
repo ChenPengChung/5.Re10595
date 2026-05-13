@@ -23,7 +23,7 @@ Pipeline:
   5. Reconstruct f_q for q = 0..18 according to --fneq-mode:
        chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
                                  NEW-grid velocity gradients via Chapman-Enskog.
-                                 Wall rows use 4th-order one-sided FD to match
+                                 Wall rows use 6th-order one-sided FD to match
                                  the solver's wall CE formula.
        interp (legacy):          f_q = f_eq(new) + scale * interp(f_neq_old)
                                  (linear interp in computational space; loses
@@ -1330,7 +1330,8 @@ def compute_minsize(cfg):
 #
 #   f_neq_q = w_q * rho * ce_coeff * Σ_αβ (3·c_qα·c_qβ - δ_αβ) · ∂u_α/∂x_β
 #
-#   ce_coeff = -(omega - 0.5) * dt = -3*niu      (variables.h:152)
+#   omega_new = 3*niu/dt_global_new + 0.5
+#   ce_coeff = -omega_new * dt_global_new
 #
 # This replaces direct linear interpolation of f_neq, which destroys the
 # velocity-gradient information encoded in f_neq via Chapman-Enskog and
@@ -1624,29 +1625,34 @@ def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
     du_dj[0, :, :]  = du_dj[1, :, :]
     du_dj[-1, :, :] = du_dj[-2, :, :]
 
-    # k-derivative — centered on fluid interior, 4th-order one-sided AT walls.
+    # k-derivative — centered on fluid interior, 6th-order one-sided AT walls.
     # Plain centered FD at k=BFR collapses to (u[BFR+1]-u[BFR])/2 because
     # fill_ghost copies u[BFR-1]=u[BFR], underestimating du/dk by ~50% in viscous
-    # sublayer. Solver wall CE uses 4th-order one-sided; mirror that to keep
-    # restart wall-stress consistent (gilbm/boundary_conditions.h:30-33).
+    # sublayer. Solver wall CE uses WALL_GRAD_ORDER=6; mirror that to keep
+    # restart wall-stress consistent (gilbm/evolution_gilbm/1.algorithm1.h).
     du_dk[:, 1:-1, :] = (u[:, 2:, :] - u[:, :-2, :]) / 2.0
 
-    # Bottom wall (k = BFR = 3): du/dk = (48*u[B+1] - 36*u[B+2] + 16*u[B+3] - 3*u[B+4]) / 12
+    # Bottom wall (k = BFR = 3):
+    # du/dk = (360u1 - 450u2 + 400u3 - 225u4 + 72u5 - 10u6) / 60
     du_dk[:, BFR, :] = (
-         48.0 * u[:, BFR+1, :]
-        - 36.0 * u[:, BFR+2, :]
-        + 16.0 * u[:, BFR+3, :]
-        -  3.0 * u[:, BFR+4, :]
-    ) / 12.0
+        360.0 * u[:, BFR+1, :]
+       -450.0 * u[:, BFR+2, :]
+       +400.0 * u[:, BFR+3, :]
+       -225.0 * u[:, BFR+4, :]
+       + 72.0 * u[:, BFR+5, :]
+       - 10.0 * u[:, BFR+6, :]
+    ) / 60.0
 
-    # Top wall (k = NZ6-4): same coefficients, 4 points BELOW wall, reversed sign.
+    # Top wall (k = NZ6-4): same coefficients below wall, reversed sign.
     kt = NZ6 - 1 - BFR  # = NZ6 - 4
     du_dk[:, kt, :] = -(
-         48.0 * u[:, kt-1, :]
-        - 36.0 * u[:, kt-2, :]
-        + 16.0 * u[:, kt-3, :]
-        -  3.0 * u[:, kt-4, :]
-    ) / 12.0
+        360.0 * u[:, kt-1, :]
+       -450.0 * u[:, kt-2, :]
+       +400.0 * u[:, kt-3, :]
+       -225.0 * u[:, kt-4, :]
+       + 72.0 * u[:, kt-5, :]
+       - 10.0 * u[:, kt-6, :]
+    ) / 60.0
 
     # Ghost rows are not in the interior crop; fill non-pathologically.
     du_dk[:, 0, :]  = du_dk[:, BFR, :]
@@ -1703,8 +1709,9 @@ def main():
                    help='fully automatic: detect phase2 origin checkpoint and phase1 oldgrid/newgrid files')
     p.add_argument('--old-dir', default=None,
                    help='old checkpoint directory (auto-detected from phase2_generatecheckpoint/step_*_origin* if omitted)')
-    p.add_argument('--step', type=int, default=0,
-                   help='new checkpoint step number written into metadata (default: 0)')
+    p.add_argument('--step', type=int, default=1,
+                   help='new checkpoint step number written into metadata (default: 1; '
+                        'must be > 0 for solver restart tripwire at main.cu:692)')
     p.add_argument('--output-root', default='restart/checkpoint',
                    help='root directory for chain-compatible output step_%%08d (default: %(default)s)')
     p.add_argument('--new-dir', default=None,
@@ -2106,8 +2113,26 @@ def main():
         np.abs(uy_new[new_int]).max(),
         np.abs(uz_new[new_int]).max()))
 
-    # ---- Step 6 & 7: f_eq + per-rank write ----
-    print('[6/8] Reconstructing f_eq and writing per-rank files')
+    # ---- Step 6: NEW-grid dt_global for CE coefficient and metadata ----
+    print('[6/8] Computing NEW-grid dt_global')
+    dt_real, dt_max_component = compute_dt_global_gilbm(
+        NEW, cfl=args.cfl, metric_order=args.metric_order)
+    dx_new = LX / (NEW.NX - 1)
+    print('      dt_global_new = {:.6e}  (CFL={}, metric_order={}, dx={:.6e})'.format(
+        dt_real, args.cfl, args.metric_order, dx_new))
+    print('      dt limited by {} component'.format(dt_max_component))
+    if dt_max_component == 'eta':
+        print('      (eta dominates: spanwise dx is the tightest constraint; '
+              'expected if y/z metric c~ < 1/dx; not an error)')
+    if args.skip_drift_check:
+        dt_for_meta = '-1.0'
+        print('      WARN: --skip-drift-check; metadata dt_global=-1.0, '
+              'but CE still uses dt_global_new above.')
+    else:
+        dt_for_meta = '{:.15e}'.format(dt_real)
+
+    # ---- Step 7: f_eq + per-rank write ----
+    print('[7/8] Reconstructing f_eq and writing per-rank files')
     parent_dir = os.path.dirname(writing_dir)
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
@@ -2129,6 +2154,8 @@ def main():
     rho_check = np.zeros_like(rho_new)
     min_f = float('inf')
     max_f = -float('inf')
+    ce_omega_new = None
+    ce_coeff_used = None
 
     if args.fneq_mode == 'chapman-enskog':
         # Resolve viscosity (variables.h: niu = Uref / Re).
@@ -2140,9 +2167,17 @@ def main():
         if niu is None:
             sys.exit('FATAL: --fneq-mode chapman-enskog requires niu. '
                      'Pass --niu <value> or run from a project with variables.h.')
-        ce_coeff = -3.0 * niu     # = -(omega - 0.5) * dt   (variables.h:152, 363)
-        print('      mode = chapman-enskog: niu = {:.6e}, ce_coeff = -3*niu = {:.6e}'.format(
-            niu, ce_coeff))
+
+        # CE coefficient: -(omega_global) * dt_global
+        #   omega_new = 3*niu/dt_global_new + 0.5   (main.cu:577)
+        #   -omega_new * dt_global_new = -3*niu - 0.5*dt_global_new
+        ce_omega_new = 3.0 * niu / dt_real + 0.5
+        ce_coeff = -ce_omega_new * dt_real
+        ce_coeff_used = ce_coeff
+        print('      mode = chapman-enskog: niu = {:.6e}'.format(niu))
+        print('      omega_new = 3*niu/dt_global_new + 0.5 = {:.12e}'.format(ce_omega_new))
+        print('      ce_coeff = -(omega)*dt = {:.6e}  (= -3niu - 0.5dt = {:.6e})'.format(
+            ce_coeff, -3.0 * niu - 0.5 * dt_real))
 
         # Inverse metric on NEW grid. Order 6 mirrors solver (gilbm/metric_terms.h);
         # order 2 is legacy 2nd-order central (kept for A/B comparison).
@@ -2158,9 +2193,8 @@ def main():
         # No-slip wall clamp: physical wall is u=v=w=0. After macro interpolation,
         # u_new[BFR] may inherit OLD's wall value
         # which may carry small residual (~O(δz·∂u/∂z|_wall) plus FP noise) because
-        # LBM CE wall BC produces approximately, not bitwise, zero. The 4th-order
-        # one-sided FD formula at boundary_conditions.h:30 explicitly assumes
-        # u_wall=0 (drops the -25*u_wall/12 term). Clamp here so CE wall stress
+        # LBM CE wall BC produces approximately, not bitwise, zero. The 6th-order
+        # one-sided FD formula in the solver explicitly assumes u_wall=0. Clamp here so CE wall stress
         # estimate matches the solver's wall BC kernel exactly.
         kt = NEW.NZ6 - 1 - BFR  # top wall row index
         wall_residual_max = max(
@@ -2273,32 +2307,12 @@ def main():
     del rho_g, ux_g, uy_g, uz_g, rho_check
 
     # ---- Step 8: metadata + atomic rename ----
-    print('[7/8] Writing new metadata.dat')
+    print('[8/8] Writing new metadata.dat')
     # dt_global handling (Phase B):
-    #   compute_dt_global_gilbm mirrors gilbm/precompute.h:78-115
-    #   ComputeGlobalTimeStep:  dt = CFL / max|c~|  over (eta, xi, zeta) and
-    #   D3Q19 dirs. With --metric-order 6 (default), the metric matches solver
-    #   to ~6th order accuracy, so dt_saved should pass solver Phase 5 drift
-    #   check (fileIO.h:658: |dt_runtime - dt_saved| < 1e-6).
-    #
-    #   --skip-drift-check writes -1.0 to trigger fileIO.h:650 legacy skip path
-    #   ("metadata.dat 無 dt_global 欄位, 跳過漂移檢查") for debugging.
-    if args.skip_drift_check:
-        dt_for_meta = '-1.0'
-        dt_max_component = 'SKIPPED'
-        print('      WARN: --skip-drift-check; dt_global=-1.0; '
-              'solver Phase 5 drift check WILL be skipped.')
-    else:
-        dt_real, dt_max_component = compute_dt_global_gilbm(
-            NEW, cfl=args.cfl, metric_order=args.metric_order)
-        dt_for_meta = '{:.15e}'.format(dt_real)
-        dx_new = LX / (NEW.NX - 1)
-        print('      dt_global = {:.6e}  (CFL={}, metric_order={}, dx={:.6e})'.format(
-            dt_real, args.cfl, args.metric_order, dx_new))
-        print('      dt limited by {} component'.format(dt_max_component))
-        if dt_max_component == 'eta':
-            print('      (eta dominates: spanwise dx is the tightest constraint; '
-                  'expected if y/z metric c~ < 1/dx; not an error)')
+    #   compute_dt_global_gilbm mirrors gilbm/precompute.h:78-115.
+    #   CE reconstruction always uses dt_global_new computed above. Metadata
+    #   writes the same value unless --skip-drift-check explicitly requests
+    #   dt_global=-1.0 for solver drift-check debugging.
     naive_minsize = compute_minsize(NEW)
     origin_meta_path = os.path.join(args.old_dir, 'metadata.dat')
     # Preserve controller state from origin checkpoint to avoid the F* step
@@ -2368,6 +2382,9 @@ def main():
         'interp_origin_accu_count': origin_accu,
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
+    if ce_omega_new is not None:
+        new_meta['interp_ce_omega_global_new'] = '{:.15e}'.format(ce_omega_new)
+        new_meta['interp_ce_coeff'] = '{:.15e}'.format(ce_coeff_used)
     # interp_fneq_scale only meaningful in legacy 'interp' mode; CE mode does not use it.
     if args.fneq_mode == 'interp':
         new_meta['interp_fneq_scale'] = str(args.fneq_scale)
@@ -2388,7 +2405,7 @@ def main():
         print('      Phase 5 drift check skipped by request; runtime computes its own dt')
     print('      (naive minSize for reference: {:.6e}; runtime Imamura dt typically ~0.4-0.5x of this)'.format(naive_minsize))
 
-    print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, out_dir))
+    print('      Atomic rename: {} -> {}'.format(writing_dir, out_dir))
     os.rename(writing_dir, out_dir)
 
     restart_root = os.path.dirname(os.path.abspath(args.output_root))

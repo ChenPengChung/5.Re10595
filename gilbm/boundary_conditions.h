@@ -10,15 +10,17 @@
 // C-E BC formula at no-slip wall (u=v=w=0), Imamura Eq.(A.9):
 //   f_i|wall = w_i * rho_wall * (1 + C_i)
 //
-//   CE non-equilibrium (NS level): f^neq = -ρ w_i (τ-0.5)Δt / c_s² × Σ(e·e - c_s² δ) × S
+//   CE non-equilibrium for the evolved transformed distribution:
+//   f^neq = -ρ w_i · omega·Δt / c_s² × Σ(e·e - c_s² δ) × S
+//   omega = 3ν/Δt + 0.5  (main.cu:577), so omega·Δt = 3ν + 0.5Δt
 //   c=1, c_s²=1/3 → 1/c_s² = 3 → tensor coeff: 3·c_{iα}·c_{iβ} - δ_{αβ}
 //   α = 1~3 (x,y,z 速度分量),  β = 2~3 (ξ,ζ 方向; β=1(η) 因 dk/dx=0 消去)
 //
-//   C_i = -(omega - 0.5)·Δt · Σ_α Σ_{β=y,z} [3·c_{iα}·c_{iβ} - δ_{αβ}] · (∂u_α/∂x_β)
+//   C_i = -(omega)·Δt · Σ_α Σ_{β=y,z} [3·c_{iα}·c_{iβ} - δ_{αβ}] · (∂u_α/∂x_β)
 //
 //   壁面 chain rule: ∂u_α/∂x_β = (du_α/dk)·(dk/dx_β)，展開 3α × 2β = 6 項：
 //
-//   C_i = -(omega - 0.5)·Δt × {              [= -(τ-0.5Δt), where τ-0.5Δt = 3ν]
+//   C_i = -(omega)·Δt × {              [omega = 3ν/Δt + 0.5]
 //     ① 3·c_{ix}·c_{iy} · (du/dk)·(dk/dy)        α=x, β=y  (δ_{xy}=0)
 //   + ② 3·c_{ix}·c_{iz} · (du/dk)·(dk/dz)        α=x, β=z  (δ_{xz}=0)
 //   + ③ (3·c_{iy}²−1)   · (dv/dk)·(dk/dy)        α=y, β=y  (δ_{yy}=1)
@@ -108,8 +110,7 @@ __device__ double ChapmanEnskogBC(
         (3.0 * ez * ez - 1.0) * dw_dk * zeta_z_val   // ⑥ (3·c_z²−1) · (dw/dζ)·(ζ_z)
     );
 
-    // CE 理論: f^neq ∝ -(τ-0.5)·Δt = -3ν (Navier-Stokes 一致)
-    // omega_global = τ = 0.5 + 3ν/Δt, 因此 (τ-0.5)·Δt = 3ν
+    // CE: f^neq ∝ -(omega)·Δt, where omega = 3ν/Δt + 0.5 (main.cu:577)
     C_alpha *= -(omega_global) * dt_global;
     double f_eq_atwall = GILBM_W[alpha] * rho_wall;
     return f_eq_atwall * (1.0 + C_alpha);
