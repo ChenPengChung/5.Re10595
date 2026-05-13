@@ -122,15 +122,9 @@ core
 core.*
 
 # simulation outputs
-Ustar_Force_record.dat
-timing_log.dat
-checkrho.dat
 png_frames/
 result/monitor_convergence_*.{pdf,png}
 
 # simulation outputs
-Ustar_Force_record.dat
-timing_log.dat
-checkrho.dat
 png_frames/
 result/monitor_convergence_*.{pdf,png}
