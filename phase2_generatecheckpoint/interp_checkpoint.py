@@ -239,6 +239,7 @@ def find_variables_h():
     candidates = [
         'variables.h',
         '../variables.h',
+        os.path.join(script_dir, 'variables.h'),
         os.path.join(script_dir, '..', 'variables.h'),
     ]
     seen = set()
@@ -248,6 +249,16 @@ def find_variables_h():
             return p
         seen.add(p)
     return None
+
+
+def resolve_variables_h_arg(path):
+    """Resolve and validate a variables.h path supplied by CLI or auto-detection."""
+    if path is None:
+        return None
+    abs_path = os.path.abspath(os.path.normpath(path))
+    if not os.path.isfile(abs_path):
+        sys.exit('FATAL: variables.h not found: {}'.format(abs_path))
+    return abs_path
 
 
 def auto_detect_from_metadata(meta_path):
@@ -1736,8 +1747,8 @@ def main():
                         '6 mirrors solver (j-central + k-adaptive Fornberg, '
                         'gilbm/metric_terms.h). 2 is legacy 2nd-order central.')
     p.add_argument('--cfl', type=float, default=None,
-                   help='CFL lambda for dt_global computation. Defaults to variables.h CFL '
-                        'when available, otherwise 0.5.')
+                   help='CFL lambda override for dt_global computation. Production runs should '
+                        'omit this and read CFL from --variables-h/variables.h.')
     p.add_argument('--skip-drift-check', action='store_true',
                    help='Write dt_global=-1.0 to bypass solver Phase 5 drift check '
                         '(fileIO.h:658). Debug only; production runs should leave this off.')
@@ -1767,11 +1778,14 @@ def main():
     g_new.add_argument('--new-grid-dat', default=None,
                        help='path to new Tecplot grid .dat file')
     g_new.add_argument('--variables-h', default=None,
-                       help='path to variables.h (auto-detected if not specified)')
+                       help='path to variables.h used for NEW grid constants, CFL, and niu. '
+                            'Auto-detected from project root or phase2_generatecheckpoint/variables.h.')
 
     args = p.parse_args()
 
     global OLD, NEW
+
+    args.variables_h = resolve_variables_h_arg(args.variables_h)
 
     if args.auto:
         import re as _re
@@ -1781,6 +1795,8 @@ def main():
         vh_path = args.variables_h or find_variables_h()
         if not vh_path:
             sys.exit('FATAL: --auto requires variables.h (not found)')
+        vh_path = resolve_variables_h_arg(vh_path)
+        args.variables_h = vh_path
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
 
@@ -1910,12 +1926,24 @@ def main():
         args.variables_h = vh_path
 
     if args.cfl is None:
-        args.cfl = 0.5
-        vh_for_cfl = getattr(args, 'variables_h', None) or find_variables_h()
-        if vh_for_cfl and os.path.isfile(vh_for_cfl):
-            cfl_from_vh = parse_variables_h(vh_for_cfl).get('CFL')
-            if cfl_from_vh is not None:
-                args.cfl = float(cfl_from_vh)
+        vh_for_cfl = args.variables_h or find_variables_h()
+        if not vh_for_cfl:
+            sys.exit('FATAL: CFL must come from variables.h or explicit --cfl. '
+                     'Pass --variables-h /path/to/variables.h for production checkpoint rebuilds.')
+        vh_for_cfl = resolve_variables_h_arg(vh_for_cfl)
+        args.variables_h = vh_for_cfl
+        cfl_from_vh = parse_variables_h(vh_for_cfl).get('CFL')
+        if cfl_from_vh is None:
+            sys.exit('FATAL: {} has no parseable #define CFL; pass --cfl only for controlled tests.'.format(
+                vh_for_cfl))
+        args.cfl = float(cfl_from_vh)
+        args.cfl_source = 'variables.h'
+    else:
+        args.cfl_source = 'cli'
+        if args.variables_h is None:
+            detected_vh = find_variables_h()
+            if detected_vh:
+                args.variables_h = resolve_variables_h_arg(detected_vh)
 
     args.old_dir = resolve_old_dir(args.old_dir)
 
@@ -2377,6 +2405,7 @@ def main():
         'interp_macro_order': str(args.interp_order),
         'interp_metric_order': str(args.metric_order),
         'interp_cfl': str(args.cfl),
+        'interp_cfl_source': args.cfl_source,
         'interp_dt_max_component': dt_max_component,
         'interp_origin_ftt': origin_ftt,
         'interp_origin_accu_count': origin_accu,
@@ -2390,6 +2419,7 @@ def main():
         new_meta['interp_fneq_scale'] = str(args.fneq_scale)
     vh_for_prov = getattr(args, 'variables_h', None)
     if vh_for_prov and os.path.isfile(vh_for_prov):
+        new_meta['interp_variables_h'] = os.path.abspath(vh_for_prov)
         new_meta['interp_variables_h_mtime'] = str(int(os.path.getmtime(vh_for_prov)))
     if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT):
         new_meta['interp_new_grid_mtime'] = str(int(os.path.getmtime(NEW.GRID_DAT)))
