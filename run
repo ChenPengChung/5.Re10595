@@ -15,6 +15,7 @@
 #        [--old-gamma <G>] [--old-alpha <A>]
 #                                從唯一 restart/step_*_origin* 建立新 grid checkpoint
 #   ./run --force-regrid         搭配 --regrid-from-origin, 清掉 checkpoint 後重建
+#   ./run --preflight-only       只跑 grid/regrid/provenance 前置檢查, 不編譯、不投遞
 #   ./run --no-queue-check       關掉 partition 擁塞檢查
 #
 #   ./run status                 chain 狀態快照 (詳細版, 等同舊 ./chain_status.sh)

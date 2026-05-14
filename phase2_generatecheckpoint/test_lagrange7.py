@@ -3,6 +3,7 @@
 
 import sys
 import os
+import tempfile
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -15,6 +16,9 @@ from interp_checkpoint import (
     fill_ghost,
     stitch_y,
     enforce_periodic_physical_duplicates,
+    compare_grid_dat_coords,
+    derive_solver_grid_dat,
+    validate_solver_grid_match,
 )
 
 PASS = 0
@@ -267,6 +271,59 @@ check('enforce_periodic_physical_duplicates syncs j duplicate',
       np.array_equal(dup[BFR+cfg_rank.NY-1, :, :], dup[BFR, :, :]))
 check('enforce_periodic_physical_duplicates syncs i duplicate',
       np.array_equal(dup[:, :, BFR+cfg_rank.NX-1], dup[:, :, BFR]))
+
+
+# ═══════════════════════════════════════════════════════════════
+# Test G: NEW grid must match solver runtime grid
+# ═══════════════════════════════════════════════════════════════
+print('\n=== Test G: Solver grid identity preflight ===')
+
+def write_tiny_grid(path, ni=4, nj=3, delta=0.0):
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write('TITLE = "tiny"\n')
+        f.write('VARIABLES = "x corner"\n')
+        f.write('"y corner"\n')
+        f.write('ZONE T="tiny"\n')
+        f.write(f' I={ni}, J={nj}, K=1,F=POINT\n')
+        f.write('DT=(SINGLE SINGLE )\n')
+        for j in range(nj):
+            for i in range(ni):
+                f.write(f'{float(i):.17g} {float(j) + delta:.17g}\n')
+
+with tempfile.TemporaryDirectory() as td:
+    a = os.path.join(td, 'newgrid.dat')
+    b = os.path.join(td, 'solver_same.dat')
+    c = os.path.join(td, 'solver_shifted.dat')
+    write_tiny_grid(a)
+    write_tiny_grid(b)
+    write_tiny_grid(c, delta=1e-6)
+    cfg_grid = GridConfig(nx=5, ny=4, nz=3, jp=1, gamma=3.7, alpha=0.5,
+                          grid_dat=a)
+
+    same = compare_grid_dat_coords(a, b, cfg_grid)
+    diff = compare_grid_dat_coords(a, c, cfg_grid)
+    check('grid coordinate compare exact match',
+          same['max_abs'] == 0.0 and same['count'] == 12)
+    check('grid coordinate compare detects mismatch',
+          diff['max_abs_y'] > 0.0 and diff['max_abs'] > 0.0)
+
+    info_ok = validate_solver_grid_match(a, b, cfg_grid, tol=0.0, fatal=False)
+    info_bad = validate_solver_grid_match(a, c, cfg_grid, tol=0.0, fatal=False)
+    check('validate_solver_grid_match reports ok',
+          info_ok is not None and info_ok['ok'])
+    check('validate_solver_grid_match reports mismatch',
+          info_bad is not None and not info_bad['ok'])
+
+    vh = os.path.join(td, 'variables.h')
+    with open(vh, 'w', encoding='utf-8') as f:
+        f.write('#define GRID_DAT_DIR "J_Frohlich"\n')
+        f.write('#define GRID_DAT_REF "3.fine grid.dat"\n')
+    derived = derive_solver_grid_dat(vh, cfg_grid)
+    expected = os.path.join(td, 'J_Frohlich',
+                            'adaptive_3.fine grid_I4_J3_g3.70_a0.5.dat')
+    check('derive_solver_grid_dat mirrors main.cu naming',
+          derived == os.path.abspath(expected),
+          f'derived={derived}')
 
 
 # ═══════════════════════════════════════════════════════════════

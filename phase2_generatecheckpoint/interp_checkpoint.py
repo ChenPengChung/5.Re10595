@@ -14,13 +14,16 @@ Modes:
 Pipeline:
   1. Build OLD/NEW grid configs (auto-detect from metadata + variables.h, or interactive)
   2. Cross-validate grid .dat headers against NX/NY/NZ
-  3. Read old checkpoint, compute macros (rho, ux, uy, uz)
-  4. Interpolate macros old -> new according to --interp-mode:
+  3. Cross-check the NEW interpolation grid against the exact solver runtime
+     grid derived from variables.h GRID_DAT_DIR/GRID_DAT_REF (or
+     --solver-grid-dat). Coordinate mismatch is fatal by default.
+  4. Read old checkpoint, compute macros (rho, ux, uy, uz)
+  5. Interpolate macros old -> new according to --interp-mode:
        phys (default): physical-space remap; correct when GAMMA changes.
          --interp-order 6 (default): 7-point Lagrange tensor product O(h^6).
          --interp-order 2:          bilinear O(h^2) (legacy).
        comp:           legacy computational (j, k, i) remap for A/B tests.
-  5. Reconstruct f_q for q = 0..18 according to --fneq-mode:
+  6. Reconstruct f_q for q = 0..18 according to --fneq-mode:
        chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
                                  NEW-grid velocity gradients via Chapman-Enskog.
                                  Wall rows use 6th-order one-sided FD to match
@@ -28,7 +31,7 @@ Pipeline:
        interp (legacy):          f_q = f_eq(new) + scale * interp(f_neq_old)
                                  (linear interp in computational space; loses
                                  gradient information across GAMMA changes).
-  6. Preserve controller state (Force_integral, error_prev, ctrl_initialized,
+  7. Preserve controller state (Force_integral, error_prev, ctrl_initialized,
      gehrke_activated) ONLY from origin metadata to avoid F* step on restart.
      FTT and accu_count are NOT preserved — they are reset to 0 because:
        - regrid is a fresh start on the new mesh (FTT=0 aligns new stats window);
@@ -36,7 +39,7 @@ Pipeline:
          (sum_u_*.bin, ...) that this pipeline does NOT regenerate.
      Origin FTT / accu_count are written into metadata as `interp_origin_*`
      fields for audit only.
-  7. Split into new ranks, write per-rank binary files + metadata.dat
+  8. Split into new ranks, write per-rank binary files + metadata.dat
 
 Output written atomically:
   <output_root>/step_%08d.WRITING/ -> <output_root>/step_%08d/
@@ -75,7 +78,14 @@ import sys
 import math
 import time
 import argparse
+import subprocess
 import numpy as np
+
+PROJECT_ROOT_FOR_IMPORTS = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT_FOR_IMPORTS not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT_FOR_IMPORTS)
+
+from grid_params import read_grid_params_sha256
 
 # ---------------------------------------------------------------
 # Domain constants (must match variables.h)
@@ -170,6 +180,191 @@ def parse_grid_dat_header(path):
             if 'I' in dims and 'J' in dims:
                 break
     return dims
+
+
+def read_grid_dat_coords(path, expected_i=None, expected_j=None):
+    """Read Tecplot POINT coordinates as raw (x, y) floats for identity checks."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(path)
+    dims = parse_grid_dat_header(path)
+    if expected_i is not None and dims.get('I') != expected_i:
+        raise ValueError('{} I={} != expected {}'.format(path, dims.get('I'), expected_i))
+    if expected_j is not None and dims.get('J') != expected_j:
+        raise ValueError('{} J={} != expected {}'.format(path, dims.get('J'), expected_j))
+
+    coords = []
+    in_data = False
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            if not in_data:
+                if line.strip().startswith('DT='):
+                    in_data = True
+                continue
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                try:
+                    coords.append((float(parts[0]), float(parts[1])))
+                except ValueError:
+                    continue
+    coords = np.asarray(coords, dtype=np.float64)
+    if expected_i is not None and expected_j is not None:
+        expected = expected_i * expected_j
+        if coords.shape[0] != expected:
+            raise ValueError('{} has {} coordinate rows, expected {}'.format(
+                path, coords.shape[0], expected))
+    return coords
+
+
+def derive_solver_grid_dat(variables_h, cfg):
+    """Return the exact external grid path main.cu will read, or None."""
+    if not variables_h or not os.path.isfile(variables_h):
+        return None
+    str_defs = parse_string_defines(variables_h)
+    grid_dir = str_defs.get('GRID_DAT_DIR')
+    grid_ref = str_defs.get('GRID_DAT_REF')
+    if not grid_dir or not grid_ref:
+        return None
+    ref_stem = os.path.splitext(grid_ref)[0]
+    fname = 'adaptive_{}_I{}_J{}_g{:.2f}_a{:.1f}.dat'.format(
+        ref_stem, cfg.NY, cfg.NZ, float(cfg.GAMMA), float(cfg.ALPHA))
+    base = os.path.dirname(os.path.abspath(variables_h))
+    if os.path.isabs(grid_dir):
+        return os.path.abspath(os.path.join(grid_dir, fname))
+    return os.path.abspath(os.path.join(base, grid_dir, fname))
+
+
+def compare_grid_dat_coords(path_a, path_b, cfg):
+    """Compare two Tecplot grid files in raw solver input coordinates."""
+    a = read_grid_dat_coords(path_a, expected_i=cfg.NY, expected_j=cfg.NZ)
+    b = read_grid_dat_coords(path_b, expected_i=cfg.NY, expected_j=cfg.NZ)
+    if a.shape != b.shape:
+        raise ValueError('coordinate row count differs: {} vs {}'.format(a.shape, b.shape))
+    diff = np.abs(a - b)
+    idx_flat = int(np.argmax(diff)) if diff.size else 0
+    row, col = np.unravel_index(idx_flat, diff.shape) if diff.size else (0, 0)
+    return {
+        'count': int(a.shape[0]),
+        'max_abs_x': float(diff[:, 0].max()) if diff.size else 0.0,
+        'max_abs_y': float(diff[:, 1].max()) if diff.size else 0.0,
+        'max_abs': float(diff.max()) if diff.size else 0.0,
+        'max_row': int(row),
+        'max_component': 'x' if col == 0 else 'y',
+    }
+
+
+def validate_solver_grid_match(new_grid_dat, solver_grid_dat, cfg, tol=0.0, fatal=True):
+    """Fail fast when the interpolation grid differs from the solver runtime grid."""
+    if not solver_grid_dat:
+        print('  WARNING: solver grid path not available; cannot cross-check NEW grid')
+        return None
+
+    solver_grid_dat = os.path.abspath(os.path.normpath(solver_grid_dat))
+    new_grid_dat = os.path.abspath(os.path.normpath(new_grid_dat))
+
+    try:
+        diff = compare_grid_dat_coords(new_grid_dat, solver_grid_dat, cfg)
+        new_fp = read_grid_params_sha256(new_grid_dat)
+        solver_fp = read_grid_params_sha256(solver_grid_dat)
+        fp_ok = (new_fp == solver_fp) if (new_fp and solver_fp) else True
+        ok = (diff['max_abs'] <= tol) and fp_ok
+    except Exception as exc:
+        msg = ('{}: cannot compare NEW grid against solver grid:\n'
+               '        NEW grid:    {}\n'
+               '        solver grid: {}\n'
+               '        reason: {}').format(
+                   'FATAL' if fatal else 'WARNING', new_grid_dat, solver_grid_dat, exc)
+        if fatal:
+            sys.exit(msg)
+        print('  ' + msg)
+        return {
+            'path': solver_grid_dat,
+            'ok': False,
+            'error': str(exc),
+        }
+
+    status = {
+        'path': solver_grid_dat,
+        'ok': bool(ok),
+        'new_grid_params_sha256': new_fp or '',
+        'solver_grid_params_sha256': solver_fp or '',
+        **diff,
+    }
+    if ok:
+        print('  OK: NEW grid coordinates match solver runtime grid')
+        print('      NEW grid:    {}'.format(new_grid_dat))
+        print('      solver grid: {}'.format(solver_grid_dat))
+        print('      compared {} points, max_abs_diff={:.3e}, tol={:.3e}'.format(
+            diff['count'], diff['max_abs'], tol))
+        if new_fp and solver_fp:
+            print('      grid parameter fingerprint: {}'.format(new_fp))
+        elif not (new_fp or solver_fp):
+            print('      grid parameter fingerprint: not present (legacy .dat headers)')
+        else:
+            print('      WARNING: grid parameter fingerprint missing from one .dat header')
+        return status
+
+    if new_fp and solver_fp and new_fp != solver_fp:
+        fp_msg = (
+            '        parameter hash differs (NEW={} solver={})\n'
+            '        This usually means a grid-generation setting such as '
+            'Poisson iteration count, tolerance, interpolation backend, GAMMA, '
+            'or ALPHA differs between paths.\n'
+        ).format(new_fp, solver_fp)
+    else:
+        fp_msg = ''
+    msg = (
+        '{}: NEW grid does not match solver runtime grid\n'
+        '        NEW grid:    {}\n'
+        '        solver grid: {}\n'
+        '        max_abs_diff={:.6e} (x={:.6e}, y={:.6e}), row={}, component={}, tol={:.3e}\n'
+        '{}'
+        '        Regenerate/sync phase1_generategrid/newgrid*.dat from the exact grid used by main.cu, '
+        'or pass --solver-grid-dat to the correct runtime grid.'
+    ).format(
+        'FATAL' if fatal else 'WARNING', new_grid_dat, solver_grid_dat,
+        diff['max_abs'], diff['max_abs_x'], diff['max_abs_y'],
+        diff['max_row'], diff['max_component'], tol, fp_msg)
+    if fatal:
+        sys.exit(msg)
+    print('  ' + msg)
+    return status
+
+
+def maybe_generate_solver_grid(solver_grid_dat, variables_h, enabled=True):
+    """Create the solver runtime grid before comparing, using the same entry as main.cu."""
+    if not solver_grid_dat:
+        return solver_grid_dat, False
+    solver_grid_dat = os.path.abspath(os.path.normpath(solver_grid_dat))
+    if os.path.isfile(solver_grid_dat):
+        return solver_grid_dat, False
+    if not enabled:
+        return solver_grid_dat, False
+    if not variables_h or not os.path.isfile(variables_h):
+        return solver_grid_dat, False
+
+    str_defs = parse_string_defines(variables_h)
+    grid_dir = str_defs.get('GRID_DAT_DIR')
+    if not grid_dir:
+        return solver_grid_dat, False
+
+    root = os.path.dirname(os.path.abspath(variables_h))
+    grid_dir_abs = grid_dir if os.path.isabs(grid_dir) else os.path.join(root, grid_dir)
+    tool = os.path.join(grid_dir_abs, 'grid_zeta_tool.py')
+    if not os.path.isfile(tool):
+        return solver_grid_dat, False
+
+    cmd = [sys.executable, tool, '--auto']
+    print('  Solver runtime grid not found; generating it before comparison')
+    print('      target: {}'.format(solver_grid_dat))
+    print('      command: {}'.format(' '.join(cmd)))
+    ret = subprocess.run(cmd, cwd=root)
+    if ret.returncode != 0:
+        sys.exit('FATAL: solver grid generation failed with exit code {}'.format(
+            ret.returncode))
+    if not os.path.isfile(solver_grid_dat):
+        sys.exit('FATAL: solver grid generation completed but target is still missing: {}'.format(
+            solver_grid_dat))
+    return solver_grid_dat, True
 
 
 def resolve_existing_file(path, label, base_dirs=()):
@@ -1793,8 +1988,25 @@ def main():
     p.add_argument('--niu', type=float, default=None,
                    help='kinematic viscosity for Chapman-Enskog mode (auto-read from variables.h '
                         'as Uref/Re when omitted)')
+    p.add_argument('--solver-grid-dat', default=None,
+                   help='path to the Tecplot grid .dat that main.cu will read at runtime. '
+                        'When omitted with variables.h available, this is derived from '
+                        'GRID_DAT_DIR/GRID_DAT_REF and NEW NY/NZ/GAMMA/ALPHA. The file is '
+                        'used only for a strict preflight coordinate comparison.')
+    p.add_argument('--no-generate-solver-grid', dest='generate_solver_grid',
+                   action='store_false',
+                   help='do not materialize the derived solver runtime grid before comparison. '
+                        'By default, if the derived solver grid is missing, this script runs '
+                        'the same J_Frohlich/grid_zeta_tool.py --auto entry that main.cu uses.')
+    p.add_argument('--grid-match-tol', type=float, default=0.0,
+                   help='absolute coordinate tolerance for --new-grid-dat vs solver grid '
+                        '(default: 0.0, exact parsed float equality)')
+    p.add_argument('--allow-solver-grid-mismatch', action='store_true',
+                   help='warn instead of aborting when --new-grid-dat differs from the solver '
+                        'runtime grid. Debug only; production should leave this off.')
     p.add_argument('--dry-run', action='store_true',
                    help='validate configuration and output path, then exit before reading/writing checkpoint data')
+    p.set_defaults(generate_solver_grid=True)
 
     g_old = p.add_argument_group('OLD grid (auto-detected from metadata when possible)')
     g_old.add_argument('--old-nx', type=int, default=None)
@@ -1873,7 +2085,7 @@ def main():
             print('[auto] Non-origin checkpoint in restart/checkpoint/ — interpolation not needed')
             sys.exit(0)
 
-        origin = find_origin_checkpoint(phase2_dir)
+        origin = resolve_old_dir(args.old_dir) if args.old_dir else find_origin_checkpoint(phase2_dir)
         if not origin:
             sys.exit('FATAL: --auto: no phase2_generatecheckpoint/step_*_origin* '
                      'or restart/step_*_origin* found')
@@ -1900,7 +2112,7 @@ def main():
                                              base_dirs=resolve_bases)
             new_fname = os.path.basename(new_grid)
             new_old_gamma, _ = infer_old_grid_params(new_grid)
-            if new_old_gamma is not None:
+            if new_old_gamma is not None and not new_fname.startswith('newgrid_'):
                 sys.exit('FATAL: --new-grid-dat appears to be an OLD uniform-gamma grid: {}'.format(
                     new_fname))
             inferred_alpha = infer_new_grid_alpha(new_grid)
@@ -1926,9 +2138,6 @@ def main():
                         continue
                     old_candidates.append((full, f, gamma, alpha))
                 elif f.startswith('newgrid_'):
-                    old_style_gamma, _ = infer_old_grid_params(f)
-                    if old_style_gamma is not None:
-                        continue
                     alpha = infer_new_grid_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
@@ -1999,6 +2208,26 @@ def main():
     print('NEW: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
     print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
+    print()
+
+    solver_grid_dat = None
+    if args.solver_grid_dat:
+        solver_grid_dat = resolve_existing_file(
+            args.solver_grid_dat, '--solver-grid-dat',
+            base_dirs=(project_root(),
+                       os.path.dirname(args.variables_h) if args.variables_h else None))
+    else:
+        solver_grid_dat = derive_solver_grid_dat(args.variables_h, NEW)
+    solver_grid_dat, solver_grid_generated = maybe_generate_solver_grid(
+        solver_grid_dat, args.variables_h, enabled=args.generate_solver_grid)
+    args.solver_grid_dat = solver_grid_dat
+    args.solver_grid_generated = solver_grid_generated
+
+    print('--- Validating NEW grid against solver runtime grid ---')
+    args.solver_grid_match_info = validate_solver_grid_match(
+        NEW.GRID_DAT, solver_grid_dat, NEW,
+        tol=args.grid_match_tol,
+        fatal=not args.allow_solver_grid_mismatch)
     print()
 
     out_dir = resolve_output_dir(args.output_root, args.step, args.new_dir)
@@ -2466,8 +2695,34 @@ def main():
         new_meta['interp_variables_h_mtime'] = str(int(os.path.getmtime(vh_for_prov)))
     if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT):
         new_meta['interp_new_grid_mtime'] = str(int(os.path.getmtime(NEW.GRID_DAT)))
+        new_fp = read_grid_params_sha256(NEW.GRID_DAT)
+        if new_fp:
+            new_meta['interp_new_grid_params_sha256'] = new_fp
     if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT):
         new_meta['interp_old_grid_mtime'] = str(int(os.path.getmtime(OLD.GRID_DAT)))
+        old_fp = read_grid_params_sha256(OLD.GRID_DAT)
+        if old_fp:
+            new_meta['interp_old_grid_params_sha256'] = old_fp
+    solver_match = getattr(args, 'solver_grid_match_info', None)
+    if args.solver_grid_dat:
+        new_meta['interp_solver_grid'] = os.path.abspath(args.solver_grid_dat)
+        if os.path.isfile(args.solver_grid_dat):
+            new_meta['interp_solver_grid_mtime'] = str(int(os.path.getmtime(args.solver_grid_dat)))
+        new_meta['interp_solver_grid_generated'] = (
+            '1' if getattr(args, 'solver_grid_generated', False) else '0')
+    if solver_match:
+        new_meta['interp_solver_grid_match'] = '1' if solver_match.get('ok') else '0'
+        if 'max_abs' in solver_match:
+            new_meta['interp_solver_grid_max_abs_diff'] = '{:.15e}'.format(
+                solver_match['max_abs'])
+            new_meta['interp_solver_grid_max_abs_x'] = '{:.15e}'.format(
+                solver_match['max_abs_x'])
+            new_meta['interp_solver_grid_max_abs_y'] = '{:.15e}'.format(
+                solver_match['max_abs_y'])
+        if solver_match.get('new_grid_params_sha256'):
+            new_meta['interp_new_grid_params_sha256'] = solver_match['new_grid_params_sha256']
+        if solver_match.get('solver_grid_params_sha256'):
+            new_meta['interp_solver_grid_params_sha256'] = solver_match['solver_grid_params_sha256']
     if os.path.isfile(origin_meta_path):
         new_meta['interp_origin_metadata_mtime'] = str(int(os.path.getmtime(origin_meta_path)))
     write_metadata(os.path.join(writing_dir, 'metadata.dat'), new_meta)
@@ -2492,6 +2747,17 @@ def main():
         'variables_h_mtime': str(int(os.path.getmtime(vh_for_prov))) if vh_for_prov and os.path.isfile(vh_for_prov) else '',
         'new_grid_mtime': str(int(os.path.getmtime(NEW.GRID_DAT))) if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT) else '',
         'old_grid_mtime': str(int(os.path.getmtime(OLD.GRID_DAT))) if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT) else '',
+        'new_grid_params_sha256': (read_grid_params_sha256(NEW.GRID_DAT) or '') if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT) else '',
+        'old_grid_params_sha256': (read_grid_params_sha256(OLD.GRID_DAT) or '') if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT) else '',
+        'solver_grid': os.path.abspath(args.solver_grid_dat) if args.solver_grid_dat else '',
+        'solver_grid_mtime': str(int(os.path.getmtime(args.solver_grid_dat))) if args.solver_grid_dat and os.path.isfile(args.solver_grid_dat) else '',
+        'solver_grid_params_sha256': (read_grid_params_sha256(args.solver_grid_dat) or '') if args.solver_grid_dat and os.path.isfile(args.solver_grid_dat) else '',
+        'solver_grid_generated': ('1' if getattr(args, 'solver_grid_generated', False) else
+                                  ('0' if args.solver_grid_dat else '')),
+        'solver_grid_match': ('1' if solver_match and solver_match.get('ok') else
+                              ('0' if solver_match else '')),
+        'solver_grid_max_abs_diff': ('{:.15e}'.format(solver_match['max_abs'])
+                                     if solver_match and 'max_abs' in solver_match else ''),
         'created': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
     prov_tmp = prov_path + '.WRITING'

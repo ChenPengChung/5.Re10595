@@ -12,6 +12,7 @@
 #   ./run.sh --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat>
 #                             從唯一 restart/step_*_origin* 轉換到新 grid checkpoint
 #   ./run.sh --force-regrid   搭配 --regrid-from-origin, 先清掉既有 checkpoint 再重建
+#   ./run.sh --preflight-only  只跑 grid/regrid/provenance 前置檢查, 不編譯、不投遞
 #   ./run.sh --h200           強制使用 H200 變體 (x86_64, sm_90, dev partition)
 #   ./run.sh --gb200          強制使用 GB200 變體 (aarch64, sm_100)
 #   ./run.sh --no-queue-check 關閉 partition 擁塞檢查 (CI/自動化用)
@@ -62,10 +63,12 @@ MODE_NO_QCHECK=0   # 1 = 跳過 partition 擁塞查詢 (CI/自動化)
 MODE_CLUSTER=""    # "" = auto-detect; "H200" or "GB200" = user override
 MODE_REGRID=0
 MODE_FORCE_REGRID=0
+MODE_PREFLIGHT_ONLY=0
 REGRID_OLD_GRID=""
 REGRID_NEW_GRID=""
 REGRID_OLD_GAMMA=""
 REGRID_OLD_ALPHA=""
+REGRID_ORIGIN_DIR=""
 
 while [ $# -gt 0 ]; do
     arg="$1"
@@ -78,6 +81,13 @@ while [ $# -gt 0 ]; do
         --gb200|--GB200)   MODE_CLUSTER="GB200" ;;
         --regrid-from-origin) MODE_REGRID=1 ;;
         --force-regrid)    MODE_FORCE_REGRID=1 ;;
+        --preflight-only)  MODE_PREFLIGHT_ONLY=1 ;;
+        --origin-dir)
+            shift
+            if [ $# -eq 0 ]; then echo "[run.sh] Missing value after $arg"; exit 2; fi
+            REGRID_ORIGIN_DIR="$1" ;;
+        --origin-dir=*)
+            REGRID_ORIGIN_DIR="${arg#*=}" ;;
         --old-grid|--old-grid-dat)
             shift
             if [ $# -eq 0 ]; then
@@ -648,6 +658,7 @@ if [ "$MODE_COLD" -eq 0 ]; then
     _NEED_GRID=0
     [ "$MODE_REGRID" -eq 1 ] && _NEED_GRID=1
     [ "$HAS_CKPT" -eq 1 ] && _NEED_GRID=1
+    [ "$MODE_PREFLIGHT_ONLY" -eq 1 ] && _NEED_GRID=1
     if [ "$_NEED_GRID" -eq 1 ]; then
         # GRID PIPELINE REGULATION:
         #   生產用網格工具固定為 J_Frohlich/grid_zeta_tool.py
@@ -671,7 +682,7 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
     REGRID_NEW_GRID="$(_project_abs_path "$REGRID_NEW_GRID")"
     _REGRID_CLEAN_EXISTING=0
 
-    if [ "$HAS_CKPT" -eq 1 ]; then
+    if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_PREFLIGHT_ONLY" -eq 0 ]; then
         if [ "$MODE_FORCE_REGRID" -eq 1 ]; then
             _REGRID_CLEAN_EXISTING=1
         else
@@ -683,11 +694,20 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
 
     _ORIGIN_DIR=""
     _ORIGIN_COUNT=0
-    for _d in restart/step_*_origin*/; do
-        [ -s "${_d}metadata.dat" ] || continue
-        _ORIGIN_DIR="${_d%/}"
-        _ORIGIN_COUNT=$((_ORIGIN_COUNT + 1))
-    done
+    if [ -n "$REGRID_ORIGIN_DIR" ]; then
+        _ORIGIN_DIR="$(_project_abs_path "$REGRID_ORIGIN_DIR")"
+        [ -s "$_ORIGIN_DIR/metadata.dat" ] || {
+            echo "[FATAL] --origin-dir 缺 metadata.dat: $_ORIGIN_DIR"
+            exit 1
+        }
+        _ORIGIN_COUNT=1
+    else
+        for _d in restart/step_*_origin*/ phase2_generatecheckpoint/step_*_origin*/ phase2_generatecheckpoint/oldcheckpoint_*/; do
+            [ -s "${_d}metadata.dat" ] || continue
+            _ORIGIN_DIR="${_d%/}"
+            _ORIGIN_COUNT=$((_ORIGIN_COUNT + 1))
+        done
+    fi
     if [ "$_ORIGIN_COUNT" -eq 0 ]; then
         echo "[FATAL] --regrid-from-origin 需要唯一 restart/step_*_origin*/metadata.dat"
         exit 1
@@ -750,12 +770,21 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
     echo "[preflight-B] OLD grid: $REGRID_OLD_GRID"
     echo "[preflight-B] NEW grid: $REGRID_NEW_GRID"
     echo "[preflight-B] 執行 checkpoint interpolation (old grid → new grid)..."
-    _INTERP_CMD=(python3 restart_tools/interp_checkpoint.py --auto --step 1
+    _INTERP_CMD=(python3 phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
+                 --old-dir "$_ORIGIN_DIR"
+                 --variables-h variables.h
                  --old-grid-dat "$REGRID_OLD_GRID"
                  --new-grid-dat "$REGRID_NEW_GRID")
     [ -n "$REGRID_OLD_GAMMA" ] && _INTERP_CMD+=(--old-gamma "$REGRID_OLD_GAMMA")
     [ -n "$REGRID_OLD_ALPHA" ] && _INTERP_CMD+=(--old-alpha "$REGRID_OLD_ALPHA")
+    [ "$MODE_PREFLIGHT_ONLY" -eq 1 ] && _INTERP_CMD+=(--dry-run)
     if "${_INTERP_CMD[@]}"; then
+        if [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then
+            echo "[preflight-B] dry-run OK: regrid inputs and solver-grid identity verified"
+            HAS_CKPT=0
+            HAS_STATE=0
+            _CKPT_OK=1
+        else
         _CKPT_DIR="restart/checkpoint/step_00000001"
         _CKPT_OK=1
         [ -s "$_CKPT_DIR/metadata.dat" ] || _CKPT_OK=0
@@ -773,6 +802,7 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
             rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
             rm -f restart/grid_provenance restart/grid_provenance.WRITING
             exit 1
+        fi
         fi
     else
         echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
@@ -872,6 +902,11 @@ if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_COLD" -eq 0 ] && [ -e restart/grid_provenan
         echo "          ./run --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat>"
         exit 1
     fi
+fi
+
+if [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then
+    echo "[preflight-only] OK: 前置 grid/regrid/provenance 檢查完成, 不編譯、不投遞."
+    exit 0
 fi
 
 # ═════════════════════════════════════════════════════════════════════════
