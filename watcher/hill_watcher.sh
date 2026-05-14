@@ -2,6 +2,9 @@
 # hill_watcher.sh — Periodic Hill Re5600 watcher loop
 set -u
 
+# If launched from run.sh/build_and_submit.sh, do not hold run.sh's flock fd.
+{ exec 200>&-; } 2>/dev/null || true
+
 _SELF="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"

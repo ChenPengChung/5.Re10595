@@ -23,6 +23,10 @@
 
 set -uo pipefail
 
+# If launched from run.sh/build_and_submit.sh, do not let the background
+# dispatcher inherit run.sh's flock fd and keep .run.lock busy.
+{ exec 200>&-; } 2>/dev/null || true
+
 # ── [方案 A path discipline] ──
 _SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
 CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"

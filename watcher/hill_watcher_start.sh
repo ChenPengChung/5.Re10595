@@ -3,6 +3,10 @@
 
 set -euo pipefail
 
+# If launched from run.sh/build_and_submit.sh, do not let watcher keep
+# .run.lock busy after the submitter exits.
+{ exec 200>&-; } 2>/dev/null || true
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LIVE_DIR="$PROJECT_DIR/live"

@@ -326,27 +326,47 @@ else
 fi
 
 # ── Post-submit: dispatcher + watcher (冪等, 已在跑就跳過) ──
-_PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+_PROJECT_ROOT="$PROJECT_ROOT"
 
-# Dispatcher: 跨 partition 自動續投
-if [ ! -f "$_PROJECT_ROOT/restart/DISPATCHER_ACTIVE" ]; then
-    if [ -f "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" ]; then
-        nohup bash "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" > /dev/null 2>&1 &
-        disown
-        echo "[post-submit] Dispatcher started"
+_post_submit_pid_alive() {
+    local _pid_file="$1" _pid
+    [ -f "$_pid_file" ] || return 1
+    _pid="$(tr -d '[:space:]' < "$_pid_file" 2>/dev/null || true)"
+    [ -n "$_pid" ] && kill -0 "$_pid" 2>/dev/null
+}
+
+_post_submit_close_run_lock() {
+    { exec 200>&-; } 2>/dev/null || true
+}
+
+# Dispatcher: 跨 partition 自動續投; sentinel 在 project root, 不是 restart/.
+if _post_submit_pid_alive "$_PROJECT_ROOT/DISPATCHER_ACTIVE"; then
+    echo "[post-submit] Dispatcher already running (PID=$(tr -d '[:space:]' < "$_PROJECT_ROOT/DISPATCHER_ACTIVE")), skipped"
+elif [ -f "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" ]; then
+    if [ -f "$_PROJECT_ROOT/DISPATCHER_ACTIVE" ]; then
+        echo "[post-submit] Dispatcher sentinel is stale; launcher will clean it"
+    fi
+    if ( _post_submit_close_run_lock; bash "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" ); then
+        echo "[post-submit] Dispatcher ensured"
+    else
+        rc=$?
+        echo "[post-submit] Dispatcher start skipped/failed (rc=$rc)"
     fi
 else
-    echo "[post-submit] Dispatcher already active, skipped"
+    echo "[post-submit] Dispatcher launcher missing, skipped"
 fi
 
-# Hill watcher: 收斂/benchmark 監控
-if [ -f "$_PROJECT_ROOT/watcher/hill_watcher.sh" ]; then
-    if [ -f "$_PROJECT_ROOT/live/watcher.pid" ] && kill -0 "$(cat "$_PROJECT_ROOT/live/watcher.pid" 2>/dev/null)" 2>/dev/null; then
-        echo "[post-submit] Hill watcher already running (PID=$(cat "$_PROJECT_ROOT/live/watcher.pid")), skipped"
+# Hill watcher: 收斂/benchmark 監控; 用 launcher 啟動, 避免重複與 pid file 競態.
+if _post_submit_pid_alive "$_PROJECT_ROOT/live/watcher.pid"; then
+    echo "[post-submit] Hill watcher already running (PID=$(tr -d '[:space:]' < "$_PROJECT_ROOT/live/watcher.pid")), skipped"
+elif [ -f "$_PROJECT_ROOT/watcher/hill_watcher_start.sh" ]; then
+    mkdir -p "$_PROJECT_ROOT/live"
+    if ( _post_submit_close_run_lock; bash "$_PROJECT_ROOT/watcher/hill_watcher_start.sh" ); then
+        echo "[post-submit] Hill watcher ensured"
     else
-        mkdir -p "$_PROJECT_ROOT/live"
-        nohup bash "$_PROJECT_ROOT/watcher/hill_watcher.sh" > /dev/null 2>&1 &
-        disown
-        echo "[post-submit] Hill watcher started (PID=$!)"
+        rc=$?
+        echo "[post-submit] Hill watcher start skipped/failed (rc=$rc)"
     fi
+else
+    echo "[post-submit] Hill watcher launcher missing, skipped"
 fi
