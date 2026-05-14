@@ -112,7 +112,7 @@
 #define     GAMMA               3.5
  //此版本直接透過指定一個拉伸參數，來反求 minSIze 
 #define     ALPHA               0.5
-#define     CFL                 0.2
+#define     CFL                 0.5
 #define     minSize             (                                              \
     (LZ-1.0) * 0.5 * (1.0 + tanh(GAMMA*(1.0/(double)(NZ-1) - ALPHA))              \
                             / tanh(GAMMA*ALPHA))                                   \
