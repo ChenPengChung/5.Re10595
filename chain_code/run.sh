@@ -824,12 +824,13 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
         done
     fi
     if [ "$_ORIGIN_COUNT" -eq 0 ]; then
-        echo "[FATAL] --regrid-from-origin 需要唯一 restart/step_*_origin*/metadata.dat"
+        echo "[FATAL] --regrid-from-origin 需要唯一 origin checkpoint metadata.dat"
+        echo "        accepted patterns: restart/step_*_origin*/, phase2_generatecheckpoint/step_*_origin*/, phase2_generatecheckpoint/oldcheckpoint_*/"
         exit 1
     fi
     if [ "$_ORIGIN_COUNT" -gt 1 ]; then
         echo "[FATAL] 多個 origin checkpoint 存在 ($_ORIGIN_COUNT 個), 無法自動選擇"
-        ls -1d restart/step_*_origin*/ 2>/dev/null
+        ls -1d restart/step_*_origin*/ phase2_generatecheckpoint/step_*_origin*/ phase2_generatecheckpoint/oldcheckpoint_*/ 2>/dev/null
         echo "        請移除不需要的 origin, 只保留一個"
         exit 1
     fi
@@ -947,6 +948,7 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
         _AUTO_READY=0
     elif [ "$_AUTO_ORIGIN_COUNT" -gt 1 ]; then
         echo "[preflight-B-auto] 多個 origin checkpoint ($_AUTO_ORIGIN_COUNT 個), 跳過自動插值"
+        echo "        accepted patterns: restart/step_*_origin*/, phase2_generatecheckpoint/step_*_origin*/, phase2_generatecheckpoint/oldcheckpoint_*/"
         _AUTO_READY=0
     fi
     if [ -z "$_AUTO_VH_NY" ] || [ -z "$_AUTO_VH_NZ" ]; then
