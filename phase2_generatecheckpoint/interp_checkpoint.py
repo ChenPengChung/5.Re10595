@@ -47,7 +47,7 @@ Output written atomically:
 
 Usage:
   # Project auto mode:
-  #   origin checkpoint: phase2_generatecheckpoint/step_*_origin*
+  #   origin checkpoint: phase2_generatecheckpoint/step_*_origin* or oldcheckpoint_*
   #   OLD grid:          phase1_generategrid/oldgrid_*.dat
   #   NEW grid:          phase1_generategrid/newgrid_*.dat
   python3 phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
@@ -67,7 +67,7 @@ Expected folder structure:
   +-- phase1_generategrid/
   |   +-- oldgrid_*_I{NY}_J{NZ}_g{G}_a{A}.dat    (OLD uniform gamma grid)
   |   +-- newgrid_*_I{NY}_J{NZ}_a{A}.dat         (NEW variable gamma grid)
-  +-- phase2_generatecheckpoint/step_*_origin*/  (source checkpoint)
+  +-- phase2_generatecheckpoint/step_*_origin*/ or oldcheckpoint_*/  (source checkpoint)
       +-- metadata.dat
       +-- f00_0.bin ... f18_{jp-1}.bin
       +-- rho_0.bin ... rho_{jp-1}.bin
@@ -595,15 +595,29 @@ def origin_search_dirs(primary_dir=None):
     ])
 
 
+def _is_origin_dir_name(name):
+    """Match origin checkpoint directory names.
+
+    Accepted patterns:
+      step_*_origin*            (canonical: step_24913001_origin_Re5600)
+      oldcheckpoint_*           (manual copy: oldcheckpoint_Re5600_step_24913001)
+    """
+    if name.startswith('step_') and '_origin' in name:
+        return True
+    if name.startswith('oldcheckpoint_'):
+        return True
+    return False
+
+
 def find_origin_checkpoint(search_dir=None):
-    """Find step_*_origin* directories with valid metadata across phase layout.
+    """Find origin checkpoint directories with valid metadata across phase layout.
     FATAL if multiple origins exist (ambiguous)."""
     candidates = []
     for parent in origin_search_dirs(search_dir):
         if not os.path.isdir(parent):
             continue
         for name in sorted(os.listdir(parent)):
-            if name.startswith('step_') and '_origin' in name:
+            if _is_origin_dir_name(name):
                 path = os.path.join(parent, name)
                 if os.path.isfile(os.path.join(path, 'metadata.dat')):
                     candidates.append(os.path.abspath(path))
@@ -620,8 +634,8 @@ def resolve_old_dir(old_dir):
         if origin:
             print('  Auto-detected origin checkpoint: {}'.format(origin))
             return origin
-        sys.exit('FATAL: --old-dir not specified and no phase2_generatecheckpoint/step_*_origin* '
-                 'or restart/step_*_origin* found')
+        sys.exit('FATAL: --old-dir not specified and no origin checkpoint found '
+                 '(searched step_*_origin* and oldcheckpoint_* in phase2/restart)')
 
     old_dir = os.path.normpath(old_dir)
     meta_path = os.path.join(old_dir, 'metadata.dat')
@@ -1579,25 +1593,33 @@ def compute_Ub(uy, z_2d, cfg):
     return float(np.sum(v_cell * dA) / np.sum(dA))
 
 
-def apply_Ub_correction(uy_old, uy_new, z2d_old, z2d_new, cfg_old, cfg_new):
+def apply_Ub_correction(Ub_old, uy_new, z2d_new, cfg_new):
     """Scale streamwise velocity so Ub is conserved across interpolation.
 
-    Returns (scale_factor, Ub_old, Ub_new_before, Ub_new_after).
+    Modifies uy_new in-place, re-enforces periodic BCs and ghost cells.
+    Returns (scale_factor, Ub_new_before, Ub_new_after).
     """
-    Ub_old = compute_Ub(uy_old, z2d_old, cfg_old)
     Ub_new_before = compute_Ub(uy_new, z2d_new, cfg_new)
+    print('      Ub correction: OLD Ub = {:.15e}'.format(Ub_old))
+    print('      Ub correction: NEW Ub (before) = {:.15e}'.format(Ub_new_before))
 
     if abs(Ub_new_before) < 1e-30:
-        return 1.0, Ub_old, Ub_new_before, Ub_new_before
+        print('      Ub correction: SKIP (Ub_new ≈ 0)')
+        return 1.0, Ub_new_before, Ub_new_before
 
     scale = Ub_old / Ub_new_before
     interior = (slice(BFR, BFR + cfg_new.NY),
                 slice(BFR, BFR + cfg_new.NZ),
                 slice(BFR, BFR + cfg_new.NX))
     uy_new[interior] *= scale
+    enforce_periodic_physical_duplicates(uy_new, cfg_new)
+    fill_ghost(uy_new, cfg_new)
 
     Ub_new_after = compute_Ub(uy_new, z2d_new, cfg_new)
-    return scale, Ub_old, Ub_new_before, Ub_new_after
+    print('      Ub correction: scale = {:.15e}'.format(scale))
+    print('      Ub correction: NEW Ub (after)  = {:.15e}'.format(Ub_new_after))
+    print('      Ub correction: residual = {:.3e}'.format(abs(Ub_new_after - Ub_old)))
+    return scale, Ub_new_before, Ub_new_after
 
 
 # ---------------------------------------------------------------
@@ -2145,7 +2167,7 @@ def main():
         has_normal = False
         if os.path.isdir(ckpt_dir):
             for name in sorted(os.listdir(ckpt_dir)):
-                if name.startswith('step_') and '_origin' not in name:
+                if name.startswith('step_') and '_origin' not in name and not _is_origin_dir_name(name):
                     if os.path.isfile(os.path.join(ckpt_dir, name, 'metadata.dat')):
                         has_normal = True
                         break
@@ -2155,8 +2177,8 @@ def main():
 
         origin = resolve_old_dir(args.old_dir) if args.old_dir else find_origin_checkpoint(phase2_dir)
         if not origin:
-            sys.exit('FATAL: --auto: no phase2_generatecheckpoint/step_*_origin* '
-                     'or restart/step_*_origin* found')
+            sys.exit('FATAL: --auto: no origin checkpoint found '
+                     '(searched step_*_origin* and oldcheckpoint_* in phase2/restart)')
         print('[auto] Origin checkpoint: {}'.format(origin))
         print('[auto] Grid directory: {}'.format(os.path.abspath(grid_dir)))
 
@@ -2473,26 +2495,8 @@ def main():
     fill_ghost(uz_new, NEW)
 
     # Ub conservation correction: scale streamwise velocity to match OLD Ub
-    Ub_new_before = compute_Ub(uy_new, z2d_new, NEW)
-    print('      Ub correction: OLD Ub = {:.15e}'.format(Ub_old))
-    print('      Ub correction: NEW Ub (before) = {:.15e}'.format(Ub_new_before))
-    if abs(Ub_new_before) > 1e-30:
-        ub_scale = Ub_old / Ub_new_before
-        uy_new_int = (slice(BFR, BFR + NEW.NY),
-                      slice(BFR, BFR + NEW.NZ),
-                      slice(BFR, BFR + NEW.NX))
-        uy_new[uy_new_int] *= ub_scale
-        for arr in (uy_new,):
-            enforce_periodic_physical_duplicates(arr, NEW)
-        fill_ghost(uy_new, NEW)
-        Ub_new_after = compute_Ub(uy_new, z2d_new, NEW)
-        print('      Ub correction: scale = {:.15e}'.format(ub_scale))
-        print('      Ub correction: NEW Ub (after)  = {:.15e}'.format(Ub_new_after))
-        print('      Ub correction: residual = {:.3e}'.format(abs(Ub_new_after - Ub_old)))
-    else:
-        ub_scale = 1.0
-        Ub_new_after = Ub_new_before
-        print('      Ub correction: SKIP (Ub_new ≈ 0)')
+    ub_scale, Ub_new_before, Ub_new_after = apply_Ub_correction(
+        Ub_old, uy_new, z2d_new, NEW)
 
     new_int = (slice(BFR, BFR+NEW.NY), slice(BFR, BFR+NEW.NZ), slice(BFR, BFR+NEW.NX))
     print('      NEW interior rho = [{:.6f}, {:.6f}], mean = {:.6f}'.format(
