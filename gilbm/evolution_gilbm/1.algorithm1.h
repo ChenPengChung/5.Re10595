@@ -58,38 +58,64 @@ __device__ __forceinline__ void gilbm_rk2_displacement(
     delta_zeta_out = dt_val * e_tzeta_half;
 }
 
-// ── Ghost zone 二次外推 (居中 stencil bk_min=0) ──
-// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部三點二次 Lagrange 外推替代
-// 二次外推公式 (距離 d = p0 - g):
-//   c0 = (d+1)(d+2)/2,  c1 = -d(d+2),  c2 = d(d+1)/2
-//   ghost[g] = c0 * f[p0] + c1 * f[p1] + c2 * f[p2]
-// 直接從 3 個內部點外推，不使用級聯（避免誤差累積）
+// ── Ghost zone Lagrange 外推 (GHOST_EXTRAP_ORDER 切換) ──
+// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部點 Lagrange 外推替代
+// 直接從內部點外推，不使用級聯（避免誤差累積）
+//   GHOST_EXTRAP_ORDER=2 (quadratic, 3-point): c0=(d+1)(d+2)/2, ...
+//   GHOST_EXTRAP_ORDER=3 (cubic, 4-point):     c0=(d+1)(d+2)(d+3)/6, ...
+//     k=3 最壞情況有 4 個內部點 → cubic 全域可用，無需降階
 __device__ __forceinline__ void gilbm_ghost_zone_extrapolate(double interp2[7], int bk_val)
 {
     const int n_ghost_bot = (3 - bk_val > 0) ? (3 - bk_val) : 0;
     const int n_ghost_top = (bk_val + 6 > (int)NZ6 - 4) ? (bk_val + 6 - ((int)NZ6 - 4)) : 0;
     if (n_ghost_bot > 0) {
-        const int p0 = n_ghost_bot;      // 最近內部點
-        const int p1 = n_ghost_bot + 1;  // 第二內部點
-        const int p2 = n_ghost_bot + 2;  // 第三內部點
+        const int p0 = n_ghost_bot;
+        const int p1 = n_ghost_bot + 1;
+        const int p2 = n_ghost_bot + 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int p3 = n_ghost_bot + 3;
+#endif
         for (int g = n_ghost_bot - 1; g >= 0; g--) {
             const double d = (double)(p0 - g);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[p0] + c1 * interp2[p1]
+                       + c2 * interp2[p2] + c3 * interp2[p3];
+#else
             const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
             const double c1 = -d * (d + 2.0);
             const double c2 = d * (d + 1.0) * 0.5;
             interp2[g] = c0 * interp2[p0] + c1 * interp2[p1] + c2 * interp2[p2];
+#endif
         }
     }
     if (n_ghost_top > 0) {
-        const int pN  = 6 - n_ghost_top;      // 最近內部點
-        const int pN1 = 6 - n_ghost_top - 1;  // 第二內部點
-        const int pN2 = 6 - n_ghost_top - 2;  // 第三內部點
+        const int pN  = 6 - n_ghost_top;
+        const int pN1 = 6 - n_ghost_top - 1;
+        const int pN2 = 6 - n_ghost_top - 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int pN3 = 6 - n_ghost_top - 3;
+#endif
         for (int g = pN + 1; g <= 6; g++) {
             const double d = (double)(g - pN);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1]
+                       + c2 * interp2[pN2] + c3 * interp2[pN3];
+#else
             const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
             const double c1 = -d * (d + 2.0);
             const double c2 = d * (d + 1.0) * 0.5;
             interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1] + c2 * interp2[pN2];
+#endif
         }
     }
 }
@@ -171,7 +197,7 @@ __device__ void algorithm1_step1_GTS(
     double zeta_y_val = zeta_y_d[idx_jk];
     double zeta_z_val = zeta_z_d[idx_jk];
 
-    // ── Wall BC: 6th-order one-sided FD for velocity gradient ──
+    // ── Wall BC: one-sided FD for velocity gradient (WALL_GRAD_ORDER 切換) ──
     // ★ 方案B: 改讀 u_out/v_out/w_out/rho_out_arr (前一步值)
     //   取代 compute_macroscopic_at(f_new_ptrs, ...) → 省 4×19=76 reads → 4×4=16 reads
     //   時間精度不變: 原代碼也是讀前一步的 f_new (CUDA race → 實際讀 stale data)
@@ -179,38 +205,66 @@ __device__ void algorithm1_step1_GTS(
     if (is_bottom) {
         int idx3 = j * nface + 4 * NX6 + i;
         int idx4 = j * nface + 5 * NX6 + i;
+        double u3 = u_out[idx3], u4 = u_out[idx4];
+        double v3 = v_out[idx3], v4 = v_out[idx4];
+        double w3 = w_out[idx3], w4 = w_out[idx4];
+#if WALL_GRAD_ORDER >= 6
         int idx5 = j * nface + 6 * NX6 + i;
         int idx6 = j * nface + 7 * NX6 + i;
         int idx7 = j * nface + 8 * NX6 + i;
         int idx8 = j * nface + 9 * NX6 + i;
-        double u3 = u_out[idx3], u4 = u_out[idx4], u5 = u_out[idx5], u6 = u_out[idx6];
-        double u7 = u_out[idx7], u8 = u_out[idx8];
-        double v3 = v_out[idx3], v4 = v_out[idx4], v5 = v_out[idx5], v6 = v_out[idx6];
-        double v7 = v_out[idx7], v8 = v_out[idx8];
-        double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
-        double w7 = w_out[idx7], w8 = w_out[idx8];
-        // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
+        double u5 = u_out[idx5], u6 = u_out[idx6], u7 = u_out[idx7], u8 = u_out[idx8];
+        double v5 = v_out[idx5], v6 = v_out[idx6], v7 = v_out[idx7], v8 = v_out[idx8];
+        double w5 = w_out[idx5], w6 = w_out[idx6], w7 = w_out[idx7], w8 = w_out[idx8];
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idx5 = j * nface + 6 * NX6 + i;
+        int idx6 = j * nface + 7 * NX6 + i;
+        double u5 = u_out[idx5], u6 = u_out[idx6];
+        double v5 = v_out[idx5], v6 = v_out[idx6];
+        double w5 = w_out[idx5], w6 = w_out[idx6];
+        du_dk = (48.0*u3 - 36.0*u4 + 16.0*u5 - 3.0*u6) / 12.0;
+        dv_dk = (48.0*v3 - 36.0*v4 + 16.0*v5 - 3.0*v6) / 12.0;
+        dw_dk = (48.0*w3 - 36.0*w4 + 16.0*w5 - 3.0*w6) / 12.0;
+#else
+        du_dk = (4.0*u3 - u4) / 2.0;
+        dv_dk = (4.0*v3 - v4) / 2.0;
+        dw_dk = (4.0*w3 - w4) / 2.0;
+#endif
         rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
         int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
+        double um1 = u_out[idxm1], um2 = u_out[idxm2];
+        double vm1 = v_out[idxm1], vm2 = v_out[idxm2];
+        double wm1 = w_out[idxm1], wm2 = w_out[idxm2];
+#if WALL_GRAD_ORDER >= 6
         int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
         int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
         int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
         int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
-        double um1 = u_out[idxm1], um2 = u_out[idxm2], um3 = u_out[idxm3], um4 = u_out[idxm4];
-        double um5 = u_out[idxm5], um6 = u_out[idxm6];
-        double vm1 = v_out[idxm1], vm2 = v_out[idxm2], vm3 = v_out[idxm3], vm4 = v_out[idxm4];
-        double vm5 = v_out[idxm5], vm6 = v_out[idxm6];
-        double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
-        double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
-        // 6th-order one-sided FD (reversed sign for top wall)
+        double um3 = u_out[idxm3], um4 = u_out[idxm4], um5 = u_out[idxm5], um6 = u_out[idxm6];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4], vm5 = v_out[idxm5], vm6 = v_out[idxm6];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4], wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
+        int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
+        double um3 = u_out[idxm3], um4 = u_out[idxm4];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4];
+        du_dk = -(48.0*um1 - 36.0*um2 + 16.0*um3 - 3.0*um4) / 12.0;
+        dv_dk = -(48.0*vm1 - 36.0*vm2 + 16.0*vm3 - 3.0*vm4) / 12.0;
+        dw_dk = -(48.0*wm1 - 36.0*wm2 + 16.0*wm3 - 3.0*wm4) / 12.0;
+#else
+        du_dk = -(4.0*um1 - um2) / 2.0;
+        dv_dk = -(4.0*vm1 - vm2) / 2.0;
+        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+#endif
         rho_wall = rho_out_arr[idxm1];
     }
 
@@ -487,38 +541,66 @@ __device__ void algorithm1_step1_GTS_smem(
     if (is_bottom) {
         int idx3 = j * nface + 4 * NX6 + i;
         int idx4 = j * nface + 5 * NX6 + i;
+        double u3 = u_out[idx3], u4 = u_out[idx4];
+        double v3 = v_out[idx3], v4 = v_out[idx4];
+        double w3 = w_out[idx3], w4 = w_out[idx4];
+#if WALL_GRAD_ORDER >= 6
         int idx5 = j * nface + 6 * NX6 + i;
         int idx6 = j * nface + 7 * NX6 + i;
         int idx7 = j * nface + 8 * NX6 + i;
         int idx8 = j * nface + 9 * NX6 + i;
-        double u3 = u_out[idx3], u4 = u_out[idx4], u5 = u_out[idx5], u6 = u_out[idx6];
-        double u7 = u_out[idx7], u8 = u_out[idx8];
-        double v3 = v_out[idx3], v4 = v_out[idx4], v5 = v_out[idx5], v6 = v_out[idx6];
-        double v7 = v_out[idx7], v8 = v_out[idx8];
-        double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
-        double w7 = w_out[idx7], w8 = w_out[idx8];
-        // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
+        double u5 = u_out[idx5], u6 = u_out[idx6], u7 = u_out[idx7], u8 = u_out[idx8];
+        double v5 = v_out[idx5], v6 = v_out[idx6], v7 = v_out[idx7], v8 = v_out[idx8];
+        double w5 = w_out[idx5], w6 = w_out[idx6], w7 = w_out[idx7], w8 = w_out[idx8];
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idx5 = j * nface + 6 * NX6 + i;
+        int idx6 = j * nface + 7 * NX6 + i;
+        double u5 = u_out[idx5], u6 = u_out[idx6];
+        double v5 = v_out[idx5], v6 = v_out[idx6];
+        double w5 = w_out[idx5], w6 = w_out[idx6];
+        du_dk = (48.0*u3 - 36.0*u4 + 16.0*u5 - 3.0*u6) / 12.0;
+        dv_dk = (48.0*v3 - 36.0*v4 + 16.0*v5 - 3.0*v6) / 12.0;
+        dw_dk = (48.0*w3 - 36.0*w4 + 16.0*w5 - 3.0*w6) / 12.0;
+#else
+        du_dk = (4.0*u3 - u4) / 2.0;
+        dv_dk = (4.0*v3 - v4) / 2.0;
+        dw_dk = (4.0*w3 - w4) / 2.0;
+#endif
         rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
         int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
+        double um1 = u_out[idxm1], um2 = u_out[idxm2];
+        double vm1 = v_out[idxm1], vm2 = v_out[idxm2];
+        double wm1 = w_out[idxm1], wm2 = w_out[idxm2];
+#if WALL_GRAD_ORDER >= 6
         int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
         int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
         int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
         int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
-        double um1 = u_out[idxm1], um2 = u_out[idxm2], um3 = u_out[idxm3], um4 = u_out[idxm4];
-        double um5 = u_out[idxm5], um6 = u_out[idxm6];
-        double vm1 = v_out[idxm1], vm2 = v_out[idxm2], vm3 = v_out[idxm3], vm4 = v_out[idxm4];
-        double vm5 = v_out[idxm5], vm6 = v_out[idxm6];
-        double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
-        double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
-        // 6th-order one-sided FD (reversed sign for top wall)
+        double um3 = u_out[idxm3], um4 = u_out[idxm4], um5 = u_out[idxm5], um6 = u_out[idxm6];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4], vm5 = v_out[idxm5], vm6 = v_out[idxm6];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4], wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
+        int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
+        double um3 = u_out[idxm3], um4 = u_out[idxm4];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4];
+        du_dk = -(48.0*um1 - 36.0*um2 + 16.0*um3 - 3.0*um4) / 12.0;
+        dv_dk = -(48.0*vm1 - 36.0*vm2 + 16.0*vm3 - 3.0*vm4) / 12.0;
+        dw_dk = -(48.0*wm1 - 36.0*wm2 + 16.0*wm3 - 3.0*wm4) / 12.0;
+#else
+        du_dk = -(4.0*um1 - um2) / 2.0;
+        dv_dk = -(4.0*vm1 - vm2) / 2.0;
+        dw_dk = -(4.0*wm1 - wm2) / 2.0;
+#endif
         rho_wall = rho_out_arr[idxm1];
     }
 
