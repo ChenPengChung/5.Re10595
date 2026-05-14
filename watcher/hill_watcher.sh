@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hill_watcher.sh — Periodic Hill Re5600 watcher loop
+# hill_watcher.sh — Periodic Hill watcher loop (Re auto-detected from variables.h)
 set -u
 
 _SELF="${BASH_SOURCE[0]:-$0}"
@@ -14,7 +14,11 @@ CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
 MASS_MONITOR="$LIVE_DIR/mass_monitor.py"
 
-RE=5600
+RE=$(grep -E '^\s*#define\s+Re\s+' "$PROJECT_DIR/variables.h" | awk '{print $3}' | tr -d '[:space:]')
+if [[ -z "$RE" || ! "$RE" =~ ^[0-9]+$ ]]; then
+    echo "[FATAL] Cannot parse Re from $PROJECT_DIR/variables.h" >&2
+    exit 1
+fi
 POLL_SEC=30
 SIZE_STABLE_WAIT=3
 CONV_TIMEOUT=180

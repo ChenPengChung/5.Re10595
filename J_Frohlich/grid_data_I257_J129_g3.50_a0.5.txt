@@ -1,7 +1,7 @@
 ========================================================================
   Grid Data Analysis  (stream-wise i=0 column / hill crest line)
 ========================================================================
-  Generated  : 2026-05-13T14:55:24
+  Generated  : 2026-05-13T20:50:02
   Source .dat: adaptive_3.fine grid_I257_J129_g3.50_a0.5.dat
   Units      : physical units detected (h_phys = 2.800001e-02); rescaled by 35.714272 to code units
 
