@@ -11,9 +11,9 @@
 #   ./run --rebuild              強制重編 a.out 再投
 #   ./run --h200 | --gb200       強制選 cluster
 #   ./run --force-cold           清空所有 state 從頭跑 (須確認)
-#   ./run --regrid-from-origin --old-grid <OLD.dat> --new-grid <NEW.dat>
+#   ./run --regrid-from-origin [--old-grid <OLD.dat>] [--new-grid <NEW.dat>]
 #        [--old-gamma <G>] [--old-alpha <A>]
-#                                從唯一 restart/step_*_origin* 建立新 grid checkpoint
+#                                從唯一 origin 建立新 grid checkpoint; grid 可自動掃描 phase1_generategrid/
 #   ./run --force-regrid         搭配 --regrid-from-origin, 清掉 checkpoint 後重建
 #   ./run --preflight-only       只跑 grid/regrid/provenance 前置檢查, 不編譯、不投遞
 #   ./run --no-queue-check       關掉 partition 擁塞檢查
