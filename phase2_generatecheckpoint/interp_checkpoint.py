@@ -1857,50 +1857,64 @@ def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
     Returns three (NY, NZ, NX) interior arrays.
     """
     NZ6 = u.shape[1]
-    du_di = np.empty_like(u)
-    du_dj = np.empty_like(u)
-    du_dk = np.empty_like(u)
+    du_di = np.zeros_like(u)
+    du_dj = np.zeros_like(u)
+    du_dk = np.zeros_like(u)
 
-    du_di[:, :, 1:-1] = (u[:, :, 2:] - u[:, :, :-2]) / 2.0
-    du_di[:, :, 0]  = du_di[:, :, 1]
-    du_di[:, :, -1] = du_di[:, :, -2]
+    # i-direction: 6th-order central (periodic ghost cells valid)
+    du_di[:, :, 3:-3] = (
+        -u[:, :, :-6] + 9.0*u[:, :, 1:-5] - 45.0*u[:, :, 2:-4]
+        + 45.0*u[:, :, 4:-2] - 9.0*u[:, :, 5:-1] + u[:, :, 6:]
+    ) / 60.0
+    du_di[:, :, :3]  = du_di[:, :, 3:4]
+    du_di[:, :, -3:] = du_di[:, :, -4:-3]
 
-    du_dj[1:-1, :, :] = (u[2:, :, :] - u[:-2, :, :]) / 2.0
-    du_dj[0, :, :]  = du_dj[1, :, :]
-    du_dj[-1, :, :] = du_dj[-2, :, :]
+    # j-direction: 6th-order central (periodic ghost valid)
+    du_dj[3:-3, :, :] = (
+        -u[:-6, :, :] + 9.0*u[1:-5, :, :] - 45.0*u[2:-4, :, :]
+        + 45.0*u[4:-2, :, :] - 9.0*u[5:-1, :, :] + u[6:, :, :]
+    ) / 60.0
+    du_dj[:3, :, :]  = du_dj[3:4, :, :]
+    du_dj[-3:, :, :] = du_dj[-4:-3, :, :]
 
-    # k-derivative — centered on fluid interior, 6th-order one-sided AT walls.
-    # Plain centered FD at k=BFR collapses to (u[BFR+1]-u[BFR])/2 because
-    # fill_ghost copies u[BFR-1]=u[BFR], underestimating du/dk by ~50% in viscous
-    # sublayer. Solver wall CE uses WALL_GRAD_ORDER=6; mirror that to keep
-    # restart wall-stress consistent (gilbm/evolution_gilbm/1.algorithm1.h).
-    du_dk[:, 1:-1, :] = (u[:, 2:, :] - u[:, :-2, :]) / 2.0
+    # k-direction: 6th-order adaptive-skew Fornberg + 4th-order one-sided at walls
+    kt = NZ6 - 1 - BFR
 
-    # Bottom wall (k = BFR = 3):
-    # du/dk = (360u1 - 450u2 + 400u3 - 225u4 + 72u5 - 10u6) / 60
+    # Central bulk (k = BFR+3 to kt-3): 6th-order central
+    c_lo = BFR + 3
+    c_hi = kt - 3
+    du_dk[:, c_lo:c_hi+1, :] = (
+        -u[:, c_lo-3:c_hi-2, :] + 9.0*u[:, c_lo-2:c_hi-1, :]
+        - 45.0*u[:, c_lo-1:c_hi, :] + 45.0*u[:, c_lo+1:c_hi+2, :]
+        - 9.0*u[:, c_lo+2:c_hi+3, :] + u[:, c_lo+3:c_hi+4, :]
+    ) / 60.0
+
+    # Near-bottom-wall: 6th-order skewed (Fornberg adaptive)
+    for kk, p in [(BFR+1, 1), (BFR+2, 2)]:
+        for m in range(7):
+            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, BFR + m, :]
+
+    # Near-top-wall: 6th-order skewed (Fornberg adaptive)
+    s_top = kt - 6
+    for kk, p in [(kt-2, 4), (kt-1, 5)]:
+        for m in range(7):
+            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, s_top + m, :]
+
+    # Bottom wall (k=BFR): 4th-order forward one-sided (u_wall=0)
     du_dk[:, BFR, :] = (
-        360.0 * u[:, BFR+1, :]
-       -450.0 * u[:, BFR+2, :]
-       +400.0 * u[:, BFR+3, :]
-       -225.0 * u[:, BFR+4, :]
-       + 72.0 * u[:, BFR+5, :]
-       - 10.0 * u[:, BFR+6, :]
-    ) / 60.0
+        48.0 * u[:, BFR+1, :] - 36.0 * u[:, BFR+2, :]
+       +16.0 * u[:, BFR+3, :] -  3.0 * u[:, BFR+4, :]
+    ) / 12.0
 
-    # Top wall (k = NZ6-4): same coefficients below wall, reversed sign.
-    kt = NZ6 - 1 - BFR  # = NZ6 - 4
+    # Top wall (k=kt): 4th-order backward one-sided (u_wall=0)
     du_dk[:, kt, :] = -(
-        360.0 * u[:, kt-1, :]
-       -450.0 * u[:, kt-2, :]
-       +400.0 * u[:, kt-3, :]
-       -225.0 * u[:, kt-4, :]
-       + 72.0 * u[:, kt-5, :]
-       - 10.0 * u[:, kt-6, :]
-    ) / 60.0
+        48.0 * u[:, kt-1, :] - 36.0 * u[:, kt-2, :]
+       +16.0 * u[:, kt-3, :] -  3.0 * u[:, kt-4, :]
+    ) / 12.0
 
-    # Ghost rows are not in the interior crop; fill non-pathologically.
-    du_dk[:, 0, :]  = du_dk[:, BFR, :]
-    du_dk[:, -1, :] = du_dk[:, kt, :]
+    # Ghost rows (not in interior crop)
+    du_dk[:, :BFR, :]  = du_dk[:, BFR:BFR+1, :]
+    du_dk[:, kt+1:, :] = du_dk[:, kt:kt+1, :]
 
     sl = (slice(BFR, BFR+cfg.NY), slice(BFR, BFR+cfg.NZ), slice(BFR, BFR+cfg.NX))
     du_di_int = du_di[sl]

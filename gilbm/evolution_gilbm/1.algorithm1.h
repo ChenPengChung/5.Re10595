@@ -219,6 +219,15 @@ __device__ void algorithm1_step1_GTS(
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idx5 = j * nface + 6 * NX6 + i;
+        int idx6 = j * nface + 7 * NX6 + i;
+        double u5 = u_out[idx5], u6 = u_out[idx6];
+        double v5 = v_out[idx5], v6 = v_out[idx6];
+        double w5 = w_out[idx5], w6 = w_out[idx6];
+        du_dk = (48.0*u3 - 36.0*u4 + 16.0*u5 - 3.0*u6) / 12.0;
+        dv_dk = (48.0*v3 - 36.0*v4 + 16.0*v5 - 3.0*v6) / 12.0;
+        dw_dk = (48.0*w3 - 36.0*w4 + 16.0*w5 - 3.0*w6) / 12.0;
 #else
         du_dk = (4.0*u3 - u4) / 2.0;
         dv_dk = (4.0*v3 - v4) / 2.0;
@@ -242,6 +251,15 @@ __device__ void algorithm1_step1_GTS(
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
+        int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
+        double um3 = u_out[idxm3], um4 = u_out[idxm4];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4];
+        du_dk = -(48.0*um1 - 36.0*um2 + 16.0*um3 - 3.0*um4) / 12.0;
+        dv_dk = -(48.0*vm1 - 36.0*vm2 + 16.0*vm3 - 3.0*vm4) / 12.0;
+        dw_dk = -(48.0*wm1 - 36.0*wm2 + 16.0*wm3 - 3.0*wm4) / 12.0;
 #else
         du_dk = -(4.0*um1 - um2) / 2.0;
         dv_dk = -(4.0*vm1 - vm2) / 2.0;
@@ -524,6 +542,15 @@ __device__ void algorithm1_step1_GTS_smem(
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idx5 = j * nface + 6 * NX6 + i;
+        int idx6 = j * nface + 7 * NX6 + i;
+        double u5 = u_out[idx5], u6 = u_out[idx6];
+        double v5 = v_out[idx5], v6 = v_out[idx6];
+        double w5 = w_out[idx5], w6 = w_out[idx6];
+        du_dk = (48.0*u3 - 36.0*u4 + 16.0*u5 - 3.0*u6) / 12.0;
+        dv_dk = (48.0*v3 - 36.0*v4 + 16.0*v5 - 3.0*v6) / 12.0;
+        dw_dk = (48.0*w3 - 36.0*w4 + 16.0*w5 - 3.0*w6) / 12.0;
 #else
         du_dk = (4.0*u3 - u4) / 2.0;
         dv_dk = (4.0*v3 - v4) / 2.0;
@@ -547,6 +574,15 @@ __device__ void algorithm1_step1_GTS_smem(
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+        int idxm3 = j * nface + (NZ6 - 7) * NX6 + i;
+        int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
+        double um3 = u_out[idxm3], um4 = u_out[idxm4];
+        double vm3 = v_out[idxm3], vm4 = v_out[idxm4];
+        double wm3 = w_out[idxm3], wm4 = w_out[idxm4];
+        du_dk = -(48.0*um1 - 36.0*um2 + 16.0*um3 - 3.0*um4) / 12.0;
+        dv_dk = -(48.0*vm1 - 36.0*vm2 + 16.0*vm3 - 3.0*vm4) / 12.0;
+        dw_dk = -(48.0*wm1 - 36.0*wm2 + 16.0*wm3 - 3.0*wm4) / 12.0;
 #else
         du_dk = -(4.0*um1 - um2) / 2.0;
         dv_dk = -(4.0*vm1 - vm2) / 2.0;

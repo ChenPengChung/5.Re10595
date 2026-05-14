@@ -324,3 +324,27 @@ if [ -f nan_monitor.py ]; then
 else
     echo "[INFO] nan_monitor.py not found, skipping NaN watchdog."
 fi
+
+# ── Post-submit: dispatcher + watcher (冪等, 已在跑就跳過) ──
+_PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
+# Dispatcher: 跨 partition 自動續投
+if [ ! -f "$_PROJECT_ROOT/restart/DISPATCHER_ACTIVE" ]; then
+    if [ -f "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" ]; then
+        bash "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" &
+        echo "[post-submit] Dispatcher started"
+    fi
+else
+    echo "[post-submit] Dispatcher already active, skipped"
+fi
+
+# Hill watcher: 收斂/benchmark 監控
+if [ -f "$_PROJECT_ROOT/watcher/hill_watcher.sh" ]; then
+    if [ -f "$_PROJECT_ROOT/live/watcher.pid" ] && kill -0 "$(cat "$_PROJECT_ROOT/live/watcher.pid" 2>/dev/null)" 2>/dev/null; then
+        echo "[post-submit] Hill watcher already running (PID=$(cat "$_PROJECT_ROOT/live/watcher.pid")), skipped"
+    else
+        mkdir -p "$_PROJECT_ROOT/live"
+        nohup bash "$_PROJECT_ROOT/watcher/hill_watcher.sh" > /dev/null 2>&1 &
+        echo "[post-submit] Hill watcher started (PID=$!)"
+    fi
+fi

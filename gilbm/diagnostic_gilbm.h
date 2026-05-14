@@ -269,6 +269,10 @@ void DiagnoseGILBM_Phase1(
     double du_x_dk = (360.0*ux3 - 450.0*ux4 + 400.0*ux5 - 225.0*ux6 + 72.0*ux7 - 10.0*ux8) / 60.0;
     double du_y_dk = (360.0*uy3 - 450.0*uy4 + 400.0*uy5 - 225.0*uy6 + 72.0*uy7 - 10.0*uy8) / 60.0;
     double du_z_dk = (360.0*uz3 - 450.0*uz4 + 400.0*uz5 - 225.0*uz6 + 72.0*uz7 - 10.0*uz8) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+    double du_x_dk = (48.0*ux3 - 36.0*ux4 + 16.0*ux5 - 3.0*ux6) / 12.0;
+    double du_y_dk = (48.0*uy3 - 36.0*uy4 + 16.0*uy5 - 3.0*uy6) / 12.0;
+    double du_z_dk = (48.0*uz3 - 36.0*uz4 + 16.0*uz5 - 3.0*uz6) / 12.0;
 #else
     double du_x_dk = (4.0*ux3 - ux4) / 2.0;
     double du_y_dk = (4.0*uy3 - uy4) / 2.0;
