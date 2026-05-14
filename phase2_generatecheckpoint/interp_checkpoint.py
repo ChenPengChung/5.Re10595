@@ -1546,6 +1546,60 @@ def apply_rho_mass_correction(rho, cfg):
     return rho_modify, mean_before, mean_after
 
 
+def compute_Ub(uy, z_2d, cfg):
+    """Compute bulk velocity Ub at j=BFR plane, matching evolution.h bilinear cell-average.
+
+    Solver formula (evolution.h:544-555):
+      for k in [3, NZ6-4):    # cell centres between walls
+        for i in [3, NX6-4):
+          v_cell  = avg of 4 corner nodes at (k,i),(k+1,i),(k,i+1),(k+1,i+1)
+          dx_cell = x[i+1] - x[i]
+          dz_cell = z_h[j=3, k+1] - z_h[j=3, k]   # physical z-spacing
+          Ub += v_cell * dx_cell * dz_cell
+          A  += dx_cell * dz_cell
+      Ub /= A
+    """
+    j0 = BFR
+    dx = LX / (cfg.NX - 1)
+    x = (np.arange(cfg.NX6, dtype=np.float64) - BFR) * dx
+
+    i_lo, i_hi = BFR, cfg.NX6 - 4   # i = 3 .. NX6-5
+    k_lo, k_hi = BFR, cfg.NZ6 - 4   # k = 3 .. NZ6-5
+
+    v_plane = uy[j0, :, :]  # [NZ6, NX6]
+    v_cell = 0.25 * (v_plane[k_lo:k_hi, i_lo:i_hi]
+                    + v_plane[k_lo+1:k_hi+1, i_lo:i_hi]
+                    + v_plane[k_lo:k_hi, i_lo+1:i_hi+1]
+                    + v_plane[k_lo+1:k_hi+1, i_lo+1:i_hi+1])
+
+    dx_cell = x[i_lo+1:i_hi+1] - x[i_lo:i_hi]                       # [ni]
+    dz_cell = z_2d[j0, k_lo+1:k_hi+1] - z_2d[j0, k_lo:k_hi]        # [nk]
+
+    dA = dz_cell[:, np.newaxis] * dx_cell[np.newaxis, :]  # [nk, ni]
+    return float(np.sum(v_cell * dA) / np.sum(dA))
+
+
+def apply_Ub_correction(uy_old, uy_new, z2d_old, z2d_new, cfg_old, cfg_new):
+    """Scale streamwise velocity so Ub is conserved across interpolation.
+
+    Returns (scale_factor, Ub_old, Ub_new_before, Ub_new_after).
+    """
+    Ub_old = compute_Ub(uy_old, z2d_old, cfg_old)
+    Ub_new_before = compute_Ub(uy_new, z2d_new, cfg_new)
+
+    if abs(Ub_new_before) < 1e-30:
+        return 1.0, Ub_old, Ub_new_before, Ub_new_before
+
+    scale = Ub_old / Ub_new_before
+    interior = (slice(BFR, BFR + cfg_new.NY),
+                slice(BFR, BFR + cfg_new.NZ),
+                slice(BFR, BFR + cfg_new.NX))
+    uy_new[interior] *= scale
+
+    Ub_new_after = compute_Ub(uy_new, z2d_new, cfg_new)
+    return scale, Ub_old, Ub_new_before, Ub_new_after
+
+
 # ---------------------------------------------------------------
 # Equilibrium reconstruction (initialization.h:36-42)
 # ---------------------------------------------------------------
@@ -2323,6 +2377,8 @@ def main():
         np.abs(ux_g[interior_slice]).max(),
         np.abs(uy_g[interior_slice]).max(),
         np.abs(uz_g[interior_slice]).max()))
+    Ub_old = compute_Ub(uy_g, z2d_old, OLD)
+    print('      OLD Ub (j=BFR cross-section) = {:.15e}'.format(Ub_old))
 
     # Cross-check stored rho against sum(f).  In a running LBM with mass
     # correction (checkrho.dat), rho is adjusted independently of f each step,
@@ -2415,6 +2471,28 @@ def main():
     fill_ghost(ux_new, NEW)
     fill_ghost(uy_new, NEW)
     fill_ghost(uz_new, NEW)
+
+    # Ub conservation correction: scale streamwise velocity to match OLD Ub
+    Ub_new_before = compute_Ub(uy_new, z2d_new, NEW)
+    print('      Ub correction: OLD Ub = {:.15e}'.format(Ub_old))
+    print('      Ub correction: NEW Ub (before) = {:.15e}'.format(Ub_new_before))
+    if abs(Ub_new_before) > 1e-30:
+        ub_scale = Ub_old / Ub_new_before
+        uy_new_int = (slice(BFR, BFR + NEW.NY),
+                      slice(BFR, BFR + NEW.NZ),
+                      slice(BFR, BFR + NEW.NX))
+        uy_new[uy_new_int] *= ub_scale
+        for arr in (uy_new,):
+            enforce_periodic_physical_duplicates(arr, NEW)
+        fill_ghost(uy_new, NEW)
+        Ub_new_after = compute_Ub(uy_new, z2d_new, NEW)
+        print('      Ub correction: scale = {:.15e}'.format(ub_scale))
+        print('      Ub correction: NEW Ub (after)  = {:.15e}'.format(Ub_new_after))
+        print('      Ub correction: residual = {:.3e}'.format(abs(Ub_new_after - Ub_old)))
+    else:
+        ub_scale = 1.0
+        Ub_new_after = Ub_new_before
+        print('      Ub correction: SKIP (Ub_new ≈ 0)')
 
     new_int = (slice(BFR, BFR+NEW.NY), slice(BFR, BFR+NEW.NZ), slice(BFR, BFR+NEW.NX))
     print('      NEW interior rho = [{:.6f}, {:.6f}], mean = {:.6f}'.format(
@@ -2695,6 +2773,10 @@ def main():
         'interp_dt_max_component': dt_max_component,
         'interp_origin_ftt': origin_ftt,
         'interp_origin_accu_count': origin_accu,
+        'interp_Ub_old': '{:.15e}'.format(Ub_old),
+        'interp_Ub_new_before': '{:.15e}'.format(Ub_new_before),
+        'interp_Ub_new_after': '{:.15e}'.format(Ub_new_after),
+        'interp_Ub_scale': '{:.15e}'.format(ub_scale),
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
     if ce_omega_new is not None:
