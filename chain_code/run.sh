@@ -962,17 +962,20 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
             exit 1
         fi
 
-        # Step 4: 比對 phase1 newgrid vs J_Frohlich simulation grid
+        # Step 4: 比對 phase1 newgrid vs J_Frohlich simulation grid (座標數據)
+        # header 可能有差異 (注釋行、ZONE T 名稱)，只比對數值行
         echo ""
         echo "[preflight-B-auto] Step 3: 比對 phase1 newgrid 與 J_Frohlich simulation grid..."
         _SIM_GRID="$(find J_Frohlich -maxdepth 1 -type f -name "adaptive_*_I${_AUTO_VH_NY}_J${_AUTO_VH_NZ}_*.dat" 2>/dev/null | head -1)"
         if [ -n "$_SIM_GRID" ]; then
-            _DIFF_LINES=$(diff <(grep -v '^[[:space:]]*$' "$_AUTO_NEW_GRID" | head -20) \
-                               <(grep -v '^[[:space:]]*$' "$_SIM_GRID" | head -20) 2>/dev/null | wc -l)
-            if [ "$_DIFF_LINES" -eq 0 ]; then
-                echo "[preflight-B-auto] Step 3 OK: 網格 header 一致 ✓"
+            # 跳過注釋和 header，只比對前 50 行數值座標
+            _extract_coords() { grep -E '^\s*[-+0-9]' "$1" | head -50; }
+            if diff <(_extract_coords "$_AUTO_NEW_GRID") <(_extract_coords "$_SIM_GRID") > /dev/null 2>&1; then
+                echo "[preflight-B-auto] Step 3 OK: 座標數據一致 ✓"
+                echo "        phase1: $_AUTO_NEW_GRID"
+                echo "        solver: $_SIM_GRID"
             else
-                echo "[preflight-B-auto] WARNING: phase1 newgrid 與 J_Frohlich grid header 有差異 (diff lines=$_DIFF_LINES)"
+                echo "[preflight-B-auto] WARNING: phase1 newgrid 與 J_Frohlich grid 座標有差異"
                 echo "        phase1: $_AUTO_NEW_GRID"
                 echo "        solver: $_SIM_GRID"
                 echo "        繼續執行, 但請檢查網格是否一致"
