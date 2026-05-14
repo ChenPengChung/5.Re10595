@@ -324,7 +324,8 @@ _PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 # Dispatcher: 跨 partition 自動續投
 if [ ! -f "$_PROJECT_ROOT/restart/DISPATCHER_ACTIVE" ]; then
     if [ -f "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" ]; then
-        bash "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" &
+        nohup bash "$_PROJECT_ROOT/chain_code/dispatcher_start.sh" > /dev/null 2>&1 &
+        disown
         echo "[post-submit] Dispatcher started"
     fi
 else
@@ -338,6 +339,7 @@ if [ -f "$_PROJECT_ROOT/watcher/hill_watcher.sh" ]; then
     else
         mkdir -p "$_PROJECT_ROOT/live"
         nohup bash "$_PROJECT_ROOT/watcher/hill_watcher.sh" > /dev/null 2>&1 &
+        disown
         echo "[post-submit] Hill watcher started (PID=$!)"
     fi
 fi
