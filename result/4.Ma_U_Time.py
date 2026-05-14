@@ -294,6 +294,20 @@ def load_checkrho(filepath):
         print(f"[ERROR] checkrho.dat needs ≥4 columns, got {data.shape[1]}")
         return None
 
+    # Skip initial mass-correction transient: the first few steps after
+    # a rebuild checkpoint have O(10x) larger rho deviation that distorts
+    # the y-axis scale.  Drop rows whose |rho-1| exceeds 5× the median.
+    rho_raw = data[:, 3]
+    if len(rho_raw) > 20:
+        median_dev = np.median(np.abs(rho_raw - 1.0))
+        threshold = max(median_dev * 5, 1e-12)
+        keep = np.abs(rho_raw - 1.0) <= threshold
+        n_drop = int(np.sum(~keep))
+        if n_drop > 0:
+            print(f"[INFO] checkrho.dat: dropped {n_drop} initial transient rows "
+                  f"(|ρ-1| > {threshold:.1e})")
+            data = data[keep]
+
     result = {
         'FTT':     data[:, 1],   # col 1 = FTT
         'rho_avg': data[:, 3],   # col 3 = volume-averaged density
@@ -1241,17 +1255,15 @@ def build_rho_panel(ax, rho_data):
         rho_mean = float(finite.mean())
         data_range = rho_max - rho_min
 
-        # Ensure 1.0 standard line is always visible
-        y_top = max(rho_max, 1.0)
-        y_bot = min(rho_min, 1.0)
+        y_top = rho_max
+        y_bot = rho_min
 
         if data_range < 1e-12:
-            # Perfectly flat: show symmetric window to reveal scale
             half_win = max(abs(rho_mean - 1.0) * 2, 1e-6)
-            y_bot = min(rho_mean, 1.0) - half_win * 0.2
-            y_top = max(rho_mean, 1.0) + half_win * 0.2
+            y_bot = rho_mean - half_win * 0.2
+            y_top = rho_mean + half_win * 0.2
         else:
-            pad = max((y_top - y_bot) * 0.10, 1e-8)
+            pad = max(data_range * 0.05, 1e-12)
             y_bot -= pad
             y_top += pad
 

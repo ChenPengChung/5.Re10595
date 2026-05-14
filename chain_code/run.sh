@@ -11,6 +11,8 @@
 #   ./run.sh --force-cold     清空所有 state / history 後從頭跑 (需確認)
 #   ./run.sh --regrid-from-origin [--old-grid <OLD.dat>] [--new-grid <NEW.dat>]
 #                             從唯一 origin 轉換到新 grid checkpoint; grid 可自動掃描 phase1_generategrid/
+#   ./run.sh                  若 phase1_generategrid/ + phase2_generatecheckpoint/
+#                             具備唯一 old/new grid + origin,會自動跑 regrid pipeline 再投遞
 #   ./run.sh --force-regrid   搭配 --regrid-from-origin, 先清掉既有 checkpoint 再重建
 #   ./run.sh --preflight-only  只跑 grid/regrid/provenance 前置檢查, 不編譯、不投遞
 #   ./run.sh --h200           強制使用 H200 變體 (x86_64, sm_90, dev partition)
@@ -154,6 +156,90 @@ _read_define_value() {
             exit
         }
     ' variables.h 2>/dev/null
+}
+
+_read_string_define_value() {
+    local key="$1"
+    awk -v key="$key" '
+        $1 == "#define" && $2 == key {
+            if (match($0, /"[^"]+"/)) {
+                print substr($0, RSTART + 1, RLENGTH - 2)
+                exit
+            }
+        }
+    ' variables.h 2>/dev/null
+}
+
+_derive_solver_grid_path() {
+    local ny="$1" nz="$2"
+    local grid_dir grid_ref gamma alpha ref_stem gamma_tag alpha_tag fname
+    grid_dir="$(_read_string_define_value GRID_DAT_DIR)"
+    grid_ref="$(_read_string_define_value GRID_DAT_REF)"
+    gamma="$(_read_define_value GAMMA)"
+    alpha="$(_read_define_value ALPHA)"
+    if [ -z "$grid_dir" ] || [ -z "$grid_ref" ] || [ -z "$gamma" ] || [ -z "$alpha" ]; then
+        echo "[FATAL] 無法從 variables.h 推導 solver grid path (GRID_DAT_DIR/GRID_DAT_REF/GAMMA/ALPHA)" >&2
+        exit 1
+    fi
+    ref_stem="${grid_ref%.*}"
+    gamma_tag="$(awk -v v="$gamma" 'BEGIN { printf "%.2f", v + 0.0 }')"
+    alpha_tag="$(awk -v v="$alpha" 'BEGIN { printf "%.1f", v + 0.0 }')"
+    fname="adaptive_${ref_stem}_I${ny}_J${nz}_g${gamma_tag}_a${alpha_tag}.dat"
+    _project_abs_path "${grid_dir}/${fname}"
+}
+
+_compare_grid_dat_coords_exact() {
+    local phase_grid="$1" solver_grid="$2" expected_i="$3" expected_j="$4"
+    python3 - "$phase_grid" "$solver_grid" "$expected_i" "$expected_j" <<'PY'
+import sys
+
+phase_grid, solver_grid, expected_i, expected_j = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
+
+def read_grid(path):
+    dims = {}
+    coords = []
+    in_data = False
+    with open(path, encoding="utf-8", errors="replace") as f:
+        for line in f:
+            stripped = line.strip()
+            if not in_data:
+                for token in stripped.replace(",", " ").split():
+                    upper = token.upper()
+                    if upper.startswith("I="):
+                        dims["I"] = int(token.split("=", 1)[1])
+                    elif upper.startswith("J="):
+                        dims["J"] = int(token.split("=", 1)[1])
+                if stripped.upper().startswith("DT="):
+                    in_data = True
+                continue
+            parts = stripped.split()
+            if len(parts) >= 2:
+                try:
+                    coords.append((float(parts[0]), float(parts[1])))
+                except ValueError:
+                    pass
+    if dims.get("I") != expected_i or dims.get("J") != expected_j:
+        raise SystemExit(f"{path}: I/J={dims.get('I')}/{dims.get('J')} != expected {expected_i}/{expected_j}")
+    expected_count = expected_i * expected_j
+    if len(coords) != expected_count:
+        raise SystemExit(f"{path}: coordinate rows={len(coords)} != expected {expected_count}")
+    return coords
+
+a = read_grid(phase_grid)
+b = read_grid(solver_grid)
+if len(a) != len(b):
+    raise SystemExit(f"row count mismatch: {len(a)} != {len(b)}")
+
+for idx, ((ax, ay), (bx, by)) in enumerate(zip(a, b), 1):
+    if ax != bx or ay != by:
+        raise SystemExit(
+            "coordinate mismatch at row {}: phase=({:.17g}, {:.17g}) solver=({:.17g}, {:.17g})".format(
+                idx, ax, ay, bx, by
+            )
+        )
+
+print(f"exact coordinate match: {len(a)} rows")
+PY
 }
 
 _grid_dim_value() {
@@ -688,7 +774,8 @@ fi
 
 # ═════════════════════════════════════════════════════════════════════════
 # Preflight B: explicit regrid interpolation (origin → new grid)
-#   只有 --regrid-from-origin 會觸發; origin 存在但未明示時不自動插值
+#   --regrid-from-origin 會明確觸發; 另外在 phase1/phase2 綁定條件完整時,
+#   下方 preflight-B-auto 會自動觸發同一條 pipeline.
 # ═════════════════════════════════════════════════════════════════════════
 if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
     _VH_NY="$(_read_define_value NY)"
@@ -828,17 +915,19 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
         fi
     else
         echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
-        echo "        清除可能殘留的不完整產物..."
-        rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
-        rm -f restart/grid_provenance restart/grid_provenance.WRITING
+        if [ "$MODE_PREFLIGHT_ONLY" -eq 0 ]; then
+            echo "        清除可能殘留的不完整產物..."
+            rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
+            rm -f restart/grid_provenance restart/grid_provenance.WRITING
+        fi
         exit 1
     fi
 elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
     # ── 自動偵測 regrid pipeline ──
-    # 三條件全滿足時自動執行 (等同 --regrid-from-origin):
-    #   (a) origin checkpoint 存在
-    #   (b) phase1_generategrid/newgrid_*.dat 存在
-    #   (c) phase1_generategrid/oldgrid_*.dat 存在
+    # 綁定條件全滿足時自動執行 (等同 --regrid-from-origin):
+    #   (a) phase1_generategrid/ 與 phase2_generatecheckpoint/ 存在
+    #   (b) unique origin checkpoint 存在
+    #   (c) phase1_generategrid/ 有唯一 oldgrid/newgrid 匹配 variables.h NY/NZ
     _AUTO_ORIGIN_DIR=""
     _AUTO_ORIGIN_COUNT=0
     for _d in restart/step_*_origin*/ phase2_generatecheckpoint/step_*_origin*/ phase2_generatecheckpoint/oldcheckpoint_*/; do
@@ -851,6 +940,9 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
     _AUTO_VH_NZ="$(_read_define_value NZ)"
 
     _AUTO_READY=1
+    if [ ! -d phase1_generategrid ] || [ ! -d phase2_generatecheckpoint ]; then
+        _AUTO_READY=0
+    fi
     if [ "$_AUTO_ORIGIN_COUNT" -eq 0 ]; then
         _AUTO_READY=0
     elif [ "$_AUTO_ORIGIN_COUNT" -gt 1 ]; then
@@ -866,16 +958,8 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
     _AUTO_NEW_GRID=""
     if [ "$_AUTO_READY" -eq 1 ]; then
         _dim_tag="_I${_AUTO_VH_NY}_J${_AUTO_VH_NZ}"
-        _AUTO_OLD_GRID="$(find phase1_generategrid -maxdepth 1 -type f -name "oldgrid*${_dim_tag}*.dat" 2>/dev/null | head -1)"
-        _AUTO_NEW_GRID="$(find phase1_generategrid -maxdepth 1 -type f -name "newgrid*${_dim_tag}*.dat" 2>/dev/null | head -1)"
-        if [ -z "$_AUTO_OLD_GRID" ]; then
-            echo "[preflight-B-auto] phase1_generategrid/ 找不到 oldgrid*${_dim_tag}*.dat, 跳過"
-            _AUTO_READY=0
-        fi
-        if [ -z "$_AUTO_NEW_GRID" ]; then
-            echo "[preflight-B-auto] phase1_generategrid/ 找不到 newgrid*${_dim_tag}*.dat, 跳過"
-            _AUTO_READY=0
-        fi
+        _AUTO_OLD_GRID="$(_discover_phase1_grid oldgrid OLD "$_AUTO_VH_NY" "$_AUTO_VH_NZ")"
+        _AUTO_NEW_GRID="$(_discover_phase1_grid newgrid NEW "$_AUTO_VH_NY" "$_AUTO_VH_NZ")"
     fi
 
     if [ "$_AUTO_READY" -eq 1 ]; then
@@ -898,6 +982,8 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
         fi
 
         # Step 2: 驗證 grid 維度一致
+        echo ""
+        echo "[preflight-B-auto] Step 2: 驗證 phase1 grid header 與 variables/origin metadata..."
         _AUTO_OLD_GRID="$(_project_abs_path "$_AUTO_OLD_GRID")"
         _AUTO_NEW_GRID="$(_project_abs_path "$_AUTO_NEW_GRID")"
 
@@ -928,64 +1014,76 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
             echo "        origin: NY=$_OLD_NY NZ=$_OLD_NZ"
             exit 1
         fi
+        echo "[preflight-B-auto] Step 2 OK: phase1 grid dimensions match"
 
         # Step 3: 執行 checkpoint interpolation
         echo ""
-        echo "[preflight-B-auto] Step 2: 執行 checkpoint interpolation (old grid → new grid)..."
+        echo "[preflight-B-auto] Step 3: 執行 checkpoint interpolation (old grid → new grid)..."
         _INTERP_CMD=(python3 phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
                      --old-dir "$_AUTO_ORIGIN_DIR"
                      --variables-h variables.h
                      --old-grid-dat "$_AUTO_OLD_GRID"
                      --new-grid-dat "$_AUTO_NEW_GRID")
+        [ "$MODE_PREFLIGHT_ONLY" -eq 1 ] && _INTERP_CMD+=(--dry-run)
         if "${_INTERP_CMD[@]}"; then
-            _CKPT_DIR="restart/checkpoint/step_00000001"
-            _CKPT_OK=1
-            [ -s "$_CKPT_DIR/metadata.dat" ] || _CKPT_OK=0
-            [ -s "$_CKPT_DIR/f00_0.bin" ]    || _CKPT_OK=0
-            [ -s "$_CKPT_DIR/rho_0.bin" ]    || _CKPT_OK=0
-            [ -s "restart/grid_provenance" ] || _CKPT_OK=0
-            if [ "$_CKPT_OK" -eq 1 ]; then
-                echo "[preflight-B-auto] Step 2 OK: 插值成功 → $_CKPT_DIR"
-                HAS_CKPT=1
-                rm -f restart/chain_count restart/chain_jobid
+            if [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then
+                echo "[preflight-B-auto] Step 3 OK: dry-run completed; no checkpoint written"
+                HAS_CKPT=0
                 HAS_STATE=0
             else
-                echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不完整 (缺 metadata/f00/rho/provenance)"
-                rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
-                rm -f restart/grid_provenance restart/grid_provenance.WRITING
-                exit 1
+                _CKPT_DIR="restart/checkpoint/step_00000001"
+                _CKPT_OK=1
+                [ -s "$_CKPT_DIR/metadata.dat" ] || _CKPT_OK=0
+                [ -s "$_CKPT_DIR/f00_0.bin" ]    || _CKPT_OK=0
+                [ -s "$_CKPT_DIR/rho_0.bin" ]    || _CKPT_OK=0
+                [ -s "restart/grid_provenance" ] || _CKPT_OK=0
+                if [ "$_CKPT_OK" -eq 1 ]; then
+                    echo "[preflight-B-auto] Step 3 OK: 插值成功 → $_CKPT_DIR"
+                    HAS_CKPT=1
+                    rm -f restart/chain_count restart/chain_jobid
+                    HAS_STATE=0
+                else
+                    echo "[FATAL] interp_checkpoint.py 回傳 0 但產物不完整 (缺 metadata/f00/rho/provenance)"
+                    rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
+                    rm -f restart/grid_provenance restart/grid_provenance.WRITING
+                    exit 1
+                fi
             fi
         else
             echo "[FATAL] Checkpoint interpolation 失敗 (exit=$?)"
-            rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
-            rm -f restart/grid_provenance restart/grid_provenance.WRITING
+            if [ "$MODE_PREFLIGHT_ONLY" -eq 0 ]; then
+                rm -rf restart/checkpoint/step_00000001 restart/checkpoint/step_00000001.WRITING
+                rm -f restart/grid_provenance restart/grid_provenance.WRITING
+            fi
             exit 1
         fi
 
-        # Step 4: 比對 phase1 newgrid vs J_Frohlich simulation grid (座標數據)
-        # header 可能有差異 (注釋行、ZONE T 名稱)，只比對數值行
+        # Step 4: 比對 phase1 newgrid vs exact J_Frohlich simulation grid (全座標)
         echo ""
-        echo "[preflight-B-auto] Step 3: 比對 phase1 newgrid 與 J_Frohlich simulation grid..."
-        _SIM_GRID="$(find J_Frohlich -maxdepth 1 -type f -name "adaptive_*_I${_AUTO_VH_NY}_J${_AUTO_VH_NZ}_*.dat" 2>/dev/null | head -1)"
-        if [ -n "$_SIM_GRID" ]; then
-            # 跳過注釋和 header，只比對前 50 行數值座標
-            _extract_coords() { grep -E '^\s*[-+0-9]' "$1" | head -50; }
-            if diff <(_extract_coords "$_AUTO_NEW_GRID") <(_extract_coords "$_SIM_GRID") > /dev/null 2>&1; then
-                echo "[preflight-B-auto] Step 3 OK: 座標數據一致 ✓"
+        echo "[preflight-B-auto] Step 4: 比對 phase1 newgrid 與 J_Frohlich simulation grid..."
+        _SIM_GRID="$(_derive_solver_grid_path "$_AUTO_VH_NY" "$_AUTO_VH_NZ")"
+        if [ -s "$_SIM_GRID" ]; then
+            if _compare_grid_dat_coords_exact "$_AUTO_NEW_GRID" "$_SIM_GRID" "$_AUTO_VH_NY" "$_AUTO_VH_NZ"; then
+                echo "[preflight-B-auto] Step 4 OK: 全座標數據一致"
                 echo "        phase1: $_AUTO_NEW_GRID"
                 echo "        solver: $_SIM_GRID"
             else
-                echo "[preflight-B-auto] WARNING: phase1 newgrid 與 J_Frohlich grid 座標有差異"
+                echo "[FATAL] phase1 newgrid 與 solver grid 座標不一致"
                 echo "        phase1: $_AUTO_NEW_GRID"
                 echo "        solver: $_SIM_GRID"
-                echo "        繼續執行, 但請檢查網格是否一致"
+                exit 1
             fi
         else
-            echo "[preflight-B-auto] WARNING: J_Frohlich/ 找不到 matching simulation grid, 跳過比對"
+            echo "[FATAL] 找不到 variables.h 對應的 solver grid: $_SIM_GRID"
+            exit 1
         fi
 
         echo ""
-        echo "[preflight-B-auto] ✓ 自動 regrid pipeline 完成 → 進入 Scenario 2 續跑"
+        if [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then
+            echo "[preflight-B-auto] ✓ 自動 regrid pipeline dry-run 完成"
+        else
+            echo "[preflight-B-auto] ✓ 自動 regrid pipeline 完成 → 進入 Scenario 2 續跑"
+        fi
     fi
 fi
 

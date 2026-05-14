@@ -46,6 +46,17 @@ This user runs multiple simulation projects on the same HPC cluster.
 
 A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically blocks bare `scancel` and modifying `scontrol` commands. If the hook blocks you, do NOT attempt to bypass it.
 
+## Regrid Pipeline Binding (MANDATORY)
+
+When a request touches `phase1_generategrid/` or `phase2_generatecheckpoint/`,
+read `PIPELINE_GUIDE.md` first and drive the workflow through `./run.sh` or
+`./run`. Do not pre-generate checkpoint data by calling
+`phase2_generatecheckpoint/interp_checkpoint.py` directly for a production run.
+The intended test is that `./run.sh` detects the phase folders, validates the
+phase1 `oldgrid/newgrid`, generates the solver grid through
+`J_Frohlich/grid_zeta_tool.py --auto`, rebuilds `restart/checkpoint/step_00000001`,
+verifies provenance, and then enters the normal job submission path.
+
 ## Periodic Hill testing shortcut (triggered by user command)
 
 When the user types **`periodichill-testing`** (any spacing/case), execute the
