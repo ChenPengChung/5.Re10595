@@ -1,0 +1,5 @@
+[2026-05-15 00:34:14] [INFO] nan_monitor started for /home/s8313697/5.Re10595/Edit5_Rebuild
+[2026-05-15 00:34:14] [INFO] Ma_max limit=0.15, poll=2.0s
+[2026-05-15 00:34:14] [INFO] Tailing: slurm_50340.log
+[2026-05-15 00:34:16] [INFO] Job 50340 round 2 started
+[2026-05-15 00:34:16] [INFO] Restart from: restart/checkpoint/step_00000001
