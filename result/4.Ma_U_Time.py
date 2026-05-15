@@ -312,6 +312,8 @@ def load_checkrho(filepath):
         'FTT':     data[:, 1],   # col 1 = FTT
         'rho_avg': data[:, 3],   # col 3 = volume-averaged density
     }
+    if data.shape[1] >= 5:
+        result['drho_pos'] = data[:, 4]  # col 4 = signed Δρ+
 
     # Validation: print summary
     rho = result['rho_avg']
@@ -324,6 +326,80 @@ def load_checkrho(filepath):
               f"<ρ> ∈ [{rho_min:.10f}, {rho_max:.10f}], "
               f"mean={rho_mean:.10f}, σ={rho_std:.2e}")
     return result
+
+# ═══════════════════════════════════════════════════════════════
+#  3c. Density Stability Index (DSI) — computed from checkrho Δρ+
+# ═══════════════════════════════════════════════════════════════
+
+def _spectral_purity(x):
+    """SPI = peak power / total power of real FFT."""
+    x = x - x.mean()
+    ps = np.abs(np.fft.rfft(x))**2
+    ps[0] = 0
+    total = ps.sum()
+    return ps.max() / total if total > 0 else 0.0
+
+def _amplitude_stability(x):
+    """AS = 1 - CV(Hilbert envelope)."""
+    from scipy.signal import hilbert
+    x0 = x - x.mean()
+    env = np.abs(hilbert(x0))
+    m = env.mean()
+    if m == 0:
+        return 0.0
+    return max(0.0, 1.0 - env.std() / m)
+
+def _sine_r2(t, x):
+    """R² of best-fit sine at dominant FFT frequency."""
+    from scipy.optimize import curve_fit
+    x0 = x - x.mean()
+    ps = np.abs(np.fft.rfft(x0))**2
+    ps[0] = 0
+    if ps.sum() == 0:
+        return 0.0
+    dt = np.mean(np.diff(t))
+    freqs = np.fft.rfftfreq(len(x0), d=dt)
+    f_dom = freqs[np.argmax(ps)]
+    if f_dom == 0:
+        return 0.0
+    def model(tt, A, phi, C):
+        return A * np.sin(2 * np.pi * f_dom * tt + phi) + C
+    try:
+        popt, _ = curve_fit(model, t, x,
+                            p0=[np.std(x), 0, np.mean(x)], maxfev=2000)
+        ss_res = np.sum((x - model(t, *popt))**2)
+        ss_tot = np.sum((x - x.mean())**2)
+        return max(0.0, 1.0 - ss_res / ss_tot) if ss_tot > 0 else 0.0
+    except Exception:
+        return np.nan
+
+def compute_dsi(ftt, drho_signed, win_ftt=0.25, step_ftt=0.02):
+    """Compute rolling Density Stability Index (DSI).
+
+    DSI = (SPI × R²_sin × AS)^(1/3)  ∈ [0, 1]
+    0 = broadband noise / unstable  →  1 = clean steady sinusoidal oscillation
+
+    Returns (ftt_centres, spi, r2, as_, dsi) arrays.
+    """
+    centres, v_spi, v_r2, v_as = [], [], [], []
+    t0 = ftt[0]
+    while t0 + win_ftt <= ftt[-1]:
+        mask = (ftt >= t0) & (ftt < t0 + win_ftt)
+        idx = np.where(mask)[0]
+        if len(idx) >= 16:
+            seg_t = ftt[idx]
+            seg_x = drho_signed[idx]
+            centres.append(t0 + win_ftt / 2)
+            v_spi.append(np.clip(_spectral_purity(seg_x), 0, 1))
+            v_r2.append(np.clip(_sine_r2(seg_t, seg_x), 0, 1))
+            v_as.append(np.clip(_amplitude_stability(seg_x), 0, 1))
+        t0 += step_ftt
+    c = np.array(centres)
+    spi = np.array(v_spi)
+    r2 = np.where(np.isnan(v_r2), 0.0, np.array(v_r2))
+    as_ = np.array(v_as)
+    dsi = (spi * r2 * as_) ** (1.0 / 3.0)
+    return c, spi, r2, as_, dsi
 
 # ═══════════════════════════════════════════════════════════════
 #  4. Label Anti-Overlap Engine (Smart Placement)
@@ -902,6 +978,7 @@ COLOR_UB  = '#0072B2'   # blue     — Ub/Uref
 COLOR_MA  = '#D55E00'   # vermilion — Ma_max
 COLOR_FC  = '#009E73'   # bluish green — F*
 COLOR_RHO = '#CC79A7'   # reddish purple — <ρ>
+COLOR_DSI = '#7B2D8E'   # deep purple — Density Stability Index
 COLOR_UU  = '#009E73'   # bluish green — RS
 COLOR_K   = '#E69F00'   # orange — TKE
 COLOR_MLUPS = '#56B4E9'  # sky blue — MLUPS
@@ -1217,30 +1294,21 @@ def build_ub_fstar_panel(ax, data, Re, ftt_stats_start, ftt_cv_gate=None):
 
 def build_rho_panel(ax, rho_data):
     """
-    Density panel: mass conservation measured against ρ₀ = 1.0.
+    Density panel: mass conservation (<ρ>, left axis) + DSI (right axis).
 
-    Design philosophy (revised):
-      The LBM theoretical reference density is ρ₀ = 1.0 (lattice unit).
-      Mass conservation quality = |<ρ> − 1.0|.
-      Perfect conservation ⟹ |<ρ> − 1.0| = 0.
-
-    Strategy:
-      1. Plot raw <ρ>(t) in purple.
-      2. Draw ρ₀ = 1.0 dashed reference line (the STANDARD, not initial ρ).
-      3. y-axis: data min-max, but force upper bound ≥ 1.000000 so the
-         1.0 standard line is always visible for comparison.
-      4. High-precision y-tick format (%.7f) to reveal micro-deviations.
-      5. Convergence metric = |<ρ>_mean − 1.0| (NOT temporal change).
-         Zero ⟹ exact conservation.
+    Left axis  (COLOR_RHO):  raw <ρ>(t) with ρ₀ = 1.0 reference
+    Right axis (COLOR_DSI):  Density Stability Index ∈ [0, 1]
+      DSI = (SPI × R²_sin × AS)^(1/3)
+      0 = broadband noise → 1 = clean sinusoidal oscillation
     """
     ftt = rho_data['FTT']
     rho = rho_data['rho_avg']
 
-    ax.plot(ftt, rho, color=COLOR_RHO, lw=0.8,
-            label=r'$\langle \rho \rangle$')
+    ln_rho = ax.plot(ftt, rho, color=COLOR_RHO, lw=0.8, zorder=1,
+                      label=r'$\langle \rho \rangle$')
 
     # ── Reference line: theoretical standard ρ₀ = 1.0 ──
-    ax.axhline(1.0, color='0.4', ls='--', lw=0.5, alpha=0.6,
+    ax.axhline(1.0, color='0.4', ls='--', lw=0.5, alpha=0.6, zorder=1,
                label=r'$\rho_0 = 1$')
 
     ax.set_ylabel(r"$\langle \rho \rangle$", color=COLOR_RHO)
@@ -1275,8 +1343,29 @@ def build_rho_panel(ax, rho_data):
         mpl.ticker.FormatStrFormatter('%.7f')
     )
 
-    # Place legend FIRST to get bbox for exclusion zone
-    leg, leg_band = _journal_legend(ax)
+    # ── Right axis: DSI (Density Stability Index) ──
+    ln_dsi = []
+    ax_dsi = None
+    drho_signed = rho_data.get('drho_pos')
+    if drho_signed is not None and len(drho_signed) > 50:
+        try:
+            c_dsi, spi, r2, as_, dsi = compute_dsi(ftt, drho_signed)
+            if len(c_dsi) > 2:
+                ax_dsi = ax.twinx()
+                ln_dsi = ax_dsi.plot(c_dsi, dsi, color=COLOR_DSI, lw=1.2,
+                                     label=r'$\mathrm{DSI}$')
+                ax_dsi.set_ylabel(r'$\mathrm{DSI}$', color=COLOR_DSI)
+                ax_dsi.tick_params(axis='y', labelcolor=COLOR_DSI)
+                ax_dsi.set_ylim(0, 1.05)
+                ax_dsi.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+        except Exception as e:
+            print(f"[WARN] DSI computation failed: {e}")
+
+    # ── Legend: combined handles, top-right, matching other panels ──
+    lns = ln_rho + ln_dsi
+    leg, leg_band = _journal_legend(ax, loc='upper left',
+                                    handles=lns,
+                                    labels=[l.get_label() for l in lns])
 
     # ── Mass conservation metric: |<ρ>_mean − 1.0| ──
     if len(finite) > 1:
@@ -1284,15 +1373,8 @@ def build_rho_panel(ax, rho_data):
         dev_from_1 = abs(rho_mean - 1.0)
         dev_max    = float(np.max(np.abs(finite - 1.0)))
 
-        # Journal-quality: compact, precise notation — black text
         if dev_from_1 < 1e-10:
             status = r"$|\langle\rho\rangle - 1|$" + f" = {dev_from_1:.1e}"
-        elif dev_from_1 < 1e-6:
-            status = (r"$|\langle\rho\rangle - 1|$" + f" = {dev_from_1:.1e}"
-                      + f"\n" + r"$\max|\Delta\rho|$" + f" = {dev_max:.1e}")
-        elif dev_from_1 < 1e-3:
-            status = (r"$|\langle\rho\rangle - 1|$" + f" = {dev_from_1:.1e}"
-                      + f"\n" + r"$\max|\Delta\rho|$" + f" = {dev_max:.1e}")
         else:
             status = (r"$|\langle\rho\rangle - 1|$" + f" = {dev_from_1:.1e}"
                       + f"\n" + r"$\max|\Delta\rho|$" + f" = {dev_max:.1e}")
@@ -1308,16 +1390,17 @@ def build_rho_panel(ax, rho_data):
                                n_candidates=40, va='top',
                                exclude_y_bands=[leg_band])
 
-        ax.text(0.02, clear_y, status,
-                transform=ax.transAxes, ha='left', va='top',
-                color='black', fontsize=7,
-                bbox=dict(facecolor='white', alpha=0.90,
-                          edgecolor='0.3', pad=1.5,
-                          boxstyle='round,pad=0.3',
-                          linewidth=0.3),
-                clip_on=True, zorder=20)
+        top_ax = ax_dsi if ax_dsi is not None else ax
+        top_ax.text(0.02, clear_y, status,
+                    transform=ax.transAxes, ha='left', va='top',
+                    color='black', fontsize=7,
+                    bbox=dict(facecolor='white', alpha=0.90,
+                              edgecolor='0.3', pad=1.5,
+                              boxstyle='round,pad=0.3',
+                              linewidth=0.3),
+                    clip_on=True, zorder=20)
 
-    _panel_label(ax, '(c)')
+    _panel_label(ax_dsi if ax_dsi is not None else ax, '(c)')
 
 
 def build_perf_panel(ax, timing_data, panel_label='(d)'):

@@ -1,0 +1,9 @@
+[2026-05-16 02:25:43] ==========================================
+[2026-05-16 02:25:43] Periodic Hill Re5600 watcher started
+[2026-05-16 02:25:43]   pid=3442646  ppid=3442587  poll=30s
+[2026-05-16 02:25:43]   project  = /home/s8313697/5.Re10595/Edit5_Rebuild
+[2026-05-16 02:25:43]   conv     = /home/s8313697/5.Re10595/Edit5_Rebuild/result/4.Ma_U_Time.py
+[2026-05-16 02:25:43]   bench    = /home/s8313697/5.Re10595/Edit5_Rebuild/result/2.Benchmark.py
+[2026-05-16 02:25:43] ==========================================
+[2026-05-16 02:26:13] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit5_Rebuild/slurm_51982.log
+[2026-05-16 02:26:13] ALERT: simulation may be diverging — check slurm log immediately
