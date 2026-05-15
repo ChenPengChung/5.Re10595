@@ -112,7 +112,7 @@
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               2.5
+#define     GAMMA               2.0
 #define     ALPHA               0.5
 
 #define     CFL                 0.5
