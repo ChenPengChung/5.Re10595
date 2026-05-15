@@ -18,19 +18,31 @@ Pipeline:
      grid derived from variables.h GRID_DAT_DIR/GRID_DAT_REF (or
      --solver-grid-dat). Coordinate mismatch is fatal by default.
   4. Read old checkpoint, compute macros (rho, ux, uy, uz)
-  5. Interpolate macros old -> new according to --interp-mode:
-       phys (default): physical-space remap; correct when GAMMA changes.
-         --interp-order 6 (default): 7-point Lagrange tensor product O(h^6).
-         --interp-order 2:          bilinear O(h^2) (legacy).
-       comp:           legacy computational (j, k, i) remap for A/B tests.
-  6. Reconstruct f_q for q = 0..18 according to --fneq-mode:
-       chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
-                                 NEW-grid velocity gradients via Chapman-Enskog.
+  5. Interpolate macros old -> new, then apply conservation corrections:
+     5a. Interpolate rho, ux, uy, uz according to --interp-mode:
+           phys (default): physical-space remap; correct when GAMMA changes.
+             --interp-order 6 (default): 7-point Lagrange tensor product O(h^6).
+                Near-wall stencils use cubic ghost extrapolation (solver-matched).
+             --interp-order 2:          bilinear O(h^2) (legacy).
+           comp:           legacy computational (j, k, i) remap for A/B tests.
+     5b. Clamp wall macros: u=v=w=0, rho=1 at k=3 and k=NZ6-4 (no-slip).
+     5c. Global density correction: additive offset on non-wall interior rows
+         so full-domain mean rho returns to 1 while walls stay at rho=1.
+     5d. Bulk velocity correction: scale interior streamwise velocity so
+         Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
+  6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
+     (rho, u, v, w) produced by steps 5a-5d. Both f_eq AND f_neq are
+     computed from these corrected fields on the full domain including
+     walls, then combined: f_q = f_eq + f_neq.  Mode --fneq-mode selects
+     how f_neq is obtained:
+       chapman-enskog (default): f_eq and f_neq both built from corrected
+                                 macros. f_neq reconstructed from NEW-grid
+                                 velocity gradients via Chapman-Enskog.
                                  Wall rows use the solver-matched one-sided FD
                                  stencil for the wall CE formula.
-       interp (legacy):          f_q = f_eq(new) + scale * interp(f_neq_old)
-                                 (linear interp in computational space; loses
-                                 gradient information across GAMMA changes).
+       interp (legacy):          f_eq from corrected macros +
+                                 scale * interp(f_neq_old) in computational
+                                 space (loses gradient info across GAMMA changes).
   7. Preserve controller state (Force_integral, error_prev, ctrl_initialized,
      gehrke_activated) ONLY from origin metadata to avoid F* step on restart.
      FTT and accu_count are NOT preserved — they are reset to 0 because:
