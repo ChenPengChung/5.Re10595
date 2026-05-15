@@ -2452,9 +2452,13 @@ def main():
         sys.exit('FATAL: mpi_rank_count mismatch: file={}, expected={}'.format(
             meta_old.get('mpi_rank_count'), OLD.JP))
     Force_value = float(meta_old['Force'])
+    dt_global_old = float(meta_old['dt_global'])
+    half_Fdt_old = 0.5 * dt_global_old * Force_value
     print('      grid_dims={} mpi_rank_count={} step={} FTT={} Force={:.6e}'.format(
         meta_old['grid_dims'], meta_old['mpi_rank_count'],
         meta_old['step'], meta_old['FTT'], Force_value))
+    print('      source dt_global={:.15e} half_Fdt={:.15e}'.format(
+        dt_global_old, half_Fdt_old))
 
     # ---- Step 2: build OLD grid ----
     print('[2/8] Building OLD grid coordinates')
@@ -2490,7 +2494,9 @@ def main():
 
     rho_safe = np.where(rho_g > 1e-12, rho_g, 1.0)
     ux_g = momx_g / rho_safe
-    uy_g = momy_g / rho_safe
+    # Match the solver macroscopic velocity definition under Guo forcing:
+    # rho * code_v = sum_i(f_i * e_i,y) + 0.5 * dt * Force.
+    uy_g = (momy_g + half_Fdt_old) / rho_safe
     uz_g = momz_g / rho_safe
     del momx_g, momy_g, momz_g, rho_safe
 
