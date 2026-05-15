@@ -122,9 +122,6 @@ core
 core.*
 
 # simulation outputs
-Ustar_Force_record.dat
-timing_log.dat
-checkrho.dat
 png_frames/
 result/monitor_convergence_*.{pdf,png}
 
@@ -133,3 +130,13 @@ result/monitor_convergence_*.{pdf,png}
 # -----------------------------------------------------------------------------
 phase2_generatecheckpoint/step_*/*.bin
 phase2_generatecheckpoint/step_*/__pycache__/
+
+# -----------------------------------------------------------------------------
+# 三大紀錄檔：原始 .dat 不追蹤（本地保留），壓縮 .dat.gz 追蹤推送
+# -----------------------------------------------------------------------------
+Ustar_Force_record.dat
+timing_log.dat
+checkrho.dat
+!Ustar_Force_record.dat.gz
+!timing_log.dat.gz
+!checkrho.dat.gz
