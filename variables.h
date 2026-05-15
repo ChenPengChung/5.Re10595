@@ -39,7 +39,7 @@
 // ── §1b. 插值方案 (WENO7) ──
 //   Semi-Lagrangian 3-pass dimensional splitting: η(展向) → ξ(流向) → ζ(法向)
 //
-//   USE_WENO7 = 0: 居中 Lagrange-7 + ghost 線性外推（穩定, 無 overhead）
+//   USE_WENO7 = 0: 居中 Lagrange-7 + ghost 外推（階數由 GHOST_EXTRAP_ORDER 控制）
 //   USE_WENO7 = 1: 居中 WENO7-Z 非線性權重（smooth 區 = Lagrange-7, 不連續處自動降階）
 //
 //   各 pass 獨立開關:

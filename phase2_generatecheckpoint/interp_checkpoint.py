@@ -26,8 +26,8 @@ Pipeline:
   6. Reconstruct f_q for q = 0..18 according to --fneq-mode:
        chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
                                  NEW-grid velocity gradients via Chapman-Enskog.
-                                 Wall rows use 6th-order one-sided FD to match
-                                 the solver's wall CE formula.
+                                 Wall rows use the solver-matched one-sided FD
+                                 stencil for the wall CE formula.
        interp (legacy):          f_q = f_eq(new) + scale * interp(f_neq_old)
                                  (linear interp in computational space; loses
                                  gradient information across GAMMA changes).
@@ -1462,11 +1462,65 @@ def lagrange7_weights_vectorized(t_arr):
     return weights
 
 
+def extrapolate_wall_ghost_stencil_cubic(stencil_k, stencil_start, cfg):
+    """Mirror solver cubic wall-ghost extrapolation for one 7-point k stencil.
+
+    stencil_k has shape (7, ...), with axis 0 corresponding to consecutive
+    wall-normal buffer indices [stencil_start, stencil_start + 6].  When that
+    window crosses either wall, replace the ghost entries by direct cubic
+    extrapolation from the nearest four in-domain stencil values before the
+    Lagrange contraction.  This mirrors gilbm_ghost_zone_extrapolate() with
+    GHOST_EXTRAP_ORDER=3 in gilbm/evolution_gilbm/1.algorithm1.h.
+    """
+    if stencil_k.shape[0] != 7:
+        raise ValueError('extrapolate_wall_ghost_stencil_cubic expects axis-0 length 7')
+
+    out = stencil_k.copy()
+    fluid_lo = BFR
+    fluid_hi = cfg.NZ6 - 1 - BFR
+
+    n_ghost_bot = max(fluid_lo - stencil_start, 0)
+    n_ghost_top = max(stencil_start + 6 - fluid_hi, 0)
+
+    if n_ghost_bot > 0:
+        p0 = n_ghost_bot
+        p1 = n_ghost_bot + 1
+        p2 = n_ghost_bot + 2
+        p3 = n_ghost_bot + 3
+        for g in range(n_ghost_bot - 1, -1, -1):
+            d = float(p0 - g)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            out[g] = c0 * out[p0] + c1 * out[p1] + c2 * out[p2] + c3 * out[p3]
+
+    if n_ghost_top > 0:
+        pN = 6 - n_ghost_top
+        pN1 = pN - 1
+        pN2 = pN - 2
+        pN3 = pN - 3
+        for g in range(pN + 1, 7):
+            d = float(g - pN)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            out[g] = c0 * out[pN] + c1 * out[pN1] + c2 * out[pN2] + c3 * out[pN3]
+
+    return out
+
+
 def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
     """Interpolate one (NY6_old, NZ6_old, NX6_old) field using 7-point Lagrange.
 
     Uses the same PhysMapping2D (j*, k*, xi, eta) as the bilinear version,
     but applies 7x7 tensor product in the (j, k) plane and 7-point along i.
+    Wall-normal stencils that cross either wall rebuild ghost entries by cubic
+    extrapolation from in-domain values before the k contraction, mirroring
+    the solver's GHOST_EXTRAP_ORDER=3 path.
 
     Stencil: for anchor cell (j*, k*), nodes j*-3..j*+3, k*-3..k*+3.
     Node m=3 at j* corresponds to xi=0; node m=4 at j*+1 to xi=1.
@@ -1522,6 +1576,11 @@ def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
             # Contract i-stencil with i_weights: sum over last dim
             # i_weights shape (NX, 7) → broadcast
             val_jk = np.einsum('jkni,ni->jkn', slab_i, i_weights)  # (7, 7, NX)
+            # Solver-style wall handling: rebuild any k-ghost entries from
+            # in-domain stencil values before the wall-normal contraction.
+            val_kjn = extrapolate_wall_ghost_stencil_cubic(
+                np.moveaxis(val_jk, 1, 0), kb - 3, cfg_old)
+            val_jk = np.moveaxis(val_kjn, 0, 1)
             # Contract (j, k) with wjk
             row = np.einsum('jk,jkn->n', wjk, val_jk)  # (NX,)
 
@@ -1531,31 +1590,63 @@ def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
     return field_new
 
 
-def apply_rho_mass_correction(rho, cfg):
-    """Global additive mass correction matching solver's ReduceRhoSum_Kernel.
+def clamp_wall_macros(rho, ux, uy, uz, cfg):
+    """Clamp physical wall macros before global conservation corrections."""
+    kt = cfg.NZ6 - 1 - BFR
+    wall_u_max_before = max(
+        float(np.max(np.abs(ux[:, BFR, :]))), float(np.max(np.abs(ux[:, kt, :]))),
+        float(np.max(np.abs(uy[:, BFR, :]))), float(np.max(np.abs(uy[:, kt, :]))),
+        float(np.max(np.abs(uz[:, BFR, :]))), float(np.max(np.abs(uz[:, kt, :]))),
+    )
+    wall_rho_max_delta_before = max(
+        float(np.max(np.abs(rho[:, BFR, :] - 1.0))),
+        float(np.max(np.abs(rho[:, kt, :] - 1.0))),
+    )
 
-    Interior: i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
-      ni = NX6 - 7, nj = NY6 - 7, nk = NZ6 - 6
-      N_interior = ni * nj * nk
-      rho_modify = (N_interior * 1.0 - sum(rho[interior])) / N_interior
-      rho[interior] += rho_modify
+    rho[:, BFR, :] = 1.0
+    rho[:, kt, :] = 1.0
+    for arr in (ux, uy, uz):
+        arr[:, BFR, :] = 0.0
+        arr[:, kt, :] = 0.0
+
+    return wall_u_max_before, wall_rho_max_delta_before
+
+
+def apply_rho_mass_correction(rho, cfg):
+    """Restore full-domain mean rho=1 while keeping physical wall rho=1.
+
+    The conserved domain matches the solver reduction domain:
+      i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
+    including both physical wall rows and excluding periodic duplicates.
+
+    Because checkpoint rebuilds clamp wall density to exactly 1 before this
+    correction, only non-wall rows absorb the additive offset:
+      k∈[4, NZ6-4)
+    This preserves wall mass exactly while restoring the full-domain total.
     """
     ni = cfg.NX6 - 7
     nj = cfg.NY6 - 7
     nk = cfg.NZ6 - 6
-    N_interior = ni * nj * nk
+    N_full = ni * nj * nk
+    N_adjust = ni * nj * max(nk - 2, 0)
+    if N_adjust <= 0:
+        raise ValueError('apply_rho_mass_correction requires at least one non-wall k row')
 
-    interior = (slice(BFR, BFR + nj),
-                slice(BFR, BFR + nk),
-                slice(BFR, BFR + ni))
+    full_domain = (slice(BFR, BFR + nj),
+                   slice(BFR, BFR + nk),
+                   slice(BFR, BFR + ni))
+    adjust_domain = (slice(BFR, BFR + nj),
+                     slice(BFR + 1, BFR + nk - 1),
+                     slice(BFR, BFR + ni))
 
-    rho_sum = float(np.sum(rho[interior]))
-    rho_target = float(N_interior) * 1.0
-    rho_modify = (rho_target - rho_sum) / float(N_interior)
+    rho_sum = float(np.sum(rho[full_domain]))
+    rho_global_avg = rho_sum / float(N_full)
+    rho_avg_defect = 1.0 - rho_global_avg
+    rho_modify = rho_avg_defect * float(N_full) / float(N_adjust)
 
-    mean_before = rho_sum / float(N_interior)
-    rho[interior] += rho_modify
-    mean_after = float(np.sum(rho[interior])) / float(N_interior)
+    mean_before = rho_global_avg
+    rho[adjust_domain] += rho_modify
+    mean_after = float(np.sum(rho[full_domain])) / float(N_full)
 
     return rho_modify, mean_before, mean_after
 
@@ -1609,7 +1700,7 @@ def apply_Ub_correction(Ub_old, uy_new, z2d_new, cfg_new):
 
     scale = Ub_old / Ub_new_before
     interior = (slice(BFR, BFR + cfg_new.NY),
-                slice(BFR, BFR + cfg_new.NZ),
+                slice(BFR + 1, BFR + cfg_new.NZ - 1),
                 slice(BFR, BFR + cfg_new.NX))
     uy_new[interior] *= scale
     enforce_periodic_physical_duplicates(uy_new, cfg_new)
@@ -1871,7 +1962,7 @@ def compute_inverse_metric_2d_fornberg(y_2d, z_2d):
 # ComputeGlobalTimeStep). Replaces the dt_global=-1.0 placeholder that
 # bypasses fileIO.h:658 Phase 5 drift check.
 # ---------------------------------------------------------------
-def compute_dt_global_gilbm(cfg, cfl=0.5, metric_order=6):
+def compute_dt_global_gilbm(cfg, cfl, metric_order=6):
     """Mirror gilbm/precompute.h:78-115 ComputeGlobalTimeStep.
 
     dt_global = cfl / max|c~|, where max is over (eta, xi, zeta) and D3Q19 dirs:
@@ -2441,7 +2532,8 @@ def main():
         # OLD grid coords needed for physical-space inverse mapping
         _, y2d_old, z2d_old = build_grid_xyz(OLD)
         interp_order = args.interp_order
-        interp_label = '7-point Lagrange O(h^6)' if interp_order == 6 else 'bilinear O(h^2)'
+        interp_label = ('7-point Lagrange O(h^6) + cubic wall ghost extrapolation'
+                        if interp_order == 6 else 'bilinear O(h^2)')
         print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space')
         print('      interpolation order: {} ({})'.format(interp_order, interp_label))
         t = time.time()
@@ -2461,11 +2553,6 @@ def main():
         print('      uy:   {:.1f}s'.format(time.time() - t))
         t = time.time(); uz_new  = interp_fn(uz_g,  mapping)
         print('      uz:   {:.1f}s'.format(time.time() - t))
-
-        # Mass correction for rho after Lagrange interpolation
-        rho_modify, mean_before, mean_after = apply_rho_mass_correction(rho_new, NEW)
-        print('      rho mass correction: rho_modify = {:.6e}'.format(rho_modify))
-        print('      rho mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
     else:
         if OLD.GAMMA != NEW.GAMMA:
             print('      WARN: GAMMA differs (OLD={}, NEW={}) but --interp-mode=comp:'.format(
@@ -2485,6 +2572,16 @@ def main():
         t = time.time()
         uz_new = interpolate_comp_3d(uz_g, OLD, NEW)
         print('      uz:   {:.1f}s'.format(time.time() - t))
+
+    print('      Applying wall macro constraints: u=v=w=0, rho=1')
+    wall_residual_max, wall_rho_delta_max = clamp_wall_macros(
+        rho_new, ux_new, uy_new, uz_new, NEW)
+    print('      max |u_wall| before clamp = {:.3e}'.format(wall_residual_max))
+    print('      max |rho_wall - 1| before clamp = {:.3e}'.format(wall_rho_delta_max))
+
+    rho_modify, mean_before, mean_after = apply_rho_mass_correction(rho_new, NEW)
+    print('      rho mass correction (non-wall rows): rho_modify = {:.6e}'.format(rho_modify))
+    print('      rho full-domain mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
 
     print('      Enforcing periodic duplicate nodes and filling ghost cells')
     for arr in (rho_new, ux_new, uy_new, uz_new):
@@ -2582,24 +2679,6 @@ def main():
             args.metric_order,
             'Fornberg j-central + k-adaptive' if args.metric_order == 6 else '2nd-order central'))
         dx_phys = LX / (NEW.NX - 1)
-
-        # No-slip wall clamp: physical wall is u=v=w=0. After macro interpolation,
-        # u_new[BFR] may inherit OLD's wall value
-        # which may carry small residual (~O(δz·∂u/∂z|_wall) plus FP noise) because
-        # LBM CE wall BC produces approximately, not bitwise, zero. The 6th-order
-        # one-sided FD formula in the solver explicitly assumes u_wall=0. Clamp here so CE wall stress
-        # estimate matches the solver's wall BC kernel exactly.
-        kt = NEW.NZ6 - 1 - BFR  # top wall row index
-        wall_residual_max = max(
-            float(np.max(np.abs(ux_new[:, BFR, :]))), float(np.max(np.abs(ux_new[:, kt, :]))),
-            float(np.max(np.abs(uy_new[:, BFR, :]))), float(np.max(np.abs(uy_new[:, kt, :]))),
-            float(np.max(np.abs(uz_new[:, BFR, :]))), float(np.max(np.abs(uz_new[:, kt, :]))),
-        )
-        print('      max |u_wall| before clamp = {:.3e}   (any value > 1e-10 indicates '
-              'OLD checkpoint or interp introduced non-zero wall residual)'.format(wall_residual_max))
-        for arr in (ux_new, uy_new, uz_new):
-            arr[:, BFR, :] = 0.0
-            arr[:, kt, :]  = 0.0
 
         # 9-component velocity gradient tensor on NEW interior
         t = time.time()
