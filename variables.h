@@ -80,7 +80,7 @@
 // └──────────────────────────────────────────────────────────────┘
 #define     NX      129         // 展向格點
 #define     NY      257         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      129         // 法向格點
+#define     NZ      193         // 法向格點
 #define     jp      8           //   GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
@@ -112,7 +112,7 @@
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               2.5
+#define     GAMMA               2.3
 #define     ALPHA               0.5
 
 #define     CFL                 0.5
@@ -172,7 +172,7 @@
 // ================================================================
 #define     loop        50000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
-#define     NDTFRC      63        // 每 N 步更新外力項 (補償 GAMMA 2.5 dt 縮小 25%)
+#define     NDTFRC      50        // 每 N 步更新外力項 
 #define     NDTBIN      1000   // 每 N 步輸出 binary checkpoint
 #define     NDTVTK      1000      // 每 N 步輸出 VTK
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度

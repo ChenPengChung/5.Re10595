@@ -1196,7 +1196,7 @@ def bilinear_inverse_newton(y_n, z_n, y_corners, z_corners,
     raise _DegenerateCellError()
 
 
-def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-6):
+def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-5):
     """Triangle barycentric fallback when Newton fails or converges out-of-bounds.
 
     Splits cell (a, b, c, d) into 2 triangles:
@@ -1231,7 +1231,7 @@ def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-6)
     raise _DegenerateCellError()
 
 
-def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-6):
+def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-4):
     """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
 
     Per-candidate strategy:

@@ -259,15 +259,14 @@ _grid_dim_value() {
 }
 
 _discover_phase1_grid() {
-    local prefix="$1" label="$2" ny="$3" nz="$4"
-    local dim_tag="_I${ny}_J${nz}"
+    local prefix="$1" label="$2"
     local -a candidates=()
     while IFS= read -r f; do
         [ -n "$f" ] && candidates+=("$f")
-    done < <(find phase1_generategrid -maxdepth 1 -type f -name "${prefix}*${dim_tag}*.dat" | sort)
+    done < <(find phase1_generategrid -maxdepth 1 -type f -name "${prefix}*.dat" | sort)
 
     if [ "${#candidates[@]}" -eq 0 ]; then
-        echo "[FATAL] phase1_generategrid/ 找不到 ${label} grid: ${prefix}*${dim_tag}*.dat" >&2
+        echo "[FATAL] phase1_generategrid/ 找不到 ${label} grid: ${prefix}*.dat" >&2
         exit 1
     fi
     if [ "${#candidates[@]}" -gt 1 ]; then
@@ -785,11 +784,11 @@ if [ "$MODE_REGRID" -eq 1 ] && [ "$MODE_COLD" -eq 0 ]; then
         exit 1
     fi
     if [ -z "$REGRID_OLD_GRID" ]; then
-        REGRID_OLD_GRID="$(_discover_phase1_grid oldgrid OLD "$_VH_NY" "$_VH_NZ")"
+        REGRID_OLD_GRID="$(_discover_phase1_grid oldgrid OLD)"
         echo "[preflight-B] Auto-found OLD grid: $REGRID_OLD_GRID"
     fi
     if [ -z "$REGRID_NEW_GRID" ]; then
-        REGRID_NEW_GRID="$(_discover_phase1_grid newgrid NEW "$_VH_NY" "$_VH_NZ")"
+        REGRID_NEW_GRID="$(_discover_phase1_grid newgrid NEW)"
         echo "[preflight-B] Auto-found NEW grid: $REGRID_NEW_GRID"
     fi
 
@@ -960,8 +959,8 @@ elif [ "$HAS_CKPT" -eq 0 ] && [ "$MODE_COLD" -eq 0 ]; then
     _AUTO_NEW_GRID=""
     if [ "$_AUTO_READY" -eq 1 ]; then
         _dim_tag="_I${_AUTO_VH_NY}_J${_AUTO_VH_NZ}"
-        _AUTO_OLD_GRID="$(_discover_phase1_grid oldgrid OLD "$_AUTO_VH_NY" "$_AUTO_VH_NZ")"
-        _AUTO_NEW_GRID="$(_discover_phase1_grid newgrid NEW "$_AUTO_VH_NY" "$_AUTO_VH_NZ")"
+        _AUTO_OLD_GRID="$(_discover_phase1_grid oldgrid OLD)"
+        _AUTO_NEW_GRID="$(_discover_phase1_grid newgrid NEW)"
     fi
 
     if [ "$_AUTO_READY" -eq 1 ]; then
