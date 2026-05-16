@@ -2618,10 +2618,6 @@ def main():
     fill_ghost(uy_new, NEW)
     fill_ghost(uz_new, NEW)
 
-    # Ub conservation correction: scale streamwise velocity to match OLD Ub
-    ub_scale, Ub_new_before, Ub_new_after = apply_Ub_correction(
-        Ub_old, uy_new, z2d_new, NEW)
-
     new_int = (slice(BFR, BFR+NEW.NY), slice(BFR, BFR+NEW.NZ), slice(BFR, BFR+NEW.NX))
     print('      NEW interior rho = [{:.6f}, {:.6f}], mean = {:.6f}'.format(
         rho_new[new_int].min(), rho_new[new_int].max(), rho_new[new_int].mean()))
@@ -2630,22 +2626,46 @@ def main():
         np.abs(uy_new[new_int]).max(),
         np.abs(uz_new[new_int]).max()))
 
+    # Initialization correction order:
+    #   wall-clamp -> rho-correct -> ghost-fill -> Poisson -> wall-reclamp
+    #   -> Ub-scale -> ghost-refill -> div-check -> f_eq
+    # Poisson first enforces div(u)=0; Ub scaling then preserves the requested
+    # bulk streamwise velocity, leaving only the tiny residual checked below.
+
     # ---- Poisson velocity projection (solenoidal correction) ----
+    proj_info = None
+    divergence_diagnostic_fn = None
     if args.project_velocity == 'poisson':
         print('      --- Poisson velocity projection ---')
-        from poisson_projection import poisson_project
-        ux_new, uy_new, uz_new, proj_info = poisson_project(
-            ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+        from poisson_projection import (
+            poisson_project, PoissonProjectionError, divergence_diagnostic)
+        divergence_diagnostic_fn = divergence_diagnostic
+        try:
+            ux_new, uy_new, uz_new, proj_info = poisson_project(
+                ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+        except PoissonProjectionError as e:
+            sys.exit('FATAL: Poisson projection failed: {}\n'
+                     '  Velocity field was NOT modified.\n'
+                     '  Cannot produce a solenoidal checkpoint — aborting.'.format(e))
         kt_wall = NEW.NZ6 - 1 - BFR
         for arr in (ux_new, uy_new, uz_new):
             arr[:, BFR, :] = 0.0
             arr[:, kt_wall, :] = 0.0
-        for arr in (ux_new, uy_new, uz_new):
-            enforce_periodic_physical_duplicates(arr, NEW)
-            fill_ghost(arr, NEW)
-        print('      wall re-clamp applied; periodic + ghost re-filled')
+        print('      wall re-clamp applied')
     else:
         print('      velocity projection: SKIPPED (--project-velocity none)')
+
+    # Ub conservation correction: scale streamwise velocity to match OLD Ub
+    ub_scale, Ub_new_before, Ub_new_after = apply_Ub_correction(
+        Ub_old, uy_new, z2d_new, NEW)
+
+    print('      Final periodic duplicate enforcement and ghost-cell fill')
+    for arr in (rho_new, ux_new, uy_new, uz_new):
+        enforce_periodic_physical_duplicates(arr, NEW)
+    fill_ghost(rho_new, NEW)
+    fill_ghost(ux_new, NEW)
+    fill_ghost(uy_new, NEW)
+    fill_ghost(uz_new, NEW)
 
     # ---- Step 6: NEW-grid dt_global for CE coefficient and metadata ----
     print('[6/8] Computing NEW-grid dt_global')
@@ -2664,6 +2684,34 @@ def main():
               'but CE still uses dt_global_new above.')
     else:
         dt_for_meta = '{:.15e}'.format(dt_real)
+
+    if divergence_diagnostic_fn is None:
+        try:
+            from poisson_projection import divergence_diagnostic as divergence_diagnostic_fn
+        except Exception:
+            divergence_diagnostic_fn = None
+    if divergence_diagnostic_fn is not None:
+        div_rms, div_max = divergence_diagnostic_fn(
+            ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+        print('      divergence check: rms = {:.6e}, max|div(u)| = {:.6e}'.format(
+            div_rms, div_max))
+    else:
+        j_mid = slice(BFR + 1, BFR + NEW.NY - 1)
+        k_mid = slice(BFR + 1, BFR + NEW.NZ - 1)
+        i_mid = slice(BFR + 1, BFR + NEW.NX - 1)
+        dudx = (ux_new[j_mid, k_mid, BFR + 2:BFR + NEW.NX]
+                - ux_new[j_mid, k_mid, BFR:BFR + NEW.NX - 2]) / (2.0 * dx_new)
+        dy = (y2d_new[BFR + 2:BFR + NEW.NY, k_mid]
+              - y2d_new[BFR:BFR + NEW.NY - 2, k_mid])[:, :, np.newaxis]
+        dudy = ((uy_new[BFR + 2:BFR + NEW.NY, k_mid, i_mid]
+                 - uy_new[BFR:BFR + NEW.NY - 2, k_mid, i_mid]) / dy)
+        dz = (z2d_new[j_mid, BFR + 2:BFR + NEW.NZ]
+              - z2d_new[j_mid, BFR:BFR + NEW.NZ - 2])[:, :, np.newaxis]
+        dwdz = ((uz_new[j_mid, BFR + 2:BFR + NEW.NZ, i_mid]
+                 - uz_new[j_mid, BFR:BFR + NEW.NZ - 2, i_mid]) / dz)
+        div_max = float(np.max(np.abs(dudx + dudy + dwdz)))
+        print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
+            div_max))
 
     # ---- Step 7: f_eq + per-rank write ----
     print('[7/8] Reconstructing f_eq and writing per-rank files')
@@ -2927,7 +2975,16 @@ def main():
         'interp_Ub_new_after': '{:.15e}'.format(Ub_new_after),
         'interp_Ub_scale': '{:.15e}'.format(ub_scale),
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'interp_project_velocity': args.project_velocity,
     }
+    if proj_info is not None:
+        new_meta['interp_proj_div_rms_before'] = '{:.6e}'.format(proj_info['div_rms_before'])
+        new_meta['interp_proj_div_max_before'] = '{:.6e}'.format(proj_info['div_max_before'])
+        new_meta['interp_proj_div_rms_after'] = '{:.6e}'.format(proj_info['div_rms_after'])
+        new_meta['interp_proj_div_max_after'] = '{:.6e}'.format(proj_info['div_max_after'])
+        new_meta['interp_proj_div_rms_interior'] = '{:.6e}'.format(proj_info['div_rms_interior'])
+        new_meta['interp_proj_outer_iters'] = str(proj_info['outer_iters'])
+        new_meta['interp_proj_solve_time_s'] = '{:.1f}'.format(proj_info['solve_time_s'])
     if ce_omega_new is not None:
         new_meta['interp_ce_omega_global_new'] = '{:.15e}'.format(ce_omega_new)
         new_meta['interp_ce_coeff'] = '{:.15e}'.format(ce_coeff_used)
