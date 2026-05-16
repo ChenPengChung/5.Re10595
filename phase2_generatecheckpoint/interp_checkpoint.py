@@ -1231,24 +1231,28 @@ def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-5)
     raise _DegenerateCellError()
 
 
-def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-4):
+def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
+                            eps_phys=1e-7, eps_param=1e-5):
     """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
 
+    eps_phys  — physical-space tolerance for bbox pre-filter
+    eps_param — parametric-space tolerance for xi/eta in-bounds check
+
     Per-candidate strategy:
-      1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps tolerance).
+      1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps_param).
       2. If Newton failed OR converged out-of-bounds -> triangle fallback.
       3. Both failed -> next candidate.
       4. All candidates exhausted -> ValueError.
     """
     bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max = bboxes
-    candidates = ((bbox_y_min - eps <= y_n) & (y_n <= bbox_y_max + eps) &
-                  (bbox_z_min - eps <= z_n) & (z_n <= bbox_z_max + eps))
+    candidates = ((bbox_y_min - eps_phys <= y_n) & (y_n <= bbox_y_max + eps_phys) &
+                  (bbox_z_min - eps_phys <= z_n) & (z_n <= bbox_z_max + eps_phys))
     cand_jk = np.argwhere(candidates)
     if len(cand_jk) == 0:
         raise ValueError('No OLD cell brackets ({:.6e}, {:.6e})'.format(y_n, z_n))
 
     def _in_bounds(xi, eta):
-        return -eps <= xi <= 1 + eps and -eps <= eta <= 1 + eps
+        return -eps_param <= xi <= 1 + eps_param and -eps_param <= eta <= 1 + eps_param
 
     for j, k in cand_jk:
         y_corners = (y_old[j, k],   y_old[j+1, k],
@@ -1269,7 +1273,7 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-4):
         if xi is None:
             try:
                 xi_t, eta_t = bilinear_inverse_triangle_fallback(y_n, z_n,
-                                                                 y_corners, z_corners)
+                                                                 y_corners, z_corners, eps=eps_param)
                 if _in_bounds(xi_t, eta_t):
                     xi, eta = xi_t, eta_t
             except _DegenerateCellError:
