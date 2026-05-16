@@ -32,8 +32,14 @@ Pipeline:
          physical domain, matching the runtime mass-correction kernel.
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
+     5e. Poisson velocity projection (--project-velocity poisson, default):
+         Solve div(grad(phi)) = div(u) with periodic x,y / Neumann z BCs,
+         then correct u_proj = u - grad(phi).  Removes the irrotational
+         component introduced by scalar-wise interpolation.  D and G
+         operators use identical CD2 stencils → div(u_proj) = 0 to solver
+         tolerance.  Wall velocity re-clamped after projection.
   6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
-     (rho, u, v, w) produced by steps 5a-5d. Mode --fneq-mode selects how the
+     (rho, u, v, w) produced by steps 5a-5e. Mode --fneq-mode selects how the
      non-equilibrium component is handled:
        zero (default):           stability A/B test mode; write pure
                                  equilibrium f_q = f_eq, i.e. f_neq = 0.
@@ -1198,7 +1204,7 @@ def bilinear_inverse_newton(y_n, z_n, y_corners, z_corners,
     raise _DegenerateCellError()
 
 
-def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-5):
+def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=5e-5):
     """Triangle barycentric fallback when Newton fails or converges out-of-bounds.
 
     Splits cell (a, b, c, d) into 2 triangles:
@@ -1234,7 +1240,7 @@ def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-5)
 
 
 def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
-                            eps_phys=1e-7, eps_param=1e-5):
+                            eps_phys=5e-6, eps_param=5e-5):
     """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
 
     eps_phys  — physical-space tolerance for bbox pre-filter
@@ -2157,6 +2163,11 @@ def main():
                         '"interp" = legacy linear interp of f_neq (loses gradient info). '
                         '"chapman-enskog" = rebuild f_neq on NEW grid from velocity '
                         'gradients via CE expansion.')
+    p.add_argument('--project-velocity', choices=['poisson', 'none'],
+                   default='poisson',
+                   help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
+                        'div(grad(phi))=div(u) to enforce solenoidal constraint (default). '
+                        '"none" = skip projection (legacy/debug).')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2618,6 +2629,23 @@ def main():
         np.abs(ux_new[new_int]).max(),
         np.abs(uy_new[new_int]).max(),
         np.abs(uz_new[new_int]).max()))
+
+    # ---- Poisson velocity projection (solenoidal correction) ----
+    if args.project_velocity == 'poisson':
+        print('      --- Poisson velocity projection ---')
+        from poisson_projection import poisson_project
+        ux_new, uy_new, uz_new, proj_info = poisson_project(
+            ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+        kt_wall = NEW.NZ6 - 1 - BFR
+        for arr in (ux_new, uy_new, uz_new):
+            arr[:, BFR, :] = 0.0
+            arr[:, kt_wall, :] = 0.0
+        for arr in (ux_new, uy_new, uz_new):
+            enforce_periodic_physical_duplicates(arr, NEW)
+            fill_ghost(arr, NEW)
+        print('      wall re-clamp applied; periodic + ghost re-filled')
+    else:
+        print('      velocity projection: SKIPPED (--project-velocity none)')
 
     # ---- Step 6: NEW-grid dt_global for CE coefficient and metadata ----
     print('[6/8] Computing NEW-grid dt_global')

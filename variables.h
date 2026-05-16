@@ -78,9 +78,9 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      129         // 展向格點
-#define     NY      257         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      193         // 法向格點
+#define     NX      65          // 展向格點
+#define     NY      129         // 流向格點 (需 (NY-1)%jp==0; 128/8=16)
+#define     NZ      65          // 法向格點
 #define     jp      8           //   GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
@@ -112,7 +112,7 @@
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               2.3
+#define     GAMMA               2.0
 #define     ALPHA               0.5
 
 #define     CFL                 0.5
