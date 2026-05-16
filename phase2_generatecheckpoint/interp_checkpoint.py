@@ -33,11 +33,11 @@ Pipeline:
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
   6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
-     (rho, u, v, w) produced by steps 5a-5d. Both f_eq AND f_neq are
-     computed from these corrected fields on the full domain including
-     walls, then combined: f_q = f_eq + f_neq.  Mode --fneq-mode selects
-     how f_neq is obtained:
-       chapman-enskog (default): f_eq and f_neq both built from corrected
+     (rho, u, v, w) produced by steps 5a-5d. Mode --fneq-mode selects how the
+     non-equilibrium component is handled:
+       zero (default):           stability A/B test mode; write pure
+                                 equilibrium f_q = f_eq, i.e. f_neq = 0.
+       chapman-enskog:           f_eq and f_neq both built from corrected
                                  macros. f_neq reconstructed from NEW-grid
                                  velocity gradients via Chapman-Enskog.
                                  Wall rows use the solver-matched one-sided FD
@@ -71,8 +71,8 @@ Usage:
       --old-gamma 2.0 --old-grid-dat old_grid.dat \\
       --new-nx 257 --new-ny 513 --new-nz 257 --new-jp 16 \\
       --new-gamma 3.0 --new-alpha 0.5 --new-grid-dat new_grid.dat \\
-      --output-root restart/checkpoint --step 1 \
-      --interp-mode phys --fneq-mode chapman-enskog
+      --output-root restart/checkpoint --step 1 \\
+      --interp-mode phys --fneq-mode zero
 
 Expected folder structure:
   workspace/
@@ -2151,10 +2151,12 @@ def main():
                    help='advanced override for output checkpoint directory; default is output-root/step_%%08d')
     p.add_argument('--fneq-scale', type=float, default=1.0,
                    help='scale factor applied to interpolated f_neq (legacy mode only; default: %(default)s)')
-    p.add_argument('--fneq-mode', choices=['interp', 'chapman-enskog'], default='chapman-enskog',
-                   help='f_neq reconstruction strategy. "interp" = legacy linear interp of f_neq '
-                        '(loses gradient info; default before fix). "chapman-enskog" = rebuild f_neq '
-                        'on NEW grid from velocity gradients via CE expansion (recommended; default).')
+    p.add_argument('--fneq-mode', choices=['zero', 'interp', 'chapman-enskog'], default='zero',
+                   help='f_neq reconstruction strategy. "zero" = pure equilibrium f=f_eq '
+                        'for stability A/B testing (default for current test). '
+                        '"interp" = legacy linear interp of f_neq (loses gradient info). '
+                        '"chapman-enskog" = rebuild f_neq on NEW grid from velocity '
+                        'gradients via CE expansion.')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2648,8 +2650,10 @@ def main():
         rho_pr[r].tofile(os.path.join(writing_dir, 'rho_{}.bin'.format(r)))
     print('      wrote rho_0..rho_{}.bin'.format(NEW.JP - 1))
 
-    # f_neq reconstruction. Two modes:
-    #   chapman-enskog (default, fix for divergence): rebuild f_neq on NEW grid
+    # f_neq reconstruction. Three modes:
+    #   zero (current stability A/B test): write pure equilibrium f = f_eq
+    #     and therefore force f_neq = 0 on the rebuilt checkpoint.
+    #   chapman-enskog: rebuild f_neq on NEW grid
     #     from velocity gradients via CE expansion. Drops the OLD f_q files
     #     after rho/u extraction; gradients are evaluated on the NEW grid so
     #     they are self-consistent with NEW spacing.
@@ -2661,7 +2665,27 @@ def main():
     ce_omega_new = None
     ce_coeff_used = None
 
-    if args.fneq_mode == 'chapman-enskog':
+    if args.fneq_mode == 'zero':
+        print('      mode = zero: writing pure equilibrium f=f_eq (f_neq forced to 0)')
+        for q in range(19):
+            f_new = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
+            enforce_periodic_physical_duplicates(f_new, NEW)
+            fill_ghost(f_new, NEW)
+
+            rho_check += f_new
+            if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
+                sys.exit('FATAL: f{:02d} contains NaN or Inf after equilibrium reconstruction'.format(q))
+            min_f = min(min_f, float(np.min(f_new)))
+            max_f = max(max_f, float(np.max(f_new)))
+
+            pr = split_y(f_new, NEW)
+            for r in range(NEW.JP):
+                pr[r].tofile(os.path.join(writing_dir, 'f{:02d}_{}.bin'.format(q, r)))
+            print('      wrote f{:02d}_0..f{:02d}_{} (equilibrium, f_neq=0)'.format(
+                q, q, NEW.JP - 1), flush=True)
+            del f_new, pr
+        print('      max |f_neq / f_eq|  = 0.000e+00   (forced equilibrium test)')
+    elif args.fneq_mode == 'chapman-enskog':
         # Resolve viscosity (variables.h: niu = Uref / Re).
         niu = args.niu
         if niu is None:
