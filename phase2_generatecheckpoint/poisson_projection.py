@@ -333,7 +333,8 @@ def divergence_diagnostic(ux, uy, uz, cfg, y_2d, z_2d):
 
 
 def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
-                    max_outer=20, div_tol=1e-6, verbose=True):
+                    max_outer=80, div_tol=1e-6, verbose=True,
+                    clamp_walls=True):
     """Project velocity onto divergence-free space.
 
     Uses outer Richardson iterations to close the gap between the compact
@@ -344,7 +345,7 @@ def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
       1. r = div_CD2(u_current)              — residual divergence
       2. dphi = L^{-1}(r)                    — FFT Poisson solve
       3. u_current -= grad_CD2(dphi)          — velocity correction
-      4. re-apply wall clamp + periodic BCs
+      4. optionally re-apply no-slip wall clamp, then periodic BCs
 
     Iterations stop when div RMS < div_tol or stagnates.
 
@@ -356,6 +357,7 @@ def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
     max_outer  : maximum outer Richardson iterations
     div_tol    : convergence tolerance on div RMS
     verbose    : print progress
+    clamp_walls : keep physical wall planes at no-slip during the projection
 
     Returns
     -------
@@ -381,8 +383,25 @@ def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
     gjj_2d = dj_dy**2 + dj_dz**2
     gkk_2d = dk_dy**2 + dk_dz**2
 
-    # Initial divergence
-    div_u = _divergence_cd2(ux, uy, uz, dx, dj_dy, dj_dz, dk_dy, dk_dz)
+    # Working copies
+    ux_w = ux.copy()
+    uy_w = uy.copy()
+    uz_w = uz.copy()
+
+    def _enforce_projection_bc():
+        if clamp_walls:
+            kt_wall = cfg.NZ6 - 1 - BFR
+            for arr in (ux_w, uy_w, uz_w):
+                arr[:, BFR, :] = 0.0
+                arr[:, kt_wall, :] = 0.0
+        for arr in (ux_w, uy_w, uz_w):
+            enforce_periodic_physical_duplicates(arr, cfg)
+            fill_ghost(arr, cfg)
+
+    _enforce_projection_bc()
+
+    # Initial divergence after enforcing the projection boundary constraints.
+    div_u = _divergence_cd2(ux_w, uy_w, uz_w, dx, dj_dy, dj_dz, dk_dy, dk_dz)
     b_arr = div_u[uniq].copy()
     div_rms_before = float(np.sqrt(np.mean(b_arr ** 2)))
     div_max_before = float(np.max(np.abs(b_arr)))
@@ -392,11 +411,6 @@ def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
             n_dof, nj, nk, ni))
         print('      div(u) BEFORE: RMS = {:.6e}, max = {:.6e}'.format(
             div_rms_before, div_max_before))
-
-    # Working copies
-    ux_w = ux.copy()
-    uy_w = uy.copy()
-    uz_w = uz.copy()
 
     t0_total = time.time()
     n_outer = 0
@@ -461,9 +475,7 @@ def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
         uy_w[full_int] -= gy[full_int]
         uz_w[full_int] -= gz[full_int]
 
-        for arr in (ux_w, uy_w, uz_w):
-            enforce_periodic_physical_duplicates(arr, cfg)
-            fill_ghost(arr, cfg)
+        _enforce_projection_bc()
 
         n_outer = outer + 1
 

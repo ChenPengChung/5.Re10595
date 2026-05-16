@@ -36,8 +36,9 @@ Pipeline:
          Solve div(grad(phi)) = div(u) with periodic x,y / Neumann z BCs,
          then correct u_proj = u - grad(phi).  Removes the irrotational
          component introduced by scalar-wise interpolation.  D and G
-         operators use identical CD2 stencils → div(u_proj) = 0 to solver
-         tolerance.  Wall velocity re-clamped after projection.
+         operators use identical CD2 stencils.  Wall velocity is constrained
+         inside the projection iterations, and no later step modifies the
+         interior velocity before f_eq reconstruction.
   6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
      (rho, u, v, w) produced by steps 5a-5e. Mode --fneq-mode selects how the
      non-equilibrium component is handled:
@@ -2157,17 +2158,23 @@ def main():
                    help='advanced override for output checkpoint directory; default is output-root/step_%%08d')
     p.add_argument('--fneq-scale', type=float, default=1.0,
                    help='scale factor applied to interpolated f_neq (legacy mode only; default: %(default)s)')
-    p.add_argument('--fneq-mode', choices=['zero', 'interp', 'chapman-enskog'], default='zero',
-                   help='f_neq reconstruction strategy. "zero" = pure equilibrium f=f_eq '
-                        'for stability A/B testing (default for current test). '
-                        '"interp" = legacy linear interp of f_neq (loses gradient info). '
+    p.add_argument('--fneq-mode', choices=['zero', 'interp', 'chapman-enskog'], default='chapman-enskog',
+                   help='f_neq reconstruction strategy. '
                         '"chapman-enskog" = rebuild f_neq on NEW grid from velocity '
-                        'gradients via CE expansion.')
+                        'gradients via CE expansion (default). '
+                        '"zero" = pure equilibrium f=f_eq for stability A/B testing. '
+                        '"interp" = legacy linear interp of f_neq (loses gradient info).')
     p.add_argument('--project-velocity', choices=['poisson', 'none'],
                    default='poisson',
                    help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
                         'div(grad(phi))=div(u) to enforce solenoidal constraint (default). '
                         '"none" = skip projection (legacy/debug).')
+    p.add_argument('--projection-max-outer', type=int, default=80,
+                   help='maximum outer Richardson iterations for Poisson projection '
+                        '(default: %(default)s; one-time preprocessing cost)')
+    p.add_argument('--projection-div-tol', type=float, default=1e-6,
+                   help='target RMS divergence tolerance for Poisson projection '
+                        '(default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2627,10 +2634,25 @@ def main():
         np.abs(uz_new[new_int]).max()))
 
     # Initialization correction order:
-    #   wall-clamp -> rho-correct -> ghost-fill -> Poisson -> wall-reclamp
-    #   -> Ub-scale -> ghost-refill -> div-check -> f_eq
-    # Poisson first enforces div(u)=0; Ub scaling then preserves the requested
-    # bulk streamwise velocity, leaving only the tiny residual checked below.
+    #   wall-clamp -> rho-correct -> ghost-fill -> Ub-scale -> ghost-refill
+    #   -> Poisson-with-wall-constraint -> final ghost-refill -> div-check -> f_eq
+    # Poisson is the final operation that modifies the interior velocity.  This
+    # prevents wall re-clamping or one-component Ub scaling from reintroducing
+    # divergence after the solenoidal projection.
+
+    # Ub conservation correction: scale streamwise velocity to match OLD Ub.
+    # This is intentionally before the projection because uy-only scaling is
+    # not a divergence-free operation on the curvilinear grid.
+    ub_scale, Ub_new_before, Ub_new_after = apply_Ub_correction(
+        Ub_old, uy_new, z2d_new, NEW)
+
+    print('      Periodic duplicate enforcement and ghost-cell fill before projection')
+    for arr in (rho_new, ux_new, uy_new, uz_new):
+        enforce_periodic_physical_duplicates(arr, NEW)
+    fill_ghost(rho_new, NEW)
+    fill_ghost(ux_new, NEW)
+    fill_ghost(uy_new, NEW)
+    fill_ghost(uz_new, NEW)
 
     # ---- Poisson velocity projection (solenoidal correction) ----
     proj_info = None
@@ -2642,22 +2664,16 @@ def main():
         divergence_diagnostic_fn = divergence_diagnostic
         try:
             ux_new, uy_new, uz_new, proj_info = poisson_project(
-                ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+                ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                max_outer=args.projection_max_outer,
+                div_tol=args.projection_div_tol)
         except PoissonProjectionError as e:
             sys.exit('FATAL: Poisson projection failed: {}\n'
                      '  Velocity field was NOT modified.\n'
                      '  Cannot produce a solenoidal checkpoint — aborting.'.format(e))
-        kt_wall = NEW.NZ6 - 1 - BFR
-        for arr in (ux_new, uy_new, uz_new):
-            arr[:, BFR, :] = 0.0
-            arr[:, kt_wall, :] = 0.0
-        print('      wall re-clamp applied')
+        print('      wall velocity constrained inside projection')
     else:
         print('      velocity projection: SKIPPED (--project-velocity none)')
-
-    # Ub conservation correction: scale streamwise velocity to match OLD Ub
-    ub_scale, Ub_new_before, Ub_new_after = apply_Ub_correction(
-        Ub_old, uy_new, z2d_new, NEW)
 
     print('      Final periodic duplicate enforcement and ghost-cell fill')
     for arr in (rho_new, ux_new, uy_new, uz_new):
@@ -2666,6 +2682,10 @@ def main():
     fill_ghost(ux_new, NEW)
     fill_ghost(uy_new, NEW)
     fill_ghost(uz_new, NEW)
+
+    Ub_final = compute_Ub(uy_new, z2d_new, NEW)
+    print('      Final Ub before f_eq = {:.15e} (target {:.15e}, residual {:.3e})'.format(
+        Ub_final, Ub_old, abs(Ub_final - Ub_old)))
 
     # ---- Step 6: NEW-grid dt_global for CE coefficient and metadata ----
     print('[6/8] Computing NEW-grid dt_global')
@@ -2685,6 +2705,8 @@ def main():
     else:
         dt_for_meta = '{:.15e}'.format(dt_real)
 
+    final_div_rms = None
+    final_div_max = None
     if divergence_diagnostic_fn is None:
         try:
             from poisson_projection import divergence_diagnostic as divergence_diagnostic_fn
@@ -2693,6 +2715,8 @@ def main():
     if divergence_diagnostic_fn is not None:
         div_rms, div_max = divergence_diagnostic_fn(
             ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+        final_div_rms = div_rms
+        final_div_max = div_max
         print('      divergence check: rms = {:.6e}, max|div(u)| = {:.6e}'.format(
             div_rms, div_max))
     else:
@@ -2710,6 +2734,7 @@ def main():
         dwdz = ((uz_new[j_mid, BFR + 2:BFR + NEW.NZ, i_mid]
                  - uz_new[j_mid, BFR:BFR + NEW.NZ - 2, i_mid]) / dz)
         div_max = float(np.max(np.abs(dudx + dudy + dwdz)))
+        final_div_max = div_max
         print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
             div_max))
 
@@ -2973,10 +2998,17 @@ def main():
         'interp_Ub_old': '{:.15e}'.format(Ub_old),
         'interp_Ub_new_before': '{:.15e}'.format(Ub_new_before),
         'interp_Ub_new_after': '{:.15e}'.format(Ub_new_after),
+        'interp_Ub_final_before_feq': '{:.15e}'.format(Ub_final),
         'interp_Ub_scale': '{:.15e}'.format(ub_scale),
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
         'interp_project_velocity': args.project_velocity,
+        'interp_projection_max_outer': str(args.projection_max_outer),
+        'interp_projection_div_tol': '{:.6e}'.format(args.projection_div_tol),
     }
+    if final_div_rms is not None:
+        new_meta['interp_final_div_rms'] = '{:.6e}'.format(final_div_rms)
+    if final_div_max is not None:
+        new_meta['interp_final_div_max'] = '{:.6e}'.format(final_div_max)
     if proj_info is not None:
         new_meta['interp_proj_div_rms_before'] = '{:.6e}'.format(proj_info['div_rms_before'])
         new_meta['interp_proj_div_max_before'] = '{:.6e}'.format(proj_info['div_max_before'])
