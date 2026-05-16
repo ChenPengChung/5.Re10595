@@ -62,6 +62,9 @@ cat <<EOF
   Live plots  :
     $LIVE_DIR/monitor_latest.png
     $LIVE_DIR/monitor_latest.pdf
+    $LIVE_DIR/restart_density_latest.png
+    $LIVE_DIR/restart_density_latest.pdf
+    $LIVE_DIR/restart_density_latest_latex.pdf
 
   Stop  : kill \$(cat "$PID_FILE")
   Tail  : tail -f "$LOG_FILE"

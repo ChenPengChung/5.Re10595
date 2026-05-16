@@ -15,12 +15,14 @@ PID_FILE="$LIVE_DIR/watcher.pid"
 
 CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
+DENSITY_AUDIT_SCRIPT="$RESULT_DIR/10.restart_density_audit.py"
 
 RE=5600
 POLL_SEC=30
 SIZE_STABLE_WAIT=3
 CONV_TIMEOUT=180
 BENCH_TIMEOUT=300
+DENSITY_AUDIT_TIMEOUT=300
 MIN_VTK_BYTES=1048576
 
 mkdir -p "$LIVE_DIR"
@@ -179,6 +181,66 @@ run_benchmark() {
     return 0
 }
 
+run_density_audit() {
+    local step="$1" capture rc
+    local before_marker="$LIVE_DIR/.density.marker.$$"
+    : > "$before_marker"
+
+    if [[ ! -f "$DENSITY_AUDIT_SCRIPT" ]]; then
+        log "DENSITY step=$step  skipped: script not found"
+        rm -f "$before_marker"
+        return 0
+    fi
+
+    capture=$(cd "$RESULT_DIR" && timeout "$DENSITY_AUDIT_TIMEOUT" python3 "$DENSITY_AUDIT_SCRIPT" 2>&1)
+    rc=$?
+
+    if (( rc == 124 )); then
+        log "DENSITY step=$step  TIMEOUT after ${DENSITY_AUDIT_TIMEOUT}s"
+        rm -f "$before_marker"
+        return 1
+    fi
+    if (( rc != 0 )); then
+        log "DENSITY step=$step  FAILED rc=$rc :: $(printf '%s' "$capture" | tail -c 300 | tr '\n' ' ')"
+        rm -f "$before_marker"
+        return 1
+    fi
+
+    local src_png src_pdf src_latex_pdf src_tex src_csv copied=""
+    src_png="$RESULT_DIR/restart_density_audit.png"
+    src_pdf="$RESULT_DIR/restart_density_audit.pdf"
+    src_latex_pdf="$RESULT_DIR/restart_density_audit_latex.pdf"
+    src_tex="$RESULT_DIR/restart_density_audit.tex"
+    src_csv="$RESULT_DIR/restart_density_audit.csv"
+
+    if [[ -f "$src_png" ]] && [[ "$src_png" -nt "$before_marker" ]]; then
+        cp -f "$src_png" "$LIVE_DIR/restart_density_latest.png"
+        copied="$copied restart_density_latest.png"
+    fi
+    if [[ -f "$src_pdf" ]] && [[ "$src_pdf" -nt "$before_marker" ]]; then
+        cp -f "$src_pdf" "$LIVE_DIR/restart_density_latest.pdf"
+        copied="$copied restart_density_latest.pdf"
+    fi
+    if [[ -f "$src_latex_pdf" ]] && [[ "$src_latex_pdf" -nt "$before_marker" ]]; then
+        cp -f "$src_latex_pdf" "$LIVE_DIR/restart_density_latest_latex.pdf"
+        copied="$copied restart_density_latest_latex.pdf"
+    fi
+    if [[ -f "$src_tex" ]] && [[ "$src_tex" -nt "$before_marker" ]]; then
+        cp -f "$src_tex" "$LIVE_DIR/restart_density_latest.tex"
+        copied="$copied restart_density_latest.tex"
+    fi
+    if [[ -f "$src_csv" ]] && [[ "$src_csv" -nt "$before_marker" ]]; then
+        cp -f "$src_csv" "$LIVE_DIR/restart_density_latest.csv"
+        copied="$copied restart_density_latest.csv"
+    fi
+    rm -f "$before_marker"
+
+    local density_line
+    density_line=$(printf '%s\n' "$capture" | grep -E '^\[LATEST\]' | tail -1 | sed -E 's/^[[:space:]]+//' || true)
+    log "DENSITY step=$step outputs:${copied:- (none)} ${density_line:+:: }$density_line"
+    return 0
+}
+
 log "=========================================="
 log "Periodic Hill Re$RE watcher started"
 log "  pid=$$  ppid=$PPID  poll=${POLL_SEC}s"
@@ -208,6 +270,7 @@ while :; do
             [[ -n "$metrics" ]] && log "  $metrics"
 
             run_convergence "$step" || true
+            run_density_audit "$step" || true
 
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,
