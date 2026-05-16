@@ -32,13 +32,13 @@ Pipeline:
          physical domain, matching the runtime mass-correction kernel.
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
-     5e. Poisson velocity projection (--project-velocity poisson, default):
-         Solve div(grad(phi)) = div(u) with periodic x,y / Neumann z BCs,
-         then correct u_proj = u - grad(phi).  Removes the irrotational
-         component introduced by scalar-wise interpolation.  D and G
-         operators use identical CD2 stencils.  Wall velocity is constrained
-         inside the projection iterations, and no later step modifies the
-         interior velocity before f_eq reconstruction.
+     5e. Velocity projection (--project-velocity poisson, default):
+         poisson:   approximate Helmholtz-Hodge correction.
+         dg-exact:  direct solve of the exact CD2 D*G scalar projection.
+         div-exact: direct minimum-norm velocity correction that zeroes the
+                    final CD2 divergence diagnostic to roundoff.  Wall
+                    velocity is constrained inside the projection, and no
+                    later step modifies the interior velocity before f_eq.
   6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
      (rho, u, v, w) produced by steps 5a-5e. Mode --fneq-mode selects how the
      non-equilibrium component is handled:
@@ -2164,10 +2164,14 @@ def main():
                         'gradients via CE expansion (default). '
                         '"zero" = pure equilibrium f=f_eq for stability A/B testing. '
                         '"interp" = legacy linear interp of f_neq (loses gradient info).')
-    p.add_argument('--project-velocity', choices=['poisson', 'none'],
+    p.add_argument('--project-velocity', choices=['poisson', 'dg-exact', 'div-exact', 'none'],
                    default='poisson',
                    help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
                         'div(grad(phi))=div(u) to enforce solenoidal constraint (default). '
+                        '"dg-exact" = direct solve of the exact CD2 D*G operator '
+                        'used by the final divergence check. '
+                        '"div-exact" = exact minimum-norm velocity correction '
+                        'that directly zeroes the final CD2 divergence diagnostic. '
                         '"none" = skip projection (legacy/debug).')
     p.add_argument('--projection-max-outer', type=int, default=80,
                    help='maximum outer Richardson iterations for Poisson projection '
@@ -2657,16 +2661,29 @@ def main():
     # ---- Poisson velocity projection (solenoidal correction) ----
     proj_info = None
     divergence_diagnostic_fn = None
-    if args.project_velocity == 'poisson':
-        print('      --- Poisson velocity projection ---')
+    if args.project_velocity in ('poisson', 'dg-exact', 'div-exact'):
+        print('      --- Velocity projection ---')
         from poisson_projection import (
-            poisson_project, PoissonProjectionError, divergence_diagnostic)
+            poisson_project, poisson_project_dg_exact,
+            velocity_project_div_exact,
+            PoissonProjectionError, divergence_diagnostic)
         divergence_diagnostic_fn = divergence_diagnostic
         try:
-            ux_new, uy_new, uz_new, proj_info = poisson_project(
-                ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
-                max_outer=args.projection_max_outer,
-                div_tol=args.projection_div_tol)
+            if args.project_velocity == 'dg-exact':
+                ux_new, uy_new, uz_new, proj_info = poisson_project_dg_exact(
+                    ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                    max_outer=args.projection_max_outer,
+                    div_tol=args.projection_div_tol)
+            elif args.project_velocity == 'div-exact':
+                ux_new, uy_new, uz_new, proj_info = velocity_project_div_exact(
+                    ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                    max_outer=args.projection_max_outer,
+                    div_tol=args.projection_div_tol)
+            else:
+                ux_new, uy_new, uz_new, proj_info = poisson_project(
+                    ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                    max_outer=args.projection_max_outer,
+                    div_tol=args.projection_div_tol)
         except PoissonProjectionError as e:
             sys.exit('FATAL: Poisson projection failed: {}\n'
                      '  Velocity field was NOT modified.\n'
@@ -3017,6 +3034,16 @@ def main():
         new_meta['interp_proj_div_rms_interior'] = '{:.6e}'.format(proj_info['div_rms_interior'])
         new_meta['interp_proj_outer_iters'] = str(proj_info['outer_iters'])
         new_meta['interp_proj_solve_time_s'] = '{:.1f}'.format(proj_info['solve_time_s'])
+        if 'method' in proj_info:
+            new_meta['interp_proj_method'] = str(proj_info['method'])
+        if 'rhs_mean' in proj_info:
+            new_meta['interp_proj_rhs_mean'] = '{:.6e}'.format(proj_info['rhs_mean'])
+        if 'true_residual_rms' in proj_info:
+            new_meta['interp_proj_true_residual_rms'] = '{:.6e}'.format(
+                proj_info['true_residual_rms'])
+        if 'true_residual_max' in proj_info:
+            new_meta['interp_proj_true_residual_max'] = '{:.6e}'.format(
+                proj_info['true_residual_max'])
     if ce_omega_new is not None:
         new_meta['interp_ce_omega_global_new'] = '{:.15e}'.format(ce_omega_new)
         new_meta['interp_ce_coeff'] = '{:.15e}'.format(ce_coeff_used)

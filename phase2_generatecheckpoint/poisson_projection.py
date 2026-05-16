@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Poisson velocity projection for LBM checkpoint interpolation.
+Velocity projection utilities for LBM checkpoint interpolation.
 
 After cross-grid interpolation, scalar-wise remapping of velocity components
 breaks the solenoidal constraint (div(u) != 0).  This module projects the
@@ -27,9 +27,11 @@ conservative Laplacian in the curvilinear (j,k) plane with face-averaged
 metric coefficients.  Each 2D system has (NY-1)*NZ DOFs (~8K) and is solved
 with sparse LU factorisation in milliseconds.
 
-The velocity correction uses CD2 gradient: u_proj = u - grad_CD2(phi).
-Since L != D*G, the projection does not drive div to machine zero, but
-achieves orders-of-magnitude reduction without checkerboard instability.
+Available projection levels:
+  - poisson: compact approximate scalar Poisson correction.
+  - dg-exact: exact CD2 D*B*G scalar projection checked by the H diagnostic.
+  - div-exact: exact minimum-norm velocity correction for D(u*) = 0 to
+    roundoff under the same wall/periodic/ghost rules as the H diagnostic.
 
 Grid layout follows interp_checkpoint.py conventions:
   - Arrays shape (NY6, NZ6, NX6) with BFR=3 ghost layers per side
@@ -43,7 +45,7 @@ import os
 import sys
 import time
 import numpy as np
-from scipy.sparse import coo_matrix, eye as speye
+from scipy.sparse import coo_matrix, diags, eye as speye
 from scipy.sparse.linalg import splu
 
 _pkg_dir = os.path.dirname(os.path.abspath(__file__))
@@ -230,6 +232,342 @@ def _build_2d_laplacian(gjj_2d, gkk_2d, nj, nk):
     return coo_matrix((data_all, (rows_all, cols_all)), shape=(n, n)).tocsr()
 
 
+def _build_j_derivative(nj, nk):
+    """Periodic CD2 derivative in the j direction on unique (j,k) DOFs."""
+    rows = []
+    cols = []
+    data = []
+    for j in range(nj):
+        jp = (j + 1) % nj
+        jm = (j - 1) % nj
+        for k in range(nk):
+            p = j * nk + k
+            rows.extend((p, p))
+            cols.extend((jp * nk + k, jm * nk + k))
+            data.extend((0.5, -0.5))
+    n = nj * nk
+    return coo_matrix((data, (rows, cols)), shape=(n, n)).tocsr()
+
+
+def _build_phi_k_derivative(nj, nk):
+    """CD2 k-derivative for phi with Neumann mirror wall ghosts."""
+    rows = []
+    cols = []
+    data = []
+    for j in range(nj):
+        for k in range(1, nk - 1):
+            p = j * nk + k
+            rows.extend((p, p))
+            cols.extend((j * nk + k + 1, j * nk + k - 1))
+            data.extend((0.5, -0.5))
+    n = nj * nk
+    return coo_matrix((data, (rows, cols)), shape=(n, n)).tocsr()
+
+
+def _build_vector_k_derivative(nj, nk):
+    """CD2 k-derivative for vector fields with constant-copy wall ghosts."""
+    rows = []
+    cols = []
+    data = []
+    for j in range(nj):
+        for k in range(nk):
+            p = j * nk + k
+            if k == 0:
+                rows.extend((p, p))
+                cols.extend((j * nk + 1, j * nk))
+                data.extend((0.5, -0.5))
+            elif k == nk - 1:
+                rows.extend((p, p))
+                cols.extend((j * nk + k, j * nk + k - 1))
+                data.extend((0.5, -0.5))
+            else:
+                rows.extend((p, p))
+                cols.extend((j * nk + k + 1, j * nk + k - 1))
+                data.extend((0.5, -0.5))
+    n = nj * nk
+    return coo_matrix((data, (rows, cols)), shape=(n, n)).tocsr()
+
+
+def _build_dg_exact_yz_operator(dj_dy, dj_dz, dk_dy, dk_dz, nj, nk):
+    """Build the exact 2D part of the CD2 D*B*G operator.
+
+    The matrix matches these runtime steps:
+      1. phi uses periodic j ghosts and Neumann mirror k ghosts;
+      2. G(phi) is converted to physical y/z components;
+      3. wall planes of the correction vector are clamped to zero;
+      4. divergence uses periodic j ghosts and constant-copy vector k ghosts.
+    """
+    s = (slice(BFR, BFR + nj), slice(BFR, BFR + nk))
+    jy = dj_dy[s].ravel()
+    jz = dj_dz[s].ravel()
+    ky = dk_dy[s].ravel()
+    kz = dk_dz[s].ravel()
+
+    n = nj * nk
+    wall_mask = np.ones((nj, nk), dtype=np.float64)
+    wall_mask[:, 0] = 0.0
+    wall_mask[:, -1] = 0.0
+    w = wall_mask.ravel()
+
+    Dj_phi = _build_j_derivative(nj, nk)
+    Dk_phi = _build_phi_k_derivative(nj, nk)
+    Dj_vec = Dj_phi
+    Dk_vec = _build_vector_k_derivative(nj, nk)
+
+    Jy = diags(jy, 0, shape=(n, n), format='csr')
+    Jz = diags(jz, 0, shape=(n, n), format='csr')
+    Ky = diags(ky, 0, shape=(n, n), format='csr')
+    Kz = diags(kz, 0, shape=(n, n), format='csr')
+    W = diags(w, 0, shape=(n, n), format='csr')
+
+    Gy = W @ (Jy @ Dj_phi + Ky @ Dk_phi)
+    Gz = W @ (Jz @ Dj_phi + Kz @ Dk_phi)
+
+    A_yz = (Jy @ Dj_vec @ Gy
+            + Ky @ Dk_vec @ Gy
+            + Jz @ Dj_vec @ Gz
+            + Kz @ Dk_vec @ Gz)
+    return A_yz.tocsc(), w
+
+
+class _FftPoissonSolver:
+    """Cached FFT(x) + sparse-LU(j,k) approximate Poisson inverse."""
+
+    def __init__(self, dx, gjj_2d, gkk_2d, nj, nk, ni, verbose=True):
+        self.dx = dx
+        self.nj = nj
+        self.nk = nk
+        self.ni = ni
+        self.verbose = verbose
+
+        t0 = time.time()
+        n_modes = ni // 2 + 1
+        ki_arr = np.arange(n_modes)
+        self.lambda_x = -(1.0 / (dx * dx)) * np.sin(2.0 * np.pi * ki_arr / ni) ** 2
+
+        self.nyquist_modes = {0}
+        if ni % 2 == 0 and ni // 2 < n_modes:
+            self.nyquist_modes.add(ni // 2)
+
+        L_2d = _build_2d_laplacian(gjj_2d, gkk_2d, nj, nk)
+        n_2d = nj * nk
+        I_2d = speye(n_2d, format='csc', dtype=np.float64)
+        L_csc = L_2d.tocsc()
+
+        self.lu = []
+        reg = 1e-12 / (dx * dx)
+        for ki_idx in range(n_modes):
+            A = L_csc + self.lambda_x[ki_idx] * I_2d
+            if ki_idx in self.nyquist_modes:
+                A = A + reg * I_2d
+            self.lu.append(splu(A))
+
+        if verbose:
+            print('      2D Laplacian: {} x {} ({} nnz), {} modes factored in {:.2f}s'.format(
+                n_2d, n_2d, L_2d.nnz, n_modes, time.time() - t0))
+
+    def solve(self, b_3d):
+        """Apply cached approximate inverse to b_3d shaped (nj,nk,ni)."""
+        b_hat = np.fft.rfft(b_3d, axis=2)
+        phi_hat = np.zeros_like(b_hat)
+
+        for ki_idx, lu in enumerate(self.lu):
+            rhs_re = b_hat[:, :, ki_idx].real.ravel().copy()
+            rhs_im = b_hat[:, :, ki_idx].imag.ravel().copy()
+
+            if ki_idx in self.nyquist_modes:
+                rhs_re -= np.mean(rhs_re)
+                rhs_im -= np.mean(rhs_im)
+
+            sol_re = lu.solve(rhs_re)
+            sol_im = lu.solve(rhs_im)
+
+            if ki_idx in self.nyquist_modes:
+                sol_re -= np.mean(sol_re)
+                sol_im -= np.mean(sol_im)
+
+            phi_hat[:, :, ki_idx] = (sol_re + 1j * sol_im).reshape(
+                self.nj, self.nk)
+
+        return np.fft.irfft(phi_hat, n=self.ni, axis=2).real
+
+
+class _DgExactFftSolver:
+    """FFT(x) + sparse-LU(j,k) solver for the exact CD2 D*B*G operator."""
+
+    def __init__(self, dx, dj_dy, dj_dz, dk_dy, dk_dz,
+                 nj, nk, ni, verbose=True):
+        self.dx = dx
+        self.nj = nj
+        self.nk = nk
+        self.ni = ni
+        self.verbose = verbose
+
+        t0 = time.time()
+        n_modes = ni // 2 + 1
+        ki_arr = np.arange(n_modes)
+        self.lambda_x = -(1.0 / (dx * dx)) * np.sin(2.0 * np.pi * ki_arr / ni) ** 2
+
+        self.A_yz, wall_mask = _build_dg_exact_yz_operator(
+            dj_dy, dj_dz, dk_dy, dk_dz, nj, nk)
+        self.W = diags(wall_mask, 0, shape=(nj * nk, nj * nk), format='csc')
+
+        diag_scale = np.max(np.abs(self.A_yz.diagonal()))
+        scale = max(float(diag_scale), 1.0 / (dx * dx), 1.0)
+        self.reg = 1.0e-13 * scale
+        self.singular_modes = {0}
+        if ni % 2 == 0 and ni // 2 < n_modes:
+            # CD2 first derivative has zero eigenvalue at Nyquist.
+            self.singular_modes.add(ni // 2)
+
+        I_2d = speye(nj * nk, format='csc', dtype=np.float64)
+        self.lu = []
+        self.op_matrices = []
+        for ki_idx, lam in enumerate(self.lambda_x):
+            A_op = (self.A_yz + lam * self.W).tocsc()
+            A_solve = A_op
+            if ki_idx in self.singular_modes:
+                A_solve = A_solve + self.reg * I_2d
+            self.op_matrices.append(A_op)
+            self.lu.append(splu(A_solve.tocsc()))
+
+        if verbose:
+            print('      exact D*G 2D operator: {} x {} ({} nnz), {} modes factored in {:.2f}s'.format(
+                nj * nk, nj * nk, self.A_yz.nnz, n_modes, time.time() - t0))
+
+    def solve(self, b_3d):
+        """Solve A phi = b for b shaped (nj,nk,ni)."""
+        b_hat = np.fft.rfft(b_3d, axis=2)
+        phi_hat = np.zeros_like(b_hat)
+
+        for ki_idx, lu in enumerate(self.lu):
+            rhs_re = b_hat[:, :, ki_idx].real.ravel().copy()
+            rhs_im = b_hat[:, :, ki_idx].imag.ravel().copy()
+
+            if ki_idx in self.singular_modes:
+                rhs_re -= np.mean(rhs_re)
+                rhs_im -= np.mean(rhs_im)
+
+            sol_re = lu.solve(rhs_re)
+            sol_im = lu.solve(rhs_im)
+
+            if ki_idx in self.singular_modes:
+                sol_re -= np.mean(sol_re)
+                sol_im -= np.mean(sol_im)
+
+            phi_hat[:, :, ki_idx] = (sol_re + 1j * sol_im).reshape(
+                self.nj, self.nk)
+
+        return np.fft.irfft(phi_hat, n=self.ni, axis=2).real
+
+    def apply(self, phi_3d):
+        """Apply the exact D*B*G operator to phi_3d shaped (nj,nk,ni)."""
+        phi_hat = np.fft.rfft(phi_3d, axis=2)
+        out_hat = np.zeros_like(phi_hat)
+
+        for ki_idx, A in enumerate(self.op_matrices):
+            phi_re = phi_hat[:, :, ki_idx].real.ravel()
+            phi_im = phi_hat[:, :, ki_idx].imag.ravel()
+            out_hat[:, :, ki_idx] = (
+                A.dot(phi_re) + 1j * A.dot(phi_im)
+            ).reshape(self.nj, self.nk)
+
+        return np.fft.irfft(out_hat, n=self.ni, axis=2).real
+
+
+def _build_divergence_yz_operators(dj_dy, dj_dz, dk_dy, dk_dz, nj, nk):
+    """Build exact y/z divergence blocks for wall-clamped velocity DOFs."""
+    s = (slice(BFR, BFR + nj), slice(BFR, BFR + nk))
+    jy = dj_dy[s].ravel()
+    jz = dj_dz[s].ravel()
+    ky = dk_dy[s].ravel()
+    kz = dk_dz[s].ravel()
+
+    n = nj * nk
+    wall_mask = np.ones((nj, nk), dtype=np.float64)
+    wall_mask[:, 0] = 0.0
+    wall_mask[:, -1] = 0.0
+    w = wall_mask.ravel()
+
+    W = diags(w, 0, shape=(n, n), format='csc')
+    Dj = _build_j_derivative(nj, nk).tocsc()
+    Dk = _build_vector_k_derivative(nj, nk).tocsc()
+
+    Jy = diags(jy, 0, shape=(n, n), format='csc')
+    Jz = diags(jz, 0, shape=(n, n), format='csc')
+    Ky = diags(ky, 0, shape=(n, n), format='csc')
+    Kz = diags(kz, 0, shape=(n, n), format='csc')
+
+    By = (Jy @ Dj @ W + Ky @ Dk @ W).tocsc()
+    Bz = (Jz @ Dj @ W + Kz @ Dk @ W).tocsc()
+    return W, By, Bz
+
+
+class _DivExactFftProjector:
+    """FFT(x) exact discrete mass projection via minimum-norm velocity correction."""
+
+    def __init__(self, dx, dj_dy, dj_dz, dk_dy, dk_dz,
+                 nj, nk, ni, verbose=True):
+        self.dx = dx
+        self.nj = nj
+        self.nk = nk
+        self.ni = ni
+        self.verbose = verbose
+
+        t0 = time.time()
+        n_modes = ni // 2 + 1
+        theta = 2.0 * np.pi * np.arange(n_modes) / ni
+        self.alpha_x = 1j * np.sin(theta) / dx
+
+        self.W, self.By, self.Bz = _build_divergence_yz_operators(
+            dj_dy, dj_dz, dk_dy, dk_dz, nj, nk)
+
+        A_yz = self.By @ self.By.T + self.Bz @ self.Bz.T
+        diag_scale = np.max(np.abs(A_yz.diagonal()))
+        scale = max(float(diag_scale), 1.0 / (dx * dx), 1.0)
+        self.reg = 1.0e-13 * scale
+
+        n = nj * nk
+        I_2d = speye(n, format='csc', dtype=np.float64)
+        self.lu = []
+        self.A_ops = []
+        for alpha in self.alpha_x:
+            A = (A_yz + (abs(alpha) ** 2) * self.W).tocsc()
+            self.A_ops.append(A)
+            self.lu.append(splu((A + self.reg * I_2d).tocsc()))
+
+        if verbose:
+            print('      exact D velocity projector: {} x {} ({} nnz), {} modes factored in {:.2f}s'.format(
+                n, n, A_yz.nnz, n_modes, time.time() - t0))
+
+    def correction(self, rhs_3d):
+        """Return minimum-norm q satisfying D q ~= rhs, arrays shaped (nj,nk,ni)."""
+        rhs_hat = np.fft.rfft(rhs_3d, axis=2)
+        qx_hat = np.zeros_like(rhs_hat)
+        qy_hat = np.zeros_like(rhs_hat)
+        qz_hat = np.zeros_like(rhs_hat)
+
+        for ki_idx, lu in enumerate(self.lu):
+            rhs_re = rhs_hat[:, :, ki_idx].real.ravel().copy()
+            rhs_im = rhs_hat[:, :, ki_idx].imag.ravel().copy()
+
+            lam_re = lu.solve(rhs_re)
+            lam_im = lu.solve(rhs_im)
+            lam = lam_re + 1j * lam_im
+
+            alpha = self.alpha_x[ki_idx]
+            qx_hat[:, :, ki_idx] = (
+                np.conjugate(alpha) * (self.W @ lam)
+            ).reshape(self.nj, self.nk)
+            qy_hat[:, :, ki_idx] = (self.By.T @ lam).reshape(self.nj, self.nk)
+            qz_hat[:, :, ki_idx] = (self.Bz.T @ lam).reshape(self.nj, self.nk)
+
+        qx = np.fft.irfft(qx_hat, n=self.ni, axis=2).real
+        qy = np.fft.irfft(qy_hat, n=self.ni, axis=2).real
+        qz = np.fft.irfft(qz_hat, n=self.ni, axis=2).real
+        return qx, qy, qz
+
+
 def _solve_poisson_fft(b_3d, dx, gjj_2d, gkk_2d, nj, nk, ni, verbose=True):
     """Solve Poisson equation using FFT in x + sparse LU in (j,k).
 
@@ -250,65 +588,11 @@ def _solve_poisson_fft(b_3d, dx, gjj_2d, gkk_2d, nj, nk, ni, verbose=True):
     phi_3d : ndarray (nj, nk, ni) — solution
     """
     t0 = time.time()
-
-    b_hat = np.fft.rfft(b_3d, axis=2)
-    n_modes = b_hat.shape[2]
-    phi_hat = np.zeros_like(b_hat)
-
-    ki_arr = np.arange(n_modes)
-    # Use exact CD2 D·G x-eigenvalue (not compact Laplacian eigenvalue).
-    # D·G: -(1/dx²)*sin²(2π·ki/NI)  vs  compact: -(4/dx²)*sin²(π·ki/NI)
-    # This eliminates the x-direction operator mismatch entirely, so outer
-    # Richardson iterations only need to correct the (j,k) mismatch.
-    lambda_x = -(1.0 / (dx * dx)) * np.sin(2.0 * np.pi * ki_arr / ni) ** 2
-
-    # ki = NI/2 (Nyquist) has lambda_x = 0 → pure Neumann (same as ki=0)
-    nyquist_modes = set()
-    nyquist_modes.add(0)
-    if ni % 2 == 0 and ni // 2 < n_modes:
-        nyquist_modes.add(ni // 2)
-
-    L_2d = _build_2d_laplacian(gjj_2d, gkk_2d, nj, nk)
-    n_2d = nj * nk
-    I_2d = speye(n_2d, format='csc', dtype=np.float64)
-
-    dt_build = time.time() - t0
+    solver = _FftPoissonSolver(dx, gjj_2d, gkk_2d, nj, nk, ni, verbose=verbose)
+    phi_3d = solver.solve(b_3d)
     if verbose:
-        print('      2D Laplacian: {} x {} ({} nnz), built in {:.2f}s'.format(
-            n_2d, n_2d, L_2d.nnz, dt_build))
-
-    L_csc = L_2d.tocsc()
-
-    t1 = time.time()
-    for ki_idx in range(n_modes):
-        A = L_csc + lambda_x[ki_idx] * I_2d
-
-        rhs_re = b_hat[:, :, ki_idx].real.ravel().copy()
-        rhs_im = b_hat[:, :, ki_idx].imag.ravel().copy()
-
-        if ki_idx in nyquist_modes:
-            rhs_re -= np.mean(rhs_re)
-            rhs_im -= np.mean(rhs_im)
-            A_reg = A + (1e-12 / (dx * dx)) * I_2d
-            lu = splu(A_reg)
-            sol_re = lu.solve(rhs_re)
-            sol_im = lu.solve(rhs_im)
-            sol_re -= np.mean(sol_re)
-            sol_im -= np.mean(sol_im)
-        else:
-            lu = splu(A)
-            sol_re = lu.solve(rhs_re)
-            sol_im = lu.solve(rhs_im)
-
-        phi_hat[:, :, ki_idx] = (sol_re + 1j * sol_im).reshape(nj, nk)
-
-    dt_solve = time.time() - t1
-    if verbose:
-        print('      FFT + {} splu factor+solve in {:.2f}s'.format(
-            n_modes, dt_solve))
-
-    phi_3d = np.fft.irfft(phi_hat, n=ni, axis=2)
-    return phi_3d.real
+        print('      FFT solve in {:.2f}s'.format(time.time() - t0))
+    return phi_3d
 
 
 # ---------------------------------------------------------------
@@ -522,5 +806,302 @@ def poisson_project(ux, uy, uz, cfg, y_2d, z_2d,
         'outer_iters': n_outer,
         'solve_time_s': dt_total,
         'n_dof': n_dof,
+    }
+    return ux_w, uy_w, uz_w, info
+
+
+def poisson_project_dg_exact(ux, uy, uz, cfg, y_2d, z_2d,
+                             max_outer=80, div_tol=1e-10, verbose=True,
+                             clamp_walls=True, gmres_restart=50):
+    """Project velocity with the exact verification operator D*G.
+
+    This solves the same discrete equation that the H diagnostic checks:
+
+        D(u - G phi) = 0  ->  (D B G) phi = D(B u)
+
+    where B is the linear boundary projection used by the restart field:
+    optional no-slip wall clamp plus periodic/ghost fill.  The solve uses the
+    x-periodicity to diagonalize the operator into independent 2D sparse
+    direct solves.  max_outer and gmres_restart are accepted for CLI/API
+    compatibility with the approximate projection path.
+    """
+    dx = LX / (cfg.NX - 1)
+    dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y_2d, z_2d)
+
+    nj = cfg.NY - 1
+    nk = cfg.NZ
+    ni = cfg.NX - 1
+    n_dof = nj * nk * ni
+    shape3 = (cfg.NY6, cfg.NZ6, cfg.NX6)
+
+    uniq = (slice(BFR, BFR + nj),
+            slice(BFR, BFR + nk),
+            slice(BFR, BFR + ni))
+    full_int = (slice(BFR, BFR + cfg.NY),
+                slice(BFR, BFR + cfg.NZ),
+                slice(BFR, BFR + cfg.NX))
+    wall_excl = (slice(BFR, BFR + nj),
+                 slice(BFR + 1, BFR + nk - 1),
+                 slice(BFR, BFR + ni))
+
+    def _apply_vector_bc(vx, vy, vz):
+        if clamp_walls:
+            kt_wall = cfg.NZ6 - 1 - BFR
+            for arr in (vx, vy, vz):
+                arr[:, BFR, :] = 0.0
+                arr[:, kt_wall, :] = 0.0
+        for arr in (vx, vy, vz):
+            enforce_periodic_physical_duplicates(arr, cfg)
+            fill_ghost(arr, cfg)
+
+    def _embed_phi(phi_vec):
+        phi = np.zeros(shape3, dtype=np.float64)
+        phi_int = phi_vec.reshape(nj, nk, ni)
+        phi[BFR:BFR + nj, BFR:BFR + nk, BFR:BFR + ni] = phi_int
+        _fill_phi_bc(phi, cfg)
+        return phi
+
+    def _grad_projected(phi_vec):
+        phi = _embed_phi(phi_vec)
+        gx, gy, gz = _gradient_cd2(phi, dx, dj_dy, dj_dz, dk_dy, dk_dz)
+        _apply_vector_bc(gx, gy, gz)
+        return gx, gy, gz
+
+    ux_w = ux.copy()
+    uy_w = uy.copy()
+    uz_w = uz.copy()
+    _apply_vector_bc(ux_w, uy_w, uz_w)
+
+    div_u = _divergence_cd2(ux_w, uy_w, uz_w, dx, dj_dy, dj_dz, dk_dy, dk_dz)
+    rhs_arr = div_u[uniq].copy()
+    rhs_mean = float(np.mean(rhs_arr))
+
+    div_rms_before = float(np.sqrt(np.mean(div_u[uniq] ** 2)))
+    div_max_before = float(np.max(np.abs(div_u[uniq])))
+    rhs_norm = float(np.linalg.norm(rhs_arr.ravel()))
+    rms_target = float(div_tol)
+
+    if verbose:
+        print('      DG-exact projection: {} DOFs ({} x {} x {})'.format(
+            n_dof, nj, nk, ni))
+        print('      div(u) BEFORE: RMS = {:.6e}, max = {:.6e}, mean = {:.6e}'.format(
+            div_rms_before, div_max_before, rhs_mean))
+        print('      direct D*G target: RMS <= {:.3e}'.format(rms_target))
+
+    if rhs_norm == 0.0:
+        return ux_w, uy_w, uz_w, {
+            'div_rms_before': div_rms_before,
+            'div_max_before': div_max_before,
+            'div_rms_after': div_rms_before,
+            'div_max_after': div_max_before,
+            'div_rms_interior': float(np.sqrt(np.mean(div_u[wall_excl] ** 2))),
+            'div_max_interior': float(np.max(np.abs(div_u[wall_excl]))),
+            'solver_info': 0,
+            'outer_iters': 0,
+            'solve_time_s': 0.0,
+            'n_dof': n_dof,
+            'rhs_mean': rhs_mean,
+            'method': 'dg-exact',
+        }
+
+    t0 = time.time()
+    try:
+        dg_solver = _DgExactFftSolver(
+            dx, dj_dy, dj_dz, dk_dy, dk_dz, nj, nk, ni, verbose=verbose)
+        phi_int = dg_solver.solve(rhs_arr)
+    except Exception as e:
+        raise PoissonProjectionError('DG-exact direct solver failed: {}'.format(e))
+    dt_total = time.time() - t0
+
+    phi_int = np.asarray(phi_int, dtype=np.float64)
+    phi_int -= np.mean(phi_int)
+
+    if not np.all(np.isfinite(phi_int)):
+        raise PoissonProjectionError('DG-exact phi contains NaN/Inf')
+
+    true_res = rhs_arr - dg_solver.apply(phi_int)
+    true_res_rms = float(np.sqrt(np.mean(true_res ** 2)))
+    true_res_max = float(np.max(np.abs(true_res)))
+
+    gx, gy, gz = _grad_projected(phi_int.ravel())
+    ux_w[full_int] -= gx[full_int]
+    uy_w[full_int] -= gy[full_int]
+    uz_w[full_int] -= gz[full_int]
+    _apply_vector_bc(ux_w, uy_w, uz_w)
+
+    div_final = _divergence_cd2(ux_w, uy_w, uz_w,
+                                dx, dj_dy, dj_dz, dk_dy, dk_dz)
+    d_cons = div_final[uniq]
+    div_rms_after = float(np.sqrt(np.mean(d_cons ** 2)))
+    div_max_after = float(np.max(np.abs(d_cons)))
+    div_mean_after = float(np.mean(d_cons))
+
+    d_int = div_final[wall_excl]
+    div_rms_interior = float(np.sqrt(np.mean(d_int ** 2)))
+    div_max_interior = float(np.max(np.abs(d_int)))
+
+    corr_max = float(max(np.max(np.abs(ux_w[full_int] - ux[full_int])),
+                         np.max(np.abs(uy_w[full_int] - uy[full_int])),
+                         np.max(np.abs(uz_w[full_int] - uz[full_int]))))
+
+    if verbose:
+        print('      DG-exact direct solve in {:.1f}s'.format(dt_total))
+        print('      true projected residual: RMS = {:.6e}, max = {:.6e}'.format(
+            true_res_rms, true_res_max))
+        print('      div(u) AFTER:')
+        print('        all points: RMS = {:.6e}, max = {:.6e}, mean = {:.6e}'.format(
+            div_rms_after, div_max_after, div_mean_after))
+        print('        interior (excl walls): RMS = {:.6e}, max = {:.6e}'.format(
+            div_rms_interior, div_max_interior))
+        if div_rms_before > 0:
+            print('      reduction: {:.2e}x (all), {:.2e}x (interior)'.format(
+                div_rms_after / div_rms_before,
+                div_rms_interior / div_rms_before))
+        print('      max |du| correction = {:.6e}'.format(corr_max))
+
+    info = {
+        'div_rms_before': div_rms_before,
+        'div_max_before': div_max_before,
+        'div_rms_after': div_rms_after,
+        'div_max_after': div_max_after,
+        'div_rms_interior': div_rms_interior,
+        'div_max_interior': div_max_interior,
+        'solver_info': 0 if true_res_rms <= max(10.0 * rms_target, rms_target + 1e-14) else 1,
+        'outer_iters': 1,
+        'solve_time_s': dt_total,
+        'n_dof': n_dof,
+        'rhs_mean': rhs_mean,
+        'true_residual_rms': true_res_rms,
+        'true_residual_max': true_res_max,
+        'method': 'dg-exact',
+    }
+    return ux_w, uy_w, uz_w, info
+
+
+def velocity_project_div_exact(ux, uy, uz, cfg, y_2d, z_2d,
+                               max_outer=80, div_tol=1e-12, verbose=True,
+                               clamp_walls=True):
+    """Project velocity by directly solving the exact discrete mass equation.
+
+    Unlike poisson_project_dg_exact(), the correction is not restricted to a
+    scalar pressure-gradient form.  It computes the minimum-norm velocity
+    correction q such that
+
+        D(u - q) ~= 0
+
+    using the same CD2 divergence, wall clamp, and periodic/ghost rules used
+    by divergence_diagnostic().  This is the path to use when the restart
+    macro velocity itself must pass the H divergence check to roundoff.
+    max_outer is accepted for CLI/API compatibility.
+    """
+    dx = LX / (cfg.NX - 1)
+    dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y_2d, z_2d)
+
+    nj = cfg.NY - 1
+    nk = cfg.NZ
+    ni = cfg.NX - 1
+    n_dof = nj * nk * ni
+
+    uniq = (slice(BFR, BFR + nj),
+            slice(BFR, BFR + nk),
+            slice(BFR, BFR + ni))
+    full_int = (slice(BFR, BFR + cfg.NY),
+                slice(BFR, BFR + cfg.NZ),
+                slice(BFR, BFR + cfg.NX))
+    wall_excl = (slice(BFR, BFR + nj),
+                 slice(BFR + 1, BFR + nk - 1),
+                 slice(BFR, BFR + ni))
+
+    ux_w = ux.copy()
+    uy_w = uy.copy()
+    uz_w = uz.copy()
+
+    def _apply_vector_bc(vx, vy, vz):
+        if clamp_walls:
+            kt_wall = cfg.NZ6 - 1 - BFR
+            for arr in (vx, vy, vz):
+                arr[:, BFR, :] = 0.0
+                arr[:, kt_wall, :] = 0.0
+        for arr in (vx, vy, vz):
+            enforce_periodic_physical_duplicates(arr, cfg)
+            fill_ghost(arr, cfg)
+
+    _apply_vector_bc(ux_w, uy_w, uz_w)
+
+    div_u = _divergence_cd2(ux_w, uy_w, uz_w, dx, dj_dy, dj_dz, dk_dy, dk_dz)
+    rhs_arr = div_u[uniq].copy()
+    rhs_mean = float(np.mean(rhs_arr))
+    div_rms_before = float(np.sqrt(np.mean(rhs_arr ** 2)))
+    div_max_before = float(np.max(np.abs(rhs_arr)))
+
+    if verbose:
+        print('      Div-exact velocity projection: {} DOFs ({} x {} x {})'.format(
+            n_dof, nj, nk, ni))
+        print('      div(u) BEFORE: RMS = {:.6e}, max = {:.6e}, mean = {:.6e}'.format(
+            div_rms_before, div_max_before, rhs_mean))
+        print('      direct D correction target: RMS <= {:.3e}'.format(div_tol))
+
+    t0 = time.time()
+    try:
+        projector = _DivExactFftProjector(
+            dx, dj_dy, dj_dz, dk_dy, dk_dz, nj, nk, ni, verbose=verbose)
+        qx, qy, qz = projector.correction(rhs_arr)
+    except Exception as e:
+        raise PoissonProjectionError('Div-exact velocity projection failed: {}'.format(e))
+    dt_total = time.time() - t0
+
+    if (not np.all(np.isfinite(qx))
+            or not np.all(np.isfinite(qy))
+            or not np.all(np.isfinite(qz))):
+        raise PoissonProjectionError('Div-exact velocity correction contains NaN/Inf')
+
+    ux_w[uniq] -= qx
+    uy_w[uniq] -= qy
+    uz_w[uniq] -= qz
+    _apply_vector_bc(ux_w, uy_w, uz_w)
+
+    div_final = _divergence_cd2(ux_w, uy_w, uz_w,
+                                dx, dj_dy, dj_dz, dk_dy, dk_dz)
+    d_cons = div_final[uniq]
+    div_rms_after = float(np.sqrt(np.mean(d_cons ** 2)))
+    div_max_after = float(np.max(np.abs(d_cons)))
+    div_mean_after = float(np.mean(d_cons))
+
+    d_int = div_final[wall_excl]
+    div_rms_interior = float(np.sqrt(np.mean(d_int ** 2)))
+    div_max_interior = float(np.max(np.abs(d_int)))
+
+    corr_max = float(max(np.max(np.abs(ux_w[full_int] - ux[full_int])),
+                         np.max(np.abs(uy_w[full_int] - uy[full_int])),
+                         np.max(np.abs(uz_w[full_int] - uz[full_int]))))
+
+    if verbose:
+        print('      Div-exact direct solve in {:.1f}s'.format(dt_total))
+        print('      div(u) AFTER:')
+        print('        all points: RMS = {:.6e}, max = {:.6e}, mean = {:.6e}'.format(
+            div_rms_after, div_max_after, div_mean_after))
+        print('        interior (excl walls): RMS = {:.6e}, max = {:.6e}'.format(
+            div_rms_interior, div_max_interior))
+        if div_rms_before > 0:
+            print('      reduction: {:.2e}x (all), {:.2e}x (interior)'.format(
+                div_rms_after / div_rms_before,
+                div_rms_interior / div_rms_before))
+        print('      max |du| correction = {:.6e}'.format(corr_max))
+
+    info = {
+        'div_rms_before': div_rms_before,
+        'div_max_before': div_max_before,
+        'div_rms_after': div_rms_after,
+        'div_max_after': div_max_after,
+        'div_rms_interior': div_rms_interior,
+        'div_max_interior': div_max_interior,
+        'solver_info': 0 if div_rms_after <= max(10.0 * div_tol, div_tol + 1e-14) else 1,
+        'outer_iters': 1,
+        'solve_time_s': dt_total,
+        'n_dof': n_dof,
+        'rhs_mean': rhs_mean,
+        'true_residual_rms': div_rms_after,
+        'true_residual_max': div_max_after,
+        'method': 'div-exact',
     }
     return ux_w, uy_w, uz_w, info
