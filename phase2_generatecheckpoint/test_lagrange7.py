@@ -99,9 +99,9 @@ check('polynomial p=7 NOT exact (expected)', max(errs) > 1e-3,
       f'max_err={max(errs):.2e}')
 
 # ═══════════════════════════════════════════════════════════════
-# Test C: Wall-preserving full-domain mass correction
+# Test C: Solver-matched full-domain mass correction
 # ═══════════════════════════════════════════════════════════════
-print('\n=== Test C: Wall-preserving full-domain mass correction ===')
+print('\n=== Test C: Solver-matched full-domain mass correction ===')
 
 # Create a small test grid
 cfg = GridConfig(nx=9, ny=9, nz=9, jp=1, gamma=2.0, alpha=0.5,
@@ -114,7 +114,6 @@ ni = cfg.NX6 - 7
 nj = cfg.NY6 - 7
 nk = cfg.NZ6 - 6
 N_full = ni * nj * nk
-N_adjust = ni * nj * (nk - 2)
 full_sl = (slice(BFR, BFR+nj), slice(BFR, BFR+nk), slice(BFR, BFR+ni))
 rho_sum_before = np.sum(rho[full_sl])
 mean_before = rho_sum_before / N_full
@@ -125,12 +124,12 @@ rho_sum_after = np.sum(rho[full_sl])
 check('mean rho == 1.0 after correction',
       abs(rho_sum_after / N_full - 1.0) < 1e-14,
       f'mean={rho_sum_after / N_full}')
-check('rho_modify uses non-wall rows only',
-      abs(rho_modify - (N_full * 1.0 - rho_sum_before) / N_adjust) < 1e-14)
-check('bottom wall rho remains exactly 1',
-      np.all(rho[BFR:BFR+nj, BFR, BFR:BFR+ni] == 1.0))
-check('top wall rho remains exactly 1',
-      np.all(rho[BFR:BFR+nj, BFR+nk-1, BFR:BFR+ni] == 1.0))
+check('rho_modify matches runtime full-domain offset',
+      abs(rho_modify - (1.0 - mean_before)) < 1e-14)
+check('bottom wall rho receives the same offset',
+      np.allclose(rho[BFR:BFR+nj, BFR, BFR:BFR+ni], 1.0 + rho_modify))
+check('top wall rho receives the same offset',
+      np.allclose(rho[BFR:BFR+nj, BFR+nk-1, BFR:BFR+ni], 1.0 + rho_modify))
 
 # Verify interior range matches solver ReduceRhoSum_Kernel:
 #   i (periodic): ni = NX6-7 = NX-1  →  [3, NX6-4)  excludes periodic duplicate
@@ -139,7 +138,7 @@ check('top wall rho remains exactly 1',
 check('ni = NX6-7 = NX-1 (periodic: excludes duplicate)', ni == cfg.NX - 1)
 check('nj = NY6-7 = NY-1 (periodic: excludes duplicate)', nj == cfg.NY - 1)
 check('nk = NZ6-6 = NZ   (wall: includes both walls)',    nk == cfg.NZ)
-check('N_adjust excludes both wall rows', N_adjust == ni * nj * (cfg.NZ - 2))
+check('N_full includes both wall rows', N_full == ni * nj * cfg.NZ)
 
 # Closed-interval last index = N6-4 for all directions (3 ghost each side)
 # But half-open upper bound differs: periodic [3, N6-4), wall [3, N6-3)
@@ -268,23 +267,23 @@ ux_test = np.ones_like(rho_test)
 uy_test = np.ones_like(rho_test)
 uz_test = np.ones_like(rho_test)
 
-wall_u_before, wall_rho_before = clamp_wall_macros(
-    rho_test, ux_test, uy_test, uz_test, cfg_small)
 kt_small = cfg_small.NZ6 - 1 - BFR
+wall_rho_snapshot = rho_test[:, (BFR, kt_small), :].copy()
+wall_u_before, wall_rho_residual_before = clamp_wall_macros(
+    rho_test, ux_test, uy_test, uz_test, cfg_small)
 check('wall clamp sees non-zero velocity residual', wall_u_before > 0.0)
-check('wall clamp sees rho residual', wall_rho_before > 0.0)
+check('wall clamp sees rho residual', wall_rho_residual_before > 0.0)
 check('wall clamp sets bottom velocity to zero',
       np.all(ux_test[:, BFR, :] == 0.0) and np.all(uy_test[:, BFR, :] == 0.0)
       and np.all(uz_test[:, BFR, :] == 0.0))
 check('wall clamp sets top velocity to zero',
       np.all(ux_test[:, kt_small, :] == 0.0) and np.all(uy_test[:, kt_small, :] == 0.0)
       and np.all(uz_test[:, kt_small, :] == 0.0))
-check('wall clamp sets rho to one',
-      np.all(rho_test[:, BFR, :] == 1.0) and np.all(rho_test[:, kt_small, :] == 1.0))
+check('wall clamp preserves rho',
+      np.array_equal(rho_test[:, (BFR, kt_small), :], wall_rho_snapshot))
 
 ni = NX6 - 7; nj = NY6 - 7; nk = NZ6 - 6
 N_full = ni * nj * nk
-N_adjust = ni * nj * (nk - 2)
 full_sl = (slice(BFR, BFR+nj), slice(BFR, BFR+nk), slice(BFR, BFR+ni))
 mean_before_corr = np.sum(rho_test[full_sl]) / N_full
 
@@ -295,9 +294,12 @@ check('mass correction restores mean=1.0',
       abs(mean_after_corr - 1.0) < 1e-14,
       f'mean_after={mean_after_corr}')
 check('rho_modify is additive correction',
-      abs(rho_mod - (1.0 - mean_before_corr) * N_full / N_adjust) < 1e-14)
-check('mass correction preserves wall rho=1',
-      np.all(rho_test[:, BFR, :] == 1.0) and np.all(rho_test[:, kt_small, :] == 1.0))
+      abs(rho_mod - (1.0 - mean_before_corr)) < 1e-14)
+check('mass correction shifts wall rho uniformly',
+      np.allclose(rho_test[BFR:BFR+nj, BFR, BFR:BFR+ni],
+                  wall_rho_snapshot[BFR:BFR+nj, 0, BFR:BFR+ni] + rho_mod)
+      and np.allclose(rho_test[BFR:BFR+nj, kt_small, BFR:BFR+ni],
+                      wall_rho_snapshot[BFR:BFR+nj, 1, BFR:BFR+ni] + rho_mod))
 
 
 # ═══════════════════════════════════════════════════════════════

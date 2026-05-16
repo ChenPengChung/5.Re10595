@@ -25,9 +25,11 @@ Pipeline:
                 Near-wall stencils use cubic ghost extrapolation (solver-matched).
              --interp-order 2:          bilinear O(h^2) (legacy).
            comp:           legacy computational (j, k, i) remap for A/B tests.
-     5b. Clamp wall macros: u=v=w=0, rho=1 at k=3 and k=NZ6-4 (no-slip).
-     5c. Global density correction: additive offset on non-wall interior rows
-         so full-domain mean rho returns to 1 while walls stay at rho=1.
+     5b. Clamp wall velocity only: u=v=w=0 at k=3 and k=NZ6-4 (no-slip).
+         Preserve wall rho so restart pressure stays consistent with the
+         interpolated source field and with the runtime solver policy.
+     5c. Global density correction: uniform additive offset on the full
+         physical domain, matching the runtime mass-correction kernel.
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
   6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
@@ -1607,7 +1609,7 @@ def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
 
 
 def clamp_wall_macros(rho, ux, uy, uz, cfg):
-    """Clamp physical wall macros before global conservation corrections."""
+    """Clamp physical wall velocity before global conservation corrections."""
     kt = cfg.NZ6 - 1 - BFR
     wall_u_max_before = max(
         float(np.max(np.abs(ux[:, BFR, :]))), float(np.max(np.abs(ux[:, kt, :]))),
@@ -1619,8 +1621,6 @@ def clamp_wall_macros(rho, ux, uy, uz, cfg):
         float(np.max(np.abs(rho[:, kt, :] - 1.0))),
     )
 
-    rho[:, BFR, :] = 1.0
-    rho[:, kt, :] = 1.0
     for arr in (ux, uy, uz):
         arr[:, BFR, :] = 0.0
         arr[:, kt, :] = 0.0
@@ -1629,39 +1629,31 @@ def clamp_wall_macros(rho, ux, uy, uz, cfg):
 
 
 def apply_rho_mass_correction(rho, cfg):
-    """Restore full-domain mean rho=1 while keeping physical wall rho=1.
+    """Restore full-domain mean rho=1 with the same uniform offset as runtime.
 
     The conserved domain matches the solver reduction domain:
       i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
     including both physical wall rows and excluding periodic duplicates.
 
-    Because checkpoint rebuilds clamp wall density to exactly 1 before this
-    correction, only non-wall rows absorb the additive offset:
-      k∈[4, NZ6-4)
-    This preserves wall mass exactly while restoring the full-domain total.
+    The runtime GILBM kernel applies rho_modify to every physical k row,
+    including both walls.  Rebuild checkpoints must use the same policy;
+    otherwise the restart state introduces an artificial wall-pressure reset.
     """
     ni = cfg.NX6 - 7
     nj = cfg.NY6 - 7
     nk = cfg.NZ6 - 6
     N_full = ni * nj * nk
-    N_adjust = ni * nj * max(nk - 2, 0)
-    if N_adjust <= 0:
-        raise ValueError('apply_rho_mass_correction requires at least one non-wall k row')
 
     full_domain = (slice(BFR, BFR + nj),
                    slice(BFR, BFR + nk),
                    slice(BFR, BFR + ni))
-    adjust_domain = (slice(BFR, BFR + nj),
-                     slice(BFR + 1, BFR + nk - 1),
-                     slice(BFR, BFR + ni))
 
     rho_sum = float(np.sum(rho[full_domain]))
     rho_global_avg = rho_sum / float(N_full)
-    rho_avg_defect = 1.0 - rho_global_avg
-    rho_modify = rho_avg_defect * float(N_full) / float(N_adjust)
+    rho_modify = 1.0 - rho_global_avg
 
     mean_before = rho_global_avg
-    rho[adjust_domain] += rho_modify
+    rho[full_domain] += rho_modify
     mean_after = float(np.sum(rho[full_domain])) / float(N_full)
 
     return rho_modify, mean_before, mean_after
@@ -2595,14 +2587,14 @@ def main():
         uz_new = interpolate_comp_3d(uz_g, OLD, NEW)
         print('      uz:   {:.1f}s'.format(time.time() - t))
 
-    print('      Applying wall macro constraints: u=v=w=0, rho=1')
+    print('      Applying wall velocity constraint: u=v=w=0 (preserve rho)')
     wall_residual_max, wall_rho_delta_max = clamp_wall_macros(
         rho_new, ux_new, uy_new, uz_new, NEW)
     print('      max |u_wall| before clamp = {:.3e}'.format(wall_residual_max))
-    print('      max |rho_wall - 1| before clamp = {:.3e}'.format(wall_rho_delta_max))
+    print('      max |rho_wall - 1| preserved = {:.3e}'.format(wall_rho_delta_max))
 
     rho_modify, mean_before, mean_after = apply_rho_mass_correction(rho_new, NEW)
-    print('      rho mass correction (non-wall rows): rho_modify = {:.6e}'.format(rho_modify))
+    print('      rho mass correction (full domain): rho_modify = {:.6e}'.format(rho_modify))
     print('      rho full-domain mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
 
     print('      Enforcing periodic duplicate nodes and filling ghost cells')
