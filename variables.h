@@ -79,7 +79,7 @@
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
 #define     NX      65         // 展向格點 (舊網格測試)
-#define     NY      129         // 流向格點 (需 (NY-1)%jp==0; 128/8=16)
+#define     NY      120         // 流向格點 (需 (NY-1)%jp==0; 256/8=32)
 #define     NZ      65         // 法向格點 (舊網格測試)
 #define     jp      8           //   GPU 數量 (流向分割)
 
@@ -238,18 +238,6 @@
 #define     MA_BRAKE_MULT_CRITICAL  2.1     // Mach 安全制動: 緊急歸零
 #define     MA_BRAKE_GROWTH_LIMIT   0.30    // 單步增長 >30% → 額外衰減
 
-// ================================================================
-//  §7.2 重啟外力平滑爬升 (Restart Force Ramp)
-// ================================================================
-// 問題: checkpoint restart 瞬間施加全額 Force 會在 collision 中
-//       產生震盪 (bounded oscillation), 即使 f_neq 已正確恢復。
-// 方案: 前 RESTART_RAMP_FTT 個 flow-through time 內
-//       Force_eff = ramp(t) × Force_checkpoint   (cosine: 0→1)
-//       controller (Launch_ModifyForcingTerm) 完全暫停
-//       ramp 結束後 Force_h[0] = Force_checkpoint, controller 恢復
-// 注意: 僅對 restart 且 FTT < RESTART_RAMP_FTT 生效; cold start 不觸發
-#define     RESTART_FORCE_RAMP      1       // 1=啟用, 0=關閉
-#define     RESTART_RAMP_FTT        0.5     // 爬升持續時間 (FTT), 建議 0.25~0.5
 
 // ================================================================
 //  §7.5 外力精度方案 (Forcing Scheme Accuracy)

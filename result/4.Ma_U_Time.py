@@ -978,7 +978,7 @@ COLOR_UB  = '#0072B2'   # blue     — Ub/Uref
 COLOR_MA  = '#D55E00'   # vermilion — Ma_max
 COLOR_FC  = '#009E73'   # bluish green — F*
 COLOR_RHO = '#CC79A7'   # reddish purple — <ρ>
-COLOR_DSI = '#7B2D8E'   # deep purple — Density Stability Index
+COLOR_DSI = '#7B2D8E'   # deep purple — ρ peak-to-peak amplitude
 COLOR_UU  = '#009E73'   # bluish green — RS
 COLOR_K   = '#E69F00'   # orange — TKE
 COLOR_MLUPS = '#56B4E9'  # sky blue — MLUPS
@@ -1343,23 +1343,33 @@ def build_rho_panel(ax, rho_data):
         mpl.ticker.FormatStrFormatter('%.7f')
     )
 
-    # ── Right axis: DSI (Density Stability Index) ──
+    # ── Right axis: rolling ρ peak-to-peak |max−min| ──
     ln_dsi = []
     ax_dsi = None
-    drho_signed = rho_data.get('drho_pos')
-    if drho_signed is not None and len(drho_signed) > 50:
+    if len(ftt) > 50:
         try:
-            c_dsi, spi, r2, as_, dsi = compute_dsi(ftt, drho_signed)
-            if len(c_dsi) > 2:
+            win_ftt, step_ftt = 0.25, 0.02
+            centres, ptp_vals = [], []
+            t0 = ftt[0]
+            while t0 + win_ftt <= ftt[-1]:
+                mask = (ftt >= t0) & (ftt < t0 + win_ftt)
+                idx = np.where(mask)[0]
+                if len(idx) >= 8:
+                    seg = rho[idx]
+                    centres.append(t0 + win_ftt / 2)
+                    ptp_vals.append(float(seg.max() - seg.min()))
+                t0 += step_ftt
+            if len(centres) > 2:
+                c_ptp = np.array(centres)
+                ptp = np.array(ptp_vals)
                 ax_dsi = ax.twinx()
-                ln_dsi = ax_dsi.plot(c_dsi, dsi, color=COLOR_DSI, lw=1.2,
-                                     label=r'$\mathrm{DSI}$')
-                ax_dsi.set_ylabel(r'$\mathrm{DSI}$', color=COLOR_DSI)
+                ln_dsi = ax_dsi.plot(c_ptp, ptp, color=COLOR_DSI, lw=1.2,
+                                     label=r'$|\rho_{\max}-\rho_{\min}|$')
+                ax_dsi.set_ylabel(r'$|\rho_{\max}-\rho_{\min}|$', color=COLOR_DSI)
                 ax_dsi.tick_params(axis='y', labelcolor=COLOR_DSI)
-                ax_dsi.set_ylim(0, 1.05)
-                ax_dsi.set_yticks([0, 0.25, 0.5, 0.75, 1.0])
+                ax_dsi.ticklabel_format(axis='y', style='scientific', scilimits=(-3, -3))
         except Exception as e:
-            print(f"[WARN] DSI computation failed: {e}")
+            print(f"[WARN] rho peak-to-peak computation failed: {e}")
 
     # ── Legend: combined handles, top-right, matching other panels ──
     lns = ln_rho + ln_dsi
