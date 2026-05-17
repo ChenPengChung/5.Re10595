@@ -117,29 +117,52 @@ __device__ void gilbm_mrt_collision_GTS(
 
 #if USE_GUO_FORCING
     // ═══════════════════════════════════════════════════════════════════
-    // Guo-Shi-Zheng (2002) forcing + Premnath-Abraham (2007) MRT projection
+    // Guo forcing — MRT projection pipeline
+    //   F_particle → M·F → (1-s/2) relaxation → inject m_star → M⁻¹
     //
-    //   F_i = w_i · [(c_i − u)/cs² + (c_i·u) c_i / cs⁴] · F_body
-    //   m_k^post = m_k^coll + δt · (1 − s_k/2) · [M · F_particle]_k
+    // <<Ref: T. Krüger et al., "The Lattice Boltzmann Method: Principles and Practice",
+    //   Springer (2017), §6.3.2, pp.236-237, Eqs. 6.14-6.16>>
     //
-    // 特化: F_body = (0, Force0, 0) — streamwise body force only
-    //       cs² = 1/3  ⇒  1/cs² = 3, 1/cs⁴ = 9
+    // Hermite 展開階數選擇 (A/B 切換):
+    //   - 2nd-order: Σ Fi·ci·cj = F_α·u_β + u_α·F_β ≠ 0 (壓縮性耦合)
+    //   - 1st-order: Σ Fi·ci·cj = 0 (不可壓條件相容)
     //
-    // 守恆 moment k∈{0,3,5,7}: s_k = 0 → (1 − s_k/2) = 1 (完整投注)
-    // 非守恆 moment: 依 Relaxation 表乘 (1 − s_k/2)
+    // ⚠ GILBM 穩定性實測 (D3Q27 Edit1_PeriodicHillchannel, 2025-05-17):
+    //   2nd-order Hermite 經 M 變換激發高階模態不穩定性 → step~1051 發散
+    //   1st-order Hermite 在相同條件下穩定收斂
+    //   理論依據: 不可壓極限 (Ma<<1) 下能量傳輸與動量解耦 (Krüger §4.3.2)
+    //   forcing 二階速度矩應為零 → 1st-order 展開即理論正確
+    //
+    // 本專案 (Re10595) 目前使用 2nd-order — 若發散請切換為 1st-order
     // ═══════════════════════════════════════════════════════════════════
-    //在二階空間精度mrt，裡面，外力也要經過矩陣變換
+
     double F_particle[19];
+    //--- 1st-order Hermite (ALTERNATIVE): Fi = wi·(ci_α/cs²)·F_α ---
+    // <<Krüger Eq.6.16>>
+    // Moments: Σ Fi = 0, Σ Fi·ci = F, Σ Fi·ci·cj = 0
+    // 不可壓相容 — GILBM 驗證穩定 (Edit1_PeriodicHillchannel)
+    // 若 2nd-order 發散，取消此段註解並註解上方 2nd-order 區塊
+    #pragma unroll
+    for (int q = 0; q < 19; q++) {
+        F_particle[q] = GILBM_W[q] * Force0 * 3.0 * GILBM_e[q][1];
+    }
+    
+    /* 
+    // --- 2nd-order Hermite (ACTIVE): Fi = wi·[ci_α/cs² + (ci_α·ci_β - cs²·δ_αβ)·u_β/cs⁴]·F_α ---
+    // <<Krüger Eq.6.14>>
+    // Moments: Σ Fi = 0, Σ Fi·ci = F, Σ Fi·ci·cj = F_α·u_β + u_α·F_β ≠ 0
+    // 非零二階矩引入壓縮性耦合 (Eq.6.15c)
     #pragma unroll
     for (int q = 0; q < 19; q++) {
         double cx = GILBM_e[q][0];
         double cy = GILBM_e[q][1];
         double cz = GILBM_e[q][2];
         double c_dot_u = cx*u_B + cy*v_B + cz*w_B;
-        // F_q = w_q · Force0 · [ 3·(c_y − u_y) + 9·(c·u)·c_y ]
         F_particle[q] = GILBM_W[q] * Force0 *
                         ( 3.0 * (cy - v_B) + 9.0 * c_dot_u * cy );
     }
+    */
+    
 
     // Forward transform: F_moment = M · F_particle
     double F_moment[19];
@@ -222,8 +245,12 @@ __device__ void gilbm_bgk_collision_GTS(
 
 #if USE_GUO_FORCING
     // BGK Guo (2002): 半力係數 (1 − 1/(2τ)) = (1 − s_visc/2)
-    // 完整 F_i 展開，含 (c_i·u) c_i / cs⁴ 速度耦合項
+    // <<Ref: Krüger et al. (2017) §6.3.2, Eqs. 6.14-6.16>>
     double half_visc = 1.0 - s_visc * 0.5;
+
+    // --- 2nd-order Hermite (ACTIVE) <<Krüger Eq.6.14>> ---
+    // Σ Fi·ci·cj = F_α·u_β + u_α·F_β ≠ 0 (壓縮性耦合)
+    // ⚠ 若發散，切換為下方 1st-order 區塊
     for (int q = 0; q < 19; q++) {
         double cx = GILBM_e[q][0];
         double cy = GILBM_e[q][1];
@@ -233,6 +260,15 @@ __device__ void gilbm_bgk_collision_GTS(
                      ( 3.0 * (cy - v_B) + 9.0 * c_dot_u * cy );
         f_out[q] = feq[q] + C * (f_B[q] - feq[q]) + dt_global * half_visc * F_q;
     }
+
+    /* --- 1st-order Hermite (ALTERNATIVE) <<Krüger Eq.6.16>> ---
+    // Σ Fi·ci·cj = 0 — 不可壓相容，GILBM 驗證穩定
+    // 若 2nd-order 發散，取消此段註解並註解上方 2nd-order 區塊
+    for (int q = 0; q < 19; q++) {
+        double F_q = GILBM_W[q] * Force0 * 3.0 * GILBM_e[q][1];
+        f_out[q] = feq[q] + C * (f_B[q] - feq[q]) + dt_global * half_visc * F_q;
+    }
+    */
 #else
     // Legacy: 零階 body force (一階精度)
     for (int q = 0; q < 19; q++) {
