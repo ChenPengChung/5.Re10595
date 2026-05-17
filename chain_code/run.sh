@@ -139,6 +139,11 @@ if [ "$MODE_FORCE_REGRID" -eq 1 ] && [ "$MODE_REGRID" -eq 0 ]; then
     echo "[run.sh] FATAL: --force-regrid 必須搭配 --regrid-from-origin"
     exit 2
 fi
+if [ "$MODE_COLD" -eq 1 ] && [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then
+    echo "[run.sh] FATAL: --force-cold 與 --preflight-only 不能同時使用"
+    echo "        --force-cold 會刪除 state, 與 preflight 的唯讀語義矛盾"
+    exit 2
+fi
 _project_abs_path() {
     case "$1" in
         /*) printf '%s\n' "$1" ;;
@@ -976,8 +981,8 @@ if [ "$_PIPELINE_CASE" -eq 2 ]; then
     [ -s "$REGRID_NEW_GRID" ] || { echo "[FATAL] NEW grid 不存在或為空: $REGRID_NEW_GRID"; exit 1; }
 
     # ── 清除既有 checkpoint (--force-regrid) ──
-    if [ "$HAS_CKPT" -eq 1 ] && [ "$MODE_PREFLIGHT_ONLY" -eq 0 ]; then
-        if [ "$MODE_FORCE_REGRID" -eq 1 ]; then
+    if [ "$HAS_CKPT" -eq 1 ]; then
+        if [ "$MODE_FORCE_REGRID" -eq 1 ] && [ "$MODE_PREFLIGHT_ONLY" -eq 0 ]; then
             echo "[case-2] --force-regrid: 清除既有 checkpoint/provenance 後重建"
             rm -rf restart/checkpoint/
             rm -f restart/grid_provenance restart/grid_provenance.WRITING restart/checkpoint/grid_provenance
@@ -986,6 +991,9 @@ if [ "$_PIPELINE_CASE" -eq 2 ]; then
         else
             echo "[FATAL] Case 2 但 restart/checkpoint/ 已有 checkpoint"
             echo "        若確定要用 origin 重建, 請加 --force-regrid --regrid-from-origin"
+            if [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then
+                echo "        (--preflight-only 不會跳過此檢查)"
+            fi
             exit 1
         fi
     fi
@@ -1045,7 +1053,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────
 # Case 3: cold-start — 確認 solver grid 存在 (匹配 variables.h)
 # ─────────────────────────────────────────────────────────────────────
-if [ "$_PIPELINE_CASE" -eq 3 ] && [ "$MODE_COLD" -eq 0 ]; then
+if [ "$_PIPELINE_CASE" -eq 3 ]; then
     echo "[case-3] 冷啟動: 確認 solver grid 匹配 variables.h..."
     if python3 J_Frohlich/grid_zeta_tool.py --auto; then
         echo "[case-3] Grid OK"
