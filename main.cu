@@ -1314,6 +1314,25 @@ int main(int argc, char *argv[])
     // (restart_step+1)&~1: 奇數→+1=偶數, 偶數→+1=奇數→&~1=偶數(重算被中斷的 even sub-step)
     int loop_start = (restart_step > 0) ? ((restart_step + 1) & ~1) : 0;
 
+#if RESTART_FORCE_RAMP
+    const double Force_checkpoint_ramp = Force_h[0];
+    const double FTT_ramp_now0 = (double)loop_start * dt_global / (double)flow_through_time;
+    const double FTT_ramp_end  = (double)RESTART_RAMP_FTT;
+    bool ramp_active = (restart_step > 0) &&
+                       ((double)RESTART_RAMP_FTT > 0.0) &&
+                       (FTT_ramp_now0 < FTT_ramp_end);
+    if (ramp_active && myid == 0) {
+        printf("\n[FORCE-RAMP] Enabled: %.2f FTT cosine ramp (FTT 0.0000 -> %.4f, resume at %.4f)\n"
+               "[FORCE-RAMP] Force_checkpoint = %.5E, controller PAUSED during ramp\n\n",
+               (double)RESTART_RAMP_FTT, FTT_ramp_end, FTT_ramp_now0, Force_checkpoint_ramp);
+    }
+    if (ramp_active) {
+        double ramp0 = 0.5 * (1.0 - cos(pi * FTT_ramp_now0 / (double)RESTART_RAMP_FTT));
+        Force_h[0] = ramp0 * Force_checkpoint_ramp;
+        CHECK_CUDA( cudaMemcpy(Force_d, Force_h, sizeof(double), cudaMemcpyHostToDevice) );
+    }
+#endif
+
 #if USE_TIMING
     Timing_Init(loop_start, g_restored_gpu_ms);
     Timing_WriteHeader(myid);
@@ -1817,7 +1836,35 @@ int main(int argc, char *argv[])
 
         // ===== Force modification (every NDTFRC steps) =====
         if ( (step%(int)NDTFRC == 1) ) {
+#if RESTART_FORCE_RAMP
+            if (ramp_active) {
+                double FTT_elapsed = FTT_now;
+                if (FTT_elapsed < (double)RESTART_RAMP_FTT) {
+                    double ramp_factor = 0.5 * (1.0 - cos(pi * FTT_elapsed / (double)RESTART_RAMP_FTT));
+                    Force_h[0] = ramp_factor * Force_checkpoint_ramp;
+                    CHECK_CUDA( cudaMemcpy(Force_d, Force_h, sizeof(double), cudaMemcpyHostToDevice) );
+                    if (myid == 0 && step % (int)NDTMIT == 1) {
+                        double F_star = Force_h[0] * (double)LY / ((double)Uref * (double)Uref);
+                        printf("[FORCE-RAMP] Step=%d FTT=%.3f  ramp=%.4f  Force=%.5E  F*=%.4f  (ckpt=%.5E)\n",
+                               step, FTT_now, ramp_factor, Force_h[0], F_star, Force_checkpoint_ramp);
+                    }
+                } else {
+                    ramp_active = false;
+                    Force_h[0] = Force_checkpoint_ramp;
+                    CHECK_CUDA( cudaMemcpy(Force_d, Force_h, sizeof(double), cudaMemcpyHostToDevice) );
+                    if (myid == 0) {
+                        printf("\n[FORCE-RAMP] COMPLETE at Step=%d FTT=%.3f\n"
+                               "[FORCE-RAMP] Force restored to %.5E, controller RESUMED\n\n",
+                               step, FTT_now, Force_checkpoint_ramp);
+                    }
+                    Launch_ModifyForcingTerm();
+                }
+            } else {
+                Launch_ModifyForcingTerm();
+            }
+#else
             Launch_ModifyForcingTerm();
+#endif
         }
 
         // ===== Monitor output (every NDTMIT steps) =====
@@ -1993,6 +2040,14 @@ int main(int argc, char *argv[])
 
             // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
             if (step % NDTBIN == 1) {
+#if RESTART_FORCE_RAMP
+                if (ramp_active) {
+                    double Force_save = Force_h[0];
+                    Force_h[0] = Force_checkpoint_ramp;
+                    SaveBinaryCheckpoint( step );
+                    Force_h[0] = Force_save;
+                } else
+#endif
                 SaveBinaryCheckpoint( step );
             }
         }
@@ -2115,6 +2170,9 @@ int main(int argc, char *argv[])
         CHECK_CUDA( cudaMemcpy(v_tavg_h, v_tavg_d, tavg_bytes_final, cudaMemcpyDeviceToHost) );
         CHECK_CUDA( cudaMemcpy(w_tavg_h, w_tavg_d, tavg_bytes_final, cudaMemcpyDeviceToHost) );
         fileIO_velocity_vtk_merged( step );
+#if RESTART_FORCE_RAMP
+        if (ramp_active) Force_h[0] = Force_checkpoint_ramp;
+#endif
         SaveBinaryCheckpoint( step );     // binary checkpoint (f^neq + tavg + RS + metadata)
 
         // ===== Animation: final GIF append (blocking, 等背景任務收尾) =====
