@@ -112,7 +112,7 @@
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               2.0
+#define     GAMMA               3.5
 #define     ALPHA               0.5
 
 #define     CFL                 0.5
@@ -259,6 +259,9 @@
 #define     USE_GUO_FORCING     1   // 預設關, Poiseuille 驗證通過後翻 1
 #endif
 
+#ifndef FORCE_HERMITE_ORDER
+#define     FORCE_HERMITE_ORDER 1   // 1 = 一階 Hermite: w_q·3·(c_y−v)·F
+#endif                              // 2 = 二階 Hermite: + 9·(c·u)·c_y·F
 
 // ================================================================
 //  §8. 重啟 (Restart) 配置

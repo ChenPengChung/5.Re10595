@@ -705,7 +705,10 @@ int main(int argc, char *argv[])
         CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_v, GILBM_MRT_Fproj_v_h, sizeof(GILBM_MRT_Fproj_v_h)) );
         CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_w, GILBM_MRT_Fproj_w_h, sizeof(GILBM_MRT_Fproj_w_h)) );
 
-        if (myid == 0) printf("GILBM-MRT: K and Guo forcing projections copied to __constant__ memory.\n");
+        if (myid == 0) {
+            printf("GILBM-MRT: K and Guo forcing projections copied to __constant__ memory.\n");
+            printf("GILBM-MRT: FORCE_HERMITE_ORDER = %d\n", FORCE_HERMITE_ORDER);
+        }
     }
 #endif  // USE_MRT
 

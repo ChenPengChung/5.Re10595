@@ -107,15 +107,18 @@ __device__ void gilbm_bgk_collision_GTS(
 
 #if USE_GUO_FORCING
     // BGK Guo (2002): 半力係數 (1 − 1/(2τ)) = (1 − s_visc/2)
-    // 完整 F_i 展開，含 (c_i·u) c_i / cs⁴ 速度耦合項
     double half_visc = 1.0 - s_visc * 0.5;
     for (int q = 0; q < 19; q++) {
-        double cx = GILBM_e[q][0];
         double cy = GILBM_e[q][1];
+#if FORCE_HERMITE_ORDER >= 2
+        double cx = GILBM_e[q][0];
         double cz = GILBM_e[q][2];
         double c_dot_u = cx*u_B + cy*v_B + cz*w_B;
         double F_q = GILBM_W[q] * Force0 *
                      ( 3.0 * (cy - v_B) + 9.0 * c_dot_u * cy );
+#else
+        double F_q = GILBM_W[q] * Force0 * 3.0 * (cy - v_B);
+#endif
         f_out[q] = feq[q] + C * (f_B[q] - feq[q]) + dt_global * half_visc * F_q;
     }
 #else
