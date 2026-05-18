@@ -315,17 +315,12 @@ __device__ void algorithm1_step1_GTS(
                     //   ξ,ζ Lagrange 權重為 Kronecker delta → collapse to (gj=j, gk=k)
                     //   每方向僅 7 次 DRAM read (連續記憶體, 1 條 cache line)
                     // ═══════════════════════════════════════════════════════
-                    double delta_eta_q = dt_global * ex * GILBM_inv_dx;
-                    double t_eta = 3.0 - delta_eta_q;   // i - bi = 3 (always, bi = i-3)
-                    if (t_eta < 0.0) t_eta = 0.0;
-                    if (t_eta > 6.0) t_eta = 6.0;
-                    double L_eta[7];
-                    lagrange_7point_coeffs(t_eta, L_eta);
+                    const int eta_sign = (ex > 0.0) ? 0 : 1;
 
                     int base_1d = q_off + j * nface + k * NX6 + bi;
                     f_streamed = 0.0;
                     for (int si = 0; si < 7; si++)
-                        f_streamed += L_eta[si] * f_post_read[base_1d + si];
+                        f_streamed += GILBM_L_eta_shared[eta_sign][si] * f_post_read[base_1d + si];
 
                 } else {
                     // ═══════════════════════════════════════════════════════
@@ -385,12 +380,7 @@ __device__ void algorithm1_step1_GTS(
                         //     L1 cache 已自動處理 η-row overlap → smem 無額外效益
                         //     整條 η-row (39×8=312B) + 49 rows = 15KB << L1 24KB
                         // ═══════════════════════════════════════════════════════
-                        double delta_eta_q = dt_global * ex * GILBM_inv_dx;
-                        double t_eta = 3.0 - delta_eta_q;   // i - bi = 3
-                        if (t_eta < 0.0) t_eta = 0.0;
-                        if (t_eta > 6.0) t_eta = 6.0;
-                        double L_eta[7];
-                        lagrange_7point_coeffs(t_eta, L_eta);
+                        const int eta_sign = (ex > 0.0) ? 0 : 1;
 
                         for (int sk = 0; sk < 7; sk++) {
                             double acc = 0.0;
@@ -398,7 +388,7 @@ __device__ void algorithm1_step1_GTS(
                                 double row_val = 0.0;
                                 int base_idx = (bj + sj) * nface + (bk + sk) * NX6 + bi;
                                 for (int si = 0; si < 7; si++) {
-                                    row_val += L_eta[si] * f_post_read[q_off + base_idx + si];
+                                    row_val += GILBM_L_eta_shared[eta_sign][si] * f_post_read[q_off + base_idx + si];
                                 }
                                 acc += L_xi[sj] * row_val;
                             }
@@ -642,16 +632,11 @@ __device__ void algorithm1_step1_GTS_smem(
 
                     if (ey == 0.0 && ez == 0.0) {
                         // 1D: q=1,2
-                        double delta_eta_q = dt_global * ex * GILBM_inv_dx;
-                        double t_eta = 3.0 - delta_eta_q;
-                        if (t_eta < 0.0) t_eta = 0.0;
-                        if (t_eta > 6.0) t_eta = 6.0;
-                        double L_eta[7];
-                        lagrange_7point_coeffs(t_eta, L_eta);
+                        const int eta_sign = (ex > 0.0) ? 0 : 1;
                         int base_1d = q_off + j * nface + k * NX6 + bi;
                         f_streamed = 0.0;
                         for (int si = 0; si < 7; si++)
-                            f_streamed += L_eta[si] * f_post_read[base_1d + si];
+                            f_streamed += GILBM_L_eta_shared[eta_sign][si] * f_post_read[base_1d + si];
                     } else {
                         // 2D: q=3-6, 15-18 (ex==0) — RK2 + ξ×ζ interpolation
                         double d_xi, delta_zeta_q;
@@ -719,16 +704,13 @@ __device__ void algorithm1_step1_GTS_smem(
                     xi_y_val, xi_z_val, zeta_y_val, zeta_z_val,
                     xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
                     d_xi, delta_zeta_q);
-                double delta_eta_q  = dt_global * ex * GILBM_inv_dx;
-
                 double t_xi  = (double)(j - bj) - d_xi;
                 if (t_xi  < 0.0) t_xi  = 0.0; if (t_xi  > 6.0) t_xi  = 6.0;
                 lagrange_7point_coeffs(t_xi, L_xi);
 
-                double t_eta = 3.0 - delta_eta_q;
-                if (t_eta < 0.0) t_eta = 0.0;
-                if (t_eta > 6.0) t_eta = 6.0;
-                lagrange_7point_coeffs(t_eta, L_eta);
+                const int eta_sign = (ex > 0.0) ? 0 : 1;
+                for (int si = 0; si < 7; si++)
+                    L_eta[si] = GILBM_L_eta_shared[eta_sign][si];
 
                 double up_k = (double)k - delta_zeta_q;
                 if (up_k < 3.0)              up_k = 3.0;
