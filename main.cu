@@ -238,6 +238,7 @@ bool g_timing_sample = false;
 #include "fileIO.h"
 #include "MRT_Matrix.h"
 #include "MRT_Process.h"
+#include "mrt_projection_host.h"
 
 static void BuildCurrentGridDatPath(char *grid_dat_path, size_t n)
 {
@@ -747,22 +748,99 @@ int main(int argc, char *argv[])
     CHECK_CUDA( cudaMemcpyToSymbol(GILBM_dt, &dt_global, sizeof(double)) );
     {
         double inv_dx_val = (double)(NX6 - 7) / LX;
-        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_inv_dx, &inv_dx_val, sizeof(double)) );
-        if (myid == 0) printf("GILBM-GTS: inv_dx = %.8e → __constant__ memory.\n", inv_dx_val);
-    }
+        double L_eta_shared_h[2][7];
+        PrecomputeGILBM_EtaSharedWeights(L_eta_shared_h, dt_global, inv_dx_val);
 
+        double eta_max_coeff_abs = 0.0;
+        double eta_max_interp_abs = 0.0;
+        VerifyGILBM_EtaSharedWeights(L_eta_shared_h, dt_global, inv_dx_val,
+                                     &eta_max_coeff_abs, &eta_max_interp_abs);
+        if (myid == 0) {
+            printf("GILBM eta shared weights verification:\n");
+            printf("  max coeff diff = %.17e\n", eta_max_coeff_abs);
+            printf("  max interp diff = %.17e\n", eta_max_interp_abs);
+        }
+        if (eta_max_coeff_abs > 1.0e-12 || eta_max_interp_abs > 1.0e-12) {
+            if (myid == 0) {
+                fprintf(stderr,
+                    "ERROR: shared eta weight verification failed: coeff=%.17e interp=%.17e\n",
+                    eta_max_coeff_abs, eta_max_interp_abs);
+            }
+            MPI_Abort(MPI_COMM_WORLD, 43);
+        }
+
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_inv_dx, &inv_dx_val, sizeof(double)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_L_eta_shared, L_eta_shared_h, sizeof(L_eta_shared_h)) );
+        if (myid == 0) {
+            printf("GILBM-GTS: inv_dx = %.8e and shared eta weights -> __constant__ memory.\n",
+                   inv_dx_val);
+        }
+    }
     // Precomputed stencil base k → GPU
     CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
 
 #if USE_MRT
-    // Phase 3.5: MRT transformation matrices → __constant__ memory
+    // Phase 3.5: MRT nonequilibrium projection tables -> __constant__ memory
     {
-        Matrix;           // MRT_Matrix.h → double M[19][19] = { ... };
-        Inverse_Matrix;   // MRT_Matrix.h → double Mi[19][19] = { ... };
-        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_M,  M,  sizeof(M)) );
-        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_Mi, Mi, sizeof(Mi)) );
+        Matrix;           // MRT_Matrix.h -> double M[19][19] = { ... };
+        Inverse_Matrix;   // MRT_Matrix.h -> double Mi[19][19] = { ... };
+        double s_visc_val_mrt = 1.0 / omega_global;
+        double GILBM_MRT_K_h[19][19];
+        double GILBM_MRT_Fproj_h[19];
+        double GILBM_MRT_Fproj_u_h[19];
+        double GILBM_MRT_Fproj_v_h[19];
+        double GILBM_MRT_Fproj_w_h[19];
 
-        if (myid == 0) printf("GILBM-MRT: M, Mi copied to __constant__ memory.\n");
+        BuildMrtProjectionTablesHost(M, Mi, s_visc_val_mrt,
+                                     GILBM_MRT_K_h,
+                                     GILBM_MRT_Fproj_h,
+                                     GILBM_MRT_Fproj_u_h,
+                                     GILBM_MRT_Fproj_v_h,
+                                     GILBM_MRT_Fproj_w_h);
+
+        MrtProjectionVerification mrt_v =
+            VerifyMrtProjectionHost(M, Mi,
+                                    GILBM_MRT_K_h,
+                                    GILBM_MRT_Fproj_h,
+                                    GILBM_MRT_Fproj_u_h,
+                                    GILBM_MRT_Fproj_v_h,
+                                    GILBM_MRT_Fproj_w_h,
+                                    s_visc_val_mrt,
+                                    dt_global);
+
+        if (myid == 0) {
+            printf("GILBM-MRT projection verification (%d samples):\n", mrt_v.samples);
+            printf("  max |Mi*M-I|                 = %.17e\n", mrt_v.max_identity_error);
+            printf("  max |M*feq-meq|              = %.17e\n", mrt_v.max_equilibrium_moment_error);
+            printf("  max conserved |M_c*K|        = %.17e\n", mrt_v.max_conserved_relax_error);
+            printf("  max Guo basis split diff     = %.17e\n", mrt_v.max_force_basis_error);
+            printf("  max Guo projection split diff= %.17e\n", mrt_v.max_force_projection_error);
+            printf("  max conserved force moment   = %.17e\n", mrt_v.max_force_moment_error);
+            printf("  max collision abs diff       = %.17e\n", mrt_v.max_collision_abs_error);
+            printf("  max collision rel diff       = %.17e\n", mrt_v.max_collision_rel_error);
+        }
+        if (mrt_v.max_identity_error > 1.0e-12 ||
+            mrt_v.max_equilibrium_moment_error > 1.0e-12 ||
+            mrt_v.max_conserved_relax_error > 1.0e-12 ||
+            mrt_v.max_force_basis_error > 1.0e-12 ||
+            mrt_v.max_force_projection_error > 1.0e-12 ||
+            mrt_v.max_force_moment_error > 1.0e-12 ||
+            mrt_v.max_collision_abs_error > 1.0e-12) {
+            if (myid == 0) {
+                fprintf(stderr, "ERROR: MRT projection verification failed strict 1e-12 tolerance.\n");
+            }
+            MPI_Abort(MPI_COMM_WORLD, 42);
+        }
+
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_K, GILBM_MRT_K_h, sizeof(GILBM_MRT_K_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj, GILBM_MRT_Fproj_h, sizeof(GILBM_MRT_Fproj_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_u, GILBM_MRT_Fproj_u_h, sizeof(GILBM_MRT_Fproj_u_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_v, GILBM_MRT_Fproj_v_h, sizeof(GILBM_MRT_Fproj_v_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_w, GILBM_MRT_Fproj_w_h, sizeof(GILBM_MRT_Fproj_w_h)) );
+
+        if (myid == 0) {
+            printf("GILBM-MRT: K and Guo forcing projections copied to __constant__ memory.\n");
+        }
     }
 #endif  // USE_MRT
 
@@ -788,6 +866,7 @@ int main(int argc, char *argv[])
     }
 
     if (myid == 0) printf("GILBM: Jacobian + __constant__(dt,inv_dx) + bk_precomp copied to GPU.\n");
+    if (myid == 0) printf("GILBM: FORCE_HERMITE_ORDER = %d\n", FORCE_HERMITE_ORDER);
 
     if ( g_init_runtime == 0 ) {
         printf("Initializing by default function...\n");

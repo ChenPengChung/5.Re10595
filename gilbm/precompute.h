@@ -155,6 +155,64 @@ double ComputeGlobalTimeStep(
 
 // [REMOVED] PrecomputeGILBM_LagrangeWeights — Lagrange weights now computed on-the-fly in Step1 kernel
 
+// [REMOVED] PrecomputeGILBM_LagrangeWeights — Lagrange weights now computed on-the-fly in Step1 kernel
+
+// ============================================================================
+// PrecomputeGILBM_EtaSharedWeights: eta weights shared by ex sign
+// ============================================================================
+// The eta displacement is uniform:
+//   delta_eta(ex) = dt * ex * inv_dx
+// It depends only on ex=+/-1, not on q, i, j, or k. Every q with the same ex
+// must reuse the same 7-point eta interpolation operator.
+static inline void PrecomputeGILBM_EtaSharedWeights(
+    double L_eta_shared[2][7],
+    double dt_val,
+    double inv_dx_val)
+{
+    for (int sign = 0; sign < 2; sign++) {
+        const double ex = (sign == 0) ? 1.0 : -1.0;
+        const double delta_eta = dt_val * ex * inv_dx_val;
+        double t_eta = 3.0 - delta_eta;
+        if (t_eta < 0.0) t_eta = 0.0;
+        if (t_eta > 6.0) t_eta = 6.0;
+        lagrange_7point_coeffs_host(t_eta, L_eta_shared[sign]);
+    }
+}
+
+static inline void VerifyGILBM_EtaSharedWeights(
+    const double L_eta_shared[2][7],
+    double dt_val,
+    double inv_dx_val,
+    double *max_coeff_abs,
+    double *max_interp_abs)
+{
+    *max_coeff_abs = 0.0;
+    *max_interp_abs = 0.0;
+
+    double L_ref[2][7];
+    PrecomputeGILBM_EtaSharedWeights(L_ref, dt_val, inv_dx_val);
+
+    for (int sign = 0; sign < 2; sign++) {
+        for (int si = 0; si < 7; si++) {
+            const double err = fabs(L_eta_shared[sign][si] - L_ref[sign][si]);
+            if (err > *max_coeff_abs) *max_coeff_abs = err;
+        }
+
+        for (int trial = 0; trial < 8; trial++) {
+            double legacy = 0.0, fast = 0.0;
+            for (int si = 0; si < 7; si++) {
+                const double row = 0.125 + 0.017 * (double)(trial + 1)
+                                 + 0.003 * (double)(si - 3)
+                                 + 0.002 * (double)sign * (double)(si + 1);
+                legacy += L_ref[sign][si] * row;
+                fast   += L_eta_shared[sign][si] * row;
+            }
+            const double err = fabs(fast - legacy);
+            if (err > *max_interp_abs) *max_interp_abs = err;
+        }
+    }
+}
+
 // ============================================================================
 // PrecomputeGILBM_StencilBaseK: precompute z-direction stencil base with wall clamping
 // ============================================================================

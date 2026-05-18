@@ -259,6 +259,23 @@
 #define     USE_GUO_FORCING     1   // 預設關, Poiseuille 驗證通過後翻 1
 #endif
 
+// ================================================================
+//  §7.5.1 Guo Forcing Hermite 展開階數
+// ================================================================
+//   1 = 一階 Hermite: F_i = w_i · 3 · c_y · Force
+//       Σ Fi·ci·cj = 0 — 不可壓相容，GILBM 驗證穩定
+//   2 = 二階 Hermite: F_i = w_i · Force · [3(c_y−v) + 9(c·u)c_y]
+//       Σ Fi·ci·cj = F_α·u_β + u_α·F_β ≠ 0 (壓縮性耦合)
+//
+// Ref: Krüger et al. (2017) §6.3.2, Eqs. 6.14 (2nd) / 6.16 (1st)
+// ================================================================
+#ifndef FORCE_HERMITE_ORDER
+#define     FORCE_HERMITE_ORDER 1   // 1 = 一階 Hermite: w_q·3·cy·F
+#endif                              // 2 = 二階 Hermite: + 9·(c·u)·cy·F
+#if FORCE_HERMITE_ORDER != 1 && FORCE_HERMITE_ORDER != 2
+#error "FORCE_HERMITE_ORDER must be 1 or 2"
+#endif
+
 
 // ================================================================
 //  §7.6 壁面速度梯度精度 (Wall Velocity Gradient Order)
