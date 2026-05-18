@@ -45,9 +45,14 @@ __constant__ double GILBM_inv_dx;         // 1/dx (uniform x-grid spacing, for o
 // ────────────────────────────────────────────────────────────────────────────
 
 #if USE_MRT
-__constant__ double GILBM_M[19][19];
-__constant__ double GILBM_Mi[19][19];
+__constant__ double GILBM_MRT_K[19][19];      // K = M^-1 S M
+__constant__ double GILBM_MRT_Fproj[19];      // M^-1(I-S/2)M · W 3 cy
+__constant__ double GILBM_MRT_Fproj_u[19];    // velocity correction: u · W 9 cx cy
+__constant__ double GILBM_MRT_Fproj_v[19];    // velocity correction: v · W (9 cy^2 - 3)
+__constant__ double GILBM_MRT_Fproj_w[19];    // velocity correction: w · W 9 cz cy
 #endif  // USE_MRT
+
+__constant__ double GILBM_L_eta_shared[2][7]; // eta weights shared by ex sign: 0=+1, 1=-1
 
 
 // ────────────────────────────────────────────────────────────────────────────
