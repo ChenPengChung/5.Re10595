@@ -1,0 +1,716 @@
+#!/bin/bash
+#SBATCH --job-name=Edit4_test2_transbound
+#SBATCH --account=MST114348
+#SBATCH --partition=gb200-dev
+#SBATCH --nodes=2
+#SBATCH --ntasks-per-node=4
+#SBATCH --gres=gpu:4
+#SBATCH --cpus-per-task=1
+# [POLICY-B1] 預設 walltime = 2 小時 (NCHC gb200-dev 上限);
+#             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
+#             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
+#                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
+#SBATCH --time=2:00:00
+#SBATCH --output=slurm_%j.log
+#SBATCH --error=slurm_%j.err
+#SBATCH --open-mode=append
+# SIGUSR1 送達時間:walltime 結束前 120s,讓程式完成最終 checkpoint。
+# 120s 為 partition-agnostic 固定值 (任何合理 walltime >= 5 分鐘都適用)。
+#SBATCH --signal=USR1@120
+#
+# ==============================================================================
+# jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
+# 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes(2) / ntasks(4/node) / mpirun ppr(4:node)
+# 對應 variables.h jp=8 (8 streamwise MPI ranks): 2 nodes × 4 GPU/node = 8 ranks
+#
+# Round 1      -> ./a.out --cold
+# Round >= 2   -> ./a.out --restart=restart/checkpoint/step_<latest>
+# 全部 checkpoint 失效 -> FATAL, chain 停 (絕不靜默冷啟動)
+#
+# Exit code 語意 (stop_control.h + POLICY-C1):
+#   0   = 自然停止 (converged / diverged / FTT_STOP / STOP_CHAIN sentinel) -> 停鏈
+#   42  = [POLICY-C1] 不可避免錯誤 (grid mismatch / restart metadata 損毀
+#         / Phase 4 tripwire / init-path FATAL) -> 停鏈 (by policy, 不續投)
+#   124 = SIGUSR1 walltime 救援 / bash timeout(1) SIGKILL                  -> 續鏈
+#   其他非 0 = crash / node failure                                         -> 續鏈
+#              (elapsed < 60s 且 RC ∉ {0,42,124} 時會觸發 fast-fail 節點黑名單)
+#
+# 四大停止原則 (POLICY-C1):
+#   只有以下情況讓 chain 停:
+#     (1) CONVERGED   -> solver exit 0
+#     (2) DIVERGED    -> solver exit 0 (Force NaN/Inf)
+#     (3) USER STOP   -> SIGUSR2/SIGTERM / restart/STOP_CHAIN 檔
+#     (4) FTT_STOP    -> 到達 max FTT / 或 (4b) 不可避免之錯誤 (exit 42)
+#   其餘任何失敗 (walltime / node failure / crash) 皆續投下一輪。
+#
+# 路徑規範 (升級後,所有 chain state 集中於 restart/):
+#   chain state      : restart/chain_jobid, restart/chain_count
+#   chain log        : restart/chain.log
+#   bad nodes        : restart/bad_nodes
+#   fast-fail count  : restart/fast_fail_count
+#   STOP sentinel    : restart/STOP_CHAIN  (solver stop_control.h 也讀此路徑)
+#   checkpoint       : restart/checkpoint/step_XXXXX/
+# ==============================================================================
+
+export PATH=$HOME/bin:$PATH
+module purge
+module load cuda/13.0
+
+export CUDA_HOME=/usr/local/cuda-13.0
+export MATH_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/25.9/math_libs/13.0/targets/sbsa-linux
+export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_aarch64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
+source $HPCX_HOME/hpcx-init.sh
+hpcx_load
+export OMPI_MCA_coll_hcoll_enable=0
+
+# ── [方案 A path discipline] ──
+PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
+CHAIN_DIR="$PROJECT_ROOT/chain_code"
+cd "$PROJECT_ROOT" || { echo "[jobscript.GB200] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
+JOBSCRIPT_SELF="$CHAIN_DIR/jobscript_chain.slurm.GB200"
+
+# ===== 0. Legacy migration: 舊 layout (root-level) -> restart/ (冪等) =====
+mkdir -p restart/
+[ -f .chain_jobid ]     && mv -n .chain_jobid     restart/chain_jobid     2>/dev/null
+[ -f .chain_count ]     && mv -n .chain_count     restart/chain_count     2>/dev/null
+[ -f .bad_nodes ]       && mv -n .bad_nodes       restart/bad_nodes       2>/dev/null
+[ -f .fast_fail_count ] && mv -n .fast_fail_count restart/fast_fail_count 2>/dev/null
+[ -f chain.log ]        && mv -n chain.log        restart/chain.log       2>/dev/null
+[ -f STOP_CHAIN ]       && mv -n STOP_CHAIN       restart/STOP_CHAIN      2>/dev/null
+if [ -d checkpoint ] && [ ! -d restart/checkpoint ]; then
+    mv -n checkpoint restart/checkpoint 2>/dev/null
+fi
+
+CHAIN_LOG=restart/chain.log
+log() { echo "[$(date '+%F %T')] [job=$SLURM_JOB_ID] $*" | tee -a "$CHAIN_LOG"; }
+
+# ═════════════════════════════════════════════════════════════════════════
+# [SINGLE-HEAD PRINCIPLE] restart/HEAD.lockdir — Single-Head per Folder
+# ─────────────────────────────────────────────────────────────────────────
+# 中心準則: 「每一格資料夾在任何時刻, queue 內最多只能有 1 個屬於本 chain
+#           的 job (不論 PENDING/RUNNING)」.
+#
+# 由 tools/head_lock_lib.sh 提供共用函式:
+#   - submit 端 (submit_dispatcher / run.sh / jobscript EOJ) 先 acquire_head
+#     再 sbatch, sbatch 成功後 write_head_jobid 寫入真正 jobid.
+#   - jobscript 進 RUNNING 時呼叫 verify_am_head(SLURM_JOB_ID):
+#       符合 → state 升級為 RUNNING, 正常跑.
+#       不符 → 表示本 job 不是 legitimate head (重複投遞 / race), exit 42.
+#   - trap EXIT: release_head_lock_if_mine(SLURM_JOB_ID)
+#       若 HEAD.lockdir/owner.jobid 已被自己的續投覆寫, 不清 (交棒).
+# ═════════════════════════════════════════════════════════════════════════
+LOCK_DIR="restart/HEAD.lockdir"   # 保留變數名以相容既有 epoch guard
+HEAD_LOCK_DIR="$LOCK_DIR"
+
+if [ -f "$CHAIN_DIR/tools/head_lock_lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CHAIN_DIR/tools/head_lock_lib.sh"
+else
+    log "FATAL: $CHAIN_DIR/tools/head_lock_lib.sh 不存在, 無法執行 Single-Head 驗證"
+    exit 1
+fi
+
+# ─────────────────────────────────────────────────────────────────────────
+# [BLACKLIST-LIB] 載入黑名單管理函式庫 (TTL + NCHC sync + cap)
+# ─────────────────────────────────────────────────────────────────────────
+if [ -f "$CHAIN_DIR/tools/blacklist_lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CHAIN_DIR/tools/blacklist_lib.sh"
+else
+    log "FATAL: $CHAIN_DIR/tools/blacklist_lib.sh 不存在, 無法做 blacklist TTL/sync/cap"
+    exit 1
+fi
+_BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
+mkdir -p "$(dirname "$_BL_LOG")"
+
+# [PARTITION-LIB] partition 切換函式庫 (支援 restart/gb200_partition override)
+if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CHAIN_DIR/tools/partition_lib.sh"
+fi
+
+if ! verify_am_head "$SLURM_JOB_ID" "GB200"; then
+    _rc=$?
+    HEAD_OWNER="$(grep '^jobid=' "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo none)"
+    HEAD_STATE="$(grep '^state='  "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo none)"
+    log "[SINGLE-HEAD] FATAL: 我 (jobid=$SLURM_JOB_ID) 不是 legitimate head"
+    log "[SINGLE-HEAD]   verify_am_head rc=$_rc  HEAD.lockdir owner=$HEAD_OWNER state=$HEAD_STATE"
+    log "[SINGLE-HEAD]   可能原因: 本 job 不是由 dispatcher/run.sh 合法投遞,"
+    log "[SINGLE-HEAD]             或 HEAD.lockdir 被其他 job 搶先持有."
+    log "[SINGLE-HEAD]   RC=42 停鏈 以維持『每格資料夾單一 head』準則."
+    exit 42
+fi
+trap 'release_head_lock_if_mine "$SLURM_JOB_ID"; log "[SINGLE-HEAD] EXIT trap: HEAD lock clean-up for jobid=$SLURM_JOB_ID"' EXIT
+log "[SINGLE-HEAD] ✓ verify_am_head 通過, HEAD.lockdir state 升級為 RUNNING (jobid=$SLURM_JOB_ID)"
+
+# ===== 1. Chain ID =====
+if [ -f restart/chain_jobid ] && [ ! -f restart/chain_count ]; then
+    log "FATAL [REVIEW-FIX #7]: restart/chain_jobid 存在但 restart/chain_count 不見"
+    log "                       chain state 半損毀,拒絕續跑以防誤觸冷啟動"
+    log "                       修法: ./run.sh  (會偵測情境 2 自動重建 state)"
+    log "                       或確定從頭: ./run.sh --force-cold"
+    exit 1
+fi
+if [ ! -f restart/chain_jobid ] && [ -f restart/chain_count ]; then
+    log "FATAL [REVIEW-FIX #7]: restart/chain_count 存在但 restart/chain_jobid 不見"
+    log "                       chain state 半損毀,拒絕續跑"
+    exit 1
+fi
+if [ ! -f restart/chain_jobid ]; then
+    echo "$SLURM_JOB_ID" > restart/chain_jobid
+    echo "1" > restart/chain_count
+fi
+CHAIN_JOB_ID=$(cat restart/chain_jobid)
+CHAIN_COUNT=$(cat restart/chain_count 2>/dev/null || echo 1)
+
+if ! [[ "$CHAIN_COUNT" =~ ^[1-9][0-9]*$ ]]; then
+    log "FATAL [REVIEW-FIX #11]: restart/chain_count 非正整數: \"$CHAIN_COUNT\""
+    exit 1
+fi
+
+log "=== Chain $CHAIN_JOB_ID round $CHAIN_COUNT on $SLURM_NODELIST ==="
+nvidia-smi --query-gpu=name,memory.total --format=csv | tee -a "$CHAIN_LOG"
+
+# Auto-summary at job start (creates/updates restart/SUMMARY.md + summary/)
+if [ -f "$CHAIN_DIR/chain_status.sh" ]; then
+    bash "$CHAIN_DIR/chain_status.sh" --job-start --cluster=GB200 --quiet 2>/dev/null || true
+    log "chain_status.sh --job-start snapshot written to restart/summary/"
+fi
+
+# ===== 1.5 使用者強制停鏈 sentinel =====
+if [ -f restart/STOP_CHAIN ]; then
+    log "restart/STOP_CHAIN sentinel found -> chain stops (user request)."
+    exit 0
+fi
+
+# ===== Animation deps check =====
+log "=== Animation deps check ==="
+{
+    echo "which ffmpeg : $(which ffmpeg 2>&1)"
+    echo "ffmpeg ver   : $(ffmpeg -version 2>&1 | head -1)"
+    echo "which pvpython: $(which pvpython 2>&1)"
+    echo "Pillow       : $(python3 -c 'from PIL import Image; print(Image.__version__)' 2>&1)"
+} | tee -a "$CHAIN_LOG"
+if ! command -v ffmpeg >/dev/null 2>&1; then
+    log "WARN: ffmpeg NOT found on compute node — animation MP4 will fail."
+fi
+
+# ===== 2. Restart 上限 =====
+MAX_RESTARTS=500
+if [ "$CHAIN_COUNT" -gt "$MAX_RESTARTS" ]; then
+    log "ABORT: chain count $CHAIN_COUNT > MAX_RESTARTS=$MAX_RESTARTS. Chain stops."
+    exit 0
+fi
+
+# ===== 3. Pre-flight =====
+if [ ! -x ./a.out ]; then
+    log "FATAL: ./a.out not found/executable. Chain stops."
+    exit 1
+fi
+
+# ===== 3.5 節點健康預檢 (走 blacklist_lib: TTL + NCHC sync) =====
+PRE_BAD_ALL=$(
+    {
+        printf '%s\n' "$(bl_local_list)"  | tr ',' '\n'
+        printf '%s\n' "$(bl_global_list)" | tr ',' '\n'
+        printf '%s\n' "$(bl_live_list)"   | tr ',' '\n'
+    } | grep -v '^[[:space:]]*$' | sort -u
+)
+
+CURRENT_NODES=$(scontrol show hostnames "$SLURM_NODELIST" 2>/dev/null)
+MATCHED_BAD=""
+for node in $CURRENT_NODES; do
+    if echo "$PRE_BAD_ALL" | grep -qxF "$node"; then
+        MATCHED_BAD="$MATCHED_BAD $node"
+    fi
+done
+
+if [ -n "$MATCHED_BAD" ]; then
+    log "PRE-FLIGHT BAD NODE detected:$MATCHED_BAD -> requeue without running mpirun"
+    for node in $MATCHED_BAD; do
+        bl_add "$node" "pre-flight matched" "jobscript-preflight" \
+            2> >(tee -a "$_BL_LOG" >&2) || true
+    done
+    _RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
+    _RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
+    EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+    PRE_BAD_CSV=$(printf '%s\n' "$PRE_BAD_ALL" | grep -v '^[[:space:]]*$' | paste -sd,)
+    EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
+               | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
+    EXCLUDE_ARG=""
+    [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
+    log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}  partition: ${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}"
+    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    if [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
+        write_head_jobid "$NEXT_ID" "GB200"
+        log "Pre-flight requeued: job=$NEXT_ID (HEAD.lockdir jobid->$NEXT_ID state=PENDING)"
+        exit 0
+    else
+        log "FATAL: pre-flight requeue failed: $NEXT_ID"
+        exit 1
+    fi
+fi
+
+# ===== 4. Checkpoint 驗證 =====
+NP=${SLURM_NTASKS:-16}
+
+STAT_NAMES=(
+    sum_u sum_v sum_w
+    sum_uu sum_uv sum_uw sum_vv sum_vw sum_ww
+    sum_uuu sum_uuv sum_uuw sum_uvv sum_uvw sum_uww sum_vvv sum_vvw sum_vww sum_www
+    sum_P sum_PP sum_Pu sum_Pv sum_Pw
+    sum_dudx2 sum_dudy2 sum_dudz2
+    sum_dvdx2 sum_dvdy2 sum_dvdz2
+    sum_dwdx2 sum_dwdy2 sum_dwdz2
+    sum_ox sum_oy sum_oz
+)
+
+validate_checkpoint() {
+    local dir="$1"
+    if [ ! -f "$dir/metadata.dat" ];  then echo "no metadata.dat"; return 1; fi
+    if [ ! -s "$dir/metadata.dat" ];  then echo "metadata.dat empty"; return 1; fi
+
+    _count_bin() {
+        find "$1" -maxdepth 1 -type f -regextype posix-extended \
+             -regex ".*/${2}_[0-9]+\.bin" 2>/dev/null | wc -l
+    }
+
+    local need_f=$((19 * NP)) got_f got_f00 got_rho
+    got_f=$(_count_bin "$dir" 'f[01][0-9]')
+    if [ "$got_f" -ne "$need_f" ];   then echo "f files $got_f / $need_f"; return 1; fi
+    got_f00=$(_count_bin "$dir" 'f00')
+    if [ "$got_f00" -ne "$NP" ];     then echo "f00 ranks $got_f00 / $NP"; return 1; fi
+    got_rho=$(_count_bin "$dir" 'rho')
+    if [ "$got_rho" -ne "$NP" ];     then echo "rho $got_rho / $NP"; return 1; fi
+
+    local accu cv
+    accu=$(grep -E '^accu_count=' "$dir/metadata.dat" | head -1 | cut -d= -f2)
+    cv=$(  grep -E '^cv_count='   "$dir/metadata.dat" | head -1 | cut -d= -f2)
+    accu=${accu:-0}; cv=${cv:-0}
+    [[ "$accu" =~ ^[0-9]+$ ]] || accu=0
+    [[ "$cv"   =~ ^[0-9]+$ ]] || cv=0
+
+    if [ "$accu" -gt 0 ]; then
+        local name got
+        for name in "${STAT_NAMES[@]}"; do
+            got=$(_count_bin "$dir" "$name")
+            if [ "$got" -ne "$NP" ]; then
+                echo "stat $name: $got / $NP (accu_count=$accu)"; return 1
+            fi
+        done
+    fi
+
+    if [ "$cv" -gt 0 ]; then
+        for fn in cv_uu_history.bin cv_k_history.bin cv_ftt_history.bin; do
+            if [ ! -s "$dir/$fn" ]; then
+                echo "missing/empty $fn (cv_count=$cv)"; return 1
+            fi
+        done
+    fi
+
+    echo "OK accu=$accu cv=$cv"
+    return 0
+}
+
+# ===== 4.1 AUTO-HEAL =====
+if [ "$CHAIN_COUNT" -eq 1 ]; then
+    CAND_HEAL=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+                | grep -v '\.WRITING$' \
+                | awk -F'_' '{print $0"\t"$NF}' \
+                | sort -k2 -n -r \
+                | cut -f1 \
+                | head -1)
+    if [ -n "$CAND_HEAL" ]; then
+        HEAL_RES=$(validate_checkpoint "$CAND_HEAL")
+        if [ $? -eq 0 ]; then
+            log "AUTO-HEAL: chain_count=1 但 $CAND_HEAL 有效 ($HEAL_RES)"
+            log "           -> 自動升級為 Round 2,略過冷啟動安全閘"
+            echo "2" > restart/chain_count
+            CHAIN_COUNT=2
+        fi
+    fi
+fi
+
+# ===== 4.5 決定 ARGS =====
+ARGS=""
+if [ "$CHAIN_COUNT" -eq 1 ]; then
+    HAS_CKPT=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+               | grep -v '\.WRITING$' \
+               | while read -r d; do
+                     [ -s "$d/metadata.dat" ] && echo "$d" && break
+                 done)
+    if [ -n "$HAS_CKPT" ] && [ "${LBM_ALLOW_COLD_START:-0}" != "1" ]; then
+        log "FATAL: chain_count=1 但 restart/checkpoint/ 已有資料 ($HAS_CKPT)"
+        log "       拒絕冷啟動以防 checkrho.dat / Ustar_Force_record.dat 被覆寫"
+        log "       -> 續跑: ./run.sh  (會自動偵測並接 Round 2)"
+        log "       -> 確定從頭跑: ./run.sh --force-cold"
+        log "       -> 或強制: export LBM_ALLOW_COLD_START=1; ./run --gb200"
+        exit 1
+    fi
+    ARGS="--cold"
+    log "Round 1 -> ARGS=\"$ARGS\""
+else
+    log "Checkpoint validation: NP=$NP ranks"
+    CAND_LIST=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+                | grep -v '\.WRITING$' \
+                | awk -F'_' '{print $0"\t"$NF}' \
+                | sort -k2 -n -r \
+                | cut -f1)
+    N_CAND=$(echo "$CAND_LIST" | grep -c '.')
+    log "Found $N_CAND candidate checkpoint directories"
+
+    LATEST=""
+    if [ -n "$CAND_LIST" ]; then
+        while IFS= read -r dir; do
+            [ -z "$dir" ] && continue
+            RES=$(validate_checkpoint "$dir")
+            RC=$?
+            if [ $RC -eq 0 ]; then
+                log "OK $dir -- $RES"
+                LATEST="$dir"
+                break
+            else
+                log "BAD $dir -- $RES (trying older)"
+            fi
+        done <<< "$CAND_LIST"
+    fi
+
+    if [ -z "$LATEST" ]; then
+        log "FATAL: No valid checkpoint among $N_CAND candidates. Chain stops."
+        log "       To force cold start: ./run.sh --force-cold"
+        exit 1
+    fi
+
+    STALE_PART=$(ls "$LATEST"/*.part 2>/dev/null | wc -l)
+    if [ "$STALE_PART" -gt 0 ]; then
+        log "Cleaning $STALE_PART stale .part files in $LATEST"
+        rm -f "$LATEST"/*.part
+    fi
+
+    SEL_STEP=$(grep -E '^step=' "$LATEST/metadata.dat" | head -1 | cut -d= -f2)
+    SEL_FTT=$( grep -E '^FTT='  "$LATEST/metadata.dat" | head -1 | cut -d= -f2)
+    log "Restart from: $LATEST  (step=$SEL_STEP FTT=$SEL_FTT)"
+
+    ARGS="--restart=$LATEST"
+    log "Round $CHAIN_COUNT -> ARGS=\"$ARGS\""
+fi
+
+# ===== 5. 執行模擬 =====
+# ------------------------------------------------------------------------------
+# [POLICY-B1] Partition-agnostic walltime 自動偵測 + 及時續跑 機制
+# ------------------------------------------------------------------------------
+# 設計目標:
+#   無論 NCHC 給我們多長 walltime (gb200-dev 1h / dev-gpu 2h / 其他 partition 更長),
+#   程式被時間切斷前必須能完成 checkpoint,且 exit 124 讓 jobscript 續投下一輪.
+#
+# 時序 (walltime = W 秒, 由 runtime 偵測):
+#   t = W - 120s   SLURM --signal=USR1@120 送 SIGUSR1
+#                    -> stop_control.h handler 設 STOP_SIGNAL_WALLTIME
+#                    -> 主迴圈 break -> 最終 checkpoint -> exit 124 -> 續鏈
+#   t = W - 60s    timeout(1) 備援送 SIGUSR1 (若 SLURM 漏發)
+#                    -> 同路徑 -> exit 124 -> 續鏈
+#   t = W          timeout --kill-after=60 送 SIGKILL, SLURM walltime 到
+#                    -> bash 回 124 -> 續鏈
+#
+# Walltime 來源 (by priority):
+#   (1) $SLURM_JOB_END_TIME - $SLURM_JOB_START_TIME  (Slurm 最精準)
+#   (2) scontrol show job $SLURM_JOB_ID | TimeLimit=HH:MM:SS
+#   (3) Fallback 3600 (1h) + WARN log
+#
+# 關鍵不變量:
+#   (1) 必須用 --signal=USR1 (非預設 SIGTERM)
+#   (2) TIMEOUT + KILL_AFTER 必須 <= walltime
+#   (3) walltime 最小 5 分鐘 (< 300s 拒跑)
+# ------------------------------------------------------------------------------
+
+# ---- 5.0 Parse walltime to seconds (MM:SS / HH:MM:SS / D-HH:MM:SS) ----
+parse_walltime_to_seconds() {
+    local tl="$1"
+    if [ -z "$tl" ] || [ "$tl" = "UNLIMITED" ] || [ "$tl" = "N/A" ]; then
+        echo 0; return
+    fi
+    local days=0 rest="$tl"
+    if [[ "$tl" == *-* ]]; then
+        days=${tl%%-*}
+        rest=${tl#*-}
+    fi
+    local a b c h=0 m=0 s=0
+    IFS=: read -r a b c <<< "$rest"
+    if [ -n "$c" ]; then
+        h=$a; m=$b; s=$c
+    elif [ -n "$b" ]; then
+        h=$a; m=$b; s=0
+    else
+        m=$a; s=0
+    fi
+    echo $(( days*86400 + 10#${h:-0}*3600 + 10#${m:-0}*60 + 10#${s:-0} ))
+}
+
+# ---- 5.0.1 偵測 walltime (秒) ----
+WALLTIME_SEC=0
+WALLTIME_SRC="fallback"
+
+if [ -n "${SLURM_JOB_END_TIME:-}" ] && [ -n "${SLURM_JOB_START_TIME:-}" ]; then
+    _END="$SLURM_JOB_END_TIME"
+    _START="$SLURM_JOB_START_TIME"
+    if [[ "$_END" =~ ^[0-9]+$ ]] && [[ "$_START" =~ ^[0-9]+$ ]]; then
+        WALLTIME_SEC=$((_END - _START))
+        WALLTIME_SRC="SLURM_JOB_END_TIME-SLURM_JOB_START_TIME"
+    fi
+fi
+
+if [ "$WALLTIME_SEC" -le 0 ] && [ -n "${SLURM_JOB_ID:-}" ]; then
+    TL_RAW=$(scontrol show job "$SLURM_JOB_ID" -o 2>/dev/null \
+             | tr ' ' '\n' | grep '^TimeLimit=' | head -1 | cut -d= -f2)
+    TL_SEC=$(parse_walltime_to_seconds "$TL_RAW")
+    if [ "$TL_SEC" -gt 0 ]; then
+        WALLTIME_SEC=$TL_SEC
+        WALLTIME_SRC="scontrol TimeLimit=$TL_RAW"
+    fi
+fi
+
+if [ "$WALLTIME_SEC" -le 0 ]; then
+    WALLTIME_SEC=3600
+    WALLTIME_SRC="fallback (未偵測到 walltime, 假設 1h)"
+    log "WARN: 無法偵測 walltime, 使用保守預設 3600s."
+fi
+
+# ---- 5.0.2 Sanity: 最小 5 分鐘 ----
+MIN_WALLTIME=300
+if [ "$WALLTIME_SEC" -lt "$MIN_WALLTIME" ]; then
+    log "FATAL [POLICY-B1]: walltime=${WALLTIME_SEC}s < ${MIN_WALLTIME}s"
+    log "                   --signal=USR1@120 + kill_after=60 需要至少 5 分鐘 margin."
+    exit 42
+fi
+
+# ---- 5.0.3 計算 TIMEOUT / KILL_AFTER ----
+KILL_AFTER=60
+TIMEOUT=$((WALLTIME_SEC - KILL_AFTER))
+if [ "$TIMEOUT" -le 120 ]; then
+    log "FATAL [POLICY-B1]: TIMEOUT=${TIMEOUT}s <= 120s (SIGUSR1 pre-walltime 時刻)"
+    exit 42
+fi
+
+log "=== Walltime detection ==="
+log "  source   : $WALLTIME_SRC"
+log "  walltime : ${WALLTIME_SEC}s"
+log "  TIMEOUT  : ${TIMEOUT}s (timeout(1) 備援 SIGUSR1 時刻)"
+log "  KILL_AFT : ${KILL_AFTER}s (SIGKILL margin)"
+log "  SLURM USR1@120: 於 $((WALLTIME_SEC - 120))s 觸發"
+# ═════ [MUTEX LAYER 3 — epoch guard] ═════
+# mpirun 啟動前最後一道防線:驗證 lock 身分仍是我.
+# 若 lock 被奪 (不該發生,但 orthogonal 驗證),立即 abort 以免 solver 寫 checkpoint.
+_EPOCH_OWNER="$(grep '^jobid=' "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+if [ "$_EPOCH_OWNER" != "$SLURM_JOB_ID" ]; then
+    log "[MUTEX-EPOCH] FATAL: lock 被奪 (owner=$_EPOCH_OWNER, me=$SLURM_JOB_ID), 拒絕啟動 mpirun"
+    exit 42
+fi
+log "[MUTEX-EPOCH] ✓ lock 身分驗證通過 (owner=$SLURM_JOB_ID), 啟動 mpirun"
+# ═════════════════════════════════════════
+
+log "Starting mpirun  TIMEOUT=${TIMEOUT}s  KILL_AFTER=${KILL_AFTER}s  ARGS=\"$ARGS\""
+export CHAIN_COUNT_FROM_JOBSCRIPT="$CHAIN_COUNT"
+START_TS=$(date +%s)
+MPIRUN_SIG_FLAGS="-mca orte_forward_job_control 1"
+
+# ── WATCHDOG: solver hang detection ──
+WATCHDOG_SENTINEL="restart/.watchdog_triggered"
+rm -f "$WATCHDOG_SENTINEL"
+WATCHDOG_HANG=0
+WATCHDOG_HANG_NODE=""
+
+# [GB200] 雙節點 8 GPU: -np 8 --map-by ppr:4:node (對應 variables.h jp=8)
+timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
+    mpirun -np 8 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
+           stdbuf -oL ./a.out $ARGS &
+SOLVER_PID=$!
+
+if [ "${WATCHDOG_ENABLED:-1}" -eq 1 ] && [ -f "$CHAIN_DIR/tools/watchdog.sh" ]; then
+    bash "$CHAIN_DIR/tools/watchdog.sh" \
+        "$SOLVER_PID" "$WATCHDOG_SENTINEL" \
+        "${WATCHDOG_TIMEOUT:-600}" "${WATCHDOG_GRACE:-180}" &
+    WATCHDOG_PID=$!
+    log "WATCHDOG: pid=$WATCHDOG_PID solver=$SOLVER_PID timeout=${WATCHDOG_TIMEOUT:-600}s grace=${WATCHDOG_GRACE:-180}s"
+else
+    WATCHDOG_PID=""
+fi
+
+wait "$SOLVER_PID" 2>/dev/null
+RC=$?
+
+if [ -n "${WATCHDOG_PID:-}" ]; then
+    kill "$WATCHDOG_PID" 2>/dev/null
+    wait "$WATCHDOG_PID" 2>/dev/null || true
+fi
+
+END_TS=$(date +%s)
+ELAPSED=$((END_TS - START_TS))
+log "mpirun exit: RC=$RC  elapsed=${ELAPSED}s  nodes=$SLURM_NODELIST"
+
+# ── WATCHDOG: sentinel check + node blacklist (direct-write, bypass bl_add/NCHC) ──
+if [ -f "$WATCHDOG_SENTINEL" ]; then
+    WATCHDOG_HANG_NODE=$(head -1 "$WATCHDOG_SENTINEL" 2>/dev/null || echo "$SLURM_NODELIST")
+    WATCHDOG_HANG=1
+    log "WATCHDOG HANG: $WATCHDOG_HANG_NODE -> blacklist (bypass NCHC — node hung while ALLOCATED)"
+    mkdir -p "$(dirname "$BAD_NODES_FILE")"
+    printf '%s\t%d\twatchdog-hang rc=%d round=%d elapsed=%ds\twatchdog\n' \
+        "$WATCHDOG_HANG_NODE" "$(date +%s)" "$RC" "$CHAIN_COUNT" "$ELAPSED" >> "$BAD_NODES_FILE"
+    rm -f "$WATCHDOG_SENTINEL"
+fi
+
+# Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
+# Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
+if [ -f "$CHAIN_DIR/chain_status.sh" ]; then
+    bash "$CHAIN_DIR/chain_status.sh" --job-end --rc="$RC" --cluster=GB200 --quiet 2>/dev/null || true
+    log "chain_status.sh --job-end snapshot written (RC=$RC)"
+fi
+
+# ===== 5.4 [POLICY-C1] RC=42 不可避免錯誤 -> 停鏈 (必須在 fast-fail 之前) =====
+if [ "$RC" -eq 42 ]; then
+    log "RC=42 [POLICY-C1] UNAVOIDABLE ERROR -> chain stops (by policy)."
+    log "          觸發來源通常是: 無效 argv / grid mismatch / restart 損毀 / init tripwire."
+    log "          請查 slurm_${SLURM_JOB_ID}.err 的 [FATAL][POLICY-*] 訊息."
+    touch restart/STOP_CHAIN
+    log "          touch restart/STOP_CHAIN  (RC=42 物化停鏈意圖, 防 dispatcher 無限重投)"
+    exit 0
+fi
+
+# ===== 5.5 Fast-fail 偵測 + 節點黑名單 (走 blacklist_lib + NCHC 驗證) =====
+# 原邏輯缺陷: 只要 mpirun 秒崩就把節點加黑名單, 不驗證節點真的壞 —
+#   若是本地程式 bug (如 --forward-signals 旗標錯), 會把好節點全封殺.
+# 新邏輯: bl_add 先查 NCHC sinfo, NCHC 說 idle/mix/alloc 就拒絕加入,
+#   並把「拒絕加入」事件記錄到 restart/blacklist.log + 本 job log 方便除錯.
+if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 42 ]; then
+    log "FAST-FAIL detected: $SLURM_NODELIST died in ${ELAPSED}s (RC=$RC)"
+    HOSTS=$(scontrol show hostnames "$SLURM_NODELIST" 2>/dev/null)
+    if [ -z "$HOSTS" ]; then
+        HOSTS="$SLURM_NODELIST"
+    fi
+    ADDED=0
+    SKIPPED_HEALTHY=0
+    while IFS= read -r h; do
+        [ -z "$h" ] && continue
+        if bl_add "$h" "rc=$RC round=$CHAIN_COUNT elapsed=${ELAPSED}s" "jobscript-fastfail" \
+                 2> >(tee -a "$_BL_LOG" "$CHAIN_LOG" >&2); then
+            ADDED=$((ADDED + 1))
+            log "Blacklisted $h -> restart/bad_nodes (TTL=${BLACKLIST_TTL_SEC:-86400}s)"
+        else
+            _rc=$?
+            if [ "$_rc" -eq 2 ]; then
+                SKIPPED_HEALTHY=$((SKIPPED_HEALTHY + 1))
+                log "NOT blacklisted $h (NCHC 確認健康; fast-fail 疑似本地程式 bug)"
+            fi
+        fi
+    done <<< "$HOSTS"
+    log "本輪: 加入黑名單 $ADDED 個, NCHC 認為健康不加 $SKIPPED_HEALTHY 個"
+    FF=$(cat restart/fast_fail_count 2>/dev/null || echo 0)
+    FF=$((FF + 1))
+    echo "$FF" > restart/fast_fail_count
+    if [ "$FF" -ge 5 ]; then
+        # ─────────────────────────────────────────────────────────────────
+        # [POLICY-D1] partition-level cooldown (取代 global STOP_CHAIN)
+        # 設計: 連續 5 次 fast-fail 代表「此 partition 暫時不可用」(MPI 環境
+        # 問題 / GPU lib 不對等), 不該停整個 chain. 改成標記該 partition 冷卻
+        # TTL 內 dispatcher 跳過它, 改投其他 partition.
+        # ─────────────────────────────────────────────────────────────────
+        PART_NAME="${SLURM_JOB_PARTITION:-unknown}"
+        COOLDOWN_TTL="${COOLDOWN_TTL_SEC:-3600}"
+        COOLDOWN_FILE="restart/cooldown_${PART_NAME}.sentinel"
+        log "FAST-FAIL GUARD: partition=$PART_NAME 連續 $FF 次 fast-fail (10s 內死)."
+        log "   標記 partition 進冷卻 TTL=${COOLDOWN_TTL}s, dispatcher 將自動跳到他 partition."
+        log "   恢復方式: rm $COOLDOWN_FILE  (或等 TTL 過)"
+        {
+            echo "partition=$PART_NAME"
+            echo "trigger_jobid=$SLURM_JOB_ID"
+            echo "trigger_at=$(date -Iseconds)"
+            echo "trigger_at_epoch=$(date +%s)"
+            echo "fast_fail_count=$FF"
+            echo "ttl_sec=$COOLDOWN_TTL"
+            echo "last_rc=$RC"
+        } > "$COOLDOWN_FILE"
+        rm -f restart/fast_fail_count   # 重置計數, 給其他 partition 重新計
+        log "   COOLDOWN sentinel 已建: $COOLDOWN_FILE"
+        log "   exit 16 (transient) - dispatcher 接手投其他 partition"
+        exit 16   # 不是 STOP_CHAIN, 不是 unavoidable 42, 是 transient 讓 chain 繼續
+    fi
+else
+    rm -f restart/fast_fail_count
+fi
+
+# ===== 6. Exit code 判斷 + 續鏈決策 =====
+# [POLICY-C1 FIX 2026-04-25]
+#   過去只用 RC=0 當「自然停止」訊號, 但 jobscript 在 DISPATCHER 模式下
+#   不論 RC 如何最終都 exit 0 (續投權交給 dispatcher), 導致 dispatcher 從 sacct
+#   只能看到 ExitCode=0:0, 無法分辨「真自然停止」vs「續投意圖」.
+#   修法: 真自然停止時主動 touch restart/STOP_CHAIN, 把意圖物化到 sentinel 檔.
+#   dispatcher POLICY-C1 改成「sacct RC=0 AND STOP_CHAIN 存在」才視為自然停止.
+if [ "$RC" -eq 0 ]; then
+    log "RC=0 [POLICY-C1] natural stop (converged/diverged/user/FTT_STOP). Chain stops."
+    touch restart/STOP_CHAIN  # ← 物化「停鏈」意圖, 供 dispatcher 判斷
+    log "          touch restart/STOP_CHAIN  (POLICY-C1 sentinel for dispatcher)"
+    exit 0
+fi
+
+if [ -f restart/STOP_CHAIN ]; then
+    log "restart/STOP_CHAIN sentinel found after mpirun -> chain stops."
+    exit 0
+fi
+
+# ===== 7. 續投下一輪 =====
+NEXT_COUNT=$((CHAIN_COUNT + 1))
+echo "$NEXT_COUNT" > restart/chain_count
+log "RC=$RC -> queuing chain round $NEXT_COUNT"
+
+# ═════ DISPATCHER 模式 sentinel check ═════
+if [ -f DISPATCHER_ACTIVE ]; then
+    log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
+    log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
+    exit 0
+fi
+# ═════════════════════════════════════════════════
+
+MAX_SBATCH_RETRY=5
+SBATCH_RETRY_DELAY=30
+
+_RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
+_RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
+
+EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+PRE_BAD_CSV=$(printf '%s\n' "${PRE_BAD_ALL:-}" | grep -v '^[[:space:]]*$' | paste -sd,)
+EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
+           | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
+
+if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
+    if ! printf ',%s,' "$EX_LIST" | grep -qF ",$WATCHDOG_HANG_NODE,"; then
+        EX_LIST="${EX_LIST:+$EX_LIST,}$WATCHDOG_HANG_NODE"
+        log "WATCHDOG: forced $WATCHDOG_HANG_NODE into resubmit exclude"
+    fi
+fi
+
+EXCLUDE_ARG=""
+if [ -n "$EX_LIST" ]; then
+    EXCLUDE_ARG="--exclude=$EX_LIST"
+    log "Resubmit exclude (bl+PRE_BAD_ALL+watchdog merged): $EX_LIST"
+else
+    log "Resubmit exclude: (empty — cluster healthy)"
+fi
+[ -n "$_RESUB_PARTITION" ] && log "Resubmit partition override: $_RESUB_PARTITION (walltime=$(gb200_partition_walltime "$_RESUB_PARTITION" 2>/dev/null))"
+
+for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
+    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    SBATCH_RC=$?
+    if [ $SBATCH_RC -eq 0 ] && [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
+        write_head_jobid "$NEXT_ID" "GB200"
+        log "Submitted next round: job=$NEXT_ID (attempt $ATTEMPT/$MAX_SBATCH_RETRY)  HEAD.lockdir jobid->$NEXT_ID state=PENDING"
+        exit 0
+    fi
+    log "sbatch attempt $ATTEMPT/$MAX_SBATCH_RETRY failed: $NEXT_ID"
+    if [ "$ATTEMPT" -lt "$MAX_SBATCH_RETRY" ]; then
+        log "Retrying in ${SBATCH_RETRY_DELAY}s (waiting for QOS slot)..."
+        sleep $SBATCH_RETRY_DELAY
+    fi
+done
+
+log "FATAL: sbatch failed after $MAX_SBATCH_RETRY attempts. Chain broken."
+log "       手動續跑: ./run.sh"
+exit

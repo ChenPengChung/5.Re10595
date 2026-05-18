@@ -1,0 +1,28 @@
+========================================================================
+  Grid Data Analysis  (stream-wise i=0 column / hill crest line)
+========================================================================
+  Generated  : 2026-05-11T23:00:25
+  Source .dat: adaptive_3.fine grid_I257_J129_g2.00_a0.5.dat
+  Units      : physical units detected (h_phys = 2.800001e-02); rescaled by 35.714272 to code units
+
+[Geometry]
+  NY (streamwise nodes)  = 257
+  NZ (wall-normal nodes) = 129   (cells = NZ-1 = 128)
+  LZ (channel height)    = 3.036000
+  hill_crest at (i=0,j=0)= 1.000000
+  lattice_size = LZ/(NZ-1) = 3.036000 / 128 = 2.371875e-02
+
+[Wall-normal spacing on i=0 column]
+  1. dz_max         = 2.088083e-02  =  0.8804 * lattice_size
+  2. dz_min         = 8.875016e-03  =  0.3742 * lattice_size
+  3. dz_max/dz_min  = 2.3528
+
+[Stretching parameters]
+  4. tanh_wall a (bisection-fit to dz_min) = 0.761650
+     formula: z(j) = L/2 + (L/(2a)) * tanh( ((-1+2j/N)/2) * log((1+a)/(1-a)) )
+     L = LZ - hill_crest = 2.036000,  N = NZ-1 = 128
+     dz_min(a_fit) = 8.875016e-03  (fit error vs observed = 0.0000%)
+  5. GAMMA (Vinokur, from variables.h or user input) = 2.0000
+     ALPHA                                            = 0.5000
+
+========================================================================

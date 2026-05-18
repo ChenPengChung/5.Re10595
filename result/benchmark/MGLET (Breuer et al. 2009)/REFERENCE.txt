@@ -1,0 +1,38 @@
+================================================================================
+ MGLET — DNS/LES on Cartesian Grids with Immersed Boundary
+================================================================================
+
+Primary Reference:
+  Breuer, M., Peller, N., Rapp, Ch., Manhart, M. (2009).
+  "Flow over periodic hills – Numerical and experimental study in a wide
+   range of Reynolds numbers."
+  Computers & Fluids, 38(2), 433-457.
+  DOI: https://doi.org/10.1016/j.compfluid.2008.05.002
+
+Code:         MGLET
+Institution:  Technische Universität München (TUM)
+Authors:      Nikolaus Peller, Michael Manhart
+Method:       3D finite-volume, non-uniform Cartesian grids, staggered,
+              2nd-order central differences, Runge-Kutta / leapfrog,
+              Immersed boundary technique (3rd-order least-squares)
+SGS Model:    None (DNS) or dynamic model (LES)
+
+Available Reynolds numbers:
+  Re=1400  (DNS, Case 3):   20.0M grid points, Nspan=132, dt=1.5e-3, Tavg=540
+  Re=2808  (DNS, Case 5):   48.0M grid points, Nspan=304, dt=1.0e-3, Tavg=562
+  Re=5600  (DNS, Case 8):  231.0M grid points, Nspan=404, dt=1.0e-3, Tavg=343
+  Re=10595 (LES, Case 10):   4.1M grid points, Nspan=104, dt=1.0e-3, Tavg=241
+  Re=37000 (LES, Case 11):   4.1M grid points, Nspan=104, dt=1.0e-3, Tavg=439
+
+Data format: 7 columns, fixed-width space-separated, NO header/comments
+  y/h   U/Ub   V/Ub   <u'u'>/Ub²   <v'v'>/Ub²   <u'v'>/Ub²   k/Ub²
+
+Note: Re=1400/2808/5600 have 11 stations (extra station)
+      Re=10595/37000 have 10 stations
+
+File naming: UFR3-30_data-NP-{OIB-re1400-v23|re2808-dns|Re5600-DNS2|
+             re10595-v28|re37000-v40}-{01-11}.dat
+
+Source: ERCOFTAC Knowledge Base Wiki, UFR 3-30
+  https://kbwiki.ercoftac.org/w/index.php?title=UFR_3-30_Test_Case
+================================================================================
