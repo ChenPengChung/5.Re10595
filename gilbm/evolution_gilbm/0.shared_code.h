@@ -48,7 +48,7 @@ __constant__ double GILBM_inv_dx;         // 1/dx (uniform x-grid spacing, for o
 __constant__ double GILBM_MRT_K[19][19];      // K = M^-1 S M
 __constant__ double GILBM_MRT_Fproj[19];      // M^-1(I-S/2)M · W 3 cy
 __constant__ double GILBM_MRT_Fproj_u[19];    // HERMITE>=2: u·W 9 cx cy   | HERMITE=1: zero
-__constant__ double GILBM_MRT_Fproj_v[19];    // HERMITE>=2: v·W(9cy²-3)   | HERMITE=1: v·W(-3)
+__constant__ double GILBM_MRT_Fproj_v[19];    // HERMITE>=2: v·W(9cy²-3)   | HERMITE=1: zero
 __constant__ double GILBM_MRT_Fproj_w[19];    // HERMITE>=2: w·W 9 cz cy   | HERMITE=1: zero
 #endif  // USE_MRT
 

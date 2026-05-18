@@ -260,7 +260,7 @@
 #endif
 
 #ifndef FORCE_HERMITE_ORDER
-#define     FORCE_HERMITE_ORDER 1   // 1 = 一階 Hermite: w_q·3·(c_y−v)·F
+#define     FORCE_HERMITE_ORDER 1   // 1 = 一階 Hermite: w_q·3·cy·F
 #endif                              // 2 = 二階 Hermite: + 9·(c·u)·c_y·F
 #if FORCE_HERMITE_ORDER != 1 && FORCE_HERMITE_ORDER != 2
 #error "FORCE_HERMITE_ORDER must be 1 or 2"
