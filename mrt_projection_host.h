@@ -7,7 +7,10 @@
 
 struct MrtProjectionVerification {
     double max_identity_error;
+    double max_equilibrium_moment_error;
     double max_conserved_relax_error;
+    double max_force_basis_error;
+    double max_force_projection_error;
     double max_force_moment_error;
     double max_collision_abs_error;
     double max_collision_rel_error;
@@ -259,7 +262,7 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
     double s_visc,
     double dt_val)
 {
-    MrtProjectionVerification v = {0.0, 0.0, 0.0, 0.0, 0.0, 0};
+    MrtProjectionVerification v = {0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0};
 
     for (int a = 0; a < 19; a++) {
         for (int b = 0; b < 19; b++) {
@@ -273,6 +276,27 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
         }
     }
 
+    for (int c = 0; c < 36; c++) {
+        const double rho = 0.85 + 0.011 * (double)c;
+        const double u0 = 0.045 * sin(0.31 * (double)(c + 1));
+        const double v0 = 0.035 * cos(0.27 * (double)(c + 1));
+        const double w0 = 0.025 * sin(0.19 * (double)(c + 2));
+
+        double feq[19], m_eq_ref[19];
+        for (int q = 0; q < 19; q++) {
+            feq[q] = HostFeqAlpha(q, rho, u0, v0, w0);
+        }
+        HostAnalyticalMrtEquilibrium(rho, u0, v0, w0, m_eq_ref);
+        for (int n = 0; n < 19; n++) {
+            double sum = 0.0;
+            for (int q = 0; q < 19; q++) {
+                sum += M[n][q] * feq[q];
+            }
+            const double err = fabs(sum - m_eq_ref[n]);
+            if (err > v.max_equilibrium_moment_error) v.max_equilibrium_moment_error = err;
+        }
+    }
+
     const int conserved[4] = {0, 3, 5, 7};
     for (int ci = 0; ci < 4; ci++) {
         const int n_cons = conserved[ci];
@@ -283,6 +307,39 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
             }
             const double err = fabs(sum);
             if (err > v.max_conserved_relax_error) v.max_conserved_relax_error = err;
+        }
+    }
+
+    double s[19];
+    BuildD3Q19RatesHost(s_visc, s);
+    for (int c = 0; c < 36; c++) {
+        const double u0 = 0.045 * sin(0.23 * (double)(c + 1));
+        const double v0 = 0.035 * cos(0.29 * (double)(c + 1));
+        const double w0 = 0.025 * sin(0.17 * (double)(c + 3));
+        double F_direct[19];
+
+        for (int q = 0; q < 19; q++) {
+            double cx, cy, cz, wq;
+            D3Q19HostVelocityWeight(q, &cx, &cy, &cz, &wq);
+            const double c_dot_u = cx * u0 + cy * v0 + cz * w0;
+            F_direct[q] = wq * (3.0 * (cy - v0) + 9.0 * c_dot_u * cy);
+            const double F_split = wq * 3.0 * cy
+                                 + u0 * wq * 9.0 * cx * cy
+                                 + v0 * wq * (9.0 * cy * cy - 3.0)
+                                 + w0 * wq * 9.0 * cz * cy;
+            const double err = fabs(F_direct[q] - F_split);
+            if (err > v.max_force_basis_error) v.max_force_basis_error = err;
+        }
+
+        double Fproj_direct[19];
+        ProjectForcingBasisHost(M, Mi, s, F_direct, Fproj_direct);
+        for (int a = 0; a < 19; a++) {
+            const double Fproj_split = Fproj[a]
+                                     + u0 * Fproj_u[a]
+                                     + v0 * Fproj_v[a]
+                                     + w0 * Fproj_w[a];
+            const double err = fabs(Fproj_direct[a] - Fproj_split);
+            if (err > v.max_force_projection_error) v.max_force_projection_error = err;
         }
     }
 
@@ -301,11 +358,11 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
         }
     }
 
-    for (int c = 0; c < 12; c++) {
-        const double rho = 0.92 + 0.017 * (double)c;
-        const double u0 = -0.010 + 0.0017 * (double)c;
-        const double v0 =  0.012 - 0.0013 * (double)c;
-        const double w0 = -0.006 + 0.0011 * (double)c;
+    for (int c = 0; c < 36; c++) {
+        const double rho = 0.92 + 0.006 * (double)c;
+        const double u0 = 0.040 * sin(0.37 * (double)(c + 1));
+        const double v0 = 0.035 * cos(0.41 * (double)(c + 1));
+        const double w0 = 0.030 * sin(0.29 * (double)(c + 2));
         const double force = ((c % 5) - 2) * 1.7e-6;
         const double scale = 1.0e-4 * (1.0 + 0.15 * (double)c);
 

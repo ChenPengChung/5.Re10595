@@ -668,14 +668,20 @@ int main(int argc, char *argv[])
         if (myid == 0) {
             printf("GILBM-MRT projection verification:\n");
             printf("  max |Mi*M-I|                  = %.3e\n", mrt_v.max_identity_error);
+            printf("  max |M*feq-meq|               = %.3e\n", mrt_v.max_equilibrium_moment_error);
             printf("  max conserved |M_c*K|         = %.3e\n", mrt_v.max_conserved_relax_error);
+            printf("  max Guo basis split err       = %.3e\n", mrt_v.max_force_basis_error);
+            printf("  max Guo projection split err  = %.3e\n", mrt_v.max_force_projection_error);
             printf("  max conserved force moment err= %.3e\n", mrt_v.max_force_moment_error);
             printf("  max collision abs diff        = %.3e\n", mrt_v.max_collision_abs_error);
             printf("  max collision rel diff        = %.3e (%d states)\n",
                    mrt_v.max_collision_rel_error, mrt_v.samples);
         }
         if (mrt_v.max_identity_error > 1.0e-12 ||
+            mrt_v.max_equilibrium_moment_error > 1.0e-12 ||
             mrt_v.max_conserved_relax_error > 1.0e-12 ||
+            mrt_v.max_force_basis_error > 1.0e-12 ||
+            mrt_v.max_force_projection_error > 1.0e-12 ||
             mrt_v.max_force_moment_error > 1.0e-12 ||
             mrt_v.max_collision_abs_error > 1.0e-12) {
             if (myid == 0) {
