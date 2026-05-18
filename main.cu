@@ -707,10 +707,10 @@ int main(int argc, char *argv[])
 
         if (myid == 0) {
             printf("GILBM-MRT: K and Guo forcing projections copied to __constant__ memory.\n");
-            printf("GILBM-MRT: FORCE_HERMITE_ORDER = %d\n", FORCE_HERMITE_ORDER);
         }
     }
 #endif  // USE_MRT
+    if (myid == 0) printf("GILBM: FORCE_HERMITE_ORDER = %d\n", FORCE_HERMITE_ORDER);
 
     // ── GTS: 全場均一鬆弛常數存入 __constant__ memory ──
     // ★ BUG FIX: s_visc / omega 上傳原本被包在 #if USE_MRT 裡面，

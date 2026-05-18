@@ -117,7 +117,7 @@ __device__ void gilbm_bgk_collision_GTS(
         double F_q = GILBM_W[q] * Force0 *
                      ( 3.0 * (cy - v_B) + 9.0 * c_dot_u * cy );
 #else
-        double F_q = GILBM_W[q] * Force0 * 3.0 * (cy - v_B);
+        double F_q = GILBM_W[q] * Force0 * 3.0 * cy;
 #endif
         f_out[q] = feq[q] + C * (f_B[q] - feq[q]) + dt_global * half_visc * F_q;
     }

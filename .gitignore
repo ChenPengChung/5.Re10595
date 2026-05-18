@@ -1,0 +1,44 @@
+# Compiled binaries
+a.out
+a.out.*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Large data files
+*.vtk
+*.bin
+
+# Simulation runtime outputs
+restart/
+statistics/
+live/
+slurm_*.log
+slurm_*.err
+nan_monitor_log.txt
+gilbm_metrics_full.dat
+meshYZ.DAT
+.run.lock
+STOP_CHAIN
+
+# Auto-generated grid files
+J_Frohlich/adaptive_*.dat
+J_Frohlich/grid_data_*.txt
+J_Frohlich/compare_auto_*.png
+
+# Estimation data (analysis outputs)
+Estimation/
+
+# Animation frames and videos
+animation/png_frames/
+animation/flow_*.mp4
+animation/short_*.mp4
+
+# Three mandatory tracking files — keep .dat.gz, ignore raw .dat
+Ustar_Force_record.dat
+timing_log.dat
+checkrho.dat
+!Ustar_Force_record.dat.gz
+!timing_log.dat.gz
+!checkrho.dat.gz

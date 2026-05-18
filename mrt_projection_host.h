@@ -158,7 +158,7 @@ static inline void BuildMrtProjectionTablesHost(
         Fw[q] = wq * 9.0 * cz * cy;
 #else
         Fu[q] = 0.0;
-        Fv[q] = wq * (-3.0);
+        Fv[q] = 0.0;
         Fw[q] = 0.0;
 #endif
     }
@@ -203,7 +203,7 @@ static inline void LegacyMrtCollisionHost(
             const double c_dot_u = cx * u0 + cy * v0 + cz * w0;
             const double Fq = wq * force * (3.0 * (cy - v0) + 9.0 * c_dot_u * cy);
 #else
-            const double Fq = wq * force * 3.0 * (cy - v0);
+            const double Fq = wq * force * 3.0 * cy;
 #endif
             sum += M[n][q] * Fq;
         }
@@ -339,9 +339,8 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
                                  + v0 * wq * (9.0 * cy * cy - 3.0)
                                  + w0 * wq * 9.0 * cz * cy;
 #else
-            F_direct[q] = wq * 3.0 * (cy - v0);
-            const double F_split = wq * 3.0 * cy
-                                 + v0 * wq * (-3.0);
+            F_direct[q] = wq * 3.0 * cy;
+            const double F_split = wq * 3.0 * cy;
 #endif
             const double err = fabs(F_direct[q] - F_split);
             if (err > v.max_force_basis_error) v.max_force_basis_error = err;

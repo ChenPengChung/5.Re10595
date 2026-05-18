@@ -190,3 +190,87 @@ before the sequence above:
    rm -f result/benchmark_*.png result/benchmark_*.pdf
    ```
 7. Then proceed with the standard sequence (steps 1–7 above).
+
+## GILBM 效能優化架構 — MRT 預計算 + eta 權重共享 + Forcing 開關
+
+本專案已完成三項 host-side 預計算優化，所有表格在 `main.cu` 初始化階段
+計算一次，上傳至 `__constant__` memory，kernel 端只做 table-lookup + multiply-add。
+
+### 1. MRT 非平衡投影預計算 (K 矩陣)
+
+**原理：** 將 MRT 碰撞 `f* = f − M⁻¹·S·M·(f−f_eq)` 中的三重矩陣乘法
+預合成為一張 `K[19][19] = M⁻¹·S·M`，kernel 只做 19×19 矩陣-向量乘法。
+
+**檔案：**
+| 位置 | 說明 |
+|------|------|
+| `mrt_projection_host.h` : `BuildMrtProjectionTablesHost()` | Host 端建 K 矩陣與 Forcing 投影表 |
+| `mrt_projection_host.h` : `VerifyMrtProjectionHost()` | 36 組樣本驗證 Legacy vs Projection，1e-12 容差 |
+| `main.cu:650-710` | 呼叫 Build → Verify → `cudaMemcpyToSymbol` |
+| `0.shared_code.h:48` | `__constant__ double GILBM_MRT_K[19][19]` |
+| `0.collision.h:61-66` | Kernel: `relax += GILBM_MRT_K[a][b] * fneq[b]` |
+
+**驗證項目（啟動時自動檢查，任一 > 1e-12 即 MPI_Abort）：**
+- `Mi*M` 恆等矩陣誤差
+- `M*feq` vs 解析平衡矩
+- 守恆矩不受 K 影響: `M_conserved * K ≈ 0`
+- Legacy vs Projection 碰撞絕對誤差
+
+### 2. Eta 方向 Lagrange 插值權重共享預計算
+
+**原理：** GILBM eta 方向的 7 點 Lagrange 插值權重只依賴 `sign(e_x)`
+（+1 或 −1），不依賴完整速度索引 q。預計算 2 組權重（正/負方向），
+kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
+
+**檔案：**
+| 位置 | 說明 |
+|------|------|
+| `gilbm/precompute.h:165` : `PrecomputeGILBM_EtaSharedWeights()` | Host 端計算 2×7 權重表 |
+| `gilbm/precompute.h:180` : `VerifyGILBM_EtaSharedWeights()` | 驗證係數差 + 插值差 < 1e-12 |
+| `main.cu:617-641` | 呼叫 Precompute → Verify → `cudaMemcpyToSymbol` |
+| `0.shared_code.h:55` | `__constant__ double GILBM_L_eta_shared[2][7]` |
+
+### 3. 新增 Hermite 1st-order 在 MRT 預計算下的開關
+
+**開關：** `variables.h` 中 `FORCE_HERMITE_ORDER`（編譯期，只允許 1 或 2）
+
+**階數定義：**
+
+| 值 | Guo forcing 公式 | 說明 |
+|----|------------------|------|
+| `1` | `F_i = w_i · 3 · c_y · Force` | 一階 Hermite — 無速度項，質量守恆 ✓ |
+| `2` | `F_i = w_i · Force · [3(c_y−v) + 9(c·u)c_y]` | 二階 Hermite — 完整 Guo (2002) |
+
+**修改範圍 (4 檔案，`#if FORCE_HERMITE_ORDER >= 2` 控制)：**
+
+| 檔案 | 修改內容 |
+|------|---------|
+| `variables.h:262-266` | `#define FORCE_HERMITE_ORDER 1` + `#error` 範圍檢查 |
+| `mrt_projection_host.h` | `BuildMrtProjectionTablesHost`: 一階時基底 `Fu=Fv=Fw=0`，只留 `F0=w_q·3·cy` |
+| | `LegacyMrtCollisionHost`: 一階時 `Fq = w_q·force·3·cy` |
+| | `VerifyMrtProjectionHost`: 直接力/分裂力/守恆矩驗證同步切換 |
+| `0.collision.h:113` | BGK Guo 路徑: 一階時 `F_q = w_q·Force·3·cy` |
+| `main.cu:713` | 啟動時印出 `GILBM: FORCE_HERMITE_ORDER = N`（MRT/BGK 共用） |
+
+**MRT kernel 不需修改：** GPU kernel 始終讀取 4 張 `__constant__` 表
+`(Fproj, Fproj_u, Fproj_v, Fproj_w)`。一階時後三張為零陣列，等效於
+`f += dt · Force · Fproj[a]`。
+
+### 與參考專案 Duct 的對比
+
+| 項目 | 本專案 (D3Q19) | Duct 參考專案 (D3Q27) |
+|------|---------------|----------------------|
+| 路徑 | `Edit6_5600DNS` | `/home/s8313697/D3Q27_PeriodicHill/Edit2_PeriodicHillDuct` |
+| K 矩陣 | `GILBM_MRT_K[19][19]` | `GILBM_MRT_K[27][27]` |
+| Forcing 投影 | 4 表 (F0+Fu+Fv+Fw, 一階時後三為零) | 1 表 `GILBM_MRT_Fproj[27]` |
+| Forcing 基底 | `F0[q] = w_q·3·cy` (兩專案相同) | `F_unit[q] = D3Q27_W[q]*3.0*D3Q27_ey[q]` |
+| Hermite 開關 | `FORCE_HERMITE_ORDER` (1 或 2) | 固定一階 |
+| Eta 共享權重 | `GILBM_L_eta_shared[2][7]` | 同架構 |
+| 碰撞 kernel | `0.collision.h:61-73` | `0.collision.h:60-72` |
+| BGK Guo | 有 `FORCE_HERMITE_ORDER` 條件 | 完整二階（BGK 路徑未簡化） |
+
+### 常見錯誤提醒
+
+一階 Hermite 是 `w_q · 3 · c_y`（純格子速度方向），**不是** `w_q · 3 · (c_y − v)`。
+`−v` 項屬於二階展開的一部分（用於消除 Fv 質量矩以保證 Galilean invariance）。
+混淆此兩者會導致 `Fv` 基底的零階矩 = −3，造成不可逆密度漂移。
