@@ -17,7 +17,7 @@ When the user types **`claude commit`**, execute the following:
 
 ## Project info
 
-- Branch: Edit3_Re5600newmesh
+- Branch: Edit5_Rebuild
 - Remote: origin (GitHub)
 - Language: commit messages should be in Traditional Chinese (繁體中文)
 - This is a CFD (Computational Fluid Dynamics) LBM simulation project running on HPC clusters (H200/GB200).

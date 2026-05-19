@@ -8,12 +8,9 @@ at Re_tau = 10595 (effective Re_eff ~ 5600 during development).
 | Parameter | Value |
 |-----------|-------|
 | Lattice | D3Q19 MRT |
-| Grid | NX=65, NY=129, NZ=65 (I=129, J=65) |
-| MPI ranks | jp=8 (streamwise decomposition) |
-| dt_global | 7.408e-3 |
-| tau / omega | 0.5011 |
-| nu | 2.679e-6 |
-| GAMMA (grid stretching) | 2.0 |
+| Grid | NX=257, NY=513, NZ=257 (I=513, J=257) |
+| MPI ranks | jp=16 (streamwise decomposition, 2 nodes × 8 GPU) |
+| GAMMA (grid stretching) | 3.6 |
 | CFL | 0.5 |
 | Forcing | SIMPLE-PROP controller, NDTFRC=50 |
 | Hermite order | FORCE_HERMITE_ORDER=1 |
@@ -89,7 +86,7 @@ All changes reverted to commit `55b573c`.
 Regrid workflow: `phase1_generategrid/` (grid) + `phase2_generatecheckpoint/`
 (interpolation). Driven through `./run.sh` — see `PIPELINE_GUIDE.md`.
 
-Origin checkpoint: `oldcheckpoint_Re5600_step_12932001` (257x129x129 grid).
+Origin checkpoint: `oldcheckpoint_Re10595_step_12550001` (129×257×129 grid, GAMMA=2.0).
 
 ## Documentation
 

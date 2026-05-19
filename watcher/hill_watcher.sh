@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hill_watcher.sh — Periodic Hill Re5600 watcher loop
+# hill_watcher.sh — Periodic Hill Re10595 watcher loop
 set -u
 
 # If launched from run.sh/build_and_submit.sh, do not hold run.sh's flock fd.
@@ -17,7 +17,7 @@ CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
 DENSITY_AUDIT_SCRIPT="$RESULT_DIR/10.restart_density_audit.py"
 
-RE=5600
+RE=10595
 POLL_SEC=30
 SIZE_STABLE_WAIT=3
 CONV_TIMEOUT=180

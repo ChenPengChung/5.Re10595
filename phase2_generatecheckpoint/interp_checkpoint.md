@@ -1,6 +1,6 @@
 # Regrid Checkpoint Pipeline — 網格重建資料點續跑機制
 
-> Edit3_Re5600newmesh 專案
+> Edit5_Rebuild Re10595 專案
 > 最後更新: 2026-05-03
 
 ---
@@ -175,11 +175,11 @@ dt_global=-1.0          ← 刻意寫 -1.0, 跳過 drift check
 **Provenance 欄位** (插值專用, solver 忽略):
 ```
 # --- provenance ---
-interp_source=restart/step_12758001_originRe5600
+interp_source=oldcheckpoint_Re10595_step_12550001
 interp_old_grid=.../adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat
-interp_new_grid=.../adaptive_3.fine grid_I257_J129_a0.5.dat
+interp_new_grid=.../adaptive_3.fine grid_I513_J257_g3.6_a0.5.dat
 interp_old_gamma=2.0
-interp_new_gamma=4.3217
+interp_new_gamma=3.6
 interp_fneq_scale=1.0
 interp_time=2026-05-03 14:30:00
 interp_variables_h_mtime=1746268800
@@ -193,9 +193,9 @@ interp_origin_metadata_mtime=1746268800
 `restart/grid_provenance` 是 session-level 檔案, 記錄整條 chain 的 grid 身份:
 
 ```
-new_grid=/abs/path/to/adaptive_3.fine grid_I257_J129_a0.5.dat
+new_grid=/abs/path/to/adaptive_3.fine grid_I513_J257_g3.6_a0.5.dat
 old_grid=/abs/path/to/adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat
-origin=/abs/path/to/restart/step_12758001_originRe5600
+origin=/abs/path/to/oldcheckpoint_Re10595_step_12550001
 origin_metadata_mtime=1746268800
 variables_h=/abs/path/to/variables.h
 variables_h_mtime=1746268800

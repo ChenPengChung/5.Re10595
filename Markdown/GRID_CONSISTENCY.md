@@ -23,9 +23,9 @@ Before this fix, `phase1_generategrid/` contained only cached `.dat` files and n
 | --- | --- | --- | --- |
 | Shared config | `grid_params.py` | `grid_params.py` | yes |
 | Reference grid | `J_Frohlich/3.fine grid.dat` | `J_Frohlich/3.fine grid.dat` | yes |
-| I / streamwise nodes | `NY=257` | `NY=257` | yes |
-| J / wall-normal nodes | `NZ=129` | `NZ=129` | yes |
-| NEW gamma | `GAMMA=3.7` | from `variables.h` (`3.7`) | yes |
+| I / streamwise nodes | `NY=513` | `NY=513` | yes |
+| J / wall-normal nodes | `NZ=257` | `NZ=257` | yes |
+| NEW gamma | `GAMMA=3.6` | from `variables.h` (`3.6`) | yes |
 | OLD gamma | not used by solver runtime | `PHASE1_OLD_GAMMA=2.0` | intentionally different |
 | Alpha | `ALPHA=0.5` | from `variables.h` (`0.5`) | yes |
 | Domain length | `LY=9.0`, `LZ=3.036`, `H_HILL=1.0` | same from `variables.h` | yes |

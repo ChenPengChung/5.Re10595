@@ -2,7 +2,7 @@
 #define VARIABLES_FILE
 
 // ╔════════════════════════════════════════════════════════════════════╗
-// ║     GILBM Periodic Hill — Edit3_Re5600newmesh Configuration        ║
+// ║     GILBM Periodic Hill — Edit5_Rebuild Re10595 Configuration       ║
 // ║     (Fröhlich curvilinear grid, D3Q19, Algorithm1 GTS-only)       ║
 // ║                                                                    ║
 // ║  架構 (Architecture):                                              ║
@@ -102,7 +102,7 @@
 //   jp=8: NY = 9,17,25,...,129,137,145,153,...
 //   通用: NY = lcm(1..8)*k + 1 = 840k+1 (如 841, 1681,...)
 #if ((NY-1) % jp != 0)
-#error "FATAL: (NY-1) must be divisible by jp! Fix: change NY or jp in variables.h so that (NY-1) % jp == 0. For jp=8, valid NY: 9,17,25,...,129,137,145,153,..."
+#error "FATAL: (NY-1) must be divisible by jp! Fix: change NY or jp in variables.h so that (NY-1) % jp == 0. For jp=16, valid NY: 17,33,49,...,257,513,769,..."
 #endif
 
 // ── 非均勻網格拉伸 ──
@@ -301,7 +301,7 @@
 //   2 = [REMOVED in Phase 9] 原 merged VTK 續跑; 改用 --restart 指 atomic checkpoint
 //   3 = 從 binary checkpoint 續跑 (精確: f + 統計量); Phase 8 後由 argv --restart=<dir> 覆寫
 #define     INIT                (0)
-#define     RESTART_BIN_DIR     "restart/checkpoint/step_4001"
+#define     RESTART_BIN_DIR     "restart/checkpoint/step_00000001"
 #define     TBINIT              (0)     // INIT=1 時: 1=讀統計量, 0=不讀
 
 // ── 初始擾動 (觸發 3D 湍流轉捩, 湍流建立後設為 0) ──
@@ -317,7 +317,7 @@
 // ── 計時 ──
 // USE_TIMING=1 啟用, TIMING_DETAIL=1 輸出 per-kernel 分解
 //
-// 計時區間對應 (Edit3_Re5600newmesh 流程):
+// 計時區間對應 (Edit5_Rebuild 流程):
 //   ev_step1:  Step1+1.5 (interpolation + macro + feq)
 //   ev_step2:  Step2 (collision, 逐點 MRT/BGK)
 //   ev_mpi:    MPI(f_post) + periodicSW_fpost
@@ -332,7 +332,7 @@
 // ================================================================
 
 // ── WENO 診斷已一體化至 USE_WENO7 (§1b) ──
-// Edit3_Re5600newmesh: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
+// Edit5_Rebuild: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
 //         全部由 USE_WENO7 統一控制（診斷 log + VTK contour + 啟用統計）。
 //         USE_WENO7=1 時自動啟用所有 WENO 診斷功能。
 
