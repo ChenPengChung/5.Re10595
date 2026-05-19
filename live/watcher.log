@@ -1,0 +1,639 @@
+[2026-05-19 11:04:13] ==========================================
+[2026-05-19 11:04:13] Periodic Hill Re5600 watcher started
+[2026-05-19 11:04:13]   pid=4067947  ppid=4067941  poll=30s
+[2026-05-19 11:04:13]   project  = /home/s8313697/5.Re10595/Edit5_Rebuild
+[2026-05-19 11:04:13]   conv     = /home/s8313697/5.Re10595/Edit5_Rebuild/result/4.Ma_U_Time.py
+[2026-05-19 11:04:13]   bench    = /home/s8313697/5.Re10595/Edit5_Rebuild/result/2.Benchmark.py
+[2026-05-19 11:04:13] ==========================================
+[2026-05-19 11:04:47] ──────────────────────────────────────
+[2026-05-19 11:04:47] PROCESS step=14001  FTT=0.20  accu=0
+[2026-05-19 11:04:47]   [Step 17001 | FTT=0.21] Ub=0.014897  U*=0.9932  Re%=-0.68%  Force=2.30651E-07  F*=0.0092  Re=5561.7  Ma=0.0258  Ma_max=0.0389  Error=4.55e-05  [SIMPLE-PROP]
+[2026-05-19 11:04:50] CONV step=14001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:05:05] DENSITY step=14001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=19001 FTT=0.234613 rho_rms=6.283177e-05 rho_max=4.572863e-04 wall_max=4.572863e-04
+[2026-05-19 11:05:05] BENCH skipped: FTT=0.20 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:05:39] ──────────────────────────────────────
+[2026-05-19 11:05:39] PROCESS step=49001  FTT=0.64  accu=0
+[2026-05-19 11:05:39]   [Step 51801 | FTT=0.64] Ub=0.014452  U*=0.9635  Re%=-3.65%  Force=1.48913E-06  F*=0.0596  Re=5395.4  Ma=0.0250  Ma_max=0.0415  Error=9.13e-06  [SIMPLE-PROP]
+[2026-05-19 11:05:42] CONV step=49001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:05:53] DENSITY step=49001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=53001 FTT=0.654425 rho_rms=6.127694e-05 rho_max=6.926830e-04 wall_max=6.926830e-04
+[2026-05-19 11:05:53] BENCH skipped: FTT=0.64 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:06:27] ──────────────────────────────────────
+[2026-05-19 11:06:27] PROCESS step=81001  FTT=1.03  accu=0
+[2026-05-19 11:06:27]   [Step 84001 | FTT=1.04] Ub=0.014503  U*=0.9668  Re%=-3.32%  Force=3.25932E-06  F*=0.1304  Re=5414.3  Ma=0.0251  Ma_max=0.0438  Error=3.13e-05  [SIMPLE-PROP]
+[2026-05-19 11:06:30] CONV step=81001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:06:36] DENSITY step=81001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=86001 FTT=1.061890 rho_rms=6.553083e-05 rho_max=5.780437e-04 wall_max=5.780437e-04
+[2026-05-19 11:06:36] BENCH skipped: FTT=1.03 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:07:10] ──────────────────────────────────────
+[2026-05-19 11:07:10] PROCESS step=110001  FTT=1.39  accu=0
+[2026-05-19 11:07:10]   [Step 112801 | FTT=1.39] Ub=0.014934  U*=0.9956  Re%=-0.44%  Force=4.14049E-06  F*=0.1656  Re=5575.4  Ma=0.0259  Ma_max=0.0393  Error=4.20e-05  [SIMPLE-PROP]
+[2026-05-19 11:07:13] CONV step=110001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:07:20] DENSITY step=110001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=115001 FTT=1.419965 rho_rms=5.804986e-05 rho_max=6.219670e-04 wall_max=6.219670e-04
+[2026-05-19 11:07:20] BENCH skipped: FTT=1.39 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:07:54] ──────────────────────────────────────
+[2026-05-19 11:07:54] PROCESS step=139001  FTT=1.75  accu=0
+[2026-05-19 11:07:54]   [Step 142001 | FTT=1.75] Ub=0.015512  U*=1.0341  Re%=3.41%  Force=3.43106E-06  F*=0.1372  Re=5791.1  Ma=0.0269  Ma_max=0.0424  Error=3.48e-05  [SIMPLE-PROP]
+[2026-05-19 11:07:57] CONV step=139001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:08:05] DENSITY step=139001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=144001 FTT=1.778040 rho_rms=6.815990e-05 rho_max=7.398253e-04 wall_max=7.398253e-04
+[2026-05-19 11:08:05] BENCH skipped: FTT=1.75 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:08:39] ──────────────────────────────────────
+[2026-05-19 11:08:39] PROCESS step=169001  FTT=2.12  accu=0
+[2026-05-19 11:08:39]   [Step 172001 | FTT=2.12] Ub=0.015517  U*=1.0345  Re%=3.45%  Force=1.71720E-06  F*=0.0687  Re=5793.0  Ma=0.0269  Ma_max=0.0447  Error=4.59e-05  [SIMPLE-PROP]
+[2026-05-19 11:08:42] CONV step=169001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:08:59] DENSITY step=169001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=173001 FTT=2.136115 rho_rms=7.597724e-05 rho_max=7.055922e-04 wall_max=7.055922e-04
+[2026-05-19 11:08:59] BENCH skipped: FTT=2.12 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:09:32] ──────────────────────────────────────
+[2026-05-19 11:09:32] PROCESS step=205001  FTT=2.57  accu=0
+[2026-05-19 11:09:32]   [Step 208001 | FTT=2.57] Ub=0.015018  U*=1.0012  Re%=0.12%  Force=7.79963E-07  F*=0.0312  Re=5606.7  Ma=0.0260  Ma_max=0.0440  Error=4.90e-05  [SIMPLE-PROP]
+[2026-05-19 11:09:35] CONV step=205001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:09:44] DENSITY step=205001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=210001 FTT=2.592969 rho_rms=7.031530e-05 rho_max=5.128708e-04 wall_max=5.128708e-04
+[2026-05-19 11:09:44] BENCH skipped: FTT=2.57 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:10:18] ──────────────────────────────────────
+[2026-05-19 11:10:18] PROCESS step=236001  FTT=2.94  accu=0
+[2026-05-19 11:10:18]   [Step 238301 | FTT=2.94] Ub=0.014588  U*=0.9725  Re%=-2.75%  Force=1.34376E-06  F*=0.0538  Re=5446.2  Ma=0.0253  Ma_max=0.0452  Error=4.26e-05  [SIMPLE-PROP]
+[2026-05-19 11:10:21] CONV step=236001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:10:29] DENSITY step=236001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=240001 FTT=2.963391 rho_rms=8.258178e-05 rho_max=6.231955e-04 wall_max=6.231955e-04
+[2026-05-19 11:10:29] BENCH skipped: FTT=2.94 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:11:04] ──────────────────────────────────────
+[2026-05-19 11:11:04] PROCESS step=266001  FTT=3.32  accu=0
+[2026-05-19 11:11:04]   [Step 269001 | FTT=3.32] Ub=0.014368  U*=0.9579  Re%=-4.21%  Force=3.08426E-06  F*=0.1234  Re=5364.0  Ma=0.0249  Ma_max=0.0450  Error=4.30e-06  [SIMPLE-PROP]
+[2026-05-19 11:11:07] CONV step=266001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:11:16] DENSITY step=266001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=271001 FTT=3.346161 rho_rms=7.706825e-05 rho_max=5.787883e-04 wall_max=5.285610e-04
+[2026-05-19 11:11:16] BENCH skipped: FTT=3.32 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:11:50] ──────────────────────────────────────
+[2026-05-19 11:11:50] PROCESS step=297001  FTT=3.70  accu=0
+[2026-05-19 11:11:50]   [Step 300001 | FTT=3.70] Ub=0.014806  U*=0.9871  Re%=-1.29%  Force=4.50579E-06  F*=0.1802  Re=5527.5  Ma=0.0256  Ma_max=0.0409  Error=7.80e-05  [SIMPLE-PROP]
+[2026-05-19 11:11:53] CONV step=297001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:12:02] DENSITY step=297001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=302001 FTT=3.728931 rho_rms=7.521250e-05 rho_max=5.569222e-04 wall_max=5.569222e-04
+[2026-05-19 11:12:02] BENCH skipped: FTT=3.70 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:12:36] ──────────────────────────────────────
+[2026-05-19 11:12:36] PROCESS step=328001  FTT=4.08  accu=0
+[2026-05-19 11:12:36]   [Step 330951 | FTT=4.09] Ub=0.015446  U*=1.0297  Re%=2.97%  Force=4.06802E-06  F*=0.1627  Re=5766.4  Ma=0.0268  Ma_max=0.0483  Error=3.80e-05  [SIMPLE-PROP]
+[2026-05-19 11:12:39] CONV step=328001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:12:49] DENSITY step=328001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=333001 FTT=4.111700 rho_rms=8.439416e-05 rho_max=7.465349e-04 wall_max=7.465349e-04
+[2026-05-19 11:12:49] BENCH skipped: FTT=4.08 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:13:23] ──────────────────────────────────────
+[2026-05-19 11:13:23] PROCESS step=359001  FTT=4.47  accu=0
+[2026-05-19 11:13:23]   [Step 362001 | FTT=4.47] Ub=0.015470  U*=1.0314  Re%=3.14%  Force=2.49297E-06  F*=0.0997  Re=5775.6  Ma=0.0268  Ma_max=0.0434  Error=1.83e-05  [SIMPLE-PROP]
+[2026-05-19 11:13:26] CONV step=359001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:13:35] DENSITY step=359001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=364001 FTT=4.494470 rho_rms=8.486178e-05 rho_max=6.507445e-04 wall_max=6.507445e-04
+[2026-05-19 11:13:35] BENCH skipped: FTT=4.47 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:14:09] ──────────────────────────────────────
+[2026-05-19 11:14:09] PROCESS step=389001  FTT=4.84  accu=0
+[2026-05-19 11:14:09]   [Step 392001 | FTT=4.84] Ub=0.015308  U*=1.0206  Re%=2.06%  Force=1.32827E-06  F*=0.0531  Re=5715.1  Ma=0.0265  Ma_max=0.0413  Error=2.98e-05  [SIMPLE-PROP]
+[2026-05-19 11:14:12] CONV step=389001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:14:21] DENSITY step=389001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=394001 FTT=4.864892 rho_rms=7.424216e-05 rho_max=7.337514e-04 wall_max=7.337514e-04
+[2026-05-19 11:14:21] BENCH skipped: FTT=4.84 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:14:55] ──────────────────────────────────────
+[2026-05-19 11:14:55] PROCESS step=420001  FTT=5.21  accu=0
+[2026-05-19 11:14:55]   [Step 422001 | FTT=5.21] Ub=0.014916  U*=0.9944  Re%=-0.56%  Force=9.57837E-07  F*=0.0383  Re=5568.5  Ma=0.0258  Ma_max=0.0447  Error=4.98e-05  [SIMPLE-PROP]
+[2026-05-19 11:14:58] CONV step=420001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:15:06] DENSITY step=420001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=424001 FTT=5.235315 rho_rms=7.387755e-05 rho_max=6.202586e-04 wall_max=5.629009e-04
+[2026-05-19 11:15:06] BENCH skipped: FTT=5.21 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:15:40] ──────────────────────────────────────
+[2026-05-19 11:15:40] PROCESS step=450001  FTT=5.59  accu=0
+[2026-05-19 11:15:40]   [Step 452551 | FTT=5.59] Ub=0.014466  U*=0.9644  Re%=-3.56%  Force=1.92460E-06  F*=0.0770  Re=5400.6  Ma=0.0251  Ma_max=0.0449  Error=2.69e-05  [SIMPLE-PROP]
+[2026-05-19 11:15:43] CONV step=450001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:15:51] DENSITY step=450001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=454001 FTT=5.605737 rho_rms=6.897175e-05 rho_max=4.961017e-04 wall_max=4.467338e-04
+[2026-05-19 11:15:51] BENCH skipped: FTT=5.59 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:16:26] ──────────────────────────────────────
+[2026-05-19 11:16:26] PROCESS step=480001  FTT=5.96  accu=0
+[2026-05-19 11:16:26]   [Step 482751 | FTT=5.96] Ub=0.014556  U*=0.9704  Re%=-2.96%  Force=3.51899E-06  F*=0.1408  Re=5434.3  Ma=0.0252  Ma_max=0.0410  Error=3.99e-05  [SIMPLE-PROP]
+[2026-05-19 11:16:29] CONV step=480001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:16:37] DENSITY step=480001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=485001 FTT=5.988507 rho_rms=7.789528e-05 rho_max=7.365251e-04 wall_max=7.365251e-04
+[2026-05-19 11:16:37] BENCH skipped: FTT=5.96 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:17:11] ──────────────────────────────────────
+[2026-05-19 11:17:11] PROCESS step=510001  FTT=6.33  accu=0
+[2026-05-19 11:17:11]   [Step 513001 | FTT=6.33] Ub=0.015106  U*=1.0071  Re%=0.71%  Force=4.08343E-06  F*=0.1633  Re=5639.5  Ma=0.0262  Ma_max=0.0479  Error=6.12e-05  [SIMPLE-PROP]
+[2026-05-19 11:17:14] CONV step=510001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:17:23] DENSITY step=510001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=515001 FTT=6.358929 rho_rms=8.646392e-05 rho_max=5.831464e-04 wall_max=5.831464e-04
+[2026-05-19 11:17:23] BENCH skipped: FTT=6.33 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:17:57] ──────────────────────────────────────
+[2026-05-19 11:17:57] PROCESS step=540001  FTT=6.70  accu=0
+[2026-05-19 11:17:57]   [Step 542751 | FTT=6.70] Ub=0.015341  U*=1.0228  Re%=2.28%  Force=3.28726E-06  F*=0.1315  Re=5727.5  Ma=0.0266  Ma_max=0.0433  Error=2.38e-06  [SIMPLE-PROP]
+[2026-05-19 11:18:01] CONV step=540001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:18:09] DENSITY step=540001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=545001 FTT=6.729352 rho_rms=7.944393e-05 rho_max=6.946445e-04 wall_max=6.946445e-04
+[2026-05-19 11:18:09] BENCH skipped: FTT=6.70 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:18:43] ──────────────────────────────────────
+[2026-05-19 11:18:43] PROCESS step=569001  FTT=7.05  accu=0
+[2026-05-19 11:18:43]   [Step 571251 | FTT=7.05] Ub=0.015328  U*=1.0218  Re%=2.18%  Force=2.33594E-06  F*=0.0934  Re=5722.4  Ma=0.0265  Ma_max=0.0416  Error=1.07e-05  [SIMPLE-PROP]
+[2026-05-19 11:18:46] CONV step=569001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:18:54] DENSITY step=569001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=573001 FTT=7.075079 rho_rms=8.132283e-05 rho_max=6.513713e-04 wall_max=6.077143e-04
+[2026-05-19 11:18:54] BENCH skipped: FTT=7.05 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:19:28] ──────────────────────────────────────
+[2026-05-19 11:19:28] PROCESS step=598001  FTT=7.42  accu=0
+[2026-05-19 11:19:28]   [Step 601001 | FTT=7.42] Ub=0.015119  U*=1.0079  Re%=0.79%  Force=1.63905E-06  F*=0.0656  Re=5644.3  Ma=0.0262  Ma_max=0.0417  Error=2.59e-05  [SIMPLE-PROP]
+[2026-05-19 11:19:31] CONV step=598001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:19:39] DENSITY step=598001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=603001 FTT=7.445501 rho_rms=8.013647e-05 rho_max=7.285807e-04 wall_max=5.961288e-04
+[2026-05-19 11:19:39] BENCH skipped: FTT=7.42 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:20:13] ──────────────────────────────────────
+[2026-05-19 11:20:13] PROCESS step=629001  FTT=7.79  accu=0
+[2026-05-19 11:20:13]   [Step 631001 | FTT=7.79] Ub=0.014803  U*=0.9869  Re%=-1.31%  Force=1.71256E-06  F*=0.0685  Re=5526.4  Ma=0.0256  Ma_max=0.0480  Error=4.08e-05  [SIMPLE-PROP]
+[2026-05-19 11:20:16] CONV step=629001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:20:25] DENSITY step=629001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=633001 FTT=7.815924 rho_rms=8.231511e-05 rho_max=8.824683e-04 wall_max=8.824683e-04
+[2026-05-19 11:20:25] BENCH skipped: FTT=7.79 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:20:59] ──────────────────────────────────────
+[2026-05-19 11:20:59] PROCESS step=660001  FTT=8.17  accu=0
+[2026-05-19 11:20:59]   [Step 662001 | FTT=8.17] Ub=0.014570  U*=0.9713  Re%=-2.87%  Force=2.72854E-06  F*=0.1091  Re=5439.5  Ma=0.0252  Ma_max=0.0503  Error=1.18e-05  [SIMPLE-PROP]
+[2026-05-19 11:21:04] CONV step=660001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:21:12] DENSITY step=660001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=665001 FTT=8.211041 rho_rms=8.133302e-05 rho_max=6.388910e-04 wall_max=6.025345e-04
+[2026-05-19 11:21:12] BENCH skipped: FTT=8.17 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:21:46] ──────────────────────────────────────
+[2026-05-19 11:21:46] PROCESS step=691001  FTT=8.56  accu=0
+[2026-05-19 11:21:46]   [Step 693001 | FTT=8.56] Ub=0.014786  U*=0.9857  Re%=-1.43%  Force=3.87573E-06  F*=0.1550  Re=5520.0  Ma=0.0256  Ma_max=0.0466  Error=5.16e-05  [SIMPLE-PROP]
+[2026-05-19 11:21:49] CONV step=691001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:21:57] DENSITY step=691001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=695001 FTT=8.581463 rho_rms=8.954628e-05 rho_max=6.818762e-04 wall_max=6.818762e-04
+[2026-05-19 11:21:57] BENCH skipped: FTT=8.56 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:22:31] ──────────────────────────────────────
+[2026-05-19 11:22:31] PROCESS step=720001  FTT=8.92  accu=0
+[2026-05-19 11:22:31]   [Step 722851 | FTT=8.93] Ub=0.015072  U*=1.0048  Re%=0.48%  Force=3.99311E-06  F*=0.1597  Re=5626.9  Ma=0.0261  Ma_max=0.0446  Error=1.28e-05  [SIMPLE-PROP]
+[2026-05-19 11:22:34] CONV step=720001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:22:44] DENSITY step=720001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=725001 FTT=8.951886 rho_rms=1.003992e-04 rho_max=6.876662e-04 wall_max=6.876662e-04
+[2026-05-19 11:22:44] BENCH skipped: FTT=8.92 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:23:18] ──────────────────────────────────────
+[2026-05-19 11:23:18] PROCESS step=751001  FTT=9.31  accu=0
+[2026-05-19 11:23:18]   [Step 753801 | FTT=9.31] Ub=0.015153  U*=1.0102  Re%=1.02%  Force=3.64644E-06  F*=0.1459  Re=5657.0  Ma=0.0262  Ma_max=0.0442  Error=6.63e-06  [SIMPLE-PROP]
+[2026-05-19 11:23:21] CONV step=751001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:23:37] DENSITY step=751001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=755001 FTT=9.322308 rho_rms=8.850535e-05 rho_max=6.422323e-04 wall_max=5.711354e-04
+[2026-05-19 11:23:37] BENCH skipped: FTT=9.31 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:24:11] ──────────────────────────────────────
+[2026-05-19 11:24:11] PROCESS step=786001  FTT=9.74  accu=0
+[2026-05-19 11:24:11]   [Step 789001 | FTT=9.74] Ub=0.015399  U*=1.0266  Re%=2.66%  Force=2.73143E-06  F*=0.1093  Re=5748.9  Ma=0.0267  Ma_max=0.0421  Error=2.00e-05  [SIMPLE-PROP]
+[2026-05-19 11:24:14] CONV step=786001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:24:24] DENSITY step=786001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=792001 FTT=9.779162 rho_rms=8.863890e-05 rho_max=6.023599e-04 wall_max=5.210234e-04
+[2026-05-19 11:24:24] BENCH skipped: FTT=9.74 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:24:58] ──────────────────────────────────────
+[2026-05-19 11:24:58] PROCESS step=818001  FTT=10.12  accu=0
+[2026-05-19 11:24:58]   [Step 820201 | FTT=10.13] Ub=0.015281  U*=1.0187  Re%=1.87%  Force=1.53775E-06  F*=0.0615  Re=5705.0  Ma=0.0265  Ma_max=0.0454  Error=3.83e-05  [SIMPLE-PROP]
+[2026-05-19 11:25:01] CONV step=818001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+cp: skipping file '/home/s8313697/5.Re10595/Edit5_Rebuild/result/restart_density_audit.csv', as it was replaced while being copied
+[2026-05-19 11:25:09] DENSITY step=818001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=822001 FTT=10.149584 rho_rms=8.353625e-05 rho_max=6.631154e-04 wall_max=6.631154e-04
+[2026-05-19 11:25:09] BENCH skipped: FTT=10.12 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:25:43] ──────────────────────────────────────
+[2026-05-19 11:25:43] PROCESS step=848001  FTT=10.51  accu=0
+[2026-05-19 11:25:43]   [Step 851001 | FTT=10.51] Ub=0.014886  U*=0.9924  Re%=-0.76%  Force=1.32288E-06  F*=0.0529  Re=5557.5  Ma=0.0258  Ma_max=0.0442  Error=2.98e-05  [SIMPLE-PROP]
+[2026-05-19 11:25:47] CONV step=848001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:25:55] DENSITY step=848001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=853001 FTT=10.532354 rho_rms=6.790165e-05 rho_max=6.727238e-04 wall_max=6.727238e-04
+[2026-05-19 11:25:55] BENCH skipped: FTT=10.51 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:26:29] ──────────────────────────────────────
+[2026-05-19 11:26:29] PROCESS step=879001  FTT=10.88  accu=0
+[2026-05-19 11:26:29]   [Step 881201 | FTT=10.88] Ub=0.014671  U*=0.9781  Re%=-2.19%  Force=2.04650E-06  F*=0.0819  Re=5477.3  Ma=0.0254  Ma_max=0.0415  Error=4.24e-08  [SIMPLE-PROP]
+[2026-05-19 11:26:32] CONV step=879001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:26:42] DENSITY step=879001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=883001 FTT=10.902777 rho_rms=6.345558e-05 rho_max=5.275080e-04 wall_max=5.275080e-04
+[2026-05-19 11:26:42] BENCH skipped: FTT=10.88 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:27:15] ──────────────────────────────────────
+[2026-05-19 11:27:15] PROCESS step=910001  FTT=11.26  accu=0
+[2026-05-19 11:27:15]   [Step 912501 | FTT=11.27] Ub=0.014835  U*=0.9890  Re%=-1.10%  Force=2.85594E-06  F*=0.1142  Re=5538.2  Ma=0.0257  Ma_max=0.0402  Error=2.08e-05  [SIMPLE-PROP]
+[2026-05-19 11:27:19] CONV step=910001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:27:27] DENSITY step=910001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=914001 FTT=11.285546 rho_rms=7.346531e-05 rho_max=5.757888e-04 wall_max=5.757888e-04
+[2026-05-19 11:27:27] BENCH skipped: FTT=11.26 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:28:01] ──────────────────────────────────────
+[2026-05-19 11:28:01] PROCESS step=940001  FTT=11.64  accu=0
+[2026-05-19 11:28:01]   [Step 943001 | FTT=11.64] Ub=0.015044  U*=1.0030  Re%=0.30%  Force=3.06281E-06  F*=0.1225  Re=5616.6  Ma=0.0261  Ma_max=0.0399  Error=2.67e-05  [SIMPLE-PROP]
+[2026-05-19 11:28:04] CONV step=940001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:28:12] DENSITY step=940001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=945001 FTT=11.668316 rho_rms=7.454927e-05 rho_max=5.489230e-04 wall_max=5.489230e-04
+[2026-05-19 11:28:13] BENCH skipped: FTT=11.64 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:28:46] ──────────────────────────────────────
+[2026-05-19 11:28:46] PROCESS step=970001  FTT=12.01  accu=0
+[2026-05-19 11:28:46]   [Step 973001 | FTT=12.01] Ub=0.015144  U*=1.0096  Re%=0.96%  Force=2.71530E-06  F*=0.1086  Re=5653.8  Ma=0.0262  Ma_max=0.0485  Error=1.59e-06  [SIMPLE-PROP]
+[2026-05-19 11:28:49] CONV step=970001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:28:58] DENSITY step=970001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=975001 FTT=12.038738 rho_rms=7.632366e-05 rho_max=6.042857e-04 wall_max=6.042857e-04
+[2026-05-19 11:28:58] BENCH skipped: FTT=12.01 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:29:32] ──────────────────────────────────────
+[2026-05-19 11:29:32] PROCESS step=1000001  FTT=12.38  accu=0
+[2026-05-19 11:29:32]   [Step 1003001 | FTT=12.38] Ub=0.015136  U*=1.0090  Re%=0.90%  Force=2.28116E-06  F*=0.0912  Re=5650.7  Ma=0.0262  Ma_max=0.0408  Error=5.42e-06  [SIMPLE-PROP]
+[2026-05-19 11:29:35] CONV step=1000001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:29:43] DENSITY step=1000001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1005001 FTT=12.409161 rho_rms=7.063617e-05 rho_max=6.414372e-04 wall_max=5.373310e-04
+[2026-05-19 11:29:43] BENCH skipped: FTT=12.38 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:30:17] ──────────────────────────────────────
+[2026-05-19 11:30:17] PROCESS step=1031001  FTT=12.76  accu=0
+[2026-05-19 11:30:17]   [Step 1033651 | FTT=12.76] Ub=0.015021  U*=1.0014  Re%=0.14%  Force=2.01672E-06  F*=0.0807  Re=5607.7  Ma=0.0260  Ma_max=0.0395  Error=1.82e-05  [SIMPLE-PROP]
+[2026-05-19 11:30:20] CONV step=1031001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:30:35] DENSITY step=1031001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1036001 FTT=12.791931 rho_rms=7.945833e-05 rho_max=7.150620e-04 wall_max=7.150620e-04
+[2026-05-19 11:30:35] BENCH skipped: FTT=12.76 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:31:09] ──────────────────────────────────────
+[2026-05-19 11:31:09] PROCESS step=1066001  FTT=13.19  accu=0
+[2026-05-19 11:31:09]   [Step 1068601 | FTT=13.19] Ub=0.014779  U*=0.9853  Re%=-1.47%  Force=2.38455E-06  F*=0.0954  Re=5517.5  Ma=0.0256  Ma_max=0.0414  Error=1.95e-05  [SIMPLE-PROP]
+[2026-05-19 11:31:12] CONV step=1066001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:31:27] DENSITY step=1066001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1071001 FTT=13.224090 rho_rms=8.713396e-05 rho_max=6.288086e-04 wall_max=6.145065e-04
+[2026-05-19 11:31:27] BENCH skipped: FTT=13.19 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:32:00] ──────────────────────────────────────
+[2026-05-19 11:32:01] PROCESS step=1100001  FTT=13.61  accu=0
+[2026-05-19 11:32:01]   [Step 1102601 | FTT=13.61] Ub=0.014781  U*=0.9854  Re%=-1.46%  Force=3.22642E-06  F*=0.1291  Re=5518.3  Ma=0.0256  Ma_max=0.0426  Error=1.26e-05  [SIMPLE-PROP]
+[2026-05-19 11:32:04] CONV step=1100001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:32:11] DENSITY step=1100001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1105001 FTT=13.643902 rho_rms=8.224937e-05 rho_max=5.833995e-04 wall_max=5.833995e-04
+[2026-05-19 11:32:11] BENCH skipped: FTT=13.61 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:32:45] ──────────────────────────────────────
+[2026-05-19 11:32:45] PROCESS step=1129001  FTT=13.98  accu=0
+[2026-05-19 11:32:45]   [Step 1132001 | FTT=13.98] Ub=0.015027  U*=1.0018  Re%=0.18%  Force=3.54592E-06  F*=0.1418  Re=5610.2  Ma=0.0260  Ma_max=0.0427  Error=3.33e-05  [SIMPLE-PROP]
+[2026-05-19 11:32:49] CONV step=1129001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:33:04] DENSITY step=1129001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1135001 FTT=14.014324 rho_rms=7.173050e-05 rho_max=7.324320e-04 wall_max=7.324320e-04
+[2026-05-19 11:33:04] BENCH skipped: FTT=13.98 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:33:38] ──────────────────────────────────────
+[2026-05-19 11:33:38] PROCESS step=1163001  FTT=14.40  accu=0
+[2026-05-19 11:33:38]   [Step 1166001 | FTT=14.40] Ub=0.015306  U*=1.0204  Re%=2.04%  Force=2.96072E-06  F*=0.1184  Re=5714.3  Ma=0.0265  Ma_max=0.0459  Error=2.80e-05  [SIMPLE-PROP]
+[2026-05-19 11:33:41] CONV step=1163001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:33:51] DENSITY step=1163001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1168001 FTT=14.421789 rho_rms=6.873429e-05 rho_max=9.725460e-04 wall_max=9.725460e-04
+[2026-05-19 11:33:51] BENCH skipped: FTT=14.40 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:34:25] ──────────────────────────────────────
+[2026-05-19 11:34:25] PROCESS step=1194001  FTT=14.78  accu=0
+[2026-05-19 11:34:25]   [Step 1197001 | FTT=14.78] Ub=0.015383  U*=1.0255  Re%=2.55%  Force=1.78998E-06  F*=0.0716  Re=5743.0  Ma=0.0266  Ma_max=0.0428  Error=1.52e-05  [SIMPLE-PROP]
+[2026-05-19 11:34:28] CONV step=1194001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:34:37] DENSITY step=1194001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1199001 FTT=14.804559 rho_rms=8.078783e-05 rho_max=7.564243e-04 wall_max=7.564243e-04
+[2026-05-19 11:34:37] BENCH skipped: FTT=14.78 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:35:10] ──────────────────────────────────────
+[2026-05-19 11:35:10] PROCESS step=1225001  FTT=15.15  accu=0
+[2026-05-19 11:35:10]   [Step 1227301 | FTT=15.15] Ub=0.015031  U*=1.0021  Re%=0.21%  Force=1.10190E-06  F*=0.0441  Re=5611.6  Ma=0.0260  Ma_max=0.0388  Error=5.17e-05  [SIMPLE-PROP]
+[2026-05-19 11:35:14] CONV step=1225001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:35:25] DENSITY step=1225001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1229001 FTT=15.174981 rho_rms=7.573743e-05 rho_max=6.308079e-04 wall_max=5.993371e-04
+[2026-05-19 11:35:25] BENCH skipped: FTT=15.15 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:35:58] ──────────────────────────────────────
+[2026-05-19 11:35:58] PROCESS step=1257001  FTT=15.55  accu=0
+[2026-05-19 11:35:58]   [Step 1259501 | FTT=15.55] Ub=0.014612  U*=0.9741  Re%=-2.59%  Force=1.73883E-06  F*=0.0696  Re=5455.0  Ma=0.0253  Ma_max=0.0425  Error=3.26e-05  [SIMPLE-PROP]
+[2026-05-19 11:36:02] CONV step=1257001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:36:13] DENSITY step=1257001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1262001 FTT=15.582445 rho_rms=7.460329e-05 rho_max=6.888760e-04 wall_max=5.389298e-04
+[2026-05-19 11:36:13] BENCH skipped: FTT=15.55 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:36:47] ──────────────────────────────────────
+[2026-05-19 11:36:47] PROCESS step=1289001  FTT=15.94  accu=0
+[2026-05-19 11:36:47]   [Step 1291301 | FTT=15.94] Ub=0.014620  U*=0.9746  Re%=-2.54%  Force=3.10987E-06  F*=0.1244  Re=5458.0  Ma=0.0253  Ma_max=0.0401  Error=2.95e-05  [SIMPLE-PROP]
+[2026-05-19 11:36:50] CONV step=1289001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+cp: skipping file '/home/s8313697/5.Re10595/Edit5_Rebuild/result/restart_density_audit.csv', as it was replaced while being copied
+[2026-05-19 11:36:59] DENSITY step=1289001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1294001 FTT=15.977563 rho_rms=7.862373e-05 rho_max=5.452070e-04 wall_max=5.452070e-04
+[2026-05-19 11:36:59] BENCH skipped: FTT=15.94 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:37:33] ──────────────────────────────────────
+[2026-05-19 11:37:33] PROCESS step=1319001  FTT=16.31  accu=0
+[2026-05-19 11:37:33]   [Step 1321301 | FTT=16.31] Ub=0.014943  U*=0.9962  Re%=-0.38%  Force=3.76796E-06  F*=0.1507  Re=5578.7  Ma=0.0259  Ma_max=0.0443  Error=3.49e-05  [SIMPLE-PROP]
+[2026-05-19 11:37:36] CONV step=1319001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:37:46] DENSITY step=1319001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1324001 FTT=16.347985 rho_rms=7.153376e-05 rho_max=6.272958e-04 wall_max=6.272958e-04
+[2026-05-19 11:37:46] BENCH skipped: FTT=16.31 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:38:20] ──────────────────────────────────────
+[2026-05-19 11:38:20] PROCESS step=1350001  FTT=16.71  accu=0
+[2026-05-19 11:38:20]   [Step 1353001 | FTT=16.71] Ub=0.015292  U*=1.0195  Re%=1.95%  Force=3.37531E-06  F*=0.1350  Re=5709.0  Ma=0.0265  Ma_max=0.0461  Error=2.24e-05  [SIMPLE-PROP]
+[2026-05-19 11:38:24] CONV step=1350001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:38:33] DENSITY step=1350001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1355001 FTT=16.730755 rho_rms=6.861193e-05 rho_max=6.722325e-04 wall_max=6.722325e-04
+[2026-05-19 11:38:33] BENCH skipped: FTT=16.71 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:39:07] ──────────────────────────────────────
+[2026-05-19 11:39:07] PROCESS step=1381001  FTT=17.08  accu=0
+[2026-05-19 11:39:07]   [Step 1383801 | FTT=17.09] Ub=0.015360  U*=1.0240  Re%=2.40%  Force=2.34751E-06  F*=0.0939  Re=5734.5  Ma=0.0266  Ma_max=0.0510  Error=5.20e-06  [SIMPLE-PROP]
+[2026-05-19 11:39:10] CONV step=1381001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:39:25] DENSITY step=1381001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1385001 FTT=17.101177 rho_rms=8.429957e-05 rho_max=6.597701e-04 wall_max=6.597701e-04
+[2026-05-19 11:39:25] BENCH skipped: FTT=17.08 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:39:59] ──────────────────────────────────────
+[2026-05-19 11:39:59] PROCESS step=1415001  FTT=17.50  accu=0
+[2026-05-19 11:39:59]   [Step 1417451 | FTT=17.50] Ub=0.015064  U*=1.0043  Re%=0.43%  Force=1.50130E-06  F*=0.0601  Re=5623.8  Ma=0.0261  Ma_max=0.0452  Error=4.59e-05  [SIMPLE-PROP]
+[2026-05-19 11:40:02] CONV step=1415001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:40:09] DENSITY step=1415001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1420001 FTT=17.533336 rho_rms=8.708122e-05 rho_max=9.771842e-04 wall_max=9.771842e-04
+[2026-05-19 11:40:09] BENCH skipped: FTT=17.50 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:40:43] ──────────────────────────────────────
+[2026-05-19 11:40:43] PROCESS step=1443001  FTT=17.85  accu=0
+[2026-05-19 11:40:43]   [Step 1446001 | FTT=17.85] Ub=0.014777  U*=0.9852  Re%=-1.48%  Force=1.78389E-06  F*=0.0714  Re=5516.9  Ma=0.0256  Ma_max=0.0418  Error=1.78e-05  [SIMPLE-PROP]
+[2026-05-19 11:40:46] CONV step=1443001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:40:54] DENSITY step=1443001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1448001 FTT=17.879064 rho_rms=7.694033e-05 rho_max=7.526058e-04 wall_max=5.258553e-04
+[2026-05-19 11:40:54] BENCH skipped: FTT=17.85 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:41:28] ──────────────────────────────────────
+[2026-05-19 11:41:28] PROCESS step=1466001  FTT=18.14  accu=0
+[2026-05-19 11:41:28]   [Step 1469101 | FTT=18.14] Ub=0.014647  U*=0.9765  Re%=-2.35%  Force=2.46177E-06  F*=0.0985  Re=5468.3  Ma=0.0254  Ma_max=0.0430  Error=7.43e-06  [SIMPLE-PROP]
+[2026-05-19 11:41:31] CONV step=1466001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:41:39] DENSITY step=1466001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1472001 FTT=18.175402 rho_rms=8.257996e-05 rho_max=8.434896e-04 wall_max=5.691451e-04
+[2026-05-19 11:41:39] BENCH skipped: FTT=18.14 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:42:13] ──────────────────────────────────────
+[2026-05-19 11:42:13] PROCESS step=1496001  FTT=18.51  accu=0
+[2026-05-19 11:42:13]   [Step 1499001 | FTT=18.51] Ub=0.014698  U*=0.9799  Re%=-2.01%  Force=3.48632E-06  F*=0.1395  Re=5487.2  Ma=0.0255  Ma_max=0.0435  Error=1.69e-05  [SIMPLE-PROP]
+[2026-05-19 11:42:17] CONV step=1496001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:42:23] DENSITY step=1496001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1502001 FTT=18.545824 rho_rms=8.656363e-05 rho_max=6.721203e-04 wall_max=6.547266e-04
+[2026-05-19 11:42:23] BENCH skipped: FTT=18.51 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:42:57] ──────────────────────────────────────
+[2026-05-19 11:42:57] PROCESS step=1525001  FTT=18.87  accu=0
+[2026-05-19 11:42:57]   [Step 1528151 | FTT=18.87] Ub=0.014990  U*=0.9993  Re%=-0.07%  Force=4.01779E-06  F*=0.1607  Re=5596.3  Ma=0.0260  Ma_max=0.0448  Error=4.79e-05  [SIMPLE-PROP]
+[2026-05-19 11:43:00] CONV step=1525001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:43:10] DENSITY step=1525001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1531001 FTT=18.903899 rho_rms=8.250459e-05 rho_max=7.746308e-04 wall_max=7.746308e-04
+[2026-05-19 11:43:10] BENCH skipped: FTT=18.87 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:43:44] ──────────────────────────────────────
+[2026-05-19 11:43:44] PROCESS step=1557001  FTT=19.26  accu=0
+[2026-05-19 11:43:44]   [Step 1560001 | FTT=19.26] Ub=0.015356  U*=1.0237  Re%=2.37%  Force=3.38264E-06  F*=0.1353  Re=5732.8  Ma=0.0266  Ma_max=0.0422  Error=1.72e-05  [SIMPLE-PROP]
+[2026-05-19 11:43:47] CONV step=1557001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:43:55] DENSITY step=1557001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1562001 FTT=19.286669 rho_rms=8.039981e-05 rho_max=6.485944e-04 wall_max=6.485944e-04
+[2026-05-19 11:43:55] BENCH skipped: FTT=19.26 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:44:29] ──────────────────────────────────────
+[2026-05-19 11:44:29] PROCESS step=1587001  FTT=19.63  accu=0
+[2026-05-19 11:44:29]   [Step 1590001 | FTT=19.63] Ub=0.015336  U*=1.0224  Re%=2.24%  Force=2.27044E-06  F*=0.0908  Re=5725.4  Ma=0.0266  Ma_max=0.0450  Error=1.97e-05  [SIMPLE-PROP]
+[2026-05-19 11:44:33] CONV step=1587001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:44:47] DENSITY step=1587001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1592001 FTT=19.657091 rho_rms=8.554701e-05 rho_max=6.950742e-04 wall_max=6.950742e-04
+[2026-05-19 11:44:47] BENCH skipped: FTT=19.63 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:45:21] ──────────────────────────────────────
+[2026-05-19 11:45:21] PROCESS step=1622001  FTT=20.06  accu=0
+[2026-05-19 11:45:21]   [Step 1624551 | FTT=20.06] Ub=0.015129  U*=1.0086  Re%=0.86%  Force=1.49168E-06  F*=0.0597  Re=5648.3  Ma=0.0262  Ma_max=0.0414  Error=1.82e-05  [SIMPLE-PROP]
+[2026-05-19 11:45:25] CONV step=1622001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:45:32] DENSITY step=1622001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1627001 FTT=20.089251 rho_rms=7.260351e-05 rho_max=7.255293e-04 wall_max=7.255293e-04
+[2026-05-19 11:45:32] BENCH skipped: FTT=20.06 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:46:06] ──────────────────────────────────────
+[2026-05-19 11:46:06] PROCESS step=1650001  FTT=20.41  accu=0
+[2026-05-19 11:46:06]   [Step 1653001 | FTT=20.41] Ub=0.014887  U*=0.9925  Re%=-0.75%  Force=1.42781E-06  F*=0.0571  Re=5557.9  Ma=0.0258  Ma_max=0.0408  Error=3.59e-05  [SIMPLE-PROP]
+[2026-05-19 11:46:09] CONV step=1650001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:46:19] DENSITY step=1650001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1655001 FTT=20.434978 rho_rms=7.676938e-05 rho_max=7.365958e-04 wall_max=7.365958e-04
+[2026-05-19 11:46:19] BENCH skipped: FTT=20.41 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:46:53] ──────────────────────────────────────
+[2026-05-19 11:46:53] PROCESS step=1682001  FTT=20.79  accu=0
+[2026-05-19 11:46:53]   [Step 1684101 | FTT=20.79] Ub=0.014642  U*=0.9761  Re%=-2.39%  Force=2.21075E-06  F*=0.0884  Re=5466.3  Ma=0.0254  Ma_max=0.0434  Error=6.86e-06  [SIMPLE-PROP]
+[2026-05-19 11:46:57] CONV step=1682001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:47:07] DENSITY step=1682001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1687001 FTT=20.830095 rho_rms=6.819740e-05 rho_max=6.464687e-04 wall_max=5.124774e-04
+[2026-05-19 11:47:07] BENCH skipped: FTT=20.79 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:47:44] ──────────────────────────────────────
+[2026-05-19 11:47:44] PROCESS step=1714001  FTT=21.20  accu=0
+[2026-05-19 11:47:44]   [Step 1718001 | FTT=21.21] Ub=0.014857  U*=0.9905  Re%=-0.95%  Force=3.16922E-06  F*=0.1268  Re=5546.7  Ma=0.0257  Ma_max=0.0402  Error=3.75e-05  [SIMPLE-PROP]
+[2026-05-19 11:47:48] CONV step=1714001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:48:01] DENSITY step=1714001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1721001 FTT=21.249907 rho_rms=6.461842e-05 rho_max=6.080237e-04 wall_max=6.080237e-04
+[2026-05-19 11:48:01] BENCH skipped: FTT=21.20 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:48:35] ──────────────────────────────────────
+[2026-05-19 11:48:35] PROCESS step=1749001  FTT=21.62  accu=0
+[2026-05-19 11:48:35]   [Step 1751451 | FTT=21.63] Ub=0.015242  U*=1.0161  Re%=1.61%  Force=2.97560E-06  F*=0.1190  Re=5690.2  Ma=0.0264  Ma_max=0.0381  Error=3.09e-05  [SIMPLE-PROP]
+[2026-05-19 11:48:38] CONV step=1749001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:48:46] DENSITY step=1749001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1753001 FTT=21.645024 rho_rms=6.701095e-05 rho_max=7.430639e-04 wall_max=7.430639e-04
+[2026-05-19 11:48:46] BENCH skipped: FTT=21.62 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:49:20] ──────────────────────────────────────
+[2026-05-19 11:49:20] PROCESS step=1779001  FTT=22.00  accu=0
+[2026-05-19 11:49:20]   [Step 1781751 | FTT=22.00] Ub=0.015306  U*=1.0204  Re%=2.04%  Force=2.02778E-06  F*=0.0811  Re=5714.4  Ma=0.0265  Ma_max=0.0397  Error=2.30e-05  [SIMPLE-PROP]
+[2026-05-19 11:49:23] CONV step=1779001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:49:30] DENSITY step=1779001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1783001 FTT=22.015447 rho_rms=7.035420e-05 rho_max=5.926930e-04 wall_max=5.926930e-04
+[2026-05-19 11:49:30] BENCH skipped: FTT=22.00 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:50:04] ──────────────────────────────────────
+[2026-05-19 11:50:04] PROCESS step=1809001  FTT=22.36  accu=0
+[2026-05-19 11:50:04]   [Step 1811701 | FTT=22.37] Ub=0.015017  U*=1.0012  Re%=0.12%  Force=1.54386E-06  F*=0.0618  Re=5606.5  Ma=0.0260  Ma_max=0.0404  Error=2.22e-05  [SIMPLE-PROP]
+[2026-05-19 11:50:08] CONV step=1809001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:50:17] DENSITY step=1809001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1814001 FTT=22.398217 rho_rms=6.585240e-05 rho_max=6.389678e-04 wall_max=5.137736e-04
+[2026-05-19 11:50:17] BENCH skipped: FTT=22.36 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:50:51] ──────────────────────────────────────
+[2026-05-19 11:50:51] PROCESS step=1841001  FTT=22.76  accu=0
+[2026-05-19 11:50:51]   [Step 1843501 | FTT=22.76] Ub=0.014941  U*=0.9961  Re%=-0.39%  Force=1.62190E-06  F*=0.0649  Re=5577.9  Ma=0.0259  Ma_max=0.0390  Error=1.31e-05  [SIMPLE-PROP]
+[2026-05-19 11:50:55] CONV step=1841001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:51:04] DENSITY step=1841001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1846001 FTT=22.793334 rho_rms=7.367075e-05 rho_max=4.889620e-04 wall_max=4.889620e-04
+[2026-05-19 11:51:04] BENCH skipped: FTT=22.76 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:51:38] ──────────────────────────────────────
+[2026-05-19 11:51:38] PROCESS step=1872001  FTT=23.15  accu=0
+[2026-05-19 11:51:38]   [Step 1875001 | FTT=23.15] Ub=0.014789  U*=0.9860  Re%=-1.40%  Force=2.04145E-06  F*=0.0817  Re=5521.4  Ma=0.0256  Ma_max=0.0434  Error=1.45e-05  [SIMPLE-PROP]
+[2026-05-19 11:51:41] CONV step=1872001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:51:52] DENSITY step=1872001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1878001 FTT=23.188451 rho_rms=6.732057e-05 rho_max=7.110576e-04 wall_max=7.110576e-04
+[2026-05-19 11:51:52] BENCH skipped: FTT=23.15 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:52:26] ──────────────────────────────────────
+[2026-05-19 11:52:26] PROCESS step=1904001  FTT=23.55  accu=0
+[2026-05-19 11:52:26]   [Step 1907001 | FTT=23.55] Ub=0.014760  U*=0.9840  Re%=-1.60%  Force=2.81187E-06  F*=0.1125  Re=5510.5  Ma=0.0256  Ma_max=0.0405  Error=9.39e-06  [SIMPLE-PROP]
+[2026-05-19 11:52:30] CONV step=1904001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:52:40] DENSITY step=1904001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1909001 FTT=23.571221 rho_rms=7.167079e-05 rho_max=6.296522e-04 wall_max=6.296522e-04
+[2026-05-19 11:52:40] BENCH skipped: FTT=23.55 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:53:14] ──────────────────────────────────────
+[2026-05-19 11:53:14] PROCESS step=1936001  FTT=23.93  accu=0
+[2026-05-19 11:53:14]   [Step 1938601 | FTT=23.94] Ub=0.015004  U*=1.0003  Re%=0.03%  Force=3.24169E-06  F*=0.1297  Re=5601.4  Ma=0.0260  Ma_max=0.0453  Error=3.38e-05  [SIMPLE-PROP]
+[2026-05-19 11:53:17] CONV step=1936001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:53:26] DENSITY step=1936001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1941001 FTT=23.966338 rho_rms=7.619585e-05 rho_max=5.878022e-04 wall_max=5.878022e-04
+[2026-05-19 11:53:26] BENCH skipped: FTT=23.93 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:54:00] ──────────────────────────────────────
+[2026-05-19 11:54:00] PROCESS step=1967001  FTT=24.32  accu=0
+[2026-05-19 11:54:00]   [Step 1970001 | FTT=24.32] Ub=0.015230  U*=1.0153  Re%=1.53%  Force=2.80989E-06  F*=0.1124  Re=5685.9  Ma=0.0264  Ma_max=0.0440  Error=5.01e-06  [SIMPLE-PROP]
+[2026-05-19 11:54:03] CONV step=1967001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:54:12] DENSITY step=1967001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=1972001 FTT=24.349108 rho_rms=7.516958e-05 rho_max=6.060968e-04 wall_max=6.060968e-04
+[2026-05-19 11:54:12] BENCH skipped: FTT=24.32 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:54:46] ──────────────────────────────────────
+[2026-05-19 11:54:46] PROCESS step=1998001  FTT=24.70  accu=0
+[2026-05-19 11:54:46]   [Step 2000801 | FTT=24.70] Ub=0.015144  U*=1.0096  Re%=0.96%  Force=2.16725E-06  F*=0.0867  Re=5653.7  Ma=0.0262  Ma_max=0.0449  Error=3.04e-05  [SIMPLE-PROP]
+[2026-05-19 11:54:49] CONV step=1998001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:54:56] DENSITY step=1998001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2003001 FTT=24.731877 rho_rms=7.608939e-05 rho_max=7.256257e-04 wall_max=7.256257e-04
+[2026-05-19 11:54:56] BENCH skipped: FTT=24.70 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:55:30] ──────────────────────────────────────
+[2026-05-19 11:55:30] PROCESS step=2026001  FTT=25.04  accu=0
+[2026-05-19 11:55:30]   [Step 2028001 | FTT=25.04] Ub=0.014942  U*=0.9962  Re%=-0.38%  Force=2.10052E-06  F*=0.0840  Re=5578.5  Ma=0.0259  Ma_max=0.0423  Error=7.87e-06  [SIMPLE-PROP]
+[2026-05-19 11:55:35] CONV step=2026001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:55:45] DENSITY step=2026001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2031001 FTT=25.077605 rho_rms=7.692537e-05 rho_max=6.653501e-04 wall_max=6.653501e-04
+[2026-05-19 11:55:45] BENCH skipped: FTT=25.04 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:56:19] ──────────────────────────────────────
+[2026-05-19 11:56:19] PROCESS step=2058001  FTT=25.44  accu=0
+[2026-05-19 11:56:19]   [Step 2060751 | FTT=25.44] Ub=0.014876  U*=0.9917  Re%=-0.83%  Force=2.37475E-06  F*=0.0950  Re=5553.6  Ma=0.0258  Ma_max=0.0425  Error=8.55e-06  [SIMPLE-PROP]
+[2026-05-19 11:56:22] CONV step=2058001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:56:31] DENSITY step=2058001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2063001 FTT=25.472722 rho_rms=7.654028e-05 rho_max=6.371694e-04 wall_max=6.371694e-04
+[2026-05-19 11:56:31] BENCH skipped: FTT=25.44 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:57:05] ──────────────────────────────────────
+[2026-05-19 11:57:05] PROCESS step=2088001  FTT=25.82  accu=0
+[2026-05-19 11:57:05]   [Step 2091001 | FTT=25.82] Ub=0.014817  U*=0.9878  Re%=-1.22%  Force=2.84319E-06  F*=0.1137  Re=5531.8  Ma=0.0257  Ma_max=0.0430  Error=1.75e-06  [SIMPLE-PROP]
+[2026-05-19 11:57:09] CONV step=2088001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:57:20] DENSITY step=2088001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2094001 FTT=25.855492 rho_rms=8.333798e-05 rho_max=6.909483e-04 wall_max=6.909483e-04
+[2026-05-19 11:57:20] BENCH skipped: FTT=25.82 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:57:54] ──────────────────────────────────────
+[2026-05-19 11:57:54] PROCESS step=2120001  FTT=26.21  accu=0
+[2026-05-19 11:57:54]   [Step 2123001 | FTT=26.21] Ub=0.014960  U*=0.9973  Re%=-0.27%  Force=3.28624E-06  F*=0.1314  Re=5585.1  Ma=0.0259  Ma_max=0.0452  Error=3.02e-05  [SIMPLE-PROP]
+[2026-05-19 11:57:57] CONV step=2120001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:58:06] DENSITY step=2120001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2125001 FTT=26.238262 rho_rms=7.475330e-05 rho_max=8.305513e-04 wall_max=6.706240e-04
+[2026-05-19 11:58:06] BENCH skipped: FTT=26.21 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:58:40] ──────────────────────────────────────
+[2026-05-19 11:58:40] PROCESS step=2152001  FTT=26.60  accu=0
+[2026-05-19 11:58:40]   [Step 2154651 | FTT=26.60] Ub=0.015142  U*=1.0095  Re%=0.95%  Force=3.08308E-06  F*=0.1233  Re=5652.9  Ma=0.0262  Ma_max=0.0449  Error=8.56e-06  [SIMPLE-PROP]
+[2026-05-19 11:58:44] CONV step=2152001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:58:53] DENSITY step=2152001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2157001 FTT=26.633379 rho_rms=8.185299e-05 rho_max=6.977196e-04 wall_max=6.977196e-04
+[2026-05-19 11:58:53] BENCH skipped: FTT=26.60 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 11:59:27] ──────────────────────────────────────
+[2026-05-19 11:59:27] PROCESS step=2183001  FTT=26.98  accu=0
+[2026-05-19 11:59:27]   [Step 2185201 | FTT=26.98] Ub=0.015191  U*=1.0127  Re%=1.27%  Force=2.56523E-06  F*=0.1026  Re=5671.3  Ma=0.0263  Ma_max=0.0440  Error=4.57e-06  [SIMPLE-PROP]
+[2026-05-19 11:59:30] CONV step=2183001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 11:59:39] DENSITY step=2183001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2187001 FTT=27.003801 rho_rms=7.243236e-05 rho_max=7.310623e-04 wall_max=7.299600e-04
+[2026-05-19 11:59:39] BENCH skipped: FTT=26.98 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:00:13] ──────────────────────────────────────
+[2026-05-19 12:00:13] PROCESS step=2213001  FTT=27.35  accu=0
+[2026-05-19 12:00:13]   [Step 2215551 | FTT=27.36] Ub=0.015167  U*=1.0111  Re%=1.11%  Force=2.03166E-06  F*=0.0813  Re=5662.3  Ma=0.0263  Ma_max=0.0412  Error=5.23e-06  [SIMPLE-PROP]
+[2026-05-19 12:00:16] CONV step=2213001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:00:25] DENSITY step=2213001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2218001 FTT=27.386571 rho_rms=8.026795e-05 rho_max=6.383192e-04 wall_max=6.383192e-04
+[2026-05-19 12:00:25] BENCH skipped: FTT=27.35 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:00:59] ──────────────────────────────────────
+[2026-05-19 12:00:59] PROCESS step=2244001  FTT=27.73  accu=0
+[2026-05-19 12:00:59]   [Step 2246001 | FTT=27.73] Ub=0.014942  U*=0.9961  Re%=-0.39%  Force=1.81492E-06  F*=0.0726  Re=5578.3  Ma=0.0259  Ma_max=0.0423  Error=3.33e-05  [SIMPLE-PROP]
+[2026-05-19 12:01:04] CONV step=2244001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:01:16] DENSITY step=2244001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2248001 FTT=27.756993 rho_rms=8.642891e-05 rho_max=5.509470e-04 wall_max=5.509470e-04
+[2026-05-19 12:01:16] BENCH skipped: FTT=27.73 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:01:50] ──────────────────────────────────────
+[2026-05-19 12:01:50] PROCESS step=2276001  FTT=28.13  accu=0
+[2026-05-19 12:01:50]   [Step 2278801 | FTT=28.14] Ub=0.014707  U*=0.9805  Re%=-1.95%  Force=2.42929E-06  F*=0.0972  Re=5490.7  Ma=0.0255  Ma_max=0.0437  Error=1.42e-05  [SIMPLE-PROP]
+[2026-05-19 12:01:53] CONV step=2276001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:02:06] DENSITY step=2276001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2281001 FTT=28.164458 rho_rms=7.491677e-05 rho_max=6.556703e-04 wall_max=6.556703e-04
+[2026-05-19 12:02:06] BENCH skipped: FTT=28.13 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:02:40] ──────────────────────────────────────
+[2026-05-19 12:02:40] PROCESS step=2309001  FTT=28.54  accu=0
+[2026-05-19 12:02:40]   [Step 2311601 | FTT=28.54] Ub=0.014821  U*=0.9881  Re%=-1.19%  Force=3.28947E-06  F*=0.1316  Re=5533.3  Ma=0.0257  Ma_max=0.0410  Error=1.87e-05  [SIMPLE-PROP]
+[2026-05-19 12:02:44] CONV step=2309001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:02:59] DENSITY step=2309001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2314001 FTT=28.571922 rho_rms=7.526928e-05 rho_max=6.082750e-04 wall_max=5.034890e-04
+[2026-05-19 12:02:59] BENCH skipped: FTT=28.54 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:03:29] WARNING: NaN/divergence detected in /home/s8313697/5.Re10595/Edit5_Rebuild/slurm_56012.log
+[2026-05-19 12:03:29] ALERT: simulation may be diverging — check slurm log immediately
+[2026-05-19 12:03:32] ──────────────────────────────────────
+[2026-05-19 12:03:32] PROCESS step=2333364  FTT=  accu=
+[2026-05-19 12:03:36] CONV step=2333364  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:03:41] DENSITY step=2333364 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2333001 FTT=28.806523 rho_rms=7.137735e-05 rho_max=8.383352e-04 wall_max=5.499314e-04
+[2026-05-19 12:03:41] BENCH skipped: FTT= < G2=50.000 (accu=, CV window not full)
+[2026-05-19 12:04:15] ──────────────────────────────────────
+[2026-05-19 12:04:15] PROCESS step=2351001  FTT=29.06  accu=0
+[2026-05-19 12:04:15]   [Step 2354001 | FTT=29.07] Ub=0.015228  U*=1.0152  Re%=1.52%  Force=3.29029E-06  F*=0.1316  Re=5685.0  Ma=0.0264  Ma_max=0.0447  Error=2.62e-05  [SIMPLE-PROP]
+[2026-05-19 12:04:18] CONV step=2351001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+cp: skipping file '/home/s8313697/5.Re10595/Edit5_Rebuild/result/restart_density_audit.csv', as it was replaced while being copied
+[2026-05-19 12:04:28] DENSITY step=2351001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2356001 FTT=29.090514 rho_rms=7.592071e-05 rho_max=6.928183e-04 wall_max=6.928183e-04
+[2026-05-19 12:04:28] BENCH skipped: FTT=29.06 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:05:02] ──────────────────────────────────────
+[2026-05-19 12:05:02] PROCESS step=2382001  FTT=29.45  accu=0
+[2026-05-19 12:05:02]   [Step 2385001 | FTT=29.45] Ub=0.015359  U*=1.0239  Re%=2.39%  Force=2.34196E-06  F*=0.0937  Re=5733.9  Ma=0.0266  Ma_max=0.0478  Error=3.72e-06  [SIMPLE-PROP]
+[2026-05-19 12:05:05] CONV step=2382001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:05:15] DENSITY step=2382001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2387001 FTT=29.473283 rho_rms=7.550485e-05 rho_max=8.233914e-04 wall_max=6.940453e-04
+[2026-05-19 12:05:15] BENCH skipped: FTT=29.45 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:05:49] ──────────────────────────────────────
+[2026-05-19 12:05:49] PROCESS step=2414001  FTT=29.83  accu=0
+[2026-05-19 12:05:49]   [Step 2416201 | FTT=29.83] Ub=0.015190  U*=1.0127  Re%=1.27%  Force=1.37656E-06  F*=0.0551  Re=5671.1  Ma=0.0263  Ma_max=0.0402  Error=4.36e-05  [SIMPLE-PROP]
+[2026-05-19 12:05:53] CONV step=2414001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:06:03] DENSITY step=2414001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2419001 FTT=29.868400 rho_rms=7.371346e-05 rho_max=5.936225e-04 wall_max=5.936225e-04
+[2026-05-19 12:06:03] BENCH skipped: FTT=29.83 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:06:36] ──────────────────────────────────────
+[2026-05-19 12:06:36] PROCESS step=2445001  FTT=30.22  accu=0
+[2026-05-19 12:06:36]   [Step 2447351 | FTT=30.22] Ub=0.014725  U*=0.9816  Re%=-1.84%  Force=1.51519E-06  F*=0.0606  Re=5497.2  Ma=0.0255  Ma_max=0.0410  Error=3.96e-05  [SIMPLE-PROP]
+[2026-05-19 12:06:40] CONV step=2445001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:07:07] DENSITY step=2445001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2449001 FTT=30.238823 rho_rms=7.097215e-05 rho_max=5.702275e-04 wall_max=5.702275e-04
+[2026-05-19 12:07:07] BENCH skipped: FTT=30.22 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:07:41] ──────────────────────────────────────
+[2026-05-19 12:07:41] PROCESS step=2477001  FTT=30.62  accu=0
+[2026-05-19 12:07:41]   [Step 2480001 | FTT=30.62] Ub=0.014676  U*=0.9784  Re%=-2.16%  Force=2.66766E-06  F*=0.1067  Re=5479.2  Ma=0.0254  Ma_max=0.0398  Error=2.34e-05  [SIMPLE-PROP]
+[2026-05-19 12:07:45] CONV step=2477001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:07:55] DENSITY step=2477001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2483001 FTT=30.658635 rho_rms=6.889132e-05 rho_max=5.327934e-04 wall_max=5.327934e-04
+[2026-05-19 12:07:55] BENCH skipped: FTT=30.62 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:08:28] ──────────────────────────────────────
+[2026-05-19 12:08:28] PROCESS step=2509001  FTT=31.02  accu=0
+[2026-05-19 12:08:28]   [Step 2512001 | FTT=31.02] Ub=0.014927  U*=0.9951  Re%=-0.49%  Force=3.29687E-06  F*=0.1319  Re=5572.6  Ma=0.0259  Ma_max=0.0464  Error=3.12e-05  [SIMPLE-PROP]
+[2026-05-19 12:08:32] CONV step=2509001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:08:41] DENSITY step=2509001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2514001 FTT=31.041405 rho_rms=7.032055e-05 rho_max=5.462914e-04 wall_max=5.462914e-04
+[2026-05-19 12:08:41] BENCH skipped: FTT=31.02 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:09:15] ──────────────────────────────────────
+[2026-05-19 12:09:15] PROCESS step=2541001  FTT=31.40  accu=0
+[2026-05-19 12:09:15]   [Step 2543201 | FTT=31.40] Ub=0.015124  U*=1.0083  Re%=0.83%  Force=3.17126E-06  F*=0.1269  Re=5646.4  Ma=0.0262  Ma_max=0.0419  Error=1.70e-05  [SIMPLE-PROP]
+[2026-05-19 12:09:19] CONV step=2541001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:09:29] DENSITY step=2541001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2545001 FTT=31.424174 rho_rms=7.507331e-05 rho_max=5.885782e-04 wall_max=4.812087e-04
+[2026-05-19 12:09:29] BENCH skipped: FTT=31.40 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:10:02] ──────────────────────────────────────
+[2026-05-19 12:10:02] PROCESS step=2571001  FTT=31.77  accu=0
+[2026-05-19 12:10:03]   [Step 2573051 | FTT=31.77] Ub=0.015252  U*=1.0168  Re%=1.68%  Force=2.58855E-06  F*=0.1035  Re=5693.9  Ma=0.0264  Ma_max=0.0401  Error=6.27e-06  [SIMPLE-PROP]
+[2026-05-19 12:10:06] CONV step=2571001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:10:16] DENSITY step=2571001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2575001 FTT=31.794597 rho_rms=7.752551e-05 rho_max=6.665323e-04 wall_max=6.665323e-04
+[2026-05-19 12:10:16] BENCH skipped: FTT=31.77 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:10:50] ──────────────────────────────────────
+[2026-05-19 12:10:50] PROCESS step=2602001  FTT=32.16  accu=0
+[2026-05-19 12:10:50]   [Step 2604751 | FTT=32.16] Ub=0.015188  U*=1.0126  Re%=1.26%  Force=1.85255E-06  F*=0.0741  Re=5670.3  Ma=0.0263  Ma_max=0.0417  Error=1.63e-05  [SIMPLE-PROP]
+[2026-05-19 12:10:54] CONV step=2602001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:11:04] DENSITY step=2602001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2607001 FTT=32.189714 rho_rms=7.539651e-05 rho_max=5.226223e-04 wall_max=5.226223e-04
+[2026-05-19 12:11:04] BENCH skipped: FTT=32.16 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:11:38] ──────────────────────────────────────
+[2026-05-19 12:11:38] PROCESS step=2634001  FTT=32.55  accu=0
+[2026-05-19 12:11:38]   [Step 2636451 | FTT=32.55] Ub=0.014951  U*=0.9967  Re%=-0.33%  Force=1.60386E-06  F*=0.0642  Re=5581.6  Ma=0.0259  Ma_max=0.0428  Error=2.59e-05  [SIMPLE-PROP]
+[2026-05-19 12:11:42] CONV step=2634001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:11:53] DENSITY step=2634001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2639001 FTT=32.584831 rho_rms=6.788181e-05 rho_max=6.107981e-04 wall_max=5.364241e-04
+[2026-05-19 12:11:53] BENCH skipped: FTT=32.55 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:12:27] ──────────────────────────────────────
+[2026-05-19 12:12:27] PROCESS step=2666001  FTT=32.96  accu=0
+[2026-05-19 12:12:27]   [Step 2669001 | FTT=32.96] Ub=0.014790  U*=0.9860  Re%=-1.40%  Force=2.06149E-06  F*=0.0825  Re=5521.6  Ma=0.0256  Ma_max=0.0401  Error=1.52e-05  [SIMPLE-PROP]
+[2026-05-19 12:12:30] CONV step=2666001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:12:45] DENSITY step=2666001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2672001 FTT=32.992296 rho_rms=7.810433e-05 rho_max=6.242410e-04 wall_max=6.242410e-04
+[2026-05-19 12:12:46] BENCH skipped: FTT=32.96 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:13:19] ──────────────────────────────────────
+[2026-05-19 12:13:19] PROCESS step=2702001  FTT=33.39  accu=0
+[2026-05-19 12:13:19]   [Step 2704601 | FTT=33.39] Ub=0.014811  U*=0.9874  Re%=-1.26%  Force=2.88153E-06  F*=0.1153  Re=5529.5  Ma=0.0257  Ma_max=0.0455  Error=1.68e-05  [SIMPLE-PROP]
+[2026-05-19 12:13:23] CONV step=2702001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:13:33] DENSITY step=2702001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2707001 FTT=33.424455 rho_rms=7.654084e-05 rho_max=1.003373e-03 wall_max=1.003373e-03
+[2026-05-19 12:13:33] BENCH skipped: FTT=33.39 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:14:07] ──────────────────────────────────────
+[2026-05-19 12:14:07] PROCESS step=2734001  FTT=33.79  accu=0
+[2026-05-19 12:14:07]   [Step 2737001 | FTT=33.79] Ub=0.014986  U*=0.9991  Re%=-0.09%  Force=3.24309E-06  F*=0.1297  Re=5594.9  Ma=0.0260  Ma_max=0.0433  Error=2.46e-05  [SIMPLE-PROP]
+[2026-05-19 12:14:11] CONV step=2734001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:14:26] DENSITY step=2734001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2739001 FTT=33.819572 rho_rms=7.323716e-05 rho_max=9.458631e-04 wall_max=4.588060e-04
+[2026-05-19 12:14:26] BENCH skipped: FTT=33.79 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:15:00] ──────────────────────────────────────
+[2026-05-19 12:15:00] PROCESS step=2770001  FTT=34.23  accu=0
+[2026-05-19 12:15:00]   [Step 2772051 | FTT=34.23] Ub=0.015236  U*=1.0157  Re%=1.57%  Force=2.84769E-06  F*=0.1139  Re=5688.1  Ma=0.0264  Ma_max=0.0420  Error=1.51e-05  [SIMPLE-PROP]
+[2026-05-19 12:15:03] CONV step=2770001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:15:14] DENSITY step=2770001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2775001 FTT=34.264079 rho_rms=8.055872e-05 rho_max=7.041654e-04 wall_max=7.041654e-04
+[2026-05-19 12:15:14] BENCH skipped: FTT=34.23 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:15:47] ──────────────────────────────────────
+[2026-05-19 12:15:47] PROCESS step=2801001  FTT=34.62  accu=0
+[2026-05-19 12:15:47]   [Step 2804001 | FTT=34.62] Ub=0.015119  U*=1.0079  Re%=0.79%  Force=2.19406E-06  F*=0.0878  Re=5644.5  Ma=0.0262  Ma_max=0.0439  Error=2.36e-05  [SIMPLE-PROP]
+[2026-05-19 12:15:51] CONV step=2801001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:16:01] DENSITY step=2801001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2806001 FTT=34.646849 rho_rms=8.149981e-05 rho_max=5.437484e-04 wall_max=5.096271e-04
+[2026-05-19 12:16:01] BENCH skipped: FTT=34.62 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:16:36] ──────────────────────────────────────
+[2026-05-19 12:16:36] PROCESS step=2834001  FTT=35.03  accu=0
+[2026-05-19 12:16:36]   [Step 2837001 | FTT=35.03] Ub=0.014972  U*=0.9982  Re%=-0.18%  Force=2.07057E-06  F*=0.0828  Re=5589.6  Ma=0.0259  Ma_max=0.0404  Error=1.19e-05  [SIMPLE-PROP]
+[2026-05-19 12:16:39] CONV step=2834001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:16:49] DENSITY step=2834001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2839001 FTT=35.054313 rho_rms=7.358062e-05 rho_max=1.073683e-03 wall_max=1.073683e-03
+[2026-05-19 12:16:49] BENCH skipped: FTT=35.03 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:17:23] ──────────────────────────────────────
+[2026-05-19 12:17:23] PROCESS step=2867001  FTT=35.42  accu=0
+[2026-05-19 12:17:23]   [Step 2869151 | FTT=35.43] Ub=0.014817  U*=0.9878  Re%=-1.22%  Force=2.38702E-06  F*=0.0955  Re=5531.8  Ma=0.0257  Ma_max=0.0397  Error=1.22e-05  [SIMPLE-PROP]
+[2026-05-19 12:17:27] CONV step=2867001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:17:37] DENSITY step=2867001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2872001 FTT=35.461778 rho_rms=7.066096e-05 rho_max=5.668081e-04 wall_max=5.668081e-04
+[2026-05-19 12:17:37] BENCH skipped: FTT=35.42 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:18:10] ──────────────────────────────────────
+[2026-05-19 12:18:10] PROCESS step=2899001  FTT=35.83  accu=0
+[2026-05-19 12:18:10]   [Step 2902001 | FTT=35.83] Ub=0.014940  U*=0.9960  Re%=-0.40%  Force=2.88105E-06  F*=0.1152  Re=5577.6  Ma=0.0259  Ma_max=0.0385  Error=2.69e-05  [SIMPLE-PROP]
+[2026-05-19 12:18:14] CONV step=2899001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:18:24] DENSITY step=2899001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2904001 FTT=35.856895 rho_rms=6.282852e-05 rho_max=5.142675e-04 wall_max=5.142675e-04
+[2026-05-19 12:18:24] BENCH skipped: FTT=35.83 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:18:58] ──────────────────────────────────────
+[2026-05-19 12:18:58] PROCESS step=2932001  FTT=36.23  accu=0
+[2026-05-19 12:18:58]   [Step 2934151 | FTT=36.23] Ub=0.015183  U*=1.0122  Re%=1.22%  Force=2.66839E-06  F*=0.1067  Re=5668.4  Ma=0.0263  Ma_max=0.0421  Error=1.97e-05  [SIMPLE-PROP]
+[2026-05-19 12:19:02] CONV step=2932001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:19:15] DENSITY step=2932001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2937001 FTT=36.264360 rho_rms=6.796212e-05 rho_max=5.993814e-04 wall_max=4.932863e-04
+[2026-05-19 12:19:15] BENCH skipped: FTT=36.23 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:19:49] ──────────────────────────────────────
+[2026-05-19 12:19:49] PROCESS step=2966001  FTT=36.66  accu=0
+[2026-05-19 12:19:49]   [Step 2969001 | FTT=36.66] Ub=0.015142  U*=1.0095  Re%=0.95%  Force=1.97306E-06  F*=0.0789  Re=5653.1  Ma=0.0262  Ma_max=0.0421  Error=2.57e-05  [SIMPLE-PROP]
+[2026-05-19 12:19:53] CONV step=2966001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:20:02] DENSITY step=2966001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=2971001 FTT=36.684172 rho_rms=7.043339e-05 rho_max=9.229440e-04 wall_max=9.229440e-04
+[2026-05-19 12:20:02] BENCH skipped: FTT=36.66 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:20:36] ──────────────────────────────────────
+[2026-05-19 12:20:36] PROCESS step=2998001  FTT=37.05  accu=0
+[2026-05-19 12:20:36]   [Step 3001001 | FTT=37.05] Ub=0.014913  U*=0.9942  Re%=-0.58%  Force=1.91317E-06  F*=0.0765  Re=5567.5  Ma=0.0258  Ma_max=0.0401  Error=1.76e-05  [SIMPLE-PROP]
+[2026-05-19 12:20:40] CONV step=2998001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:20:50] DENSITY step=2998001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3004001 FTT=37.091636 rho_rms=7.358928e-05 rho_max=4.898032e-04 wall_max=4.898032e-04
+[2026-05-19 12:20:50] BENCH skipped: FTT=37.05 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:21:24] ──────────────────────────────────────
+[2026-05-19 12:21:24] PROCESS step=3031001  FTT=37.46  accu=0
+[2026-05-19 12:21:24]   [Step 3033801 | FTT=37.46] Ub=0.014863  U*=0.9909  Re%=-0.91%  Force=2.32927E-06  F*=0.0932  Re=5548.8  Ma=0.0257  Ma_max=0.0422  Error=4.63e-06  [SIMPLE-PROP]
+[2026-05-19 12:21:28] CONV step=3031001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:21:41] DENSITY step=3031001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3036001 FTT=37.486753 rho_rms=6.949052e-05 rho_max=8.274830e-04 wall_max=8.274830e-04
+[2026-05-19 12:21:41] BENCH skipped: FTT=37.46 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:22:15] ──────────────────────────────────────
+[2026-05-19 12:22:15] PROCESS step=3066001  FTT=37.89  accu=0
+[2026-05-19 12:22:15]   [Step 3069001 | FTT=37.89] Ub=0.014995  U*=0.9997  Re%=-0.03%  Force=2.59283E-06  F*=0.1037  Re=5598.3  Ma=0.0260  Ma_max=0.0402  Error=7.85e-06  [SIMPLE-PROP]
+[2026-05-19 12:22:19] CONV step=3066001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:22:35] DENSITY step=3066001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3071001 FTT=37.918913 rho_rms=6.916009e-05 rho_max=4.963824e-04 wall_max=4.963824e-04
+[2026-05-19 12:22:36] BENCH skipped: FTT=37.89 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:23:09] ──────────────────────────────────────
+[2026-05-19 12:23:09] PROCESS step=3103001  FTT=38.35  accu=0
+[2026-05-19 12:23:09]   [Step 3106001 | FTT=38.35] Ub=0.014973  U*=0.9982  Re%=-0.18%  Force=2.64121E-06  F*=0.1056  Re=5589.9  Ma=0.0259  Ma_max=0.0465  Error=8.37e-06  [SIMPLE-PROP]
+[2026-05-19 12:23:13] CONV step=3103001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:23:27] DENSITY step=3103001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3108001 FTT=38.375767 rho_rms=7.865030e-05 rho_max=5.385424e-04 wall_max=5.385424e-04
+[2026-05-19 12:23:27] BENCH skipped: FTT=38.35 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:24:01] ──────────────────────────────────────
+[2026-05-19 12:24:01] PROCESS step=3138001  FTT=38.78  accu=0
+[2026-05-19 12:24:01]   [Step 3140651 | FTT=38.78] Ub=0.015136  U*=1.0091  Re%=0.91%  Force=2.44682E-06  F*=0.0979  Re=5650.7  Ma=0.0262  Ma_max=0.0429  Error=4.33e-06  [SIMPLE-PROP]
+[2026-05-19 12:24:05] CONV step=3138001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:24:37] DENSITY step=3138001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3134001 FTT=38.696800 rho_rms=7.894119e-05 rho_max=6.182347e-04 wall_max=6.182347e-04
+[2026-05-19 12:24:37] BENCH skipped: FTT=38.78 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:25:11] ──────────────────────────────────────
+[2026-05-19 12:25:11] PROCESS step=3185001  FTT=39.36  accu=0
+[2026-05-19 12:25:11]   [Step 3188001 | FTT=39.36] Ub=0.014841  U*=0.9894  Re%=-1.06%  Force=2.41737E-06  F*=0.0967  Re=5540.8  Ma=0.0257  Ma_max=0.0403  Error=1.49e-05  [SIMPLE-PROP]
+[2026-05-19 12:25:15] CONV step=3185001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:25:32] DENSITY step=3185001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3191001 FTT=39.400602 rho_rms=8.295620e-05 rho_max=9.943451e-04 wall_max=9.943451e-04
+[2026-05-19 12:25:33] BENCH skipped: FTT=39.36 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:26:06] ──────────────────────────────────────
+[2026-05-19 12:26:06] PROCESS step=3223001  FTT=39.83  accu=0
+[2026-05-19 12:26:06]   [Step 3226001 | FTT=39.83] Ub=0.014970  U*=0.9980  Re%=-0.20%  Force=2.91449E-06  F*=0.1166  Re=5588.8  Ma=0.0259  Ma_max=0.0460  Error=2.05e-05  [SIMPLE-PROP]
+[2026-05-19 12:26:11] CONV step=3223001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:26:35] DENSITY step=3223001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3228001 FTT=39.857456 rho_rms=7.387790e-05 rho_max=5.801165e-04 wall_max=5.801165e-04
+[2026-05-19 12:26:35] BENCH skipped: FTT=39.83 < G2=50.000 (accu=0, CV window not full)
+[2026-05-19 12:27:09] ──────────────────────────────────────
+[2026-05-19 12:27:09] PROCESS step=3256001  FTT=40.22  accu=17456
+[2026-05-19 12:27:09]   [Step 3257351 | FTT=40.22] Ub=0.015054  U*=1.0036  Re%=0.36%  Force=2.81814E-06  F*=0.1127  Re=5620.2  Ma=0.0261  Ma_max=0.0408  Error=5.06e-06  [SIMPLE-PROP]
+[2026-05-19 12:27:16] CONV step=3256001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
+[2026-05-19 12:27:34] DENSITY step=3256001 outputs: restart_density_latest.png restart_density_latest.pdf restart_density_latest_latex.pdf restart_density_latest.tex restart_density_latest.csv :: [LATEST] step=3260001 FTT=40.252573 rho_rms=8.206517e-05 rho_max=6.671296e-04 wall_max=6.671296e-04
+[2026-05-19 12:27:34] BENCH skipped: FTT=40.22 < G2=50.000 (accu=17456, CV window not full)
+[2026-05-19 12:28:08] ──────────────────────────────────────
+[2026-05-19 12:28:08] PROCESS step=3280001  FTT=40.51  accu=41456
+[2026-05-19 12:28:08]   [Step 3281351 | FTT=40.52] Ub=0.014989  U*=0.9993  Re%=-0.07%  Force=2.78251E-06  F*=0.1113  Re=5595.8  Ma=0.0260  Ma_max=0.0453  Error=1.68e-06  [SIMPLE-PROP]
+[2026-05-19 12:28:16] CONV step=3280001  Re=5600  png=monitor_convergence_Re5600.png  pdf=monitor_convergence_Re5600.pdf  :: [OK] Saved (turbulent): monitor_convergence_Re5600.pdf / .png
