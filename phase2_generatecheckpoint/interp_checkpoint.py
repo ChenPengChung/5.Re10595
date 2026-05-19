@@ -2165,7 +2165,7 @@ def main():
                         '"zero" = pure equilibrium f=f_eq for stability A/B testing. '
                         '"interp" = legacy linear interp of f_neq (loses gradient info).')
     p.add_argument('--project-velocity', choices=['poisson', 'dg-exact', 'div-exact', 'none'],
-                   default='poisson',
+                   default='div-exact',
                    help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
                         'div(grad(phi))=div(u) to enforce solenoidal constraint (default). '
                         '"dg-exact" = direct solve of the exact CD2 D*G operator '
