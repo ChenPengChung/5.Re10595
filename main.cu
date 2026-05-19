@@ -106,6 +106,8 @@ double *rho_modify_h, *rho_modify_d;
 
 // GPU reduction partial sums for mass conservation (replaces SendDataToCPU every step)
 double *rho_partial_h, *rho_partial_d;
+double *rho_cv_weight_h, *rho_cv_weight_d;  // control-volume weights for volume-weighted mass correction
+double rho_cv_global_volume = 0.0;          // Σ control-volume weights across all ranks
 
 // Time-average accumulation (FTT-gated)
 // u=spanwise, v=streamwise, w=wall-normal; GPU-side accumulation
@@ -653,6 +655,11 @@ int main(int argc, char *argv[])
 
     // 1.3 讀取外部二維 (y, z) 座標 (取代 GenerateMesh_Y + GenerateMesh_Z)
     ReadExternalGrid_YZ(y_2d_h, z_h, myid);
+
+    // Mass correction uses physical control-volume weights from the curvilinear
+    // y-z grid. Build before the later coordinate MPI exchange because
+    // ReadExternalGrid_YZ still has the correct +/-LY periodic ghost offsets.
+    InitializeMassCorrectionWeights();
 
     // 初始化 monitor RS 代表點 (需在座標填充後)
     InitMonitorCheckPoint();
@@ -1456,10 +1463,11 @@ int main(int argc, char *argv[])
             fprintf(fhdr, "# Col1: step          — time step number\n");
             fprintf(fhdr, "# Col2: FTT           — flow-through time\n");
             fprintf(fhdr, "# Col3: rho_target    — target density (always 1.0)\n");
-            fprintf(fhdr, "# Col4: rho_avg       — global average density (full precision)\n");
+            fprintf(fhdr, "# Col4: rho_avg       — global volume-weighted average density (full precision)\n");
             fprintf(fhdr, "# Col5: rho_drift     — rho_avg - 1.0 (positive = heavier than target)\n");
             fprintf(fhdr, "# Col6: rho_correction— mass correction applied NEXT step (= -rho_drift)\n");
             fprintf(fhdr, "# Col7: SKIP_MC       — 0=mass correction ON, 1=mid-step correction OFF\n");
+            fprintf(fhdr, "# NOTE: rho_avg uses control-volume weights from the curvilinear y-z grid.\n");
             fprintf(fhdr, "# NOTE: |Col5| == |Col6| is EXPECTED — both are computed from the same\n");
             fprintf(fhdr, "#       density field. Col6 = -Col5 because the correction exactly\n");
             fprintf(fhdr, "#       compensates the drift. Check Col5 trend for mass conservation.\n");
@@ -1543,35 +1551,14 @@ int main(int argc, char *argv[])
         // ===== Mid-step mass correction (between even and odd) =====
         // 由 SKIP_MIDSTEP_MASSCORR 開關控制 (variables.h)
         // Mid-step mass correction 區塊
-        // 包含: ReduceRhoSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
+        // 包含: ReduceRhoWeightedSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
         // ★ 這是全域 MPI barrier, MPI_Wtime 計時可測量其實際開銷
 #if !SKIP_MIDSTEP_MASSCORR
         {
 #if USE_TIMING && TIMING_DETAIL
             double t_mc_start = MPI_Wtime();
 #endif
-            const int rho_total_mid = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads_mid = 256;
-            const int rho_blocks_mid = (rho_total_mid + rho_threads_mid - 1) / rho_threads_mid;
-
-            ReduceRhoSum_Kernel<<<rho_blocks_mid, rho_threads_mid, rho_threads_mid * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks_mid * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum_mid = 0.0;
-            for (int b = 0; b < rho_blocks_mid; b++) rho_LocalSum_mid += rho_partial_h[b];
-
-            double rho_GlobalSum_mid = 0.0;
-            MPI_Reduce(&rho_LocalSum_mid, &rho_GlobalSum_mid, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            if (myid == 0) {
-                // Bug fix: 使用實際 MPI 分解後的全域格點數 jp*(NYD6-7)，
-                // 而非 (NY6-7)=(NY-1)，避免 (NY-1)%jp!=0 時的虛假質量虧損。
-                // 此公式對任意 jp (1~8) 皆正確，無論 (NY-1) 是否整除 jp。
-                const double N_global_interior = (double)(NX6 - 7) * (double)(jp * (NYD6 - 7)) * (double)(NZ6 - 6);
-                double rho_global_mid = 1.0 * N_global_interior;
-                rho_modify_h[0] = (rho_global_mid - rho_GlobalSum_mid) / N_global_interior;
-            }
-            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
+            UpdateVolumeWeightedMassCorrection();
 
 #if USE_TIMING && TIMING_DETAIL
             g_timing.last_masscorr_ms = (MPI_Wtime() - t_mc_start) * 1000.0;
@@ -2076,54 +2063,21 @@ int main(int argc, char *argv[])
             }
         }
 
-        // ===== Global Mass Conservation Modify (GPU reduction — no SendDataToCPU) =====
+        // ===== Global Mass Conservation Modify (volume-weighted GPU reduction — no SendDataToCPU) =====
         cudaDeviceSynchronize();
         cudaMemcpy(Force_h, Force_d, sizeof(double), cudaMemcpyDeviceToHost);
-        {
-            const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads = 256;
-            const int rho_blocks = (rho_total + rho_threads - 1) / rho_threads;
+        UpdateVolumeWeightedMassCorrection();
 
-            ReduceRhoSum_Kernel<<<rho_blocks, rho_threads, rho_threads * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum = 0.0;
-            for (int b = 0; b < rho_blocks; b++) rho_LocalSum += rho_partial_h[b];
-
-            double rho_GlobalSum = 0.0;
-            MPI_Reduce(&rho_LocalSum, &rho_GlobalSum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            if (myid == 0) {
-                // Bug fix: 同 mid-step，使用 jp*(NYD6-7) 取代 (NY6-7)
-                const double N_global_interior = (double)(NX6 - 7) * (double)(jp * (NYD6 - 7)) * (double)(NZ6 - 6);
-                double rho_global = 1.0 * N_global_interior;
-                rho_modify_h[0] = (rho_global - rho_GlobalSum) / N_global_interior;
-            }
-            // Broadcast mass correction to ALL ranks (Bug #16 fix: was rank 0 only)
-            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
-        }
-
-        // ===== Mass Conservation Check + NaN early stop (every 100 steps, GPU reduction) =====
+        // ===== Mass Conservation Check + NaN early stop (every 100 steps) =====
+        // rho_modify_h was just computed from the volume-weighted average:
+        //   rho_modify = 1 - <rho>_V  →  <rho>_V = 1 - rho_modify
         if (step % 100 == 1) {
-            const int rho_total_chk = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads_chk = 256;
-            const int rho_blocks_chk = (rho_total_chk + rho_threads_chk - 1) / rho_threads_chk;
-
-            ReduceRhoSum_Kernel<<<rho_blocks_chk, rho_threads_chk, rho_threads_chk * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks_chk * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum_chk = 0.0;
-            for (int b = 0; b < rho_blocks_chk; b++) rho_LocalSum_chk += rho_partial_h[b];
-            double rho_LocalAvg = rho_LocalSum_chk / ((NX6 - 7) * (NYD6 - 7) * (NZ6 - 6));
-
-            double rho_GlobalSum_chk = 0.0;
-            MPI_Reduce(&rho_LocalAvg, &rho_GlobalSum_chk, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-
             int nan_flag = 0;
+            double rho_avg_check = 0.0;
             if (myid == 0) {
-                double rho_avg_check = rho_GlobalSum_chk / (double)jp;
+                rho_avg_check = 1.0 - rho_modify_h[0];
                 if (std::isnan(rho_avg_check) || std::isinf(rho_avg_check) || fabs(rho_avg_check - 1.0) > 0.01) {
-                    printf("[FATAL] Divergence detected at step %d: rho_avg = %.6e, stopping.\n", step, rho_avg_check);
+                    printf("[FATAL] Divergence detected at step %d: rho_avg_V = %.6e, stopping.\n", step, rho_avg_check);
                     nan_flag = 1;
                 }
             }
@@ -2137,7 +2091,7 @@ int main(int argc, char *argv[])
 
             if (myid == 0) {
                 double FTT_rho = step * dt_global / (double)flow_through_time;
-                double rho_avg_out = rho_GlobalSum_chk / (double)jp;
+                double rho_avg_out = rho_avg_check;
                 FILE *checkrho = fopen("checkrho.dat", "a");
                 // step  FTT  rho_target  rho_avg  rho_drift  rho_correction  SKIP_MC
                 // NOTE: rho_correction = -rho_drift (by definition), see header for details

@@ -60,6 +60,10 @@ void AllocateMemory() {
     }
 
     AllocateDeviceArray(nBytes, 4,  &rho_d, &u, &v, &w);
+    AllocateHostArray( nBytes, 1,  &rho_cv_weight_h );
+    AllocateDeviceArray(nBytes, 1,  &rho_cv_weight_d );
+    memset(rho_cv_weight_h, 0, nBytes);
+    CHECK_CUDA( cudaMemset(rho_cv_weight_d, 0, nBytes) );
     for( int i = 0; i < 19; i++ ) {
         CHECK_CUDA( cudaMalloc( &fd[i], nBytes ) );     CHECK_CUDA( cudaMemset( fd[i], 0.0, nBytes ) );
         CHECK_CUDA( cudaMalloc( &ft[i], nBytes ) );     CHECK_CUDA( cudaMemset( ft[i], 0.0, nBytes ) );
@@ -264,6 +268,8 @@ void FreeSource() {
     // GPU reduction partial sums
     CHECK_CUDA( cudaFreeHost(rho_partial_h) );
     CHECK_CUDA( cudaFree(rho_partial_d) );
+    CHECK_CUDA( cudaFreeHost(rho_cv_weight_h) );
+    CHECK_CUDA( cudaFree(rho_cv_weight_d) );
 
     FreeHostArray(  1,  x_h);
     FreeDeviceArray(1,  x_d);

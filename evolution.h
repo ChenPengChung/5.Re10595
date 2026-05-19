@@ -7,10 +7,8 @@
 
 
 // ===== GPU reduction kernel: sum rho_d over interior points =====
-// Maps 1D thread index to interior (i,j,k), writes partial block sums to partial_sums_d.
-// Host sums the partial results (typically 256-512 doubles = 2-4 KB) instead of
-// transferring the entire rho field (1.6 MB per rank) to CPU.
-__global__ void ReduceRhoSum_Kernel(double *rho_d, double *partial_sums_d) {
+// Legacy unweighted path retained for quick A/B diagnostics.
+__global__ void ReduceRhoSum_Kernel(const double *rho_d, double *partial_sums_d) {
     extern __shared__ double sdata[];
     const int tid = threadIdx.x;
     const int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -39,6 +37,168 @@ __global__ void ReduceRhoSum_Kernel(double *rho_d, double *partial_sums_d) {
     }
 
     if (tid == 0) partial_sums_d[blockIdx.x] = sdata[0];
+}
+
+// ===== GPU reduction kernel: sum rho_d * control-volume weight =====
+// Uses the same unique-node domain as the mass correction actually modifies:
+//   i = 3..NX6-5, j = 3..NYD6-5, k = 3..NZ6-4.
+// Weights are built from true curvilinear cell volumes on the host at startup.
+__global__ void ReduceRhoWeightedSum_Kernel(
+    const double *rho_d,
+    const double *rho_weight_d,
+    double *partial_sums_d)
+{
+    extern __shared__ double sdata[];
+    const int tid = threadIdx.x;
+    const int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    const int ni = NX6 - 7;
+    const int nk = NZ6 - 6;
+    const int nj = NYD6 - 7;
+    const int total = ni * nj * nk;
+
+    double val = 0.0;
+    if (gid < total) {
+        int j = gid / (ni * nk) + 3;
+        int rem = gid % (ni * nk);
+        int k = rem / ni + 3;
+        int i = rem % ni + 3;
+        const int idx = j * NX6 * NZ6 + k * NX6 + i;
+        val = rho_d[idx] * rho_weight_d[idx];
+    }
+
+    sdata[tid] = val;
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) sdata[tid] += sdata[tid + s];
+        __syncthreads();
+    }
+
+    if (tid == 0) partial_sums_d[blockIdx.x] = sdata[0];
+}
+
+static inline double MassCorrectionCellVolume(const int i_cell, const int j_cell, const int k_cell)
+{
+    const double dx = x_h[i_cell + 1] - x_h[i_cell];
+
+    const int jk00 = j_cell * NZ6 + k_cell;
+    const int jk10 = (j_cell + 1) * NZ6 + k_cell;
+    const int jk11 = (j_cell + 1) * NZ6 + (k_cell + 1);
+    const int jk01 = j_cell * NZ6 + (k_cell + 1);
+
+    const double y0 = y_2d_h[jk00], z0 = z_h[jk00];
+    const double y1 = y_2d_h[jk10], z1 = z_h[jk10];
+    const double y2 = y_2d_h[jk11], z2 = z_h[jk11];
+    const double y3 = y_2d_h[jk01], z3 = z_h[jk01];
+
+    const double area_yz = 0.5 * fabs(
+          y0 * z1 - z0 * y1
+        + y1 * z2 - z1 * y2
+        + y2 * z3 - z2 * y3
+        + y3 * z0 - z3 * y0);
+
+    return fabs(dx) * area_yz;
+}
+
+void InitializeMassCorrectionWeights()
+{
+    const size_t grid_size = (size_t)NX6 * NYD6 * NZ6;
+    memset(rho_cv_weight_h, 0, grid_size * sizeof(double));
+
+    double local_weight_sum = 0.0;
+    double local_min_w = 1.0e300;
+    double local_max_w = 0.0;
+
+    for (int j = 3; j < NYD6 - 4; j++) {
+    for (int k = 3; k < NZ6  - 3; k++) {
+    for (int i = 3; i < NX6  - 4; i++) {
+        const int idx = j * NX6 * NZ6 + k * NX6 + i;
+
+        const int i_cells[2] = {
+            (i == 3) ? (NX6 - 5) : (i - 1),
+            i
+        };
+        const int j_cells[2] = { j - 1, j };
+        int k_cells[2];
+        int nk_cells = 0;
+        if (k > 3)       k_cells[nk_cells++] = k - 1;
+        if (k < NZ6 - 4) k_cells[nk_cells++] = k;
+
+        double weight = 0.0;
+        for (int jj = 0; jj < 2; jj++) {
+        for (int ii = 0; ii < 2; ii++) {
+        for (int kk = 0; kk < nk_cells; kk++) {
+            const double vol = MassCorrectionCellVolume(i_cells[ii], j_cells[jj], k_cells[kk]);
+            if (!(vol > 0.0) || !std::isfinite(vol)) {
+                fprintf(stderr,
+                        "[MASS-CORR] FATAL: invalid cell volume at rank=%d cell(i=%d,j=%d,k=%d): %.17e\n",
+                        myid, i_cells[ii], j_cells[jj], k_cells[kk], vol);
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+            weight += 0.125 * vol;
+        }}}
+
+        rho_cv_weight_h[idx] = weight;
+        local_weight_sum += weight;
+        if (weight < local_min_w) local_min_w = weight;
+        if (weight > local_max_w) local_max_w = weight;
+    }}}
+
+    CHECK_MPI( MPI_Allreduce(&local_weight_sum, &rho_cv_global_volume, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) );
+
+    double global_min_w = 0.0, global_max_w = 0.0;
+    CHECK_MPI( MPI_Allreduce(&local_min_w, &global_min_w, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Allreduce(&local_max_w, &global_max_w, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD) );
+
+    if (!(rho_cv_global_volume > 0.0) || !std::isfinite(rho_cv_global_volume)) {
+        if (myid == 0) {
+            fprintf(stderr, "[MASS-CORR] FATAL: invalid global control volume %.17e\n",
+                    rho_cv_global_volume);
+        }
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    CHECK_CUDA( cudaMemcpy(rho_cv_weight_d, rho_cv_weight_h,
+                           grid_size * sizeof(double), cudaMemcpyHostToDevice) );
+
+    if (myid == 0) {
+        printf("[MASS-CORR] Volume-weighted density correction ON\n");
+        printf("[MASS-CORR]   global control volume = %.15e\n", rho_cv_global_volume);
+        printf("[MASS-CORR]   node weight range     = [%.6e, %.6e]\n",
+               global_min_w, global_max_w);
+    }
+}
+
+static inline double ComputeVolumeWeightedRhoAverageRoot()
+{
+    const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
+    const int rho_threads = 256;
+    const int rho_blocks = (rho_total + rho_threads - 1) / rho_threads;
+
+    ReduceRhoWeightedSum_Kernel<<<rho_blocks, rho_threads, rho_threads * sizeof(double)>>>(
+        rho_d, rho_cv_weight_d, rho_partial_d);
+    CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d,
+                           rho_blocks * sizeof(double), cudaMemcpyDeviceToHost) );
+
+    double rho_LocalWeightedMass = 0.0;
+    for (int b = 0; b < rho_blocks; b++) rho_LocalWeightedMass += rho_partial_h[b];
+
+    double rho_GlobalWeightedMass = 0.0;
+    MPI_Reduce(&rho_LocalWeightedMass, &rho_GlobalWeightedMass,
+               1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    return (myid == 0) ? (rho_GlobalWeightedMass / rho_cv_global_volume) : 0.0;
+}
+
+static inline void UpdateVolumeWeightedMassCorrection()
+{
+    const double rho_avg = ComputeVolumeWeightedRhoAverageRoot();
+    if (myid == 0) {
+        rho_modify_h[0] = 1.0 - rho_avg;
+    }
+    MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    CHECK_CUDA( cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice) );
 }
 
 // ===== Unpack f_post (flat interleaved) → fh_p[q] (host) for D2H transfer =====
