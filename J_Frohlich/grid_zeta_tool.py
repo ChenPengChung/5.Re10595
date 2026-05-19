@@ -1518,7 +1518,7 @@ def auto_generate(variables_h_path, script_dir=None):
     x_out, y_out, conv = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
         gamma=gamma, alpha=alpha,
-        poisson_iter=15000, poisson_tol=1e-12)
+        poisson_iter=50000, poisson_tol=1e-12)
 
     # ── Validate generated grid dimensions ──
     nj_out, ni_out = x_out.shape

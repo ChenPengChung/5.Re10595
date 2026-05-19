@@ -409,7 +409,6 @@ int main(int argc, char *argv[])
             struct stat grid_st, dep_st;
             if (stat(grid_dat_path, &grid_st) == 0) {
                 const char *deps[] = {
-                    "variables.h",
                     GRID_DAT_DIR "/grid_zeta_tool.py",
                     GRID_DAT_DIR "/" GRID_DAT_REF,
 #ifdef UTAU_BOT_DAT
