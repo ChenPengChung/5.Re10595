@@ -241,6 +241,142 @@ bool g_timing_sample = false;
 #include "MRT_Matrix.h"
 #include "MRT_Process.h"
 #include "mrt_projection_host.h"
+
+// ── Runtime grid safety: checkpoint ↔ grid consistency check ──
+static void BuildCurrentGridDatPath(char *grid_dat_path, size_t n)
+{
+    char grid_ref_stem[256];
+    strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+    grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+    { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
+    snprintf(grid_dat_path, n,
+             "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat",
+             GRID_DAT_DIR, grid_ref_stem,
+             NY, NZ, (double)GAMMA, (double)ALPHA);
+}
+
+static void TrimLineValue(char *s)
+{
+    size_t len = strlen(s);
+    while (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r' ||
+                       s[len - 1] == ' '  || s[len - 1] == '\t')) {
+        s[--len] = '\0';
+    }
+}
+
+static int ReadGridParamsSha256(const char *path, char *out, size_t out_n)
+{
+    FILE *fp = fopen(path, "r");
+    if (!fp) return 0;
+
+    const char *key = "GRID_PARAMS_SHA256=";
+    const size_t key_len = strlen(key);
+    char line[4096];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strstr(line, "DT=")) break;
+        char *p = strstr(line, key);
+        if (!p) continue;
+        p += key_len;
+        TrimLineValue(p);
+        strncpy(out, p, out_n - 1);
+        out[out_n - 1] = '\0';
+        found = 1;
+        break;
+    }
+    fclose(fp);
+    return found;
+}
+
+static int ReadCheckpointMetaValue(const char *checkpoint_dir,
+                                   const char *key,
+                                   char *out,
+                                   size_t out_n)
+{
+    char meta_path[1024];
+    if (checkpoint_dir && checkpoint_dir[0] == '/')
+        snprintf(meta_path, sizeof(meta_path), "%s/metadata.dat", checkpoint_dir);
+    else
+        snprintf(meta_path, sizeof(meta_path), "./%s/metadata.dat", checkpoint_dir);
+
+    FILE *fp = fopen(meta_path, "r");
+    if (!fp) return 0;
+
+    char prefix[256];
+    snprintf(prefix, sizeof(prefix), "%s=", key);
+    const size_t prefix_len = strlen(prefix);
+    char line[4096];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, prefix, prefix_len) != 0) continue;
+        char *value = line + prefix_len;
+        TrimLineValue(value);
+        strncpy(out, value, out_n - 1);
+        out[out_n - 1] = '\0';
+        found = 1;
+        break;
+    }
+    fclose(fp);
+    return found;
+}
+
+static void PrecheckCheckpointGridConsistency(const char *checkpoint_dir, int rank)
+{
+    if (rank != 0) return;
+
+    char match_flag[32] = {0};
+    if (ReadCheckpointMetaValue(checkpoint_dir, "interp_solver_grid_match",
+                                match_flag, sizeof(match_flag)) &&
+        strcmp(match_flag, "0") == 0) {
+        fprintf(stderr,
+                "\n[FATAL][GRID] checkpoint metadata says Phase 1 NEW grid did not match solver grid\n"
+                "  Checkpoint dir : %s\n"
+                "  Field          : interp_solver_grid_match=0\n"
+                "  Policy         : refuse to load checkpoint data.\n",
+                checkpoint_dir);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    char expected_fp[128] = {0};
+    int has_expected = ReadCheckpointMetaValue(
+        checkpoint_dir, "interp_solver_grid_params_sha256",
+        expected_fp, sizeof(expected_fp));
+    if (!has_expected) {
+        has_expected = ReadCheckpointMetaValue(
+            checkpoint_dir, "interp_new_grid_params_sha256",
+            expected_fp, sizeof(expected_fp));
+    }
+
+    char grid_dat_path[512];
+    BuildCurrentGridDatPath(grid_dat_path, sizeof(grid_dat_path));
+    char current_fp[128] = {0};
+    int has_current = ReadGridParamsSha256(grid_dat_path, current_fp, sizeof(current_fp));
+
+    if (has_expected && has_current && strcmp(expected_fp, current_fp) != 0) {
+        fprintf(stderr,
+                "\n[FATAL][GRID] grid parameter fingerprint mismatch before checkpoint load\n"
+                "  Checkpoint dir : %s\n"
+                "  Runtime grid   : %s\n"
+                "  checkpoint fp  : %s\n"
+                "  runtime fp     : %s\n"
+                "  Probable cause : Phase 1 and runtime grids were generated with different\n"
+                "                   Poisson/grid parameters (for example n_iter mismatch).\n"
+                "  Policy         : regenerate Phase 1 grids and checkpoint from shared grid_params.py.\n",
+                checkpoint_dir, grid_dat_path, expected_fp, current_fp);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    if (has_expected && !has_current) {
+        printf("[GRID] WARN: checkpoint has grid fingerprint but runtime .dat lacks one; legacy grid header, skipping hash check\n");
+    } else if (!has_expected && has_current) {
+        printf("[GRID] WARN: runtime grid has fingerprint but checkpoint metadata lacks one; legacy checkpoint, skipping hash check\n");
+    } else if (has_expected && has_current) {
+        printf("[GRID] Parameter fingerprint OK: %s\n", current_fp);
+    }
+}
+
+// ── Animation
 // ── Animation 自動渲染參數（可自由調整）──
 // 新 pipeline (v3 lossless MP4): 每次 VTK 輸出 → pipeline.py 背景呼叫
 //   → 產 2 張 4K PNG 到 animation/png_frames/ (永久保留, 續跑必備資料)
@@ -757,6 +893,7 @@ int main(int argc, char *argv[])
             "INIT=2 (VTK restart) 已移除。請改用 --restart=<checkpoint_dir>。");
     } else if ( g_init_runtime == 3 ) {
         printf("Initializing from binary checkpoint: %s\n", g_restart_bin_dir);
+        PrecheckCheckpointGridConsistency(g_restart_bin_dir, myid);
         LoadBinaryCheckpoint(g_restart_bin_dir);
 
         // ============================================================
