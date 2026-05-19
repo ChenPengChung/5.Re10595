@@ -34,6 +34,13 @@ Estimation/
 animation/png_frames/
 animation/flow_*.mp4
 animation/short_*.mp4
+png_frames/
+
+# Result data files (keep Python scripts)
+result/*.dat
+
+# PDF files
+*.pdf
 
 # Three mandatory tracking files — keep .dat.gz, ignore raw .dat
 Ustar_Force_record.dat
