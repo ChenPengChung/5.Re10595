@@ -78,10 +78,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      65         // 展向格點 (舊網格測試)
-#define     NY      129         // 流向格點 (需 (NY-1)%jp==0; 128/8=16)
-#define     NZ      65         // 法向格點 (舊網格測試)
-#define     jp      8           //   GPU 數量 (流向分割)
+#define     NX      257          // 展向格點 (舊網格測試)
+#define     NY      513          // 流向格點 (需 (NY-1)%jp==0; 128/8=16)
+#define     NZ      257          // 法向格點 (舊網格測試)
+#define     jp      16           //   GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -112,7 +112,7 @@
 //          gamma 範圍: [2.8493, 4.3217], mean=3.3230
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               2.0
+#define     GAMMA               3.6
 #define     ALPHA               0.5
 
 #define     CFL                 0.5
@@ -144,7 +144,7 @@
 // ================================================================
 //  §4. 物理參數
 // ================================================================
-#define     Re      5600       // Reynolds number (基於 H_HILL 和 Uref)
+#define     Re      10595       // Reynolds number (基於 H_HILL 和 Uref)
 #define     Uref    0.015       // 參考速度 (bulk velocity)
                                 // Re700:0.0583, Re1400/2800:0.0776
                                 // Re5600:0.0464, Re10595:0.0878
@@ -181,7 +181,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     40.0    // 統計量開始累積
+#define     FTT_STATS_START     15.0    // 統計量開始累積
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
@@ -282,7 +282,7 @@
 // ================================================================
 //   2 = 二階單邊差分: (4u₁ - u₂)/2,            O(h²), 需 2 個內部點
 //   6 = 六階單邊差分: (360u₁-450u₂+400u₃-225u₄+72u₅-10u₆)/60, O(h⁶), 需 6 個內部點
-#define     WALL_GRAD_ORDER     4
+#define     WALL_GRAD_ORDER     6
 
 // ================================================================
 //  §7.7 Ghost Zone 外推精度 (Ghost Zone Extrapolation Order)

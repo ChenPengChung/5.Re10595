@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit5_regrid_g3.7
+#SBATCH --job-name=Edit5_Rebuild
 #SBATCH --account=MST114348
 #SBATCH --partition=dev
 #SBATCH --nodes=1
