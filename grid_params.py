@@ -17,7 +17,7 @@ GRID_PARAM_SCHEMA = 1
 GRID_GENERATOR = "periodic_hill_steger_sorenson"
 
 # Poisson smoother parameters.  These values affect the generated coordinates.
-POISSON_MAX_ITER = 100000
+POISSON_MAX_ITER = 160000
 POISSON_TOL = 1.0e-12
 POISSON_OMEGA = 1.0
 POISSON_PRINT_EVERY = 2000

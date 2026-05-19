@@ -78,9 +78,9 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      257          // 展向格點 (舊網格測試)
-#define     NY      513          // 流向格點 (需 (NY-1)%jp==0; 128/8=16)
-#define     NZ      257          // 法向格點 (舊網格測試)
+#define     NX      257          // 展向格點
+#define     NY      513          // 流向格點 (需 (NY-1)%jp==0; 512/16=32)
+#define     NZ      257          // 法向格點
 #define     jp      16           //   GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
@@ -172,7 +172,7 @@
 // ================================================================
 #define     loop        50000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
-#define     NDTFRC      50        // 每 N 步更新外力項
+#define     NDTFRC      280       // 每 N 步更新外力項 (50×5.6, dt_global 縮小補償)
 #define     NDTBIN      1000   // 每 N 步輸出 binary checkpoint
 #define     NDTVTK      1000      // 每 N 步輸出 VTK
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度
