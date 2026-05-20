@@ -172,7 +172,7 @@
 // ================================================================
 #define     loop        50000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
-#define     NDTFRC      280       // 每 N 步更新外力項 (50×5.6, dt_global 縮小補償)
+#define     NDTFRC      50       // 50  確定不改!!!
 #define     NDTBIN      1000   // 每 N 步輸出 binary checkpoint
 #define     NDTVTK      1000      // 每 N 步輸出 VTK
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度

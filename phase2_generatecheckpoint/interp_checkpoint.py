@@ -1241,17 +1241,23 @@ def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=5e-5)
 
 
 def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
-                            eps_phys=5e-6, eps_param=5e-5):
+                            eps_phys=5e-6, eps_param=5e-5,
+                            snap_tol=5e-2):
     """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
 
     eps_phys  — physical-space tolerance for bbox pre-filter
     eps_param — parametric-space tolerance for xi/eta in-bounds check
+    snap_tol  — parametric-space tolerance for nearest-cell snap fallback;
+                when strict search fails (e.g. NEW wall points slightly outside
+                OLD grid due to cubic-vs-analytical boundary mismatch), accept
+                the best candidate if its parametric overshoot < snap_tol.
 
     Per-candidate strategy:
       1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps_param).
       2. If Newton failed OR converged out-of-bounds -> triangle fallback.
-      3. Both failed -> next candidate.
-      4. All candidates exhausted -> ValueError.
+      3. Both failed -> track best (closest) candidate, try next.
+      4. All candidates exhausted -> accept best if overshoot < snap_tol,
+         otherwise ValueError.
     """
     bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max = bboxes
     candidates = ((bbox_y_min - eps_phys <= y_n) & (y_n <= bbox_y_max + eps_phys) &
@@ -1262,6 +1268,11 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
 
     def _in_bounds(xi, eta):
         return -eps_param <= xi <= 1 + eps_param and -eps_param <= eta <= 1 + eps_param
+
+    def _overshoot(xi, eta):
+        return max(max(-xi, xi - 1), max(-eta, eta - 1), 0.0)
+
+    best_j, best_k, best_xi, best_eta, best_over = None, None, None, None, 1e30
 
     for j, k in cand_jk:
         y_corners = (y_old[j, k],   y_old[j+1, k],
@@ -1275,6 +1286,10 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
             xi_n, eta_n = bilinear_inverse_newton(y_n, z_n, y_corners, z_corners)
             if _in_bounds(xi_n, eta_n):
                 xi, eta = xi_n, eta_n
+            else:
+                ov = _overshoot(xi_n, eta_n)
+                if ov < best_over:
+                    best_j, best_k, best_xi, best_eta, best_over = j, k, xi_n, eta_n, ov
         except _DegenerateCellError:
             pass
 
@@ -1285,14 +1300,22 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
                                                                  y_corners, z_corners, eps=eps_param)
                 if _in_bounds(xi_t, eta_t):
                     xi, eta = xi_t, eta_t
+                else:
+                    ov = _overshoot(xi_t, eta_t)
+                    if ov < best_over:
+                        best_j, best_k, best_xi, best_eta, best_over = j, k, xi_t, eta_t, ov
             except _DegenerateCellError:
                 pass
 
         if xi is not None:
             return int(j), int(k), float(np.clip(xi, 0, 1)), float(np.clip(eta, 0, 1))
 
+    if best_j is not None and best_over < snap_tol:
+        return int(best_j), int(best_k), float(np.clip(best_xi, 0, 1)), float(np.clip(best_eta, 0, 1))
+
     raise ValueError(
-        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle'.format(y_n, z_n))
+        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle '
+        '(best overshoot={:.3e}, snap_tol={:.3e})'.format(y_n, z_n, best_over, snap_tol))
 
 
 class PhysMapping2D:
