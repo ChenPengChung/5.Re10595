@@ -2179,6 +2179,9 @@ def main():
     p.add_argument('--projection-div-tol', type=float, default=1e-6,
                    help='target RMS divergence tolerance for Poisson projection '
                         '(default: %(default)s)')
+    p.add_argument('--div-gate-tol', type=float, default=1e-10,
+                   help='max|div(u*)| gate before f_eq output. '
+                        'Checkpoint is NOT written if exceeded (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2754,6 +2757,19 @@ def main():
         final_div_max = div_max
         print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
             div_max))
+
+    # ---- Divergence gate: u* must be solenoidal before f_eq ----
+    div_gate_tol = args.div_gate_tol
+    if final_div_max is not None:
+        if final_div_max >= div_gate_tol:
+            sys.exit('FATAL: u* divergence gate FAILED: max|div(u*)| = {:.6e} >= {:.0e}\n'
+                     '  The velocity field entering f_eq is not sufficiently solenoidal.\n'
+                     '  Checkpoint NOT written. Use --project-velocity div-exact or '
+                     'tighten --projection-div-tol.'.format(final_div_max, div_gate_tol))
+        print('      u* divergence gate PASSED: max|div(u*)| = {:.6e} < {:.0e}'.format(
+            final_div_max, div_gate_tol))
+    else:
+        print('      WARNING: divergence could not be computed; gate skipped')
 
     # ---- Step 7: f_eq + per-rank write ----
     print('[7/8] Reconstructing f_eq and writing per-rank files')
