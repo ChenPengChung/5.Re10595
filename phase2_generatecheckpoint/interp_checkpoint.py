@@ -1356,12 +1356,15 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     # OLD domain so the bbox prefilter doesn't reject boundary points.
     y_old_min, y_old_max = float(y_int_old.min()), float(y_int_old.max())
     z_old_min, z_old_max = float(z_int_old.min()), float(z_int_old.max())
+    z_col_min = z_int_old.min(axis=1)   # shape (NY_old,)
+    z_col_max = z_int_old.max(axis=1)
 
     jstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     kstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     xistar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
     etastar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
     n_clamped = 0
+    n_nearest = 0
     for j_n in range(cfg_new.NY):
         for k_n in range(cfg_new.NZ):
             y_n = y2d_new[BFR + j_n, BFR + k_n]
@@ -1370,8 +1373,20 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
                 y_n = max(y_old_min, min(y_old_max, y_n))
                 z_n = max(z_old_min, min(z_old_max, z_n))
                 n_clamped += 1
-            j_o, k_o, xi, eta = find_containing_cell_2d(
-                y_n, z_n, y_int_old, z_int_old, bboxes)
+            try:
+                j_o, k_o, xi, eta = find_containing_cell_2d(
+                    y_n, z_n, y_int_old, z_int_old, bboxes)
+            except ValueError:
+                # Nearest-cell fallback: point is outside OLD domain locally
+                # (e.g. NEW hill surface or top wall differs from OLD by O(1e-5)).
+                # Find the OLD column with closest y, then clamp z into that column.
+                j_near = int(np.argmin(np.abs(y_int_old[:, 0] - y_n)))
+                z_lo = float(z_col_min[j_near])
+                z_hi = float(z_col_max[j_near])
+                z_c = max(z_lo, min(z_hi, z_n))
+                j_o, k_o, xi, eta = find_containing_cell_2d(
+                    y_int_old[j_near, 0], z_c, y_int_old, z_int_old, bboxes)
+                n_nearest += 1
             jstar[j_n, k_n] = j_o
             kstar[j_n, k_n] = k_o
             xistar[j_n, k_n] = xi
@@ -1387,6 +1402,9 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     if n_clamped > 0:
         print('      domain-boundary clamp applied to {} of {} points (FP noise at shared boundary)'.format(
             n_clamped, cfg_new.NY * cfg_new.NZ))
+    if n_nearest > 0:
+        print('      nearest-cell fallback applied to {} points (wall surface mismatch between OLD/NEW grids)'.format(
+            n_nearest))
     print('      Phys mapping cache built: {} cells located'.format(
         cfg_new.NY * cfg_new.NZ))
     return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
@@ -2202,6 +2220,9 @@ def main():
     p.add_argument('--projection-div-tol', type=float, default=1e-6,
                    help='target RMS divergence tolerance for Poisson projection '
                         '(default: %(default)s)')
+    p.add_argument('--div-gate-tol', type=float, default=1e-10,
+                   help='max|div(u*)| gate before f_eq output. '
+                        'Checkpoint is NOT written if exceeded (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2777,6 +2798,11 @@ def main():
         final_div_max = div_max
         print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
             div_max))
+
+    # ---- Divergence gate: abort if max|div(u*)| exceeds tolerance ----
+    if final_div_max is not None and final_div_max > args.div_gate_tol:
+        sys.exit('FATAL: max|div(u*)| = {:.6e} exceeds --div-gate-tol {:.6e}; '
+                 'checkpoint NOT written.'.format(final_div_max, args.div_gate_tol))
 
     # ---- Step 7: f_eq + per-rank write ----
     print('[7/8] Reconstructing f_eq and writing per-rank files')
