@@ -55,6 +55,7 @@ from grid_params import (
     POISSON_OMEGA,
     POISSON_PRINT_EVERY,
     POISSON_REQUIRE_CONVERGED,
+    HILL_LY,
     build_grid_metadata,
     grid_header_comment_lines,
     read_grid_params_sha256,
@@ -224,6 +225,11 @@ def hill_function(Y, LY=9.0):
             v = r * 28.0
             model = (1.0/28.0) * max(0.0, 56.39011190988 - 2.010520359035*v + 0.01644919857549*v*v + 0.00002674976141766*v*v*v)
     return model
+
+
+def hill_function_array(Y_arr, LY=9.0):
+    """Vectorized hill_function: evaluate the analytical hill profile at an array of positions."""
+    return np.array([hill_function(float(y), LY=LY) for y in Y_arr])
 
 
 def tanh_wall(L, a, j, N):
@@ -1085,6 +1091,20 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     xt, yt = _resample_boundary(x_ref[-1, :], y_ref[-1, :], ni_new)
     xl, yl = _resample_boundary(x_ref[:, 0],  y_ref[:, 0],  nj_new)
     xr, yr = _resample_boundary(x_ref[:, -1], y_ref[:, -1], nj_new)
+
+    # Analytical overwrite: bottom boundary must lie exactly on the
+    # Mellen-Fröhlich-Rodi hill polynomial.  _resample_boundary uses cubic
+    # interpolation from the reference grid, which introduces O(1e-6) error
+    # at different target resolutions.  Overwrite yb (wall-normal heights)
+    # with analytically evaluated hill_function values.
+    fro_x_max = x_ref[0, -1]
+    _h_phys = fro_x_max / HILL_LY
+    _scale = 1.0 / _h_phys if _h_phys < 0.5 else 1.0
+    yb_old = yb.copy()
+    yb = hill_function_array(xb * _scale, LY=HILL_LY) / _scale
+    _max_correction = float(np.max(np.abs(yb - yb_old)))
+    print(f"    [3/6] Bottom boundary: analytical hill overwrite "
+          f"(max correction = {_max_correction:.3e})")
 
     xl[0] = xb[0];   yl[0] = yb[0]
     xl[-1] = xt[0];  yl[-1] = yt[0]
