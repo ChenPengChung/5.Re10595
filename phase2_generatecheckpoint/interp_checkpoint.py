@@ -1338,7 +1338,14 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     kstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     xistar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
     etastar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
+    # Per-column z bounds for local hill-surface clamping.
+    # Global clamp (z_old_min/max) misses curved-wall cases where
+    # z_old_min ≈ 0 (flat region) but the local hill surface is ≈ 1.0.
+    z_col_min = z_int_old.min(axis=1)   # shape (NY_old,)
+    z_col_max = z_int_old.max(axis=1)
+
     n_clamped = 0
+    n_nearest = 0
     for j_n in range(cfg_new.NY):
         for k_n in range(cfg_new.NZ):
             y_n = y2d_new[BFR + j_n, BFR + k_n]
@@ -1347,8 +1354,20 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
                 y_n = max(y_old_min, min(y_old_max, y_n))
                 z_n = max(z_old_min, min(z_old_max, z_n))
                 n_clamped += 1
-            j_o, k_o, xi, eta = find_containing_cell_2d(
-                y_n, z_n, y_int_old, z_int_old, bboxes)
+            try:
+                j_o, k_o, xi, eta = find_containing_cell_2d(
+                    y_n, z_n, y_int_old, z_int_old, bboxes)
+            except ValueError:
+                # Nearest-cell fallback: point is outside OLD domain locally
+                # (e.g. NEW hill surface or top wall differs from OLD by O(1e-5)).
+                # Find the OLD column with closest y, then clamp z into that column.
+                j_near = int(np.argmin(np.abs(y_int_old[:, 0] - y_n)))
+                z_lo = float(z_col_min[j_near])
+                z_hi = float(z_col_max[j_near])
+                z_c = max(z_lo, min(z_hi, z_n))
+                j_o, k_o, xi, eta = find_containing_cell_2d(
+                    y_int_old[j_near, 0], z_c, y_int_old, z_int_old, bboxes)
+                n_nearest += 1
             jstar[j_n, k_n] = j_o
             kstar[j_n, k_n] = k_o
             xistar[j_n, k_n] = xi
@@ -1364,6 +1383,9 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     if n_clamped > 0:
         print('      domain-boundary clamp applied to {} of {} points (FP noise at shared boundary)'.format(
             n_clamped, cfg_new.NY * cfg_new.NZ))
+    if n_nearest > 0:
+        print('      nearest-cell fallback applied to {} points (wall surface mismatch between OLD/NEW grids)'.format(
+            n_nearest))
     print('      Phys mapping cache built: {} cells located'.format(
         cfg_new.NY * cfg_new.NZ))
     return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
