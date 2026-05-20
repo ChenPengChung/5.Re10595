@@ -1036,7 +1036,8 @@ def _resample_boundary(xb, yb, n_new):
 
 def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
                            gamma=0.0, alpha=0.5,
-                           poisson_iter=15000, poisson_tol=1e-10):
+                           poisson_iter=15000, poisson_tol=1e-10,
+                           LZ=None):
     """
     Full Steger-Sorenson adaptive grid generation.
 
@@ -1087,6 +1088,17 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     print(f"    [3/6] Bottom boundary: analytical hill overwrite "
           f"(max correction = {_max_correction:.3e})")
 
+    # Analytical overwrite: top boundary must be at exactly LZ (in physical
+    # units).  The reference grid may have z_top != LZ*h_phys due to the
+    # original Frohlich data being rounded (e.g. 0.085 m vs 3.036*0.028).
+    if LZ is not None:
+        yt_exact = LZ / _scale   # LZ in code units → physical
+        yt_old = yt.copy()
+        yt[:] = yt_exact
+        _top_correction = float(np.max(np.abs(yt - yt_old)))
+        print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
+              f"(max correction = {_top_correction:.3e})")
+
     xl[0] = xb[0];   yl[0] = yb[0]
     xl[-1] = xt[0];  yl[-1] = yt[0]
     xr[0] = xb[-1];  yr[0] = yb[-1]
@@ -1122,10 +1134,10 @@ def write_tecplot_dat(filepath, x, y, title="Generated grid",
         f.write('"y corner"\n')
         f.write(f'ZONE T="{zone_title}"\n')
         f.write(f' I={ni}, J={nj}, K=1,F=POINT\n')
-        f.write('DT=(SINGLE SINGLE )\n')
+        f.write('DT=(DOUBLE DOUBLE )\n')
         for j in range(nj):
             for i in range(ni):
-                f.write(f" {x[j, i]: .9E} {y[j, i]: .9E}\n")
+                f.write(f" {x[j, i]: .15E} {y[j, i]: .15E}\n")
     print(f"  [written] {filepath}")
 
 
@@ -1540,7 +1552,8 @@ def auto_generate(variables_h_path, script_dir=None):
     x_out, y_out, conv = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
         gamma=gamma, alpha=alpha,
-        poisson_iter=50000, poisson_tol=1e-12)
+        poisson_iter=50000, poisson_tol=1e-12,
+        LZ=LZ)
 
     # ── Validate generated grid dimensions ──
     nj_out, ni_out = x_out.shape
