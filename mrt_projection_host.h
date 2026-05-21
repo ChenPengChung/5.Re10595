@@ -152,9 +152,15 @@ static inline void BuildMrtProjectionTablesHost(
         double cx, cy, cz, wq;
         D3Q19HostVelocityWeight(q, &cx, &cy, &cz, &wq);
         F0[q] = wq * 3.0 * cy;
+#if FORCE_HERMITE_ORDER >= 2
         Fu[q] = wq * 9.0 * cx * cy;
         Fv[q] = wq * (9.0 * cy * cy - 3.0);
         Fw[q] = wq * 9.0 * cz * cy;
+#else
+        Fu[q] = 0.0;
+        Fv[q] = 0.0;
+        Fw[q] = 0.0;
+#endif
     }
 
     ProjectForcingBasisHost(M, Mi, s, F0, Fproj);
@@ -193,8 +199,12 @@ static inline void LegacyMrtCollisionHost(
         for (int q = 0; q < 19; q++) {
             double cx, cy, cz, wq;
             D3Q19HostVelocityWeight(q, &cx, &cy, &cz, &wq);
+#if FORCE_HERMITE_ORDER >= 2
             const double c_dot_u = cx * u0 + cy * v0 + cz * w0;
             const double Fq = wq * force * (3.0 * (cy - v0) + 9.0 * c_dot_u * cy);
+#else
+            const double Fq = wq * force * 3.0 * cy;
+#endif
             sum += M[n][q] * Fq;
         }
         F_mom[n] = sum;
@@ -321,12 +331,17 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
         for (int q = 0; q < 19; q++) {
             double cx, cy, cz, wq;
             D3Q19HostVelocityWeight(q, &cx, &cy, &cz, &wq);
+#if FORCE_HERMITE_ORDER >= 2
             const double c_dot_u = cx * u0 + cy * v0 + cz * w0;
             F_direct[q] = wq * (3.0 * (cy - v0) + 9.0 * c_dot_u * cy);
             const double F_split = wq * 3.0 * cy
                                  + u0 * wq * 9.0 * cx * cy
                                  + v0 * wq * (9.0 * cy * cy - 3.0)
                                  + w0 * wq * 9.0 * cz * cy;
+#else
+            F_direct[q] = wq * 3.0 * cy;
+            const double F_split = wq * 3.0 * cy;
+#endif
             const double err = fabs(F_direct[q] - F_split);
             if (err > v.max_force_basis_error) v.max_force_basis_error = err;
         }

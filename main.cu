@@ -731,6 +731,7 @@ int main(int argc, char *argv[])
     }
 
     if (myid == 0) printf("GILBM: Jacobian + __constant__(dt,inv_dx) + bk_precomp copied to GPU.\n");
+    if (myid == 0) printf("GILBM: FORCE_HERMITE_ORDER = %d\n", FORCE_HERMITE_ORDER);
 
     if ( g_init_runtime == 0 ) {
         printf("Initializing by default function...\n");
