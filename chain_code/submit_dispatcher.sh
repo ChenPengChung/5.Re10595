@@ -28,6 +28,9 @@
 
 set -uo pipefail
 
+# If launched from run.sh/build_and_submit.sh, do not hold run.sh's flock fd.
+{ exec 200>&-; } 2>/dev/null || true
+
 # ── [方案 A path discipline] ──
 # 本 daemon 與所有 chain_code 同伴 script 一樣, 必須以 PROJECT_ROOT 為 cwd
 # (restart/, a.out, DISPATCHER_ACTIVE sentinel 等都在 PROJECT_ROOT).

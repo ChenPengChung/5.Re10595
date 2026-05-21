@@ -175,6 +175,13 @@ class SolverState:
 
 
 def main():
+    # Avoid inheriting run.sh's flock fd when this monitor is launched from
+    # a pipeline shell; otherwise a passive watcher can block future run.sh.
+    try:
+        os.close(200)
+    except OSError:
+        pass
+
     parser = argparse.ArgumentParser(description='GILBM NaN/divergence monitor')
     parser.add_argument('project_dir', nargs='?', default='.')
     parser.add_argument('--ma-limit', type=float, default=DEFAULT_MA_LIMIT)
