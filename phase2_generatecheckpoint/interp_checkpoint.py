@@ -14,19 +14,45 @@ Modes:
 Pipeline:
   1. Build OLD/NEW grid configs (auto-detect from metadata + variables.h, or interactive)
   2. Cross-validate grid .dat headers against NX/NY/NZ
-  3. Read old checkpoint, compute macros (rho, ux, uy, uz)
-  4. Interpolate macros old -> new according to --interp-mode:
-       phys (default): physical-space remap; correct when GAMMA changes.
-       comp:           legacy computational (j, k, i) remap for A/B tests.
-  5. Reconstruct f_q for q = 0..18 according to --fneq-mode:
-       chapman-enskog (default): f_q = f_eq(new) + f_neq_q reconstructed from
-                                 NEW-grid velocity gradients via Chapman-Enskog.
-                                 Wall rows use 4th-order one-sided FD to match
-                                 the solver's wall CE formula.
-       interp (legacy):          f_q = f_eq(new) + scale * interp(f_neq_old)
-                                 (linear interp in computational space; loses
-                                 gradient information across GAMMA changes).
-  6. Preserve controller state (Force_integral, error_prev, ctrl_initialized,
+  3. Cross-check the NEW interpolation grid against the exact solver runtime
+     grid derived from variables.h GRID_DAT_DIR/GRID_DAT_REF (or
+     --solver-grid-dat). Coordinate mismatch is fatal by default.
+  4. Read old checkpoint, compute macros (rho, ux, uy, uz)
+  5. Interpolate macros old -> new, then apply conservation corrections:
+     5a. Interpolate rho, ux, uy, uz according to --interp-mode:
+           phys (default): physical-space remap; correct when GAMMA changes.
+             --interp-order 6 (default): 7-point Lagrange tensor product O(h^6).
+                Near-wall stencils use cubic ghost extrapolation (solver-matched).
+             --interp-order 2:          bilinear O(h^2) (legacy).
+           comp:           legacy computational (j, k, i) remap for A/B tests.
+     5b. Clamp wall velocity only: u=v=w=0 at k=3 and k=NZ6-4 (no-slip).
+         Preserve wall rho so restart pressure stays consistent with the
+         interpolated source field and with the runtime solver policy.
+     5c. Global density correction: uniform additive offset on the full
+         physical domain, matching the runtime mass-correction kernel.
+     5d. Bulk velocity correction: scale interior streamwise velocity so
+         Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
+     5e. Velocity projection (--project-velocity poisson, default):
+         poisson:   approximate Helmholtz-Hodge correction.
+         dg-exact:  direct solve of the exact CD2 D*G scalar projection.
+         div-exact: direct minimum-norm velocity correction that zeroes the
+                    final CD2 divergence diagnostic to roundoff.  Wall
+                    velocity is constrained inside the projection, and no
+                    later step modifies the interior velocity before f_eq.
+  6. Reconstruct f_q for q = 0..18 from the corrected macroscopic quantities
+     (rho, u, v, w) produced by steps 5a-5e. Mode --fneq-mode selects how the
+     non-equilibrium component is handled:
+       zero (default):           stability A/B test mode; write pure
+                                 equilibrium f_q = f_eq, i.e. f_neq = 0.
+       chapman-enskog:           f_eq and f_neq both built from corrected
+                                 macros. f_neq reconstructed from NEW-grid
+                                 velocity gradients via Chapman-Enskog.
+                                 Wall rows use the solver-matched one-sided FD
+                                 stencil for the wall CE formula.
+       interp (legacy):          f_eq from corrected macros +
+                                 scale * interp(f_neq_old) in computational
+                                 space (loses gradient info across GAMMA changes).
+  7. Preserve controller state (Force_integral, error_prev, ctrl_initialized,
      gehrke_activated) ONLY from origin metadata to avoid F* step on restart.
      FTT and accu_count are NOT preserved — they are reset to 0 because:
        - regrid is a fresh start on the new mesh (FTT=0 aligns new stats window);
@@ -34,7 +60,7 @@ Pipeline:
          (sum_u_*.bin, ...) that this pipeline does NOT regenerate.
      Origin FTT / accu_count are written into metadata as `interp_origin_*`
      fields for audit only.
-  7. Split into new ranks, write per-rank binary files + metadata.dat
+  8. Split into new ranks, write per-rank binary files + metadata.dat
 
 Output written atomically:
   <output_root>/step_%08d.WRITING/ -> <output_root>/step_%08d/
@@ -42,7 +68,7 @@ Output written atomically:
 
 Usage:
   # Project auto mode:
-  #   origin checkpoint: phase2_generatecheckpoint/step_*_origin*
+  #   origin checkpoint: phase2_generatecheckpoint/step_*_origin* or oldcheckpoint_*
   #   OLD grid:          phase1_generategrid/oldgrid_*.dat
   #   NEW grid:          phase1_generategrid/newgrid_*.dat
   python3 phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
@@ -52,8 +78,8 @@ Usage:
       --old-gamma 2.0 --old-grid-dat old_grid.dat \\
       --new-nx 257 --new-ny 513 --new-nz 257 --new-jp 16 \\
       --new-gamma 3.0 --new-alpha 0.5 --new-grid-dat new_grid.dat \\
-      --output-root restart/checkpoint --step 1 \
-      --interp-mode phys --fneq-mode chapman-enskog
+      --output-root restart/checkpoint --step 1 \\
+      --interp-mode phys --fneq-mode zero
 
 Expected folder structure:
   workspace/
@@ -62,7 +88,7 @@ Expected folder structure:
   +-- phase1_generategrid/
   |   +-- oldgrid_*_I{NY}_J{NZ}_g{G}_a{A}.dat    (OLD uniform gamma grid)
   |   +-- newgrid_*_I{NY}_J{NZ}_a{A}.dat         (NEW variable gamma grid)
-  +-- phase2_generatecheckpoint/step_*_origin*/  (source checkpoint)
+  +-- phase2_generatecheckpoint/step_*_origin*/ or oldcheckpoint_*/  (source checkpoint)
       +-- metadata.dat
       +-- f00_0.bin ... f18_{jp-1}.bin
       +-- rho_0.bin ... rho_{jp-1}.bin
@@ -72,8 +98,16 @@ import os
 import sys
 import math
 import time
+import hashlib
 import argparse
+import subprocess
 import numpy as np
+
+PROJECT_ROOT_FOR_IMPORTS = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if PROJECT_ROOT_FOR_IMPORTS not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT_FOR_IMPORTS)
+
+from grid_params import read_grid_params_sha256
 
 # ---------------------------------------------------------------
 # Domain constants (must match variables.h)
@@ -83,6 +117,7 @@ LY = 9.0
 LZ = 3.036
 H_HILL = 1.0
 BFR = 3
+_DOMAIN_FROM_VH = False
 
 # ---------------------------------------------------------------
 # Grid configurations
@@ -170,6 +205,202 @@ def parse_grid_dat_header(path):
     return dims
 
 
+def read_grid_dat_coords(path, expected_i=None, expected_j=None):
+    """Read Tecplot POINT coordinates as raw (x, y) floats for identity checks."""
+    if not os.path.isfile(path):
+        raise FileNotFoundError(path)
+    dims = parse_grid_dat_header(path)
+    if expected_i is not None and dims.get('I') != expected_i:
+        raise ValueError('{} I={} != expected {}'.format(path, dims.get('I'), expected_i))
+    if expected_j is not None and dims.get('J') != expected_j:
+        raise ValueError('{} J={} != expected {}'.format(path, dims.get('J'), expected_j))
+
+    coords = []
+    in_data = False
+    with open(path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            if not in_data:
+                if line.strip().startswith('DT='):
+                    in_data = True
+                continue
+            parts = line.strip().split()
+            if len(parts) >= 2:
+                try:
+                    coords.append((float(parts[0]), float(parts[1])))
+                except ValueError:
+                    continue
+    coords = np.asarray(coords, dtype=np.float64)
+    if expected_i is not None and expected_j is not None:
+        expected = expected_i * expected_j
+        if coords.shape[0] != expected:
+            raise ValueError('{} has {} coordinate rows, expected {}'.format(
+                path, coords.shape[0], expected))
+    return coords
+
+
+def compute_grid_coord_sha256(path):
+    """Compute SHA-256 of raw coordinate data from a Tecplot .dat grid file.
+
+    Hashes the binary representation of parsed (x, y) coordinate pairs so that
+    two grids with identical physical coordinates produce the same hash
+    regardless of header formatting or whitespace differences.
+    """
+    coords = read_grid_dat_coords(path)
+    return hashlib.sha256(coords.tobytes()).hexdigest()
+
+
+def derive_solver_grid_dat(variables_h, cfg):
+    """Return the exact external grid path main.cu will read, or None."""
+    if not variables_h or not os.path.isfile(variables_h):
+        return None
+    str_defs = parse_string_defines(variables_h)
+    grid_dir = str_defs.get('GRID_DAT_DIR')
+    grid_ref = str_defs.get('GRID_DAT_REF')
+    if not grid_dir or not grid_ref:
+        return None
+    ref_stem = os.path.splitext(grid_ref)[0]
+    fname = 'adaptive_{}_I{}_J{}_g{:.2f}_a{:.1f}.dat'.format(
+        ref_stem, cfg.NY, cfg.NZ, float(cfg.GAMMA), float(cfg.ALPHA))
+    base = os.path.dirname(os.path.abspath(variables_h))
+    if os.path.isabs(grid_dir):
+        return os.path.abspath(os.path.join(grid_dir, fname))
+    return os.path.abspath(os.path.join(base, grid_dir, fname))
+
+
+def compare_grid_dat_coords(path_a, path_b, cfg):
+    """Compare two Tecplot grid files in raw solver input coordinates."""
+    a = read_grid_dat_coords(path_a, expected_i=cfg.NY, expected_j=cfg.NZ)
+    b = read_grid_dat_coords(path_b, expected_i=cfg.NY, expected_j=cfg.NZ)
+    if a.shape != b.shape:
+        raise ValueError('coordinate row count differs: {} vs {}'.format(a.shape, b.shape))
+    diff = np.abs(a - b)
+    idx_flat = int(np.argmax(diff)) if diff.size else 0
+    row, col = np.unravel_index(idx_flat, diff.shape) if diff.size else (0, 0)
+    return {
+        'count': int(a.shape[0]),
+        'max_abs_x': float(diff[:, 0].max()) if diff.size else 0.0,
+        'max_abs_y': float(diff[:, 1].max()) if diff.size else 0.0,
+        'max_abs': float(diff.max()) if diff.size else 0.0,
+        'max_row': int(row),
+        'max_component': 'x' if col == 0 else 'y',
+    }
+
+
+def validate_solver_grid_match(new_grid_dat, solver_grid_dat, cfg, tol=0.0, fatal=True):
+    """Fail fast when the interpolation grid differs from the solver runtime grid."""
+    if not solver_grid_dat:
+        print('  WARNING: solver grid path not available; cannot cross-check NEW grid')
+        return None
+
+    solver_grid_dat = os.path.abspath(os.path.normpath(solver_grid_dat))
+    new_grid_dat = os.path.abspath(os.path.normpath(new_grid_dat))
+
+    try:
+        diff = compare_grid_dat_coords(new_grid_dat, solver_grid_dat, cfg)
+        new_fp = read_grid_params_sha256(new_grid_dat)
+        solver_fp = read_grid_params_sha256(solver_grid_dat)
+        fp_ok = (new_fp == solver_fp) if (new_fp and solver_fp) else True
+        ok = (diff['max_abs'] <= tol) and fp_ok
+    except Exception as exc:
+        msg = ('{}: cannot compare NEW grid against solver grid:\n'
+               '        NEW grid:    {}\n'
+               '        solver grid: {}\n'
+               '        reason: {}').format(
+                   'FATAL' if fatal else 'WARNING', new_grid_dat, solver_grid_dat, exc)
+        if fatal:
+            sys.exit(msg)
+        print('  ' + msg)
+        return {
+            'path': solver_grid_dat,
+            'ok': False,
+            'error': str(exc),
+        }
+
+    status = {
+        'path': solver_grid_dat,
+        'ok': bool(ok),
+        'new_grid_params_sha256': new_fp or '',
+        'solver_grid_params_sha256': solver_fp or '',
+        **diff,
+    }
+    if ok:
+        print('  OK: NEW grid coordinates match solver runtime grid')
+        print('      NEW grid:    {}'.format(new_grid_dat))
+        print('      solver grid: {}'.format(solver_grid_dat))
+        print('      compared {} points, max_abs_diff={:.3e}, tol={:.3e}'.format(
+            diff['count'], diff['max_abs'], tol))
+        if new_fp and solver_fp:
+            print('      grid parameter fingerprint: {}'.format(new_fp))
+        elif not (new_fp or solver_fp):
+            print('      grid parameter fingerprint: not present (legacy .dat headers)')
+        else:
+            print('      WARNING: grid parameter fingerprint missing from one .dat header')
+        return status
+
+    if new_fp and solver_fp and new_fp != solver_fp:
+        fp_msg = (
+            '        parameter hash differs (NEW={} solver={})\n'
+            '        This usually means a grid-generation setting such as '
+            'Poisson iteration count, tolerance, interpolation backend, GAMMA, '
+            'or ALPHA differs between paths.\n'
+        ).format(new_fp, solver_fp)
+    else:
+        fp_msg = ''
+    msg = (
+        '{}: NEW grid does not match solver runtime grid\n'
+        '        NEW grid:    {}\n'
+        '        solver grid: {}\n'
+        '        max_abs_diff={:.6e} (x={:.6e}, y={:.6e}), row={}, component={}, tol={:.3e}\n'
+        '{}'
+        '        Regenerate/sync phase1_generategrid/newgrid*.dat from the exact grid used by main.cu, '
+        'or pass --solver-grid-dat to the correct runtime grid.'
+    ).format(
+        'FATAL' if fatal else 'WARNING', new_grid_dat, solver_grid_dat,
+        diff['max_abs'], diff['max_abs_x'], diff['max_abs_y'],
+        diff['max_row'], diff['max_component'], tol, fp_msg)
+    if fatal:
+        sys.exit(msg)
+    print('  ' + msg)
+    return status
+
+
+def maybe_generate_solver_grid(solver_grid_dat, variables_h, enabled=True):
+    """Create the solver runtime grid before comparing, using the same entry as main.cu."""
+    if not solver_grid_dat:
+        return solver_grid_dat, False
+    solver_grid_dat = os.path.abspath(os.path.normpath(solver_grid_dat))
+    if os.path.isfile(solver_grid_dat):
+        return solver_grid_dat, False
+    if not enabled:
+        return solver_grid_dat, False
+    if not variables_h or not os.path.isfile(variables_h):
+        return solver_grid_dat, False
+
+    str_defs = parse_string_defines(variables_h)
+    grid_dir = str_defs.get('GRID_DAT_DIR')
+    if not grid_dir:
+        return solver_grid_dat, False
+
+    root = os.path.dirname(os.path.abspath(variables_h))
+    grid_dir_abs = grid_dir if os.path.isabs(grid_dir) else os.path.join(root, grid_dir)
+    tool = os.path.join(grid_dir_abs, 'grid_zeta_tool.py')
+    if not os.path.isfile(tool):
+        return solver_grid_dat, False
+
+    cmd = [sys.executable, tool, '--auto']
+    print('  Solver runtime grid not found; generating it before comparison')
+    print('      target: {}'.format(solver_grid_dat))
+    print('      command: {}'.format(' '.join(cmd)))
+    ret = subprocess.run(cmd, cwd=root)
+    if ret.returncode != 0:
+        sys.exit('FATAL: solver grid generation failed with exit code {}'.format(
+            ret.returncode))
+    if not os.path.isfile(solver_grid_dat):
+        sys.exit('FATAL: solver grid generation completed but target is still missing: {}'.format(
+            solver_grid_dat))
+    return solver_grid_dat, True
+
+
 def resolve_existing_file(path, label, base_dirs=()):
     """Resolve a user-supplied file path against cwd and optional base dirs."""
     tried = []
@@ -237,6 +468,7 @@ def find_variables_h():
     candidates = [
         'variables.h',
         '../variables.h',
+        os.path.join(script_dir, 'variables.h'),
         os.path.join(script_dir, '..', 'variables.h'),
     ]
     seen = set()
@@ -246,6 +478,16 @@ def find_variables_h():
             return p
         seen.add(p)
     return None
+
+
+def resolve_variables_h_arg(path):
+    """Resolve and validate a variables.h path supplied by CLI or auto-detection."""
+    if path is None:
+        return None
+    abs_path = os.path.abspath(os.path.normpath(path))
+    if not os.path.isfile(abs_path):
+        sys.exit('FATAL: variables.h not found: {}'.format(abs_path))
+    return abs_path
 
 
 def auto_detect_from_metadata(meta_path):
@@ -387,15 +629,29 @@ def origin_search_dirs(primary_dir=None):
     ])
 
 
+def _is_origin_dir_name(name):
+    """Match origin checkpoint directory names.
+
+    Accepted patterns:
+      step_*_origin*            (canonical: step_24913001_origin_Re5600)
+      oldcheckpoint_*           (manual copy: oldcheckpoint_Re5600_step_24913001)
+    """
+    if name.startswith('step_') and '_origin' in name:
+        return True
+    if name.startswith('oldcheckpoint_'):
+        return True
+    return False
+
+
 def find_origin_checkpoint(search_dir=None):
-    """Find step_*_origin* directories with valid metadata across phase layout.
+    """Find origin checkpoint directories with valid metadata across phase layout.
     FATAL if multiple origins exist (ambiguous)."""
     candidates = []
     for parent in origin_search_dirs(search_dir):
         if not os.path.isdir(parent):
             continue
         for name in sorted(os.listdir(parent)):
-            if name.startswith('step_') and '_origin' in name:
+            if _is_origin_dir_name(name):
                 path = os.path.join(parent, name)
                 if os.path.isfile(os.path.join(path, 'metadata.dat')):
                     candidates.append(os.path.abspath(path))
@@ -412,8 +668,8 @@ def resolve_old_dir(old_dir):
         if origin:
             print('  Auto-detected origin checkpoint: {}'.format(origin))
             return origin
-        sys.exit('FATAL: --old-dir not specified and no phase2_generatecheckpoint/step_*_origin* '
-                 'or restart/step_*_origin* found')
+        sys.exit('FATAL: --old-dir not specified and no origin checkpoint found '
+                 '(searched step_*_origin* and oldcheckpoint_* in phase2/restart)')
 
     old_dir = os.path.normpath(old_dir)
     meta_path = os.path.join(old_dir, 'metadata.dat')
@@ -550,7 +806,7 @@ def build_new_config(args):
             for k in ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'):
                 if k in vh_defs:
                     print('    {} = {}'.format(k, vh_defs[k]))
-            global LX, LY, LZ, H_HILL
+            global LX, LY, LZ, H_HILL, _DOMAIN_FROM_VH
             if 'LX' in vh_defs:
                 LX = vh_defs['LX']
             if 'LY' in vh_defs:
@@ -559,6 +815,7 @@ def build_new_config(args):
                 LZ = vh_defs['LZ']
             if 'H_HILL' in vh_defs:
                 H_HILL = vh_defs['H_HILL']
+            _DOMAIN_FROM_VH = True
     else:
         print('  Standalone mode: variables.h not found')
         print('  Enter NEW grid parameters interactively.')
@@ -767,14 +1024,23 @@ def read_rank_bin(path, cfg):
 def stitch_y(per_rank_list, cfg):
     """Combine per-rank arrays into global (NY6, NZ6, NX6).
 
-    Mapping (initialization.h:292):  j_global = rank * (NYD6 - 7) + j_local
-    Overlapping ghost regions across ranks are identical post-MPI-halo;
-    later ranks overwrite earlier ones harmlessly.
+    Only each rank's unique physical rows are authoritative.  Checkpoint
+    files also contain j-ghost rows and one overlap row, but those can be
+    stale for post-collision f buffers.  Copying the whole slab lets a later
+    rank's ghost rows overwrite the previous rank's interior rows, creating
+    visible GPU-seam artifacts after interpolation.
+
+    Unique mapping:
+      local j = 3 .. 3+CHUNK-1  ->  global j = rank*CHUNK+3 .. +CHUNK-1
+
+    The final physical j row is the periodic duplicate of the first physical
+    row and is reconstructed explicitly.
     """
     g = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
     for r in range(cfg.JP):
         j0 = r * cfg.CHUNK
-        g[j0:j0 + cfg.NYD6, :, :] = per_rank_list[r]
+        g[j0+BFR:j0+BFR+cfg.CHUNK, :, :] = per_rank_list[r][BFR:BFR+cfg.CHUNK, :, :]
+    enforce_periodic_physical_duplicates(g, cfg)
     return g
 
 
@@ -785,6 +1051,21 @@ def split_y(global_arr, cfg):
         j0 = r * cfg.CHUNK
         out.append(global_arr[j0:j0 + cfg.NYD6, :, :].copy())
     return out
+
+
+def enforce_periodic_physical_duplicates(field, cfg):
+    """Make physical periodic duplicate nodes bitwise identical.
+
+    The solver's mass sum excludes the last physical node in periodic i/j, but
+    the checkpoint and VTK surfaces still contain those duplicate nodes.  Keep
+    them synchronized before ghost fill and rank splitting.
+    """
+    j0 = BFR
+    jL = BFR + cfg.NY - 1
+    i0 = BFR
+    iL = BFR + cfg.NX - 1
+    field[jL, :, :] = field[j0, :, :]
+    field[:, :, iL] = field[:, :, i0]
 
 
 # ---------------------------------------------------------------
@@ -938,7 +1219,7 @@ def bilinear_inverse_newton(y_n, z_n, y_corners, z_corners,
     raise _DegenerateCellError()
 
 
-def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-9):
+def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=5e-5):
     """Triangle barycentric fallback when Newton fails or converges out-of-bounds.
 
     Splits cell (a, b, c, d) into 2 triangles:
@@ -973,24 +1254,39 @@ def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=1e-9)
     raise _DegenerateCellError()
 
 
-def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-9):
+def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
+                            eps_phys=5e-6, eps_param=5e-5,
+                            snap_tol=5e-2):
     """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
 
+    eps_phys  — physical-space tolerance for bbox pre-filter
+    eps_param — parametric-space tolerance for xi/eta in-bounds check
+    snap_tol  — parametric-space tolerance for nearest-cell snap fallback;
+                when strict search fails (e.g. NEW wall points slightly outside
+                OLD grid due to cubic-vs-analytical boundary mismatch), accept
+                the best candidate if its parametric overshoot < snap_tol.
+
     Per-candidate strategy:
-      1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps tolerance).
+      1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps_param).
       2. If Newton failed OR converged out-of-bounds -> triangle fallback.
-      3. Both failed -> next candidate.
-      4. All candidates exhausted -> ValueError.
+      3. Both failed -> track best (closest) candidate, try next.
+      4. All candidates exhausted -> accept best if overshoot < snap_tol,
+         otherwise ValueError.
     """
     bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max = bboxes
-    candidates = ((bbox_y_min - eps <= y_n) & (y_n <= bbox_y_max + eps) &
-                  (bbox_z_min - eps <= z_n) & (z_n <= bbox_z_max + eps))
+    candidates = ((bbox_y_min - eps_phys <= y_n) & (y_n <= bbox_y_max + eps_phys) &
+                  (bbox_z_min - eps_phys <= z_n) & (z_n <= bbox_z_max + eps_phys))
     cand_jk = np.argwhere(candidates)
     if len(cand_jk) == 0:
         raise ValueError('No OLD cell brackets ({:.6e}, {:.6e})'.format(y_n, z_n))
 
     def _in_bounds(xi, eta):
-        return -eps <= xi <= 1 + eps and -eps <= eta <= 1 + eps
+        return -eps_param <= xi <= 1 + eps_param and -eps_param <= eta <= 1 + eps_param
+
+    def _overshoot(xi, eta):
+        return max(max(-xi, xi - 1), max(-eta, eta - 1), 0.0)
+
+    best_j, best_k, best_xi, best_eta, best_over = None, None, None, None, 1e30
 
     for j, k in cand_jk:
         y_corners = (y_old[j, k],   y_old[j+1, k],
@@ -1004,6 +1300,10 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-9):
             xi_n, eta_n = bilinear_inverse_newton(y_n, z_n, y_corners, z_corners)
             if _in_bounds(xi_n, eta_n):
                 xi, eta = xi_n, eta_n
+            else:
+                ov = _overshoot(xi_n, eta_n)
+                if ov < best_over:
+                    best_j, best_k, best_xi, best_eta, best_over = j, k, xi_n, eta_n, ov
         except _DegenerateCellError:
             pass
 
@@ -1011,17 +1311,25 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes, eps=1e-9):
         if xi is None:
             try:
                 xi_t, eta_t = bilinear_inverse_triangle_fallback(y_n, z_n,
-                                                                 y_corners, z_corners)
+                                                                 y_corners, z_corners, eps=eps_param)
                 if _in_bounds(xi_t, eta_t):
                     xi, eta = xi_t, eta_t
+                else:
+                    ov = _overshoot(xi_t, eta_t)
+                    if ov < best_over:
+                        best_j, best_k, best_xi, best_eta, best_over = j, k, xi_t, eta_t, ov
             except _DegenerateCellError:
                 pass
 
         if xi is not None:
             return int(j), int(k), float(np.clip(xi, 0, 1)), float(np.clip(eta, 0, 1))
 
+    if best_j is not None and best_over < snap_tol:
+        return int(best_j), int(best_k), float(np.clip(best_xi, 0, 1)), float(np.clip(best_eta, 0, 1))
+
     raise ValueError(
-        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle'.format(y_n, z_n))
+        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle '
+        '(best overshoot={:.3e}, snap_tol={:.3e})'.format(y_n, z_n, best_over, snap_tol))
 
 
 class PhysMapping2D:
@@ -1057,16 +1365,42 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     z_int_old = z2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
     bboxes = build_old_cell_search_index(y_int_old, z_int_old)
 
+    # Domain bounds for clamping: different .dat files may have FP noise at
+    # shared boundaries (e.g., y=-3.4e-8 vs y=0.0).  Clamp NEW coords into
+    # OLD domain so the bbox prefilter doesn't reject boundary points.
+    y_old_min, y_old_max = float(y_int_old.min()), float(y_int_old.max())
+    z_old_min, z_old_max = float(z_int_old.min()), float(z_int_old.max())
+    z_col_min = z_int_old.min(axis=1)   # shape (NY_old,)
+    z_col_max = z_int_old.max(axis=1)
+
     jstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     kstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     xistar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
     etastar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
+    n_clamped = 0
+    n_nearest = 0
     for j_n in range(cfg_new.NY):
         for k_n in range(cfg_new.NZ):
             y_n = y2d_new[BFR + j_n, BFR + k_n]
             z_n = z2d_new[BFR + j_n, BFR + k_n]
-            j_o, k_o, xi, eta = find_containing_cell_2d(
-                y_n, z_n, y_int_old, z_int_old, bboxes)
+            if y_n < y_old_min or y_n > y_old_max or z_n < z_old_min or z_n > z_old_max:
+                y_n = max(y_old_min, min(y_old_max, y_n))
+                z_n = max(z_old_min, min(z_old_max, z_n))
+                n_clamped += 1
+            try:
+                j_o, k_o, xi, eta = find_containing_cell_2d(
+                    y_n, z_n, y_int_old, z_int_old, bboxes)
+            except ValueError:
+                # Nearest-cell fallback: point is outside OLD domain locally
+                # (e.g. NEW hill surface or top wall differs from OLD by O(1e-5)).
+                # Find the OLD column with closest y, then clamp z into that column.
+                j_near = int(np.argmin(np.abs(y_int_old[:, 0] - y_n)))
+                z_lo = float(z_col_min[j_near])
+                z_hi = float(z_col_max[j_near])
+                z_c = max(z_lo, min(z_hi, z_n))
+                j_o, k_o, xi, eta = find_containing_cell_2d(
+                    y_int_old[j_near, 0], z_c, y_int_old, z_int_old, bboxes)
+                n_nearest += 1
             jstar[j_n, k_n] = j_o
             kstar[j_n, k_n] = k_o
             xistar[j_n, k_n] = xi
@@ -1079,8 +1413,30 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     i_o_arr = np.floor(i_o_float_arr).astype(np.int64)
     xi_i_arr = i_o_float_arr - i_o_arr
 
-    print('      Phys mapping cache built: {} cells located'.format(
-        cfg_new.NY * cfg_new.NZ))
+    total_pts = cfg_new.NY * cfg_new.NZ
+    n_affected = n_clamped + n_nearest
+    affected_frac = n_affected / total_pts if total_pts > 0 else 0.0
+
+    if n_clamped > 0:
+        print('      domain-boundary clamp applied to {} of {} points ({:.2f}%)'.format(
+            n_clamped, total_pts, 100.0 * n_clamped / total_pts))
+    if n_nearest > 0:
+        print('      nearest-cell fallback applied to {} of {} points ({:.2f}%)'.format(
+            n_nearest, total_pts, 100.0 * n_nearest / total_pts))
+    if n_affected > 0:
+        print('      total clamp+fallback: {} of {} points ({:.2f}%)'.format(
+            n_affected, total_pts, 100.0 * affected_frac))
+
+    CLAMP_FRACTION_FATAL = 0.05
+    if affected_frac > CLAMP_FRACTION_FATAL:
+        raise ValueError(
+            'FATAL: {:.1f}% of NEW grid points required clamping/fallback '
+            '(threshold {:.0f}%). This usually means the OLD grid .dat has '
+            'significantly different geometry from the NEW grid (wrong LZ, '
+            'GAMMA, or ALPHA). Verify OLD grid provenance and re-run.'.format(
+                100.0 * affected_frac, 100.0 * CLAMP_FRACTION_FATAL))
+
+    print('      Phys mapping cache built: {} cells located'.format(total_pts))
     return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
                          cfg_old, cfg_new)
 
@@ -1143,6 +1499,415 @@ def interpolate_phys_3d(field_old, cfg_old, cfg_new,
 
 
 # ---------------------------------------------------------------
+# 6th-order 7-point Lagrange interpolation (O(h^6) tensor product)
+# ---------------------------------------------------------------
+# Uniform nodes {0,1,2,3,4,5,6}; fractional position t ∈ [0,1] within
+# the central cell (nodes 3,4).  Stencil: 3 nodes left + 3 nodes right
+# of the central pair.
+#
+# L_m(t) = ∏_{n=0,n≠m}^{6} (t+3-n) / (m-n)    for m=0..6
+#
+# where s = t + 3 maps the fraction into the stencil-local coordinate
+# so that node m corresponds to s = m.
+#
+# Polynomial exactness: reproduces degree-6 polynomials exactly.
+
+def lagrange7_weights(t):
+    """Compute 7-point Lagrange basis weights for fractional position t ∈ [0,1].
+
+    The stencil is centered on nodes 3 and 4: the interpolation point lies
+    at stencil coordinate s = t + 3.  Returns array of 7 weights.
+    """
+    s = t + 3.0
+    w = np.empty(7, dtype=np.float64)
+    for m in range(7):
+        val = 1.0
+        for n in range(7):
+            if n != m:
+                val *= (s - n) / (m - n)
+        w[m] = val
+    return w
+
+
+def lagrange7_weights_vectorized(t_arr):
+    """Vectorized: compute 7-point Lagrange weights for an array of t values.
+
+    t_arr : 1D array of fractional positions in [0,1].
+    Returns (len(t_arr), 7) weight matrix.
+    """
+    s = t_arr[:, np.newaxis] + 3.0   # (N, 1) stencil coordinates
+    nodes = np.arange(7, dtype=np.float64)[np.newaxis, :]  # (1, 7)
+
+    denom = np.empty(7, dtype=np.float64)
+    for m in range(7):
+        d = 1.0
+        for n in range(7):
+            if n != m:
+                d *= (m - n)
+        denom[m] = d
+
+    diff = s - nodes  # (N, 7): s_i - n for each node n
+    prod_all = np.prod(diff, axis=1, keepdims=True)  # (N, 1)
+    with np.errstate(divide='ignore', invalid='ignore'):
+        weights = prod_all / (diff * denom[np.newaxis, :])
+    mask = np.abs(diff) < 1e-15
+    if np.any(mask):
+        idx_i, idx_m = np.where(mask)
+        weights[idx_i, :] = 0.0
+        weights[idx_i, idx_m] = 1.0
+    return weights
+
+
+def extrapolate_wall_ghost_stencil_cubic(stencil_k, stencil_start, cfg):
+    """Mirror solver cubic wall-ghost extrapolation for one 7-point k stencil.
+
+    stencil_k has shape (7, ...), with axis 0 corresponding to consecutive
+    wall-normal buffer indices [stencil_start, stencil_start + 6].  When that
+    window crosses either wall, replace the ghost entries by direct cubic
+    extrapolation from the nearest four in-domain stencil values before the
+    Lagrange contraction.  This mirrors gilbm_ghost_zone_extrapolate() with
+    GHOST_EXTRAP_ORDER=3 in gilbm/evolution_gilbm/1.algorithm1.h.
+    """
+    if stencil_k.shape[0] != 7:
+        raise ValueError('extrapolate_wall_ghost_stencil_cubic expects axis-0 length 7')
+
+    out = stencil_k.copy()
+    fluid_lo = BFR
+    fluid_hi = cfg.NZ6 - 1 - BFR
+
+    n_ghost_bot = max(fluid_lo - stencil_start, 0)
+    n_ghost_top = max(stencil_start + 6 - fluid_hi, 0)
+
+    if n_ghost_bot > 0:
+        p0 = n_ghost_bot
+        p1 = n_ghost_bot + 1
+        p2 = n_ghost_bot + 2
+        p3 = n_ghost_bot + 3
+        for g in range(n_ghost_bot - 1, -1, -1):
+            d = float(p0 - g)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            out[g] = c0 * out[p0] + c1 * out[p1] + c2 * out[p2] + c3 * out[p3]
+
+    if n_ghost_top > 0:
+        pN = 6 - n_ghost_top
+        pN1 = pN - 1
+        pN2 = pN - 2
+        pN3 = pN - 3
+        for g in range(pN + 1, 7):
+            d = float(g - pN)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            out[g] = c0 * out[pN] + c1 * out[pN1] + c2 * out[pN2] + c3 * out[pN3]
+
+    return out
+
+
+def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
+    """Interpolate one (NY6_old, NZ6_old, NX6_old) field using 7-point Lagrange.
+
+    Uses the same PhysMapping2D (j*, k*, xi, eta) as the bilinear version,
+    but applies 7x7 tensor product in the (j, k) plane and 7-point along i.
+    Wall-normal stencils that cross either wall rebuild ghost entries by cubic
+    extrapolation from in-domain values before the k contraction, mirroring
+    the solver's GHOST_EXTRAP_ORDER=3 path.
+
+    Stencil: for anchor cell (j*, k*), nodes j*-3..j*+3, k*-3..k*+3.
+    Node m=3 at j* corresponds to xi=0; node m=4 at j*+1 to xi=1.
+    """
+    cfg_old, cfg_new = mapping.cfg_old, mapping.cfg_new
+    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
+
+    i_o_arr = mapping.i_o_arr
+    xi_i_arr = mapping.xi_i_arr
+    NX_new = cfg_new.NX
+    NY6_old = cfg_old.NY6
+    NZ6_old = cfg_old.NZ6
+    NX6_old = cfg_old.NX6
+
+    i_weights = lagrange7_weights_vectorized(xi_i_arr)  # (NX, 7)
+
+    # Precompute i-stencil buffer indices for all NX_new points: (NX_new, 7)
+    # Stencil offsets: -3, -2, -1, 0, +1, +2, +3 relative to anchor i_o.
+    # Node m=3 at (BFR + i_o) corresponds to xi_i=0; node m=4 to xi_i=1.
+    # Ghost fill gives 3 valid layers on each side, so buf indices [0, NX6-1]
+    # cover the stencil.  Clamp handles the rare boundary case (where
+    # xi_i=0/1 makes the clamped-index weights exactly 0).
+    i_stencil = np.empty((NX_new, 7), dtype=np.int64)
+    for s in range(7):
+        buf_idx = BFR + i_o_arr + (s - 3)
+        i_stencil[:, s] = np.clip(buf_idx, 0, NX6_old - 1)
+
+    for j_n in range(cfg_new.NY):
+        for k_n in range(cfg_new.NZ):
+            j_o = int(mapping.jstar[j_n, k_n])
+            k_o = int(mapping.kstar[j_n, k_n])
+            xi  = float(mapping.xistar[j_n, k_n])
+            eta = float(mapping.etastar[j_n, k_n])
+
+            wj = lagrange7_weights(xi)
+            wk = lagrange7_weights(eta)
+
+            jb = BFR + j_o
+            kb = BFR + k_o
+
+            j_indices = np.clip(np.arange(jb - 3, jb + 4), 0, NY6_old - 1)
+            k_indices = np.clip(np.arange(kb - 3, kb + 4), 0, NZ6_old - 1)
+
+            # wjk[mj, mk] = wj[mj] * wk[mk], shape (7, 7)
+            wjk = np.outer(wj, wk)
+
+            # Gather stencil slab: field_old[j_indices, k_indices, i_stencil]
+            # → (7, 7, NX, 7) then contract with i_weights → (7, 7, NX)
+            slab = field_old[np.ix_(j_indices, k_indices)]  # (7, 7, NX6_old)
+            # For each (mj, mk) pair, gather the 7 i-stencil values for all NX points
+            # slab_i shape: (7, 7, NX, 7) — last dim is the i-stencil
+            slab_i = slab[:, :, i_stencil]  # (7, 7, NX, 7)
+            # Contract i-stencil with i_weights: sum over last dim
+            # i_weights shape (NX, 7) → broadcast
+            val_jk = np.einsum('jkni,ni->jkn', slab_i, i_weights)  # (7, 7, NX)
+            # Solver-style wall handling: rebuild any k-ghost entries from
+            # in-domain stencil values before the wall-normal contraction.
+            val_kjn = extrapolate_wall_ghost_stencil_cubic(
+                np.moveaxis(val_jk, 1, 0), kb - 3, cfg_old)
+            val_jk = np.moveaxis(val_kjn, 0, 1)
+            # Contract (j, k) with wjk
+            row = np.einsum('jk,jkn->n', wjk, val_jk)  # (NX,)
+
+            field_new[BFR + j_n, BFR + k_n, BFR:BFR + NX_new] = row
+
+    fill_ghost(field_new, cfg_new)
+    return field_new
+
+
+def clamp_wall_macros(rho, ux, uy, uz, cfg):
+    """Clamp physical wall velocity before global conservation corrections."""
+    kt = cfg.NZ6 - 1 - BFR
+    wall_u_max_before = max(
+        float(np.max(np.abs(ux[:, BFR, :]))), float(np.max(np.abs(ux[:, kt, :]))),
+        float(np.max(np.abs(uy[:, BFR, :]))), float(np.max(np.abs(uy[:, kt, :]))),
+        float(np.max(np.abs(uz[:, BFR, :]))), float(np.max(np.abs(uz[:, kt, :]))),
+    )
+    wall_rho_max_delta_before = max(
+        float(np.max(np.abs(rho[:, BFR, :] - 1.0))),
+        float(np.max(np.abs(rho[:, kt, :] - 1.0))),
+    )
+
+    for arr in (ux, uy, uz):
+        arr[:, BFR, :] = 0.0
+        arr[:, kt, :] = 0.0
+
+    return wall_u_max_before, wall_rho_max_delta_before
+
+
+def compute_cv_weights(y_2d, z_2d, cfg):
+    """Build per-node control-volume weights matching the solver.
+
+    Mirrors evolution.h:InitializeMassCorrectionWeights + MassCorrectionCellVolume.
+    Each interior node weight = 1/8 * sum of volumes of all cells sharing
+    that node.  Wall nodes (k=BFR or k=NZ6-4) have one fewer k-cell neighbour.
+
+    Vectorized: computes all cell volumes at once, then scatters 1/8 of each
+    cell volume to its 8 corner nodes.
+
+    Returns (weights_3d[NY6, NZ6, NX6], global_volume).
+    """
+    if not _DOMAIN_FROM_VH:
+        raise RuntimeError(
+            'FATAL: LX={} is the hardcoded default — variables.h was not parsed. '
+            'Volume-weighted mass correction requires LX from variables.h to '
+            'match the solver. Pass --variables-h or run from a project directory '
+            'containing variables.h.'.format(LX))
+    dx_span = LX / (cfg.NX - 1)
+
+    # Cell index ranges (cell (j,k) has corners at (j,k),(j+1,k),(j+1,k+1),(j,k+1))
+    # Solver cell loops: j_cell in [2, NYD6-4), k_cell in [2, NZ6-4), i_cell in [2, NX6-4)
+    # Global equivalent: j_cell in [BFR-1, NY6-4), k_cell in [BFR, NZ6-4), i_cell in [BFR-1, NX6-4)
+    # But node loop is j in [BFR, NY6-4), k in [BFR, NZ6-3), i in [BFR, NX6-4),
+    # referencing cells at (j-1..j, k-1..k, i-1..i).
+    # So the cells that contribute are: j_cell in [BFR-1, NY6-4),
+    #   k_cell in [BFR, NZ6-4), i_cell in [BFR-1, NX6-4).
+    # With periodic wrap: i_cell = BFR-1 maps to NX6-5.
+
+    # All cell volumes via vectorized shoelace
+    j_lo, j_hi = BFR - 1, cfg.NY6 - 4      # j_cell range
+    k_lo, k_hi = BFR,     cfg.NZ6 - 4       # k_cell range
+
+    y0 = y_2d[j_lo:j_hi,     k_lo:k_hi]
+    z0 = z_2d[j_lo:j_hi,     k_lo:k_hi]
+    y1 = y_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    z1 = z_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    y2 = y_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    z2 = z_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    y3 = y_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+    z3 = z_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+
+    area_yz = 0.5 * np.abs(y0*z1 - z0*y1
+                          + y1*z2 - z1*y2
+                          + y2*z3 - z2*y3
+                          + y3*z0 - z3*y0)
+    cell_vol = abs(dx_span) * area_yz     # shape (nj_cells, nk_cells)
+
+    # Per-cell volume validation (mirrors solver MPI_Abort on invalid cell)
+    bad_mask = ~(np.isfinite(cell_vol) & (cell_vol > 0.0))
+    if np.any(bad_mask):
+        bad_idx = np.argwhere(bad_mask)
+        first = bad_idx[0]
+        raise ValueError(
+            'FATAL: invalid cell volume at (j_cell={}, k_cell={}): {:.17e}. '
+            '{} of {} cells are invalid.'.format(
+                j_lo + int(first[0]), k_lo + int(first[1]),
+                float(cell_vol[first[0], first[1]]),
+                int(bad_mask.sum()), cell_vol.size))
+
+    # Scatter 1/8 of each cell volume to its 8 corner nodes.
+    # Each cell (j_cell, k_cell) contributes to nodes at:
+    #   j in {j_cell, j_cell+1}, k in {k_cell, k_cell+1}, i in {i_cell, i_cell+1}
+    # For i: all cells have the same dx_span (uniform x), and each node touches
+    #   cells at i_cell=(i-1) and i_cell=i.  With periodic wrap at i=BFR,
+    #   every interior node has exactly 2 i-neighbours.  So the i-contribution
+    #   is the same for all i nodes: factor 2 from the two i_cells.
+    #   Wall nodes in k have only 1 k-cell instead of 2.
+    # We accumulate in a 2D (j, k) weight array, then broadcast uniformly
+    # over i with the factor-of-2 for the two i-cells.
+
+    nj_node = cfg.NY6 - 7   # j in [BFR, NY6-4)
+    nk_node = cfg.NZ6 - 6   # k in [BFR, NZ6-3)
+    w2d = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+
+    # Each cell (j_cell, k_cell) → scatter to 4 corner nodes in (j, k)
+    nj_cells = j_hi - j_lo
+    nk_cells = k_hi - k_lo
+    for dj in (0, 1):
+        for dk in (0, 1):
+            j_nodes = np.arange(j_lo + dj, j_lo + dj + nj_cells)
+            k_nodes = np.arange(k_lo + dk, k_lo + dk + nk_cells)
+            w2d[np.ix_(j_nodes, k_nodes)] += cell_vol
+
+    # Scale: 1/8 per cell corner, times 2 for the two i-cells each node touches
+    # = 2 * (1/8) = 1/4.  But i=BFR wraps periodically to NX6-5, which the
+    # solver handles identically (same volume), so factor is the same.
+    w2d *= 0.25
+
+    # Build 3D weights: uniform in i for the interior node range
+    ni_node = cfg.NX6 - 7   # i in [BFR, NX6-4)
+    weights = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
+    for i in range(BFR, BFR + ni_node):
+        weights[:, :, i] = w2d
+
+    global_volume = float(np.sum(weights[BFR:BFR+nj_node,
+                                          BFR:BFR+nk_node,
+                                          BFR:BFR+ni_node]))
+    if not (global_volume > 0.0) or not np.isfinite(global_volume):
+        raise ValueError('Invalid global control volume: {:.17e}'.format(global_volume))
+
+    return weights, global_volume
+
+
+def apply_rho_mass_correction(rho, cfg, y_2d, z_2d):
+    """Volume-weighted mass correction matching the solver exactly.
+
+    Mirrors evolution.h:ComputeVolumeWeightedRhoAverageRoot +
+    UpdateVolumeWeightedMassCorrection:
+      rho_avg    = Σ(rho * cv_weight) / Σ(cv_weight)
+      rho_modify = 1 - rho_avg
+      rho[domain] += rho_modify   (uniform additive to all physical nodes)
+
+    The conserved domain matches the solver reduction domain:
+      i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
+    including both physical wall rows and excluding periodic duplicates.
+    """
+    ni = cfg.NX6 - 7
+    nj = cfg.NY6 - 7
+    nk = cfg.NZ6 - 6
+
+    full_domain = (slice(BFR, BFR + nj),
+                   slice(BFR, BFR + nk),
+                   slice(BFR, BFR + ni))
+
+    weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
+    weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
+    rho_global_avg = weighted_rho_sum / global_volume
+    rho_modify = 1.0 - rho_global_avg
+
+    mean_before = rho_global_avg
+    rho[full_domain] += rho_modify
+
+    weighted_rho_sum_after = float(np.sum(rho[full_domain] * weights[full_domain]))
+    mean_after = weighted_rho_sum_after / global_volume
+
+    return rho_modify, mean_before, mean_after, global_volume
+
+
+def compute_Ub(uy, z_2d, cfg):
+    """Compute bulk velocity Ub at j=BFR plane, matching evolution.h bilinear cell-average.
+
+    Solver formula (evolution.h:544-555):
+      for k in [3, NZ6-4):    # cell centres between walls
+        for i in [3, NX6-4):
+          v_cell  = avg of 4 corner nodes at (k,i),(k+1,i),(k,i+1),(k+1,i+1)
+          dx_cell = x[i+1] - x[i]
+          dz_cell = z_h[j=3, k+1] - z_h[j=3, k]   # physical z-spacing
+          Ub += v_cell * dx_cell * dz_cell
+          A  += dx_cell * dz_cell
+      Ub /= A
+    """
+    j0 = BFR
+    dx = LX / (cfg.NX - 1)
+    x = (np.arange(cfg.NX6, dtype=np.float64) - BFR) * dx
+
+    i_lo, i_hi = BFR, cfg.NX6 - 4   # i = 3 .. NX6-5
+    k_lo, k_hi = BFR, cfg.NZ6 - 4   # k = 3 .. NZ6-5
+
+    v_plane = uy[j0, :, :]  # [NZ6, NX6]
+    v_cell = 0.25 * (v_plane[k_lo:k_hi, i_lo:i_hi]
+                    + v_plane[k_lo+1:k_hi+1, i_lo:i_hi]
+                    + v_plane[k_lo:k_hi, i_lo+1:i_hi+1]
+                    + v_plane[k_lo+1:k_hi+1, i_lo+1:i_hi+1])
+
+    dx_cell = x[i_lo+1:i_hi+1] - x[i_lo:i_hi]                       # [ni]
+    dz_cell = z_2d[j0, k_lo+1:k_hi+1] - z_2d[j0, k_lo:k_hi]        # [nk]
+
+    dA = dz_cell[:, np.newaxis] * dx_cell[np.newaxis, :]  # [nk, ni]
+    return float(np.sum(v_cell * dA) / np.sum(dA))
+
+
+def apply_Ub_correction(Ub_old, uy_new, z2d_new, cfg_new):
+    """Scale streamwise velocity so Ub is conserved across interpolation.
+
+    Modifies uy_new in-place, re-enforces periodic BCs and ghost cells.
+    Returns (scale_factor, Ub_new_before, Ub_new_after).
+    """
+    Ub_new_before = compute_Ub(uy_new, z2d_new, cfg_new)
+    print('      Ub correction: OLD Ub = {:.15e}'.format(Ub_old))
+    print('      Ub correction: NEW Ub (before) = {:.15e}'.format(Ub_new_before))
+
+    if abs(Ub_new_before) < 1e-30:
+        print('      Ub correction: SKIP (Ub_new ≈ 0)')
+        return 1.0, Ub_new_before, Ub_new_before
+
+    scale = Ub_old / Ub_new_before
+    interior = (slice(BFR, BFR + cfg_new.NY),
+                slice(BFR + 1, BFR + cfg_new.NZ - 1),
+                slice(BFR, BFR + cfg_new.NX))
+    uy_new[interior] *= scale
+    enforce_periodic_physical_duplicates(uy_new, cfg_new)
+    fill_ghost(uy_new, cfg_new)
+
+    Ub_new_after = compute_Ub(uy_new, z2d_new, cfg_new)
+    print('      Ub correction: scale = {:.15e}'.format(scale))
+    print('      Ub correction: NEW Ub (after)  = {:.15e}'.format(Ub_new_after))
+    print('      Ub correction: residual = {:.3e}'.format(abs(Ub_new_after - Ub_old)))
+    return scale, Ub_new_before, Ub_new_after
+
+
+# ---------------------------------------------------------------
 # Equilibrium reconstruction (initialization.h:36-42)
 # ---------------------------------------------------------------
 def compute_feq_q(rho, ux, uy, uz, q):
@@ -1170,7 +1935,8 @@ def compute_minsize(cfg):
 #
 #   f_neq_q = w_q * rho * ce_coeff * Σ_αβ (3·c_qα·c_qβ - δ_αβ) · ∂u_α/∂x_β
 #
-#   ce_coeff = -(omega - 0.5) * dt = -3*niu      (variables.h:152)
+#   omega_new = 3*niu/dt_global_new + 0.5
+#   ce_coeff = -omega_new * dt_global_new
 #
 # This replaces direct linear interpolation of f_neq, which destroys the
 # velocity-gradient information encoded in f_neq via Chapman-Enskog and
@@ -1390,7 +2156,7 @@ def compute_inverse_metric_2d_fornberg(y_2d, z_2d):
 # ComputeGlobalTimeStep). Replaces the dt_global=-1.0 placeholder that
 # bypasses fileIO.h:658 Phase 5 drift check.
 # ---------------------------------------------------------------
-def compute_dt_global_gilbm(cfg, cfl=0.5, metric_order=6):
+def compute_dt_global_gilbm(cfg, cfl, metric_order=6):
     """Mirror gilbm/precompute.h:78-115 ComputeGlobalTimeStep.
 
     dt_global = cfl / max|c~|, where max is over (eta, xi, zeta) and D3Q19 dirs:
@@ -1452,45 +2218,64 @@ def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
     Returns three (NY, NZ, NX) interior arrays.
     """
     NZ6 = u.shape[1]
-    du_di = np.empty_like(u)
-    du_dj = np.empty_like(u)
-    du_dk = np.empty_like(u)
+    du_di = np.zeros_like(u)
+    du_dj = np.zeros_like(u)
+    du_dk = np.zeros_like(u)
 
-    du_di[:, :, 1:-1] = (u[:, :, 2:] - u[:, :, :-2]) / 2.0
-    du_di[:, :, 0]  = du_di[:, :, 1]
-    du_di[:, :, -1] = du_di[:, :, -2]
+    # i-direction: 6th-order central (periodic ghost cells valid)
+    du_di[:, :, 3:-3] = (
+        -u[:, :, :-6] + 9.0*u[:, :, 1:-5] - 45.0*u[:, :, 2:-4]
+        + 45.0*u[:, :, 4:-2] - 9.0*u[:, :, 5:-1] + u[:, :, 6:]
+    ) / 60.0
+    du_di[:, :, :3]  = du_di[:, :, 3:4]
+    du_di[:, :, -3:] = du_di[:, :, -4:-3]
 
-    du_dj[1:-1, :, :] = (u[2:, :, :] - u[:-2, :, :]) / 2.0
-    du_dj[0, :, :]  = du_dj[1, :, :]
-    du_dj[-1, :, :] = du_dj[-2, :, :]
+    # j-direction: 6th-order central (periodic ghost valid)
+    du_dj[3:-3, :, :] = (
+        -u[:-6, :, :] + 9.0*u[1:-5, :, :] - 45.0*u[2:-4, :, :]
+        + 45.0*u[4:-2, :, :] - 9.0*u[5:-1, :, :] + u[6:, :, :]
+    ) / 60.0
+    du_dj[:3, :, :]  = du_dj[3:4, :, :]
+    du_dj[-3:, :, :] = du_dj[-4:-3, :, :]
 
-    # k-derivative — centered on fluid interior, 4th-order one-sided AT walls.
-    # Plain centered FD at k=BFR collapses to (u[BFR+1]-u[BFR])/2 because
-    # fill_ghost copies u[BFR-1]=u[BFR], underestimating du/dk by ~50% in viscous
-    # sublayer. Solver wall CE uses 4th-order one-sided; mirror that to keep
-    # restart wall-stress consistent (gilbm/boundary_conditions.h:30-33).
-    du_dk[:, 1:-1, :] = (u[:, 2:, :] - u[:, :-2, :]) / 2.0
+    # k-direction: 6th-order adaptive-skew Fornberg + 4th-order one-sided at walls
+    kt = NZ6 - 1 - BFR
 
-    # Bottom wall (k = BFR = 3): du/dk = (48*u[B+1] - 36*u[B+2] + 16*u[B+3] - 3*u[B+4]) / 12
+    # Central bulk (k = BFR+3 to kt-3): 6th-order central
+    c_lo = BFR + 3
+    c_hi = kt - 3
+    du_dk[:, c_lo:c_hi+1, :] = (
+        -u[:, c_lo-3:c_hi-2, :] + 9.0*u[:, c_lo-2:c_hi-1, :]
+        - 45.0*u[:, c_lo-1:c_hi, :] + 45.0*u[:, c_lo+1:c_hi+2, :]
+        - 9.0*u[:, c_lo+2:c_hi+3, :] + u[:, c_lo+3:c_hi+4, :]
+    ) / 60.0
+
+    # Near-bottom-wall: 6th-order skewed (Fornberg adaptive)
+    for kk, p in [(BFR+1, 1), (BFR+2, 2)]:
+        for m in range(7):
+            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, BFR + m, :]
+
+    # Near-top-wall: 6th-order skewed (Fornberg adaptive)
+    s_top = kt - 6
+    for kk, p in [(kt-2, 4), (kt-1, 5)]:
+        for m in range(7):
+            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, s_top + m, :]
+
+    # Bottom wall (k=BFR): 4th-order forward one-sided (u_wall=0)
     du_dk[:, BFR, :] = (
-         48.0 * u[:, BFR+1, :]
-        - 36.0 * u[:, BFR+2, :]
-        + 16.0 * u[:, BFR+3, :]
-        -  3.0 * u[:, BFR+4, :]
+        48.0 * u[:, BFR+1, :] - 36.0 * u[:, BFR+2, :]
+       +16.0 * u[:, BFR+3, :] -  3.0 * u[:, BFR+4, :]
     ) / 12.0
 
-    # Top wall (k = NZ6-4): same coefficients, 4 points BELOW wall, reversed sign.
-    kt = NZ6 - 1 - BFR  # = NZ6 - 4
+    # Top wall (k=kt): 4th-order backward one-sided (u_wall=0)
     du_dk[:, kt, :] = -(
-         48.0 * u[:, kt-1, :]
-        - 36.0 * u[:, kt-2, :]
-        + 16.0 * u[:, kt-3, :]
-        -  3.0 * u[:, kt-4, :]
+        48.0 * u[:, kt-1, :] - 36.0 * u[:, kt-2, :]
+       +16.0 * u[:, kt-3, :] -  3.0 * u[:, kt-4, :]
     ) / 12.0
 
-    # Ghost rows are not in the interior crop; fill non-pathologically.
-    du_dk[:, 0, :]  = du_dk[:, BFR, :]
-    du_dk[:, -1, :] = du_dk[:, kt, :]
+    # Ghost rows (not in interior crop)
+    du_dk[:, :BFR, :]  = du_dk[:, BFR:BFR+1, :]
+    du_dk[:, kt+1:, :] = du_dk[:, kt:kt+1, :]
 
     sl = (slice(BFR, BFR+cfg.NY), slice(BFR, BFR+cfg.NZ), slice(BFR, BFR+cfg.NX))
     du_di_int = du_di[sl]
@@ -1544,37 +2329,79 @@ def main():
     p.add_argument('--old-dir', default=None,
                    help='old checkpoint directory (auto-detected from phase2_generatecheckpoint/step_*_origin* if omitted)')
     p.add_argument('--step', type=int, default=1,
-                   help='new checkpoint step number written into metadata (default: 1)')
+                   help='new checkpoint step number written into metadata (default: 1; '
+                        'must be > 0 for solver restart tripwire at main.cu:692)')
     p.add_argument('--output-root', default='restart/checkpoint',
                    help='root directory for chain-compatible output step_%%08d (default: %(default)s)')
     p.add_argument('--new-dir', default=None,
                    help='advanced override for output checkpoint directory; default is output-root/step_%%08d')
     p.add_argument('--fneq-scale', type=float, default=1.0,
                    help='scale factor applied to interpolated f_neq (legacy mode only; default: %(default)s)')
-    p.add_argument('--fneq-mode', choices=['interp', 'chapman-enskog'], default='chapman-enskog',
-                   help='f_neq reconstruction strategy. "interp" = legacy linear interp of f_neq '
-                        '(loses gradient info; default before fix). "chapman-enskog" = rebuild f_neq '
-                        'on NEW grid from velocity gradients via CE expansion (recommended; default).')
+    p.add_argument('--fneq-mode', choices=['zero', 'interp', 'chapman-enskog'], default='chapman-enskog',
+                   help='f_neq reconstruction strategy. '
+                        '"chapman-enskog" = rebuild f_neq on NEW grid from velocity '
+                        'gradients via CE expansion (default). '
+                        '"zero" = pure equilibrium f=f_eq for stability A/B testing. '
+                        '"interp" = legacy linear interp of f_neq (loses gradient info).')
+    p.add_argument('--project-velocity', choices=['poisson', 'dg-exact', 'div-exact', 'none'],
+                   default='div-exact',
+                   help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
+                        'div(grad(phi))=div(u) to enforce solenoidal constraint (default). '
+                        '"dg-exact" = direct solve of the exact CD2 D*G operator '
+                        'used by the final divergence check. '
+                        '"div-exact" = exact minimum-norm velocity correction '
+                        'that directly zeroes the final CD2 divergence diagnostic. '
+                        '"none" = skip projection (legacy/debug).')
+    p.add_argument('--projection-max-outer', type=int, default=80,
+                   help='maximum outer Richardson iterations for Poisson projection '
+                        '(default: %(default)s; one-time preprocessing cost)')
+    p.add_argument('--projection-div-tol', type=float, default=1e-6,
+                   help='target RMS divergence tolerance for Poisson projection '
+                        '(default: %(default)s)')
+    p.add_argument('--div-gate-tol', type=float, default=1e-10,
+                   help='max|div(u*)| gate before f_eq output. '
+                        'Checkpoint is NOT written if exceeded (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
                         '"comp" = legacy computational-space (j,k,i) index remap '
                         '(causes physical mis-placement when GAMMA differs).')
+    p.add_argument('--interp-order', type=int, choices=[2, 6], default=6,
+                   help='Interpolation order for macro fields in physical-space mode. '
+                        '6 = 7-point Lagrange tensor product O(h^6) (default). '
+                        '2 = bilinear O(h^2) (legacy).')
     p.add_argument('--metric-order', type=int, choices=[2, 6], default=6,
                    help='Order of FD for inverse metric used in CE f_neq reconstruction. '
                         '6 mirrors solver (j-central + k-adaptive Fornberg, '
                         'gilbm/metric_terms.h). 2 is legacy 2nd-order central.')
     p.add_argument('--cfl', type=float, default=None,
-                   help='CFL lambda for dt_global computation. Defaults to variables.h CFL '
-                        'when available, otherwise 0.5.')
+                   help='CFL lambda override for dt_global computation. Production runs should '
+                        'omit this and read CFL from --variables-h/variables.h.')
     p.add_argument('--skip-drift-check', action='store_true',
                    help='Write dt_global=-1.0 to bypass solver Phase 5 drift check '
                         '(fileIO.h:658). Debug only; production runs should leave this off.')
     p.add_argument('--niu', type=float, default=None,
                    help='kinematic viscosity for Chapman-Enskog mode (auto-read from variables.h '
                         'as Uref/Re when omitted)')
+    p.add_argument('--solver-grid-dat', default=None,
+                   help='path to the Tecplot grid .dat that main.cu will read at runtime. '
+                        'When omitted with variables.h available, this is derived from '
+                        'GRID_DAT_DIR/GRID_DAT_REF and NEW NY/NZ/GAMMA/ALPHA. The file is '
+                        'used only for a strict preflight coordinate comparison.')
+    p.add_argument('--no-generate-solver-grid', dest='generate_solver_grid',
+                   action='store_false',
+                   help='do not materialize the derived solver runtime grid before comparison. '
+                        'By default, if the derived solver grid is missing, this script runs '
+                        'the same J_Frohlich/grid_zeta_tool.py --auto entry that main.cu uses.')
+    p.add_argument('--grid-match-tol', type=float, default=0.0,
+                   help='absolute coordinate tolerance for --new-grid-dat vs solver grid '
+                        '(default: 0.0, exact parsed float equality)')
+    p.add_argument('--allow-solver-grid-mismatch', action='store_true',
+                   help='warn instead of aborting when --new-grid-dat differs from the solver '
+                        'runtime grid. Debug only; production should leave this off.')
     p.add_argument('--dry-run', action='store_true',
                    help='validate configuration and output path, then exit before reading/writing checkpoint data')
+    p.set_defaults(generate_solver_grid=True)
 
     g_old = p.add_argument_group('OLD grid (auto-detected from metadata when possible)')
     g_old.add_argument('--old-nx', type=int, default=None)
@@ -1596,11 +2423,14 @@ def main():
     g_new.add_argument('--new-grid-dat', default=None,
                        help='path to new Tecplot grid .dat file')
     g_new.add_argument('--variables-h', default=None,
-                       help='path to variables.h (auto-detected if not specified)')
+                       help='path to variables.h used for NEW grid constants, CFL, and niu. '
+                            'Auto-detected from project root or phase2_generatecheckpoint/variables.h.')
 
     args = p.parse_args()
 
     global OLD, NEW
+
+    args.variables_h = resolve_variables_h_arg(args.variables_h)
 
     if args.auto:
         import re as _re
@@ -1610,6 +2440,8 @@ def main():
         vh_path = args.variables_h or find_variables_h()
         if not vh_path:
             sys.exit('FATAL: --auto requires variables.h (not found)')
+        vh_path = resolve_variables_h_arg(vh_path)
+        args.variables_h = vh_path
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
 
@@ -1640,7 +2472,7 @@ def main():
         has_normal = False
         if os.path.isdir(ckpt_dir):
             for name in sorted(os.listdir(ckpt_dir)):
-                if name.startswith('step_') and '_origin' not in name:
+                if name.startswith('step_') and '_origin' not in name and not _is_origin_dir_name(name):
                     if os.path.isfile(os.path.join(ckpt_dir, name, 'metadata.dat')):
                         has_normal = True
                         break
@@ -1648,10 +2480,10 @@ def main():
             print('[auto] Non-origin checkpoint in restart/checkpoint/ — interpolation not needed')
             sys.exit(0)
 
-        origin = find_origin_checkpoint(phase2_dir)
+        origin = resolve_old_dir(args.old_dir) if args.old_dir else find_origin_checkpoint(phase2_dir)
         if not origin:
-            sys.exit('FATAL: --auto: no phase2_generatecheckpoint/step_*_origin* '
-                     'or restart/step_*_origin* found')
+            sys.exit('FATAL: --auto: no origin checkpoint found '
+                     '(searched step_*_origin* and oldcheckpoint_* in phase2/restart)')
         print('[auto] Origin checkpoint: {}'.format(origin))
         print('[auto] Grid directory: {}'.format(os.path.abspath(grid_dir)))
 
@@ -1675,7 +2507,7 @@ def main():
                                              base_dirs=resolve_bases)
             new_fname = os.path.basename(new_grid)
             new_old_gamma, _ = infer_old_grid_params(new_grid)
-            if new_old_gamma is not None:
+            if new_old_gamma is not None and not new_fname.startswith('newgrid_'):
                 sys.exit('FATAL: --new-grid-dat appears to be an OLD uniform-gamma grid: {}'.format(
                     new_fname))
             inferred_alpha = infer_new_grid_alpha(new_grid)
@@ -1701,9 +2533,6 @@ def main():
                         continue
                     old_candidates.append((full, f, gamma, alpha))
                 elif f.startswith('newgrid_'):
-                    old_style_gamma, _ = infer_old_grid_params(f)
-                    if old_style_gamma is not None:
-                        continue
                     alpha = infer_new_grid_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
@@ -1739,18 +2568,49 @@ def main():
         args.variables_h = vh_path
 
     if args.cfl is None:
-        args.cfl = 0.5
-        vh_for_cfl = getattr(args, 'variables_h', None) or find_variables_h()
-        if vh_for_cfl and os.path.isfile(vh_for_cfl):
-            cfl_from_vh = parse_variables_h(vh_for_cfl).get('CFL')
-            if cfl_from_vh is not None:
-                args.cfl = float(cfl_from_vh)
+        vh_for_cfl = args.variables_h or find_variables_h()
+        if not vh_for_cfl:
+            sys.exit('FATAL: CFL must come from variables.h or explicit --cfl. '
+                     'Pass --variables-h /path/to/variables.h for production checkpoint rebuilds.')
+        vh_for_cfl = resolve_variables_h_arg(vh_for_cfl)
+        args.variables_h = vh_for_cfl
+        cfl_from_vh = parse_variables_h(vh_for_cfl).get('CFL')
+        if cfl_from_vh is None:
+            sys.exit('FATAL: {} has no parseable #define CFL; pass --cfl only for controlled tests.'.format(
+                vh_for_cfl))
+        args.cfl = float(cfl_from_vh)
+        args.cfl_source = 'variables.h'
+    else:
+        args.cfl_source = 'cli'
+        if args.variables_h is None:
+            detected_vh = find_variables_h()
+            if detected_vh:
+                args.variables_h = resolve_variables_h_arg(detected_vh)
 
     args.old_dir = resolve_old_dir(args.old_dir)
 
     print()
     OLD = build_old_config(args)
     NEW = build_new_config(args)
+
+    # --- Grid parameter mismatch diagnostic ---
+    gamma_diff = abs(OLD.GAMMA - NEW.GAMMA)
+    alpha_diff = abs(OLD.ALPHA - NEW.ALPHA)
+    GAMMA_WARN_THRESHOLD = 0.1
+    GAMMA_FATAL_THRESHOLD = 2.0
+    if gamma_diff > GAMMA_FATAL_THRESHOLD:
+        sys.exit('FATAL: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f} '
+                 '(> {:.1f}). This will cause massive interpolation '
+                 'mis-placement. Verify OLD grid provenance.'.format(
+                     OLD.GAMMA, NEW.GAMMA, gamma_diff, GAMMA_FATAL_THRESHOLD))
+    if gamma_diff > GAMMA_WARN_THRESHOLD:
+        print('  WARNING: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f}'.format(
+            OLD.GAMMA, NEW.GAMMA, gamma_diff))
+        print('           Physical-space interpolation handles this correctly,')
+        print('           but verify OLD grid .dat matches the source checkpoint.')
+    if alpha_diff > 0.01:
+        print('  WARNING: OLD ALPHA={} vs NEW ALPHA={} differ by {:.3f}'.format(
+            OLD.ALPHA, NEW.ALPHA, alpha_diff))
 
     t0 = time.time()
     print('=' * 72)
@@ -1762,6 +2622,26 @@ def main():
     print('NEW: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
     print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
+    print()
+
+    solver_grid_dat = None
+    if args.solver_grid_dat:
+        solver_grid_dat = resolve_existing_file(
+            args.solver_grid_dat, '--solver-grid-dat',
+            base_dirs=(project_root(),
+                       os.path.dirname(args.variables_h) if args.variables_h else None))
+    else:
+        solver_grid_dat = derive_solver_grid_dat(args.variables_h, NEW)
+    solver_grid_dat, solver_grid_generated = maybe_generate_solver_grid(
+        solver_grid_dat, args.variables_h, enabled=args.generate_solver_grid)
+    args.solver_grid_dat = solver_grid_dat
+    args.solver_grid_generated = solver_grid_generated
+
+    print('--- Validating NEW grid against solver runtime grid ---')
+    args.solver_grid_match_info = validate_solver_grid_match(
+        NEW.GRID_DAT, solver_grid_dat, NEW,
+        tol=args.grid_match_tol,
+        fatal=not args.allow_solver_grid_mismatch)
     print()
 
     out_dir = resolve_output_dir(args.output_root, args.step, args.new_dir)
@@ -1793,9 +2673,13 @@ def main():
         sys.exit('FATAL: mpi_rank_count mismatch: file={}, expected={}'.format(
             meta_old.get('mpi_rank_count'), OLD.JP))
     Force_value = float(meta_old['Force'])
+    dt_global_old = float(meta_old['dt_global'])
+    half_Fdt_old = 0.5 * dt_global_old * Force_value
     print('      grid_dims={} mpi_rank_count={} step={} FTT={} Force={:.6e}'.format(
         meta_old['grid_dims'], meta_old['mpi_rank_count'],
         meta_old['step'], meta_old['FTT'], Force_value))
+    print('      source dt_global={:.15e} half_Fdt={:.15e}'.format(
+        dt_global_old, half_Fdt_old))
 
     # ---- Step 2: build OLD grid ----
     print('[2/8] Building OLD grid coordinates')
@@ -1806,6 +2690,29 @@ def main():
         y_int.min(), y_int.max(), LY))
     print('      Z interior range [{:.4f}, {:.4f}] (expect [hill, {:.3f}])'.format(
         z_int.min(), z_int.max(), LZ))
+
+    # OLD grid provenance check: if the source checkpoint was itself produced
+    # by this pipeline, its metadata contains interp_old_grid_coord_sha256
+    # (the coordinate hash of the grid used at that time).  Compare against
+    # the current OLD .dat to catch mismatched grid files.
+    old_grid_coord_hash = compute_grid_coord_sha256(OLD.GRID_DAT)
+    print('      OLD grid coordinate SHA-256: {}...{}'.format(
+        old_grid_coord_hash[:16], old_grid_coord_hash[-8:]))
+    stored_old_hash = meta_old.get('interp_new_grid_coord_sha256')
+    if stored_old_hash:
+        if stored_old_hash != old_grid_coord_hash:
+            print('  WARNING: OLD grid .dat coordinate hash does NOT match the hash')
+            print('           stored in the source checkpoint metadata.')
+            print('           metadata hash: {}...{}'.format(
+                stored_old_hash[:16], stored_old_hash[-8:]))
+            print('           current  hash: {}...{}'.format(
+                old_grid_coord_hash[:16], old_grid_coord_hash[-8:]))
+            print('           The OLD .dat may not be the grid that produced this checkpoint.')
+            print('           Proceeding with caution — verify results carefully.')
+        else:
+            print('      OLD grid provenance VERIFIED: coordinate hash matches source checkpoint')
+    else:
+        print('      OLD grid provenance: source checkpoint has no coordinate hash (legacy)')
 
     # ---- Step 3: read checkpoint, compute macros ----
     print('[3/8] Reading {} f-files ({} ranks x 19 directions)'.format(OLD.JP*19, OLD.JP))
@@ -1831,7 +2738,9 @@ def main():
 
     rho_safe = np.where(rho_g > 1e-12, rho_g, 1.0)
     ux_g = momx_g / rho_safe
-    uy_g = momy_g / rho_safe
+    # Match the solver macroscopic velocity definition under Guo forcing:
+    # rho * code_v = sum_i(f_i * e_i,y) + 0.5 * dt * Force.
+    uy_g = (momy_g + half_Fdt_old) / rho_safe
     uz_g = momz_g / rho_safe
     del momx_g, momy_g, momz_g, rho_safe
 
@@ -1843,6 +2752,8 @@ def main():
         np.abs(ux_g[interior_slice]).max(),
         np.abs(uy_g[interior_slice]).max(),
         np.abs(uz_g[interior_slice]).max()))
+    Ub_old = compute_Ub(uy_g, z2d_old, OLD)
+    print('      OLD Ub (j=BFR cross-section) = {:.15e}'.format(Ub_old))
 
     # Cross-check stored rho against sum(f).  In a running LBM with mass
     # correction (checkrho.dat), rho is adjusted independently of f each step,
@@ -1882,17 +2793,27 @@ def main():
     if args.interp_mode == 'phys':
         # OLD grid coords needed for physical-space inverse mapping
         _, y2d_old, z2d_old = build_grid_xyz(OLD)
+        interp_order = args.interp_order
+        interp_label = ('7-point Lagrange O(h^6) + cubic wall ghost extrapolation'
+                        if interp_order == 6 else 'bilinear O(h^2)')
         print('[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space')
+        print('      interpolation order: {} ({})'.format(interp_order, interp_label))
         t = time.time()
         mapping = precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new, OLD, NEW)
         print('      mapping cache build: {:.1f}s'.format(time.time() - t))
-        t = time.time(); rho_new = interpolate_phys_3d_with_mapping(rho_g, mapping)
+
+        if interp_order == 6:
+            interp_fn = interpolate_lagrange7_3d_with_mapping
+        else:
+            interp_fn = interpolate_phys_3d_with_mapping
+
+        t = time.time(); rho_new = interp_fn(rho_g, mapping)
         print('      rho:  {:.1f}s'.format(time.time() - t))
-        t = time.time(); ux_new  = interpolate_phys_3d_with_mapping(ux_g,  mapping)
+        t = time.time(); ux_new  = interp_fn(ux_g,  mapping)
         print('      ux:   {:.1f}s'.format(time.time() - t))
-        t = time.time(); uy_new  = interpolate_phys_3d_with_mapping(uy_g,  mapping)
+        t = time.time(); uy_new  = interp_fn(uy_g,  mapping)
         print('      uy:   {:.1f}s'.format(time.time() - t))
-        t = time.time(); uz_new  = interpolate_phys_3d_with_mapping(uz_g,  mapping)
+        t = time.time(); uz_new  = interp_fn(uz_g,  mapping)
         print('      uz:   {:.1f}s'.format(time.time() - t))
     else:
         if OLD.GAMMA != NEW.GAMMA:
@@ -1914,7 +2835,21 @@ def main():
         uz_new = interpolate_comp_3d(uz_g, OLD, NEW)
         print('      uz:   {:.1f}s'.format(time.time() - t))
 
-    print('      Filling ghost cells')
+    print('      Applying wall velocity constraint: u=v=w=0 (preserve rho)')
+    wall_residual_max, wall_rho_delta_max = clamp_wall_macros(
+        rho_new, ux_new, uy_new, uz_new, NEW)
+    print('      max |u_wall| before clamp = {:.3e}'.format(wall_residual_max))
+    print('      max |rho_wall - 1| preserved = {:.3e}'.format(wall_rho_delta_max))
+
+    rho_modify, mean_before, mean_after, cv_volume = apply_rho_mass_correction(
+        rho_new, NEW, y2d_new, z2d_new)
+    print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(rho_modify))
+    print('      global control volume = {:.15e}'.format(cv_volume))
+    print('      rho volume-weighted mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
+
+    print('      Enforcing periodic duplicate nodes and filling ghost cells')
+    for arr in (rho_new, ux_new, uy_new, uz_new):
+        enforce_periodic_physical_duplicates(arr, NEW)
     fill_ghost(rho_new, NEW)
     fill_ghost(ux_new, NEW)
     fill_ghost(uy_new, NEW)
@@ -1928,8 +2863,131 @@ def main():
         np.abs(uy_new[new_int]).max(),
         np.abs(uz_new[new_int]).max()))
 
-    # ---- Step 6 & 7: f_eq + per-rank write ----
-    print('[6/8] Reconstructing f_eq and writing per-rank files')
+    # Initialization correction order:
+    #   wall-clamp -> rho-correct -> ghost-fill -> Ub-scale -> ghost-refill
+    #   -> Poisson-with-wall-constraint -> final ghost-refill -> div-check -> f_eq
+    # Poisson is the final operation that modifies the interior velocity.  This
+    # prevents wall re-clamping or one-component Ub scaling from reintroducing
+    # divergence after the solenoidal projection.
+
+    # Ub conservation correction: scale streamwise velocity to match OLD Ub.
+    # This is intentionally before the projection because uy-only scaling is
+    # not a divergence-free operation on the curvilinear grid.
+    ub_scale, Ub_new_before, Ub_new_after = apply_Ub_correction(
+        Ub_old, uy_new, z2d_new, NEW)
+
+    print('      Periodic duplicate enforcement and ghost-cell fill before projection')
+    for arr in (rho_new, ux_new, uy_new, uz_new):
+        enforce_periodic_physical_duplicates(arr, NEW)
+    fill_ghost(rho_new, NEW)
+    fill_ghost(ux_new, NEW)
+    fill_ghost(uy_new, NEW)
+    fill_ghost(uz_new, NEW)
+
+    # ---- Poisson velocity projection (solenoidal correction) ----
+    proj_info = None
+    divergence_diagnostic_fn = None
+    if args.project_velocity in ('poisson', 'dg-exact', 'div-exact'):
+        print('      --- Velocity projection ---')
+        from poisson_projection import (
+            poisson_project, poisson_project_dg_exact,
+            velocity_project_div_exact,
+            PoissonProjectionError, divergence_diagnostic)
+        divergence_diagnostic_fn = divergence_diagnostic
+        try:
+            if args.project_velocity == 'dg-exact':
+                ux_new, uy_new, uz_new, proj_info = poisson_project_dg_exact(
+                    ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                    max_outer=args.projection_max_outer,
+                    div_tol=args.projection_div_tol)
+            elif args.project_velocity == 'div-exact':
+                ux_new, uy_new, uz_new, proj_info = velocity_project_div_exact(
+                    ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                    max_outer=args.projection_max_outer,
+                    div_tol=args.projection_div_tol)
+            else:
+                ux_new, uy_new, uz_new, proj_info = poisson_project(
+                    ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new,
+                    max_outer=args.projection_max_outer,
+                    div_tol=args.projection_div_tol)
+        except PoissonProjectionError as e:
+            sys.exit('FATAL: Poisson projection failed: {}\n'
+                     '  Velocity field was NOT modified.\n'
+                     '  Cannot produce a solenoidal checkpoint — aborting.'.format(e))
+        print('      wall velocity constrained inside projection')
+    else:
+        print('      velocity projection: SKIPPED (--project-velocity none)')
+
+    print('      Final periodic duplicate enforcement and ghost-cell fill')
+    for arr in (rho_new, ux_new, uy_new, uz_new):
+        enforce_periodic_physical_duplicates(arr, NEW)
+    fill_ghost(rho_new, NEW)
+    fill_ghost(ux_new, NEW)
+    fill_ghost(uy_new, NEW)
+    fill_ghost(uz_new, NEW)
+
+    Ub_final = compute_Ub(uy_new, z2d_new, NEW)
+    print('      Final Ub before f_eq = {:.15e} (target {:.15e}, residual {:.3e})'.format(
+        Ub_final, Ub_old, abs(Ub_final - Ub_old)))
+
+    # ---- Step 6: NEW-grid dt_global for CE coefficient and metadata ----
+    print('[6/8] Computing NEW-grid dt_global')
+    dt_real, dt_max_component = compute_dt_global_gilbm(
+        NEW, cfl=args.cfl, metric_order=args.metric_order)
+    dx_new = LX / (NEW.NX - 1)
+    print('      dt_global_new = {:.6e}  (CFL={}, metric_order={}, dx={:.6e})'.format(
+        dt_real, args.cfl, args.metric_order, dx_new))
+    print('      dt limited by {} component'.format(dt_max_component))
+    if dt_max_component == 'eta':
+        print('      (eta dominates: spanwise dx is the tightest constraint; '
+              'expected if y/z metric c~ < 1/dx; not an error)')
+    if args.skip_drift_check:
+        dt_for_meta = '-1.0'
+        print('      WARN: --skip-drift-check; metadata dt_global=-1.0, '
+              'but CE still uses dt_global_new above.')
+    else:
+        dt_for_meta = '{:.15e}'.format(dt_real)
+
+    final_div_rms = None
+    final_div_max = None
+    if divergence_diagnostic_fn is None:
+        try:
+            from poisson_projection import divergence_diagnostic as divergence_diagnostic_fn
+        except Exception:
+            divergence_diagnostic_fn = None
+    if divergence_diagnostic_fn is not None:
+        div_rms, div_max = divergence_diagnostic_fn(
+            ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+        final_div_rms = div_rms
+        final_div_max = div_max
+        print('      divergence check: rms = {:.6e}, max|div(u)| = {:.6e}'.format(
+            div_rms, div_max))
+    else:
+        j_mid = slice(BFR + 1, BFR + NEW.NY - 1)
+        k_mid = slice(BFR + 1, BFR + NEW.NZ - 1)
+        i_mid = slice(BFR + 1, BFR + NEW.NX - 1)
+        dudx = (ux_new[j_mid, k_mid, BFR + 2:BFR + NEW.NX]
+                - ux_new[j_mid, k_mid, BFR:BFR + NEW.NX - 2]) / (2.0 * dx_new)
+        dy = (y2d_new[BFR + 2:BFR + NEW.NY, k_mid]
+              - y2d_new[BFR:BFR + NEW.NY - 2, k_mid])[:, :, np.newaxis]
+        dudy = ((uy_new[BFR + 2:BFR + NEW.NY, k_mid, i_mid]
+                 - uy_new[BFR:BFR + NEW.NY - 2, k_mid, i_mid]) / dy)
+        dz = (z2d_new[j_mid, BFR + 2:BFR + NEW.NZ]
+              - z2d_new[j_mid, BFR:BFR + NEW.NZ - 2])[:, :, np.newaxis]
+        dwdz = ((uz_new[j_mid, BFR + 2:BFR + NEW.NZ, i_mid]
+                 - uz_new[j_mid, BFR:BFR + NEW.NZ - 2, i_mid]) / dz)
+        div_max = float(np.max(np.abs(dudx + dudy + dwdz)))
+        final_div_max = div_max
+        print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
+            div_max))
+
+    # ---- Divergence gate: abort if max|div(u*)| exceeds tolerance ----
+    if final_div_max is not None and final_div_max > args.div_gate_tol:
+        sys.exit('FATAL: max|div(u*)| = {:.6e} exceeds --div-gate-tol {:.6e}; '
+                 'checkpoint NOT written.'.format(final_div_max, args.div_gate_tol))
+
+    # ---- Step 7: f_eq + per-rank write ----
+    print('[7/8] Reconstructing f_eq and writing per-rank files')
     parent_dir = os.path.dirname(writing_dir)
     if parent_dir:
         os.makedirs(parent_dir, exist_ok=True)
@@ -1941,8 +2999,10 @@ def main():
         rho_pr[r].tofile(os.path.join(writing_dir, 'rho_{}.bin'.format(r)))
     print('      wrote rho_0..rho_{}.bin'.format(NEW.JP - 1))
 
-    # f_neq reconstruction. Two modes:
-    #   chapman-enskog (default, fix for divergence): rebuild f_neq on NEW grid
+    # f_neq reconstruction. Three modes:
+    #   zero (current stability A/B test): write pure equilibrium f = f_eq
+    #     and therefore force f_neq = 0 on the rebuilt checkpoint.
+    #   chapman-enskog: rebuild f_neq on NEW grid
     #     from velocity gradients via CE expansion. Drops the OLD f_q files
     #     after rho/u extraction; gradients are evaluated on the NEW grid so
     #     they are self-consistent with NEW spacing.
@@ -1951,8 +3011,30 @@ def main():
     rho_check = np.zeros_like(rho_new)
     min_f = float('inf')
     max_f = -float('inf')
+    ce_omega_new = None
+    ce_coeff_used = None
 
-    if args.fneq_mode == 'chapman-enskog':
+    if args.fneq_mode == 'zero':
+        print('      mode = zero: writing pure equilibrium f=f_eq (f_neq forced to 0)')
+        for q in range(19):
+            f_new = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
+            enforce_periodic_physical_duplicates(f_new, NEW)
+            fill_ghost(f_new, NEW)
+
+            rho_check += f_new
+            if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
+                sys.exit('FATAL: f{:02d} contains NaN or Inf after equilibrium reconstruction'.format(q))
+            min_f = min(min_f, float(np.min(f_new)))
+            max_f = max(max_f, float(np.max(f_new)))
+
+            pr = split_y(f_new, NEW)
+            for r in range(NEW.JP):
+                pr[r].tofile(os.path.join(writing_dir, 'f{:02d}_{}.bin'.format(q, r)))
+            print('      wrote f{:02d}_0..f{:02d}_{} (equilibrium, f_neq=0)'.format(
+                q, q, NEW.JP - 1), flush=True)
+            del f_new, pr
+        print('      max |f_neq / f_eq|  = 0.000e+00   (forced equilibrium test)')
+    elif args.fneq_mode == 'chapman-enskog':
         # Resolve viscosity (variables.h: niu = Uref / Re).
         niu = args.niu
         if niu is None:
@@ -1962,9 +3044,17 @@ def main():
         if niu is None:
             sys.exit('FATAL: --fneq-mode chapman-enskog requires niu. '
                      'Pass --niu <value> or run from a project with variables.h.')
-        ce_coeff = -3.0 * niu     # = -(omega - 0.5) * dt   (variables.h:152, 363)
-        print('      mode = chapman-enskog: niu = {:.6e}, ce_coeff = -3*niu = {:.6e}'.format(
-            niu, ce_coeff))
+
+        # CE coefficient: -(omega_global) * dt_global
+        #   omega_new = 3*niu/dt_global_new + 0.5   (main.cu:577)
+        #   -omega_new * dt_global_new = -3*niu - 0.5*dt_global_new
+        ce_omega_new = 3.0 * niu / dt_real + 0.5
+        ce_coeff = -ce_omega_new * dt_real
+        ce_coeff_used = ce_coeff
+        print('      mode = chapman-enskog: niu = {:.6e}'.format(niu))
+        print('      omega_new = 3*niu/dt_global_new + 0.5 = {:.12e}'.format(ce_omega_new))
+        print('      ce_coeff = -(omega)*dt = {:.6e}  (= -3niu - 0.5dt = {:.6e})'.format(
+            ce_coeff, -3.0 * niu - 0.5 * dt_real))
 
         # Inverse metric on NEW grid. Order 6 mirrors solver (gilbm/metric_terms.h);
         # order 2 is legacy 2nd-order central (kept for A/B comparison).
@@ -1976,25 +3066,6 @@ def main():
             args.metric_order,
             'Fornberg j-central + k-adaptive' if args.metric_order == 6 else '2nd-order central'))
         dx_phys = LX / (NEW.NX - 1)
-
-        # No-slip wall clamp: physical wall is u=v=w=0. After macro interpolation,
-        # u_new[BFR] may inherit OLD's wall value
-        # which may carry small residual (~O(δz·∂u/∂z|_wall) plus FP noise) because
-        # LBM CE wall BC produces approximately, not bitwise, zero. The 4th-order
-        # one-sided FD formula at boundary_conditions.h:30 explicitly assumes
-        # u_wall=0 (drops the -25*u_wall/12 term). Clamp here so CE wall stress
-        # estimate matches the solver's wall BC kernel exactly.
-        kt = NEW.NZ6 - 1 - BFR  # top wall row index
-        wall_residual_max = max(
-            float(np.max(np.abs(ux_new[:, BFR, :]))), float(np.max(np.abs(ux_new[:, kt, :]))),
-            float(np.max(np.abs(uy_new[:, BFR, :]))), float(np.max(np.abs(uy_new[:, kt, :]))),
-            float(np.max(np.abs(uz_new[:, BFR, :]))), float(np.max(np.abs(uz_new[:, kt, :]))),
-        )
-        print('      max |u_wall| before clamp = {:.3e}   (any value > 1e-10 indicates '
-              'OLD checkpoint or interp introduced non-zero wall residual)'.format(wall_residual_max))
-        for arr in (ux_new, uy_new, uz_new):
-            arr[:, BFR, :] = 0.0
-            arr[:, kt, :]  = 0.0
 
         # 9-component velocity gradient tensor on NEW interior
         t = time.time()
@@ -2024,6 +3095,7 @@ def main():
 
             f_new = feq_full.copy()
             f_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX] += fneq_int
+            enforce_periodic_physical_duplicates(f_new, NEW)
             fill_ghost(f_new, NEW)
             del feq_full
 
@@ -2069,6 +3141,8 @@ def main():
             feq = compute_feq_q(rho_new, ux_new, uy_new, uz_new, q)
             f_new = feq + args.fneq_scale * fneq_new
             del feq, fneq_new
+            enforce_periodic_physical_duplicates(f_new, NEW)
+            fill_ghost(f_new, NEW)
 
             rho_check += f_new
             if np.any(np.isnan(f_new)) or np.any(np.isinf(f_new)):
@@ -2095,32 +3169,12 @@ def main():
     del rho_g, ux_g, uy_g, uz_g, rho_check
 
     # ---- Step 8: metadata + atomic rename ----
-    print('[7/8] Writing new metadata.dat')
+    print('[8/8] Writing new metadata.dat')
     # dt_global handling (Phase B):
-    #   compute_dt_global_gilbm mirrors gilbm/precompute.h:78-115
-    #   ComputeGlobalTimeStep:  dt = CFL / max|c~|  over (eta, xi, zeta) and
-    #   D3Q19 dirs. With --metric-order 6 (default), the metric matches solver
-    #   to ~6th order accuracy, so dt_saved should pass solver Phase 5 drift
-    #   check (fileIO.h:658: |dt_runtime - dt_saved| < 1e-6).
-    #
-    #   --skip-drift-check writes -1.0 to trigger fileIO.h:650 legacy skip path
-    #   ("metadata.dat 無 dt_global 欄位, 跳過漂移檢查") for debugging.
-    if args.skip_drift_check:
-        dt_for_meta = '-1.0'
-        dt_max_component = 'SKIPPED'
-        print('      WARN: --skip-drift-check; dt_global=-1.0; '
-              'solver Phase 5 drift check WILL be skipped.')
-    else:
-        dt_real, dt_max_component = compute_dt_global_gilbm(
-            NEW, cfl=args.cfl, metric_order=args.metric_order)
-        dt_for_meta = '{:.15e}'.format(dt_real)
-        dx_new = LX / (NEW.NX - 1)
-        print('      dt_global = {:.6e}  (CFL={}, metric_order={}, dx={:.6e})'.format(
-            dt_real, args.cfl, args.metric_order, dx_new))
-        print('      dt limited by {} component'.format(dt_max_component))
-        if dt_max_component == 'eta':
-            print('      (eta dominates: spanwise dx is the tightest constraint; '
-                  'expected if y/z metric c~ < 1/dx; not an error)')
+    #   compute_dt_global_gilbm mirrors gilbm/precompute.h:78-115.
+    #   CE reconstruction always uses dt_global_new computed above. Metadata
+    #   writes the same value unless --skip-drift-check explicitly requests
+    #   dt_global=-1.0 for solver drift-check debugging.
     naive_minsize = compute_minsize(NEW)
     origin_meta_path = os.path.join(args.old_dir, 'metadata.dat')
     # Preserve controller state from origin checkpoint to avoid the F* step
@@ -2182,23 +3236,87 @@ def main():
         'interp_new_gamma': str(NEW.GAMMA),
         'interp_fneq_mode': args.fneq_mode,
         'interp_macro_mode': args.interp_mode,
+        'interp_macro_order': str(args.interp_order),
         'interp_metric_order': str(args.metric_order),
         'interp_cfl': str(args.cfl),
+        'interp_cfl_source': args.cfl_source,
         'interp_dt_max_component': dt_max_component,
         'interp_origin_ftt': origin_ftt,
         'interp_origin_accu_count': origin_accu,
+        'interp_Ub_old': '{:.15e}'.format(Ub_old),
+        'interp_Ub_new_before': '{:.15e}'.format(Ub_new_before),
+        'interp_Ub_new_after': '{:.15e}'.format(Ub_new_after),
+        'interp_Ub_final_before_feq': '{:.15e}'.format(Ub_final),
+        'interp_Ub_scale': '{:.15e}'.format(ub_scale),
         'interp_time': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'interp_project_velocity': args.project_velocity,
+        'interp_projection_max_outer': str(args.projection_max_outer),
+        'interp_projection_div_tol': '{:.6e}'.format(args.projection_div_tol),
     }
+    if final_div_rms is not None:
+        new_meta['interp_final_div_rms'] = '{:.6e}'.format(final_div_rms)
+    if final_div_max is not None:
+        new_meta['interp_final_div_max'] = '{:.6e}'.format(final_div_max)
+    if proj_info is not None:
+        new_meta['interp_proj_div_rms_before'] = '{:.6e}'.format(proj_info['div_rms_before'])
+        new_meta['interp_proj_div_max_before'] = '{:.6e}'.format(proj_info['div_max_before'])
+        new_meta['interp_proj_div_rms_after'] = '{:.6e}'.format(proj_info['div_rms_after'])
+        new_meta['interp_proj_div_max_after'] = '{:.6e}'.format(proj_info['div_max_after'])
+        new_meta['interp_proj_div_rms_interior'] = '{:.6e}'.format(proj_info['div_rms_interior'])
+        new_meta['interp_proj_outer_iters'] = str(proj_info['outer_iters'])
+        new_meta['interp_proj_solve_time_s'] = '{:.1f}'.format(proj_info['solve_time_s'])
+        if 'method' in proj_info:
+            new_meta['interp_proj_method'] = str(proj_info['method'])
+        if 'rhs_mean' in proj_info:
+            new_meta['interp_proj_rhs_mean'] = '{:.6e}'.format(proj_info['rhs_mean'])
+        if 'true_residual_rms' in proj_info:
+            new_meta['interp_proj_true_residual_rms'] = '{:.6e}'.format(
+                proj_info['true_residual_rms'])
+        if 'true_residual_max' in proj_info:
+            new_meta['interp_proj_true_residual_max'] = '{:.6e}'.format(
+                proj_info['true_residual_max'])
+    if ce_omega_new is not None:
+        new_meta['interp_ce_omega_global_new'] = '{:.15e}'.format(ce_omega_new)
+        new_meta['interp_ce_coeff'] = '{:.15e}'.format(ce_coeff_used)
     # interp_fneq_scale only meaningful in legacy 'interp' mode; CE mode does not use it.
     if args.fneq_mode == 'interp':
         new_meta['interp_fneq_scale'] = str(args.fneq_scale)
     vh_for_prov = getattr(args, 'variables_h', None)
     if vh_for_prov and os.path.isfile(vh_for_prov):
+        new_meta['interp_variables_h'] = os.path.abspath(vh_for_prov)
         new_meta['interp_variables_h_mtime'] = str(int(os.path.getmtime(vh_for_prov)))
     if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT):
         new_meta['interp_new_grid_mtime'] = str(int(os.path.getmtime(NEW.GRID_DAT)))
+        new_fp = read_grid_params_sha256(NEW.GRID_DAT)
+        if new_fp:
+            new_meta['interp_new_grid_params_sha256'] = new_fp
+        new_meta['interp_new_grid_coord_sha256'] = compute_grid_coord_sha256(NEW.GRID_DAT)
     if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT):
         new_meta['interp_old_grid_mtime'] = str(int(os.path.getmtime(OLD.GRID_DAT)))
+        old_fp = read_grid_params_sha256(OLD.GRID_DAT)
+        if old_fp:
+            new_meta['interp_old_grid_params_sha256'] = old_fp
+        new_meta['interp_old_grid_coord_sha256'] = old_grid_coord_hash
+    solver_match = getattr(args, 'solver_grid_match_info', None)
+    if args.solver_grid_dat:
+        new_meta['interp_solver_grid'] = os.path.abspath(args.solver_grid_dat)
+        if os.path.isfile(args.solver_grid_dat):
+            new_meta['interp_solver_grid_mtime'] = str(int(os.path.getmtime(args.solver_grid_dat)))
+        new_meta['interp_solver_grid_generated'] = (
+            '1' if getattr(args, 'solver_grid_generated', False) else '0')
+    if solver_match:
+        new_meta['interp_solver_grid_match'] = '1' if solver_match.get('ok') else '0'
+        if 'max_abs' in solver_match:
+            new_meta['interp_solver_grid_max_abs_diff'] = '{:.15e}'.format(
+                solver_match['max_abs'])
+            new_meta['interp_solver_grid_max_abs_x'] = '{:.15e}'.format(
+                solver_match['max_abs_x'])
+            new_meta['interp_solver_grid_max_abs_y'] = '{:.15e}'.format(
+                solver_match['max_abs_y'])
+        if solver_match.get('new_grid_params_sha256'):
+            new_meta['interp_new_grid_params_sha256'] = solver_match['new_grid_params_sha256']
+        if solver_match.get('solver_grid_params_sha256'):
+            new_meta['interp_solver_grid_params_sha256'] = solver_match['solver_grid_params_sha256']
     if os.path.isfile(origin_meta_path):
         new_meta['interp_origin_metadata_mtime'] = str(int(os.path.getmtime(origin_meta_path)))
     write_metadata(os.path.join(writing_dir, 'metadata.dat'), new_meta)
@@ -2209,7 +3327,7 @@ def main():
         print('      Phase 5 drift check skipped by request; runtime computes its own dt')
     print('      (naive minSize for reference: {:.6e}; runtime Imamura dt typically ~0.4-0.5x of this)'.format(naive_minsize))
 
-    print('[8/8] Atomic rename: {} -> {}'.format(writing_dir, out_dir))
+    print('      Atomic rename: {} -> {}'.format(writing_dir, out_dir))
     os.rename(writing_dir, out_dir)
 
     restart_root = os.path.dirname(os.path.abspath(args.output_root))
@@ -2223,6 +3341,17 @@ def main():
         'variables_h_mtime': str(int(os.path.getmtime(vh_for_prov))) if vh_for_prov and os.path.isfile(vh_for_prov) else '',
         'new_grid_mtime': str(int(os.path.getmtime(NEW.GRID_DAT))) if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT) else '',
         'old_grid_mtime': str(int(os.path.getmtime(OLD.GRID_DAT))) if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT) else '',
+        'new_grid_params_sha256': (read_grid_params_sha256(NEW.GRID_DAT) or '') if NEW.GRID_DAT and os.path.isfile(NEW.GRID_DAT) else '',
+        'old_grid_params_sha256': (read_grid_params_sha256(OLD.GRID_DAT) or '') if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT) else '',
+        'solver_grid': os.path.abspath(args.solver_grid_dat) if args.solver_grid_dat else '',
+        'solver_grid_mtime': str(int(os.path.getmtime(args.solver_grid_dat))) if args.solver_grid_dat and os.path.isfile(args.solver_grid_dat) else '',
+        'solver_grid_params_sha256': (read_grid_params_sha256(args.solver_grid_dat) or '') if args.solver_grid_dat and os.path.isfile(args.solver_grid_dat) else '',
+        'solver_grid_generated': ('1' if getattr(args, 'solver_grid_generated', False) else
+                                  ('0' if args.solver_grid_dat else '')),
+        'solver_grid_match': ('1' if solver_match and solver_match.get('ok') else
+                              ('0' if solver_match else '')),
+        'solver_grid_max_abs_diff': ('{:.15e}'.format(solver_match['max_abs'])
+                                     if solver_match and 'max_abs' in solver_match else ''),
         'created': time.strftime('%Y-%m-%d %H:%M:%S'),
     }
     prov_tmp = prov_path + '.WRITING'
