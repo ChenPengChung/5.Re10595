@@ -293,6 +293,19 @@
 #define     GHOST_EXTRAP_ORDER  3
 
 
+
+// ----------------------------------------------------------------
+//  §7b. 質量修正體積權重方法 (Cell Volume Method)
+// ----------------------------------------------------------------
+//   0 = Shoelace (離散多邊形精確面積, telescoping 保證)
+//   1 = Jacobian 3×3 Gauss-Legendre quadrature (O(h⁶), 捕捉曲率)
+//   x 方向: dx = x_h[i+1] - x_h[i] 為精確節點間距 (FTC)，無需 GL
+#ifndef CELL_VOLUME_METHOD
+#define     CELL_VOLUME_METHOD  0
+#endif
+#if CELL_VOLUME_METHOD != 0 && CELL_VOLUME_METHOD != 1
+#error "CELL_VOLUME_METHOD must be 0 (Shoelace) or 1 (Jacobian 3x3 GL)"
+#endif
 // ================================================================
 //  §8. 重啟 (Restart) 配置
 // ================================================================
