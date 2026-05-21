@@ -98,6 +98,7 @@ import os
 import sys
 import math
 import time
+import hashlib
 import argparse
 import subprocess
 import numpy as np
@@ -116,6 +117,7 @@ LY = 9.0
 LZ = 3.036
 H_HILL = 1.0
 BFR = 3
+_DOMAIN_FROM_VH = False
 
 # ---------------------------------------------------------------
 # Grid configurations
@@ -234,6 +236,17 @@ def read_grid_dat_coords(path, expected_i=None, expected_j=None):
             raise ValueError('{} has {} coordinate rows, expected {}'.format(
                 path, coords.shape[0], expected))
     return coords
+
+
+def compute_grid_coord_sha256(path):
+    """Compute SHA-256 of raw coordinate data from a Tecplot .dat grid file.
+
+    Hashes the binary representation of parsed (x, y) coordinate pairs so that
+    two grids with identical physical coordinates produce the same hash
+    regardless of header formatting or whitespace differences.
+    """
+    coords = read_grid_dat_coords(path)
+    return hashlib.sha256(coords.tobytes()).hexdigest()
 
 
 def derive_solver_grid_dat(variables_h, cfg):
@@ -793,7 +806,7 @@ def build_new_config(args):
             for k in ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'):
                 if k in vh_defs:
                     print('    {} = {}'.format(k, vh_defs[k]))
-            global LX, LY, LZ, H_HILL
+            global LX, LY, LZ, H_HILL, _DOMAIN_FROM_VH
             if 'LX' in vh_defs:
                 LX = vh_defs['LX']
             if 'LY' in vh_defs:
@@ -802,6 +815,7 @@ def build_new_config(args):
                 LZ = vh_defs['LZ']
             if 'H_HILL' in vh_defs:
                 H_HILL = vh_defs['H_HILL']
+            _DOMAIN_FROM_VH = True
     else:
         print('  Standalone mode: variables.h not found')
         print('  Enter NEW grid parameters interactively.')
@@ -1380,14 +1394,30 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     i_o_arr = np.floor(i_o_float_arr).astype(np.int64)
     xi_i_arr = i_o_float_arr - i_o_arr
 
+    total_pts = cfg_new.NY * cfg_new.NZ
+    n_affected = n_clamped + n_nearest
+    affected_frac = n_affected / total_pts if total_pts > 0 else 0.0
+
     if n_clamped > 0:
-        print('      domain-boundary clamp applied to {} of {} points (FP noise at shared boundary)'.format(
-            n_clamped, cfg_new.NY * cfg_new.NZ))
+        print('      domain-boundary clamp applied to {} of {} points ({:.2f}%)'.format(
+            n_clamped, total_pts, 100.0 * n_clamped / total_pts))
     if n_nearest > 0:
-        print('      nearest-cell fallback applied to {} points (wall surface mismatch between OLD/NEW grids)'.format(
-            n_nearest))
-    print('      Phys mapping cache built: {} cells located'.format(
-        cfg_new.NY * cfg_new.NZ))
+        print('      nearest-cell fallback applied to {} of {} points ({:.2f}%)'.format(
+            n_nearest, total_pts, 100.0 * n_nearest / total_pts))
+    if n_affected > 0:
+        print('      total clamp+fallback: {} of {} points ({:.2f}%)'.format(
+            n_affected, total_pts, 100.0 * affected_frac))
+
+    CLAMP_FRACTION_FATAL = 0.05
+    if affected_frac > CLAMP_FRACTION_FATAL:
+        raise ValueError(
+            'FATAL: {:.1f}% of NEW grid points required clamping/fallback '
+            '(threshold {:.0f}%). This usually means the OLD grid .dat has '
+            'significantly different geometry from the NEW grid (wrong LZ, '
+            'GAMMA, or ALPHA). Verify OLD grid provenance and re-run.'.format(
+                100.0 * affected_frac, 100.0 * CLAMP_FRACTION_FATAL))
+
+    print('      Phys mapping cache built: {} cells located'.format(total_pts))
     return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
                          cfg_old, cfg_new)
 
@@ -1657,35 +1687,143 @@ def clamp_wall_macros(rho, ux, uy, uz, cfg):
     return wall_u_max_before, wall_rho_max_delta_before
 
 
-def apply_rho_mass_correction(rho, cfg):
-    """Restore full-domain mean rho=1 with the same uniform offset as runtime.
+def compute_cv_weights(y_2d, z_2d, cfg):
+    """Build per-node control-volume weights matching the solver.
+
+    Mirrors evolution.h:InitializeMassCorrectionWeights + MassCorrectionCellVolume.
+    Each interior node weight = 1/8 * sum of volumes of all cells sharing
+    that node.  Wall nodes (k=BFR or k=NZ6-4) have one fewer k-cell neighbour.
+
+    Vectorized: computes all cell volumes at once, then scatters 1/8 of each
+    cell volume to its 8 corner nodes.
+
+    Returns (weights_3d[NY6, NZ6, NX6], global_volume).
+    """
+    if not _DOMAIN_FROM_VH:
+        raise RuntimeError(
+            'FATAL: LX={} is the hardcoded default — variables.h was not parsed. '
+            'Volume-weighted mass correction requires LX from variables.h to '
+            'match the solver. Pass --variables-h or run from a project directory '
+            'containing variables.h.'.format(LX))
+    dx_span = LX / (cfg.NX - 1)
+
+    # Cell index ranges (cell (j,k) has corners at (j,k),(j+1,k),(j+1,k+1),(j,k+1))
+    # Solver cell loops: j_cell in [2, NYD6-4), k_cell in [2, NZ6-4), i_cell in [2, NX6-4)
+    # Global equivalent: j_cell in [BFR-1, NY6-4), k_cell in [BFR, NZ6-4), i_cell in [BFR-1, NX6-4)
+    # But node loop is j in [BFR, NY6-4), k in [BFR, NZ6-3), i in [BFR, NX6-4),
+    # referencing cells at (j-1..j, k-1..k, i-1..i).
+    # So the cells that contribute are: j_cell in [BFR-1, NY6-4),
+    #   k_cell in [BFR, NZ6-4), i_cell in [BFR-1, NX6-4).
+    # With periodic wrap: i_cell = BFR-1 maps to NX6-5.
+
+    # All cell volumes via vectorized shoelace
+    j_lo, j_hi = BFR - 1, cfg.NY6 - 4      # j_cell range
+    k_lo, k_hi = BFR,     cfg.NZ6 - 4       # k_cell range
+
+    y0 = y_2d[j_lo:j_hi,     k_lo:k_hi]
+    z0 = z_2d[j_lo:j_hi,     k_lo:k_hi]
+    y1 = y_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    z1 = z_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    y2 = y_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    z2 = z_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    y3 = y_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+    z3 = z_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+
+    area_yz = 0.5 * np.abs(y0*z1 - z0*y1
+                          + y1*z2 - z1*y2
+                          + y2*z3 - z2*y3
+                          + y3*z0 - z3*y0)
+    cell_vol = abs(dx_span) * area_yz     # shape (nj_cells, nk_cells)
+
+    # Per-cell volume validation (mirrors solver MPI_Abort on invalid cell)
+    bad_mask = ~(np.isfinite(cell_vol) & (cell_vol > 0.0))
+    if np.any(bad_mask):
+        bad_idx = np.argwhere(bad_mask)
+        first = bad_idx[0]
+        raise ValueError(
+            'FATAL: invalid cell volume at (j_cell={}, k_cell={}): {:.17e}. '
+            '{} of {} cells are invalid.'.format(
+                j_lo + int(first[0]), k_lo + int(first[1]),
+                float(cell_vol[first[0], first[1]]),
+                int(bad_mask.sum()), cell_vol.size))
+
+    # Scatter 1/8 of each cell volume to its 8 corner nodes.
+    # Each cell (j_cell, k_cell) contributes to nodes at:
+    #   j in {j_cell, j_cell+1}, k in {k_cell, k_cell+1}, i in {i_cell, i_cell+1}
+    # For i: all cells have the same dx_span (uniform x), and each node touches
+    #   cells at i_cell=(i-1) and i_cell=i.  With periodic wrap at i=BFR,
+    #   every interior node has exactly 2 i-neighbours.  So the i-contribution
+    #   is the same for all i nodes: factor 2 from the two i_cells.
+    #   Wall nodes in k have only 1 k-cell instead of 2.
+    # We accumulate in a 2D (j, k) weight array, then broadcast uniformly
+    # over i with the factor-of-2 for the two i-cells.
+
+    nj_node = cfg.NY6 - 7   # j in [BFR, NY6-4)
+    nk_node = cfg.NZ6 - 6   # k in [BFR, NZ6-3)
+    w2d = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+
+    # Each cell (j_cell, k_cell) -> scatter to 4 corner nodes in (j, k)
+    nj_cells = j_hi - j_lo
+    nk_cells = k_hi - k_lo
+    for dj in (0, 1):
+        for dk in (0, 1):
+            j_nodes = np.arange(j_lo + dj, j_lo + dj + nj_cells)
+            k_nodes = np.arange(k_lo + dk, k_lo + dk + nk_cells)
+            w2d[np.ix_(j_nodes, k_nodes)] += cell_vol
+
+    # Scale: 1/8 per cell corner, times 2 for the two i-cells each node touches
+    # = 2 * (1/8) = 1/4.  But i=BFR wraps periodically to NX6-5, which the
+    # solver handles identically (same volume), so factor is the same.
+    w2d *= 0.25
+
+    # Build 3D weights: uniform in i for the interior node range
+    ni_node = cfg.NX6 - 7   # i in [BFR, NX6-4)
+    weights = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
+    for i in range(BFR, BFR + ni_node):
+        weights[:, :, i] = w2d
+
+    global_volume = float(np.sum(weights[BFR:BFR+nj_node,
+                                          BFR:BFR+nk_node,
+                                          BFR:BFR+ni_node]))
+    if not (global_volume > 0.0) or not np.isfinite(global_volume):
+        raise ValueError('Invalid global control volume: {:.17e}'.format(global_volume))
+
+    return weights, global_volume
+
+
+def apply_rho_mass_correction(rho, cfg, y_2d, z_2d):
+    """Volume-weighted mass correction matching the solver exactly.
+
+    Mirrors evolution.h:ComputeVolumeWeightedRhoAverageRoot +
+    UpdateVolumeWeightedMassCorrection:
+      rho_avg    = Σ(rho * cv_weight) / Σ(cv_weight)
+      rho_modify = 1 - rho_avg
+      rho[domain] += rho_modify   (uniform additive to all physical nodes)
 
     The conserved domain matches the solver reduction domain:
       i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
     including both physical wall rows and excluding periodic duplicates.
-
-    The runtime GILBM kernel applies rho_modify to every physical k row,
-    including both walls.  Rebuild checkpoints must use the same policy;
-    otherwise the restart state introduces an artificial wall-pressure reset.
     """
     ni = cfg.NX6 - 7
     nj = cfg.NY6 - 7
     nk = cfg.NZ6 - 6
-    N_full = ni * nj * nk
 
     full_domain = (slice(BFR, BFR + nj),
                    slice(BFR, BFR + nk),
                    slice(BFR, BFR + ni))
 
-    rho_sum = float(np.sum(rho[full_domain]))
-    rho_global_avg = rho_sum / float(N_full)
+    weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
+    weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
+    rho_global_avg = weighted_rho_sum / global_volume
     rho_modify = 1.0 - rho_global_avg
 
     mean_before = rho_global_avg
     rho[full_domain] += rho_modify
-    mean_after = float(np.sum(rho[full_domain])) / float(N_full)
 
-    return rho_modify, mean_before, mean_after
+    weighted_rho_sum_after = float(np.sum(rho[full_domain] * weights[full_domain]))
+    mean_after = weighted_rho_sum_after / global_volume
+
+    return rho_modify, mean_before, mean_after, global_volume
 
 
 def compute_Ub(uy, z_2d, cfg):
@@ -2436,6 +2574,25 @@ def main():
     OLD = build_old_config(args)
     NEW = build_new_config(args)
 
+    # --- Grid parameter mismatch diagnostic ---
+    gamma_diff = abs(OLD.GAMMA - NEW.GAMMA)
+    alpha_diff = abs(OLD.ALPHA - NEW.ALPHA)
+    GAMMA_WARN_THRESHOLD = 0.1
+    GAMMA_FATAL_THRESHOLD = 2.0
+    if gamma_diff > GAMMA_FATAL_THRESHOLD:
+        sys.exit('FATAL: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f} '
+                 '(> {:.1f}). This will cause massive interpolation '
+                 'mis-placement. Verify OLD grid provenance.'.format(
+                     OLD.GAMMA, NEW.GAMMA, gamma_diff, GAMMA_FATAL_THRESHOLD))
+    if gamma_diff > GAMMA_WARN_THRESHOLD:
+        print('  WARNING: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f}'.format(
+            OLD.GAMMA, NEW.GAMMA, gamma_diff))
+        print('           Physical-space interpolation handles this correctly,')
+        print('           but verify OLD grid .dat matches the source checkpoint.')
+    if alpha_diff > 0.01:
+        print('  WARNING: OLD ALPHA={} vs NEW ALPHA={} differ by {:.3f}'.format(
+            OLD.ALPHA, NEW.ALPHA, alpha_diff))
+
     t0 = time.time()
     print('=' * 72)
     print('LBM checkpoint interpolator: {}x{}x{} (jp={}) -> {}x{}x{} (jp={})'.format(
@@ -2514,6 +2671,29 @@ def main():
         y_int.min(), y_int.max(), LY))
     print('      Z interior range [{:.4f}, {:.4f}] (expect [hill, {:.3f}])'.format(
         z_int.min(), z_int.max(), LZ))
+
+    # OLD grid provenance check: if the source checkpoint was itself produced
+    # by this pipeline, its metadata contains interp_old_grid_coord_sha256
+    # (the coordinate hash of the grid used at that time).  Compare against
+    # the current OLD .dat to catch mismatched grid files.
+    old_grid_coord_hash = compute_grid_coord_sha256(OLD.GRID_DAT)
+    print('      OLD grid coordinate SHA-256: {}...{}'.format(
+        old_grid_coord_hash[:16], old_grid_coord_hash[-8:]))
+    stored_old_hash = meta_old.get('interp_new_grid_coord_sha256')
+    if stored_old_hash:
+        if stored_old_hash != old_grid_coord_hash:
+            print('  WARNING: OLD grid .dat coordinate hash does NOT match the hash')
+            print('           stored in the source checkpoint metadata.')
+            print('           metadata hash: {}...{}'.format(
+                stored_old_hash[:16], stored_old_hash[-8:]))
+            print('           current  hash: {}...{}'.format(
+                old_grid_coord_hash[:16], old_grid_coord_hash[-8:]))
+            print('           The OLD .dat may not be the grid that produced this checkpoint.')
+            print('           Proceeding with caution — verify results carefully.')
+        else:
+            print('      OLD grid provenance VERIFIED: coordinate hash matches source checkpoint')
+    else:
+        print('      OLD grid provenance: source checkpoint has no coordinate hash (legacy)')
 
     # ---- Step 3: read checkpoint, compute macros ----
     print('[3/8] Reading {} f-files ({} ranks x 19 directions)'.format(OLD.JP*19, OLD.JP))
@@ -2642,9 +2822,11 @@ def main():
     print('      max |u_wall| before clamp = {:.3e}'.format(wall_residual_max))
     print('      max |rho_wall - 1| preserved = {:.3e}'.format(wall_rho_delta_max))
 
-    rho_modify, mean_before, mean_after = apply_rho_mass_correction(rho_new, NEW)
-    print('      rho mass correction (full domain): rho_modify = {:.6e}'.format(rho_modify))
-    print('      rho full-domain mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
+    rho_modify, mean_before, mean_after, cv_volume = apply_rho_mass_correction(
+        rho_new, NEW, y2d_new, z2d_new)
+    print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(rho_modify))
+    print('      global control volume = {:.15e}'.format(cv_volume))
+    print('      rho volume-weighted mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
 
     print('      Enforcing periodic duplicate nodes and filling ghost cells')
     for arr in (rho_new, ux_new, uy_new, uz_new):
@@ -3097,11 +3279,13 @@ def main():
         new_fp = read_grid_params_sha256(NEW.GRID_DAT)
         if new_fp:
             new_meta['interp_new_grid_params_sha256'] = new_fp
+        new_meta['interp_new_grid_coord_sha256'] = compute_grid_coord_sha256(NEW.GRID_DAT)
     if OLD.GRID_DAT and os.path.isfile(OLD.GRID_DAT):
         new_meta['interp_old_grid_mtime'] = str(int(os.path.getmtime(OLD.GRID_DAT)))
         old_fp = read_grid_params_sha256(OLD.GRID_DAT)
         if old_fp:
             new_meta['interp_old_grid_params_sha256'] = old_fp
+        new_meta['interp_old_grid_coord_sha256'] = old_grid_coord_hash
     solver_match = getattr(args, 'solver_grid_match_info', None)
     if args.solver_grid_dat:
         new_meta['interp_solver_grid'] = os.path.abspath(args.solver_grid_dat)
