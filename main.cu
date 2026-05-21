@@ -1315,6 +1315,20 @@ int main(int argc, char *argv[])
                 CHECK_CUDA( cudaMemset(oy_tavg_d, 0, tavg_bytes_gate) );
                 CHECK_CUDA( cudaMemset(oz_tavg_d, 0, tavg_bytes_gate) );
             }
+
+            // CV ring buffer + convergence state (loaded from checkpoint, must reset with statistics)
+            cv_idx = 0;
+            cv_buf_count = 0;
+            memset(uu_history,      0, sizeof(uu_history));
+            memset(k_history,       0, sizeof(k_history));
+            memset(ftt_cv_history,  0, sizeof(ftt_cv_history));
+            g_cv_uu       = 100.0;
+            g_cv_k        = 100.0;
+            g_conv_status = 0;
+            g_conv_count  = 0;
+
+            if (myid == 0)
+                printf("[FTT-GATE] CV buffer + convergence state reset to initial values.\n");
         }
     }
 
