@@ -1473,10 +1473,11 @@ int main(int argc, char *argv[])
             fprintf(fhdr, "# Col1: step          — time step number\n");
             fprintf(fhdr, "# Col2: FTT           — flow-through time\n");
             fprintf(fhdr, "# Col3: rho_target    — target density (always 1.0)\n");
-            fprintf(fhdr, "# Col4: rho_avg       — global average density (full precision)\n");
+            fprintf(fhdr, "# Col4: rho_avg       — global volume-weighted average density (full precision)\n");
             fprintf(fhdr, "# Col5: rho_drift     — rho_avg - 1.0 (positive = heavier than target)\n");
             fprintf(fhdr, "# Col6: rho_correction— mass correction applied NEXT step (= -rho_drift)\n");
             fprintf(fhdr, "# Col7: SKIP_MC       — 0=mass correction ON, 1=mid-step correction OFF\n");
+            fprintf(fhdr, "# NOTE: rho_avg uses control-volume weights from the curvilinear y-z grid.\n");
             fprintf(fhdr, "# NOTE: |Col5| == |Col6| is EXPECTED — both are computed from the same\n");
             fprintf(fhdr, "#       density field. Col6 = -Col5 because the correction exactly\n");
             fprintf(fhdr, "#       compensates the drift. Check Col5 trend for mass conservation.\n");
@@ -2072,32 +2073,21 @@ int main(int argc, char *argv[])
             }
         }
 
-        // ===== Global Mass Conservation Modify (GPU reduction — no SendDataToCPU) =====
+        // ===== Global Mass Conservation Modify (volume-weighted GPU reduction — no SendDataToCPU) =====
         cudaDeviceSynchronize();
         cudaMemcpy(Force_h, Force_d, sizeof(double), cudaMemcpyDeviceToHost);
         UpdateVolumeWeightedMassCorrection();
 
-        // ===== Mass Conservation Check + NaN early stop (every 100 steps, GPU reduction) =====
+        // ===== Mass Conservation Check + NaN early stop (every 100 steps) =====
+        // rho_modify_h was just computed from the volume-weighted average:
+        //   rho_modify = 1 - <rho>_V  →  <rho>_V = 1 - rho_modify
         if (step % 100 == 1) {
-            const int rho_total_chk = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads_chk = 256;
-            const int rho_blocks_chk = (rho_total_chk + rho_threads_chk - 1) / rho_threads_chk;
-
-            ReduceRhoSum_Kernel<<<rho_blocks_chk, rho_threads_chk, rho_threads_chk * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks_chk * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum_chk = 0.0;
-            for (int b = 0; b < rho_blocks_chk; b++) rho_LocalSum_chk += rho_partial_h[b];
-            double rho_LocalAvg = rho_LocalSum_chk / ((NX6 - 7) * (NYD6 - 7) * (NZ6 - 6));
-
-            double rho_GlobalSum_chk = 0.0;
-            MPI_Reduce(&rho_LocalAvg, &rho_GlobalSum_chk, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-
             int nan_flag = 0;
+            double rho_avg_check = 0.0;
             if (myid == 0) {
-                double rho_avg_check = rho_GlobalSum_chk / (double)jp;
+                rho_avg_check = 1.0 - rho_modify_h[0];
                 if (std::isnan(rho_avg_check) || std::isinf(rho_avg_check) || fabs(rho_avg_check - 1.0) > 0.01) {
-                    printf("[FATAL] Divergence detected at step %d: rho_avg = %.6e, stopping.\n", step, rho_avg_check);
+                    printf("[FATAL] Divergence detected at step %d: rho_avg_V = %.6e, stopping.\n", step, rho_avg_check);
                     nan_flag = 1;
                 }
             }
@@ -2111,7 +2101,7 @@ int main(int argc, char *argv[])
 
             if (myid == 0) {
                 double FTT_rho = step * dt_global / (double)flow_through_time;
-                double rho_avg_out = rho_GlobalSum_chk / (double)jp;
+                double rho_avg_out = rho_avg_check;
                 FILE *checkrho = fopen("checkrho.dat", "a");
                 // step  FTT  rho_target  rho_avg  rho_drift  rho_correction  SKIP_MC
                 // NOTE: rho_correction = -rho_drift (by definition), see header for details
