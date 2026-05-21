@@ -685,9 +685,10 @@ int main(int argc, char *argv[])
         int j_recv_left  = 0;
         int tag = 600;
 
-        // 交換 6 個陣列: xi_y, xi_z, zeta_y, zeta_z, y_2d, z
-        double *arrays_to_exchange[] = { xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, y_2d_h, z_h };
-        int n_arrays = 6;
+        // 交換 7 個陣列: xi_y, xi_z, zeta_y, zeta_z, y_2d, z, J_2D
+        // J_2D_h 加入交換：Jacobian GL quadrature 的 6 點 Lagrange stencil 需要 ghost row 的 J 值
+        double *arrays_to_exchange[] = { xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, y_2d_h, z_h, J_2D_h };
+        int n_arrays = 7;
         for (int a = 0; a < n_arrays; a++) {
             MPI_Sendrecv(&arrays_to_exchange[a][j_send_left],  ghost_count, MPI_DOUBLE, l_nbr, tag,
                          &arrays_to_exchange[a][j_recv_right], ghost_count, MPI_DOUBLE, r_nbr, tag,
@@ -706,8 +707,20 @@ int main(int argc, char *argv[])
                              J_2D_h, xi_y_h, xi_z_h, zeta_y_h, zeta_z_h,
                              y_2d_h, z_h, NYD6, NZ6, myid);
 
+    // 2.4 體積權重方法比較 + 3D 物理域體積驗證
+    {
+#if CELL_VOLUME_METHOD == 1
+        double shoelace_vol = 0.0;
+        ComputeJacobianMassCorrectionWeights(J_2D_h, &shoelace_vol);
+        VerifyPhysicalDomainVolume3D(shoelace_vol,          "Shoelace");
+        VerifyPhysicalDomainVolume3D(rho_cv_global_volume,  "Jacobian-GL");
+#else
+        VerifyPhysicalDomainVolume3D(rho_cv_global_volume,  "Shoelace");
+#endif
+    }
+
     // ════════════════════════════════════════════════════════════════
-    //  Stage 3: Global Time Step 
+    //  Stage 3: Global Time Step
     // ════════════════════════════════════════════════════════════════
 
     double dx_val = LX / (double)(NX6 - 7);

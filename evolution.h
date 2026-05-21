@@ -170,6 +170,256 @@ void InitializeMassCorrectionWeights()
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  Jacobian-based volume weighting: 3×3 Gauss-Legendre quadrature
+//  with 6th-order Lagrange interpolation of J_2D at Gauss points.
+//  Compile-time switch: CELL_VOLUME_METHOD (variables.h)
+// ═══════════════════════════════════════════════════════════════════
+
+static const double GL3_nodes[3] = {
+    0.5 * (1.0 - 0.7745966692414834),   // (1 - sqrt(3/5))/2 ≈ 0.1127
+    0.5,
+    0.5 * (1.0 + 0.7745966692414834)    // (1 + sqrt(3/5))/2 ≈ 0.8873
+};
+static const double GL3_weights[3] = {
+    5.0 / 18.0,    // ≈ 0.27778
+    8.0 / 18.0,    // ≈ 0.44444
+    5.0 / 18.0
+};
+
+static inline void Lagrange6Weights(double x, int start, double w[6])
+{
+    for (int m = 0; m < 6; m++) {
+        double L = 1.0;
+        double xm = (double)(start + m);
+        for (int r = 0; r < 6; r++) {
+            if (r != m) {
+                double xr = (double)(start + r);
+                L *= (x - xr) / (xm - xr);
+            }
+        }
+        w[m] = L;
+    }
+}
+
+static inline bool SelectStencilStart(int cell_idx, int lo, int hi, int *start_out)
+{
+    int ideal = cell_idx - 2;
+    int max_start = hi - 5;
+    if (max_start - lo < 0) return false;
+    *start_out = (ideal < lo) ? lo : (ideal > max_start) ? max_start : ideal;
+    return true;
+}
+
+static inline double InterpolateJ2D_Lagrange6(
+    double xi_pos, double zeta_pos, int sj, int sk,
+    const double *J_2D, int NZ6_local)
+{
+    double wj[6], wk[6];
+    Lagrange6Weights(xi_pos,   sj, wj);
+    Lagrange6Weights(zeta_pos, sk, wk);
+
+    double result = 0.0;
+    for (int m = 0; m < 6; m++) {
+        double row_sum = 0.0;
+        for (int n = 0; n < 6; n++)
+            row_sum += wk[n] * J_2D[(sj + m) * NZ6_local + (sk + n)];
+        result += wj[m] * row_sum;
+    }
+    return result;
+}
+
+#if CELL_VOLUME_METHOD == 1
+void ComputeJacobianMassCorrectionWeights(
+    const double *J_2D, double *shoelace_global_volume_out)
+{
+    // After MPI exchange, J_2D ghost rows (j=0..2, j=NYD6-3..NYD6-1) are valid.
+    // Keep k-stencils on physical wall-normal nodes only. k=2 and k=NZ6-3 are
+    // buffer-side metric rows, so near-wall GL cells use one-sided physical
+    // stencils k=3..8 and k=NZ6-9..NZ6-4.
+    const int j_lo_J = 0;
+    const int j_hi_J = NYD6 - 1;
+    const int k_lo_J = 3;
+    const int k_hi_J = NZ6  - 4;
+
+    double *shoelace_backup = nullptr;
+    const size_t grid_size = (size_t)NX6 * NYD6 * NZ6;
+
+    shoelace_backup = (double *)malloc(grid_size * sizeof(double));
+    memcpy(shoelace_backup, rho_cv_weight_h, grid_size * sizeof(double));
+    double shoelace_vol = rho_cv_global_volume;
+    if (shoelace_global_volume_out) *shoelace_global_volume_out = shoelace_vol;
+
+    memset(rho_cv_weight_h, 0, grid_size * sizeof(double));
+
+    double local_weight_sum = 0.0;
+    int local_fallback_count = 0;
+    double local_max_rel_diff = 0.0;
+    double local_sum_rel_diff = 0.0;
+    int    local_cell_count   = 0;
+
+    for (int j = 3; j < NYD6 - 4; j++) {
+    for (int k = 3; k < NZ6  - 3; k++) {
+    for (int i = 3; i < NX6  - 4; i++) {
+        const int idx = j * NX6 * NZ6 + k * NX6 + i;
+
+        const int i_cells[2] = {
+            (i == 3) ? (NX6 - 5) : (i - 1),
+            i
+        };
+        const int j_cells[2] = { j - 1, j };
+        int k_cells[2];
+        int nk_cells = 0;
+        if (k > 3)       k_cells[nk_cells++] = k - 1;
+        if (k < NZ6 - 4) k_cells[nk_cells++] = k;
+
+        double weight = 0.0;
+        for (int jj = 0; jj < 2; jj++) {
+        for (int ii = 0; ii < 2; ii++) {
+        for (int kk = 0; kk < nk_cells; kk++) {
+            const int jc = j_cells[jj];
+            const int kc = k_cells[kk];
+            const double dx = x_h[i_cells[ii] + 1] - x_h[i_cells[ii]];
+
+            int sj, sk;
+            bool sj_ok = SelectStencilStart(jc, j_lo_J, j_hi_J, &sj);
+            bool sk_ok = SelectStencilStart(kc, k_lo_J, k_hi_J, &sk);
+
+            double vol_jac;
+            bool used_fallback = false;
+
+            if (sj_ok && sk_ok) {
+                double area_jac = 0.0;
+                for (int a = 0; a < 3; a++) {
+                for (int b = 0; b < 3; b++) {
+                    double xi_pos   = (double)jc + GL3_nodes[a];
+                    double zeta_pos = (double)kc + GL3_nodes[b];
+                    double J_val = InterpolateJ2D_Lagrange6(
+                        xi_pos, zeta_pos, sj, sk, J_2D, NZ6);
+                    if (!std::isfinite(J_val) || J_val <= 0.0) {
+                        used_fallback = true;
+                        break;
+                    }
+                    area_jac += GL3_weights[a] * GL3_weights[b] * J_val;
+                }
+                if (used_fallback) break;
+                }
+                vol_jac = fabs(dx) * area_jac;
+            } else {
+                used_fallback = true;
+            }
+
+            if (used_fallback) {
+                vol_jac = MassCorrectionCellVolume(i_cells[ii], jc, kc);
+                local_fallback_count++;
+            }
+
+            double vol_shoe = MassCorrectionCellVolume(i_cells[ii], jc, kc);
+            if (vol_shoe > 0.0) {
+                double rd = fabs(vol_jac - vol_shoe) / vol_shoe;
+                if (rd > local_max_rel_diff) local_max_rel_diff = rd;
+                local_sum_rel_diff += rd;
+                local_cell_count++;
+            }
+
+            weight += 0.125 * vol_jac;
+        }}}
+
+        rho_cv_weight_h[idx] = weight;
+        local_weight_sum += weight;
+    }}}
+
+    CHECK_MPI( MPI_Allreduce(&local_weight_sum, &rho_cv_global_volume,
+               1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) );
+
+    CHECK_CUDA( cudaMemcpy(rho_cv_weight_d, rho_cv_weight_h,
+                           grid_size * sizeof(double), cudaMemcpyHostToDevice) );
+
+    int    global_fallback = 0;
+    double global_max_rd   = 0.0;
+    double global_sum_rd   = 0.0;
+    int    global_cells    = 0;
+    CHECK_MPI( MPI_Reduce(&local_fallback_count, &global_fallback, 1, MPI_INT,    MPI_SUM, 0, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Reduce(&local_max_rel_diff,   &global_max_rd,   1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Reduce(&local_sum_rel_diff,   &global_sum_rd,   1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Reduce(&local_cell_count,     &global_cells,    1, MPI_INT,    MPI_SUM, 0, MPI_COMM_WORLD) );
+
+    if (myid == 0) {
+        printf("[MASS-CORR] Jacobian 3x3 GL volume weighting ON\n");
+        printf("[MASS-CORR]   Shoelace  global volume = %.15e\n", shoelace_vol);
+        printf("[MASS-CORR]   Jacobian  global volume = %.15e\n", rho_cv_global_volume);
+        printf("[MASS-CORR]   Δ(Jac-Shoe)/Shoe        = %.6e\n",
+               fabs(rho_cv_global_volume - shoelace_vol) / shoelace_vol);
+        printf("[MASS-CORR]   Per-cell max  rel diff   = %.6e\n", global_max_rd);
+        printf("[MASS-CORR]   Per-cell mean rel diff   = %.6e\n",
+               (global_cells > 0) ? global_sum_rd / global_cells : 0.0);
+        printf("[MASS-CORR]   Fallback to Shoelace     = %d cells\n", global_fallback);
+    }
+
+    free(shoelace_backup);
+}
+#endif
+
+static inline double ComputeGlobalDiscreteShoelaceVolume3D()
+{
+    double local_volume = 0.0;
+
+    // Unique physical cells per rank:
+    //   i_cell = 3..NX6-5  (NX-1 spanwise cells)
+    //   j_cell = 3..NYD6-5 ((NY-1)/jp streamwise cells; periodic endpoint excluded)
+    //   k_cell = 3..NZ6-5  (NZ-1 wall-normal cells)
+    // This is the discrete mesh volume that Shoelace guarantees exactly.
+    for (int j_cell = 3; j_cell < NYD6 - 4; j_cell++) {
+    for (int k_cell = 3; k_cell < NZ6  - 4; k_cell++) {
+    for (int i_cell = 3; i_cell < NX6  - 4; i_cell++) {
+        local_volume += MassCorrectionCellVolume(i_cell, j_cell, k_cell);
+    }}}
+
+    double global_volume = 0.0;
+    CHECK_MPI( MPI_Allreduce(&local_volume, &global_volume, 1,
+                             MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) );
+    return global_volume;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  3D 物理域體積驗證:
+//    primary: Σ dV vs LX × A_yz_discrete_mesh from unique Shoelace cells
+//    reference only: analytic HillFunction integral
+// ═══════════════════════════════════════════════════════════════════
+void VerifyPhysicalDomainVolume3D(double cv_global_volume, const char *method_name)
+{
+    const double V_discrete_mesh = ComputeGlobalDiscreteShoelaceVolume3D();
+
+    if (myid != 0) return;
+
+    const int N_QUAD = 10000;
+    const double dy = (double)LY / N_QUAD;
+    double hill_integral = 0.0;
+    for (int m = 0; m <= N_QUAD; m++) {
+        double y_val = m * dy;
+        double w_simp = (m == 0 || m == N_QUAD) ? 1.0 :
+                        (m % 2 == 1) ? 4.0 : 2.0;
+        hill_integral += w_simp * HillFunction(y_val);
+    }
+    hill_integral *= dy / 3.0;
+
+    double V_physical = (double)LX * ((double)LY * (double)LZ - hill_integral);
+
+    double rel_err_discrete = fabs(cv_global_volume - V_discrete_mesh) / V_discrete_mesh;
+    double rel_err_analytic = fabs(cv_global_volume - V_physical) / V_physical;
+    double mesh_vs_analytic = fabs(V_discrete_mesh - V_physical) / V_physical;
+
+    printf("[VOL-CHECK] === 3D Physical Domain Volume Verification (%s) ===\n", method_name);
+    printf("[VOL-CHECK]   V_discrete_mesh = Σ unique Shoelace cells = %.15e\n", V_discrete_mesh);
+    printf("[VOL-CHECK]   Σ weights (%s)                       = %.15e\n", method_name, cv_global_volume);
+    printf("[VOL-CHECK]   RelErr vs discrete mesh              = %.6e\n", rel_err_discrete);
+    printf("[VOL-CHECK]   %s\n", (rel_err_discrete < 1e-12) ? "PASS" : "WARNING: differs from discrete mesh volume");
+    printf("[VOL-CHECK]   Reference: ∫₀^LY h(y)dy               = %.15e  (Simpson N=%d)\n", hill_integral, N_QUAD);
+    printf("[VOL-CHECK]   Reference: LX×(LY×LZ − ∫h)           = %.15e\n", V_physical);
+    printf("[VOL-CHECK]   RelErr vs analytic HillFunction      = %.6e\n", rel_err_analytic);
+    printf("[VOL-CHECK]   Discrete mesh vs analytic reference  = %.6e\n", mesh_vs_analytic);
+}
+
 static inline double ComputeVolumeWeightedRhoAverageRoot()
 {
     const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);

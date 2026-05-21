@@ -185,7 +185,9 @@
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
-// 0 = 基本 (13 SCALARS): 瞬時速度(3)+渦度(3)+U_mean+V_mean+RS(3)+k_TKE+P_mean
+// 0 = 基本: 瞬時(6) + 累積(7, accu>0 才輸出)
+//     瞬時: u/v/w_inst(3)+omega_u/v/w(3) — 每步都有
+//     累積: U_mean+V_mean+RS(3)+k_TKE+P_mean — FTT>=FTT_STATS_START 後才出現
 // 1 = 完整: Level 0 + W_mean(展向) + 展向RS + 平均渦度 + epsilon + Tturb + Pdiff + PP_RS
 #define     VTK_OUTPUT_LEVEL    0
 
@@ -264,6 +266,18 @@
 #endif                              // 2 = 二階 Hermite: + 9·(c·u)·c_y·F
 #if FORCE_HERMITE_ORDER != 1 && FORCE_HERMITE_ORDER != 2
 #error "FORCE_HERMITE_ORDER must be 1 or 2"
+#endif
+
+// ----------------------------------------------------------------
+//  §7b. 質量修正體積權重方法 (Cell Volume Method)
+// ----------------------------------------------------------------
+//   0 = Shoelace (離散多邊形精確面積, telescoping 保證)
+//   1 = Jacobian 3×3 Gauss-Legendre quadrature (O(h⁶), 捕捉曲率)
+#ifndef CELL_VOLUME_METHOD
+#define     CELL_VOLUME_METHOD  0
+#endif
+#if CELL_VOLUME_METHOD != 0 && CELL_VOLUME_METHOD != 1
+#error "CELL_VOLUME_METHOD must be 0 (Shoelace) or 1 (Jacobian 3x3 GL)"
 #endif
 
 // ================================================================
