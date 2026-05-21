@@ -45,6 +45,25 @@ try:
 except ImportError:
     _HAS_SCIPY = False
 
+_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
+from grid_params import (
+    POISSON_MAX_ITER,
+    POISSON_TOL,
+    POISSON_OMEGA,
+    POISSON_PRINT_EVERY,
+    POISSON_REQUIRE_CONVERGED,
+    HILL_LY,
+    build_grid_metadata,
+    grid_header_comment_lines,
+    read_grid_params_sha256,
+)
+
+DEFAULT_POISSON_ITER = POISSON_MAX_ITER
+DEFAULT_POISSON_TOL = POISSON_TOL
+
 # ============================================================
 #  1.  Parser
 # ============================================================
@@ -206,6 +225,11 @@ def hill_function(Y, LY=9.0):
             v = r * 28.0
             model = (1.0/28.0) * max(0.0, 56.39011190988 - 2.010520359035*v + 0.01644919857549*v*v + 0.00002674976141766*v*v*v)
     return model
+
+
+def hill_function_array(Y_arr, LY=9.0):
+    """Vectorized hill_function: evaluate the analytical hill profile at an array of positions."""
+    return np.array([hill_function(float(y), LY=LY) for y in Y_arr])
 
 
 def tanh_wall(L, a, j, N):
@@ -862,7 +886,8 @@ def _compute_PQ(metrics):
 
 
 def _poisson_solve(x_init, y_init, P, Q,
-                   n_iter=15000, omega=1.0, tol=1e-10, print_every=2000):
+                   n_iter=DEFAULT_POISSON_ITER, omega=POISSON_OMEGA,
+                   tol=DEFAULT_POISSON_TOL, print_every=POISSON_PRINT_EVERY):
     """Row-vectorised Gauss-Seidel Poisson solver. Boundaries fixed."""
     nj, ni = x_init.shape
     x = x_init.copy()
@@ -1028,7 +1053,10 @@ def _resample_boundary(xb, yb, n_new):
 
 def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
                            gamma=0.0, alpha=0.5,
-                           poisson_iter=15000, poisson_tol=1e-10):
+                           poisson_iter=DEFAULT_POISSON_ITER,
+                           poisson_tol=DEFAULT_POISSON_TOL,
+                           require_converged=POISSON_REQUIRE_CONVERGED,
+                           LZ=None):
     """
     Full Steger-Sorenson adaptive grid generation.
 
@@ -1065,6 +1093,31 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     xl, yl = _resample_boundary(x_ref[:, 0],  y_ref[:, 0],  nj_new)
     xr, yr = _resample_boundary(x_ref[:, -1], y_ref[:, -1], nj_new)
 
+    # Analytical overwrite: bottom boundary must lie exactly on the
+    # Mellen-Fröhlich-Rodi hill polynomial.  _resample_boundary uses cubic
+    # interpolation from the reference grid, which introduces O(1e-6) error
+    # at different target resolutions.  Overwrite yb (wall-normal heights)
+    # with analytically evaluated hill_function values.
+    fro_x_max = x_ref[0, -1]
+    _h_phys = fro_x_max / HILL_LY
+    _scale = 1.0 / _h_phys if _h_phys < 0.5 else 1.0
+    yb_old = yb.copy()
+    yb = hill_function_array(xb * _scale, LY=HILL_LY) / _scale
+    _max_correction = float(np.max(np.abs(yb - yb_old)))
+    print(f"    [3/6] Bottom boundary: analytical hill overwrite "
+          f"(max correction = {_max_correction:.3e})")
+
+    # Analytical overwrite: top boundary must be at exactly LZ (in physical
+    # units).  The reference grid may have z_top != LZ*h_phys due to the
+    # original Frohlich data being rounded (e.g. 0.085 m vs 3.036*0.028).
+    if LZ is not None:
+        yt_exact = LZ / _scale   # LZ in code units → physical
+        yt_old = yt.copy()
+        yt[:] = yt_exact
+        _top_correction = float(np.max(np.abs(yt - yt_old)))
+        print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
+              f"(max correction = {_top_correction:.3e})")
+
     xl[0] = xb[0];   yl[0] = yb[0]
     xl[-1] = xt[0];  yl[-1] = yt[0]
     xr[0] = xb[-1];  yr[0] = yb[-1]
@@ -1077,6 +1130,15 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     x_out, y_out, conv = _poisson_solve(
         x_tfi, y_tfi, P_new, Q_new,
         n_iter=poisson_iter, omega=1.0, tol=poisson_tol, print_every=2000)
+
+    final_corr = conv[-1] if conv else float("inf")
+    if (not np.isfinite(final_corr)) or final_corr >= poisson_tol:
+        msg = (f"Poisson grid did not converge: final max_corr={final_corr:.4e}, "
+               f"tol={poisson_tol:.4e}, iter={len(conv)}/{poisson_iter}. "
+               "Increase --poisson-iter or relax only for diagnostics.")
+        if require_converged:
+            raise RuntimeError(msg)
+        print(f"    WARNING: {msg}")
 
     if gamma > 1e-14:
         print(f"    [6/6] Applying physical-z stretching (gamma={gamma}, alpha={alpha}) ...")
@@ -1092,18 +1154,20 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
 # ============================================================
 
 def write_tecplot_dat(filepath, x, y, title="Generated grid",
-                      zone_title="Adaptive"):
+                      zone_title="Adaptive", grid_metadata=None):
     nj, ni = x.shape
     with open(filepath, "w") as f:
+        for line in grid_header_comment_lines(grid_metadata):
+            f.write(line)
         f.write(f'TITLE     = "{title}"\n')
         f.write('VARIABLES = "x corner"\n')
         f.write('"y corner"\n')
         f.write(f'ZONE T="{zone_title}"\n')
         f.write(f' I={ni}, J={nj}, K=1,F=POINT\n')
-        f.write('DT=(SINGLE SINGLE )\n')
+        f.write('DT=(DOUBLE DOUBLE )\n')
         for j in range(nj):
             for i in range(ni):
-                f.write(f" {x[j, i]: .9E} {y[j, i]: .9E}\n")
+                f.write(f" {x[j, i]: .15E} {y[j, i]: .15E}\n")
     print(f"  [written] {filepath}")
 
 
@@ -1320,6 +1384,31 @@ def validate_grid_dimensions(dat_path, NY, NZ):
     return ok, ni_actual, nj_actual, ni_expected, nj_expected
 
 
+def make_grid_metadata(ni, nj, gamma, alpha, reference_grid, ly=9.0, lz=None,
+                       mode="adaptive_poisson",
+                       poisson_iter=DEFAULT_POISSON_ITER,
+                       poisson_tol=DEFAULT_POISSON_TOL,
+                       require_converged=POISSON_REQUIRE_CONVERGED):
+    """Build the shared parameter fingerprint metadata for generated .dat files."""
+    pq_backend = "scipy_rect_bivariate_spline" if _HAS_SCIPY else "numpy_bilinear"
+    boundary_backend = "scipy_cubic" if _HAS_SCIPY else "numpy_linear"
+    return build_grid_metadata(
+        ni=ni,
+        nj=nj,
+        gamma=gamma,
+        alpha=alpha,
+        reference_grid=reference_grid,
+        ly=ly,
+        lz=lz,
+        mode=mode,
+        pq_interpolation=pq_backend,
+        boundary_interpolation=boundary_backend,
+        poisson_iter=poisson_iter,
+        poisson_tol=poisson_tol,
+        require_converged=require_converged,
+    )
+
+
 # ============================================================
 #  8.  Interactive helpers
 # ============================================================
@@ -1417,7 +1506,10 @@ def parse_variables_h(path):
     return result
 
 
-def auto_generate(variables_h_path, script_dir=None):
+def auto_generate(variables_h_path, script_dir=None,
+                  poisson_iter=DEFAULT_POISSON_ITER,
+                  poisson_tol=DEFAULT_POISSON_TOL,
+                  require_converged=POISSON_REQUIRE_CONVERGED):
     """
     Fully automatic grid generation:
       1. Parse NY, NZ, LZ, LY, GAMMA, ALPHA from variables.h
@@ -1492,6 +1584,39 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Reference: {ref_path.name}")
     print(f"  [auto] Target grid: I={NI} (=NY) x J={NJ} (=NZ)")
 
+    # Output filename must match C code sprintf format:
+    #   "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat"
+    #   with ("3.fine grid", NY, NZ, GAMMA, ALPHA)
+    #   I = NY (streamwise nodes), J = NZ (wall-normal nodes)
+    # ★ CRITICAL: use :.2f for GAMMA and :.1f for ALPHA to match C's format exactly
+    grid_key = ref_path.stem          # "3.fine grid"
+    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.dat"
+    out_path = script_dir / out_name
+    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.txt"
+    grid_metadata = make_grid_metadata(
+        NI, NJ, gamma, alpha, ref_path.name, ly=LY, lz=LZ,
+        poisson_iter=poisson_iter, poisson_tol=poisson_tol,
+        require_converged=require_converged)
+    expected_fp = grid_metadata.get("GRID_PARAMS_SHA256")
+
+    if out_path.exists():
+        ok, *_ = validate_grid_dimensions(str(out_path), NY, NZ)
+        existing_fp = read_grid_params_sha256(out_path)
+        if ok and existing_fp and existing_fp == expected_fp:
+            if not grid_data_path.exists():
+                print(f"  [auto] Grid cache hit, diagnostics missing; rebuilding {grid_data_path.name}")
+                x_cached, y_cached, _, _ = parse_tecplot_dat(out_path)
+                write_grid_data(grid_data_path, x_cached, y_cached,
+                                NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha, LZ=LZ,
+                                source_dat=out_path.name)
+            print(f"  [auto] Grid cache hit: {out_path}")
+            print(f"  [auto] GRID_PARAMS_SHA256={existing_fp}")
+            return str(out_path)
+        if not existing_fp:
+            print(f"  [auto] Existing grid has no parameter fingerprint; regenerating: {out_path.name}")
+        elif existing_fp != expected_fp:
+            print(f"  [auto] Existing grid fingerprint mismatch; regenerating: {out_path.name}")
+
     # ── GILBM stability pre-check (階段 A: 1D 無網格預估) ──
     print_gilbm_stability_table()
     if gamma > 0:
@@ -1518,7 +1643,8 @@ def auto_generate(variables_h_path, script_dir=None):
     x_out, y_out, conv = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
         gamma=gamma, alpha=alpha,
-        poisson_iter=15000, poisson_tol=1e-12)
+        poisson_iter=poisson_iter, poisson_tol=poisson_tol,
+        require_converged=require_converged, LZ=LZ)
 
     # ── Validate generated grid dimensions ──
     nj_out, ni_out = x_out.shape
@@ -1554,21 +1680,12 @@ def auto_generate(variables_h_path, script_dir=None):
         print("  !! Reduce GAMMA in variables.h and regenerate. !!")
         print()
 
-    # Output filename must match C code sprintf format:
-    #   "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat"
-    #   with ("3.fine grid", NY, NZ, GAMMA, ALPHA)
-    #   I = NY (streamwise nodes), J = NZ (wall-normal nodes)
-    # ★ CRITICAL: use :.2f for GAMMA and :.1f for ALPHA to match C's format exactly
-    grid_key = ref_path.stem          # "3.fine grid"
-    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.dat"
-    out_path = script_dir / out_name
-
     write_tecplot_dat(out_path, x_out, y_out,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}")
+                      zone_title=f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}",
+                      grid_metadata=grid_metadata)
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
-    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.txt"
     write_grid_data(grid_data_path, x_out, y_out,
                     NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha, LZ=LZ,
                     source_dat=out_path.name)
@@ -1590,6 +1707,19 @@ def auto_generate(variables_h_path, script_dir=None):
 
     print(f"  [auto] Output: {out_path}")
     return str(out_path)
+
+
+def _read_cli_option(flag, cast, default):
+    """Tiny parser for --auto options without changing interactive mode."""
+    if flag not in sys.argv:
+        return default
+    idx = sys.argv.index(flag)
+    if idx + 1 >= len(sys.argv):
+        raise SystemExit(f"ERROR: {flag} requires a value")
+    try:
+        return cast(sys.argv[idx + 1])
+    except ValueError as exc:
+        raise SystemExit(f"ERROR: invalid {flag}: {sys.argv[idx + 1]}") from exc
 
 
 # ============================================================
@@ -1626,7 +1756,16 @@ if __name__ == "__main__":
         print(f"  Reading from: {variables_h}")
         print("=" * 62)
 
-        out = auto_generate(str(variables_h), script_dir)
+        poisson_iter = _read_cli_option("--poisson-iter", int, DEFAULT_POISSON_ITER)
+        poisson_tol = _read_cli_option("--poisson-tol", float, DEFAULT_POISSON_TOL)
+        require_converged = "--allow-unconverged-grid" not in sys.argv
+        print(f"  Poisson: max_iter={poisson_iter}, tol={poisson_tol:g}, "
+              f"require_converged={int(require_converged)}")
+
+        out = auto_generate(str(variables_h), script_dir,
+                            poisson_iter=poisson_iter,
+                            poisson_tol=poisson_tol,
+                            require_converged=require_converged)
         print("=" * 62)
         print(f"  DONE: {out}")
         print("=" * 62)
@@ -1777,10 +1916,11 @@ if __name__ == "__main__":
         print()
         print("  Poisson solver iterations")
         print("    (more = more accurate, slower)")
-        print("    Typical: 10000~30000 for high accuracy")
-        POISSON_ITER = ask_int("Poisson iterations", default=15000, lo=1000, hi=100000)
+        print("    Typical: 50000~100000 for high accuracy")
+        POISSON_ITER = ask_int("Poisson iterations", default=DEFAULT_POISSON_ITER,
+                               lo=1000, hi=500000)
     else:
-        POISSON_ITER = 15000
+        POISSON_ITER = DEFAULT_POISSON_ITER
 
     print()
     print(f"  -> Mode:  {'Zeta-only' if mode == 1 else 'Adaptive (Poisson + P,Q)'}")
@@ -1838,7 +1978,7 @@ if __name__ == "__main__":
         x_new, y_new, poisson_conv = generate_adaptive_grid(
             x_ref, y_ref, NI, NJ,
             gamma=GAMMA, alpha=ALPHA,
-            poisson_iter=POISSON_ITER, poisson_tol=1e-12)
+            poisson_iter=POISSON_ITER, poisson_tol=DEFAULT_POISSON_TOL)
 
     print(f"  Generated grid: I={NI}, J={NJ}")
 
@@ -1881,9 +2021,14 @@ if __name__ == "__main__":
                           savepath=out_sp)
 
     out_dat = base / f"adaptive_{grid_key}_{tag_str}.dat"
+    grid_metadata = make_grid_metadata(
+        NI, NJ, GAMMA, ALPHA, dat_path.name, ly=stability_LY,
+        mode=("zeta_only" if mode == 1 else "adaptive_poisson"),
+        poisson_iter=POISSON_ITER, poisson_tol=DEFAULT_POISSON_TOL)
     write_tecplot_dat(out_dat, x_new, y_new,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_g{GAMMA}_a{ALPHA}")
+                      zone_title=f"I{NI}_J{NJ}_g{GAMMA}_a{ALPHA}",
+                      grid_metadata=grid_metadata)
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
     # Try to read LZ from variables.h (same search paths as auto mode);
@@ -1952,7 +2097,9 @@ if __name__ == "__main__":
             else:
                 xn, yn, _ = generate_adaptive_grid(
                     x_ref, y_ref, NI, NJ,
-                    gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER)
+                    gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER,
+                    poisson_tol=DEFAULT_POISSON_TOL,
+                    require_converged=False)
             nj_n, ni_n = xn.shape
             for jj in range(nj_n):
                 ax.plot(xn[jj, :], yn[jj, :], "k-", lw=0.2)
