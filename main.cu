@@ -106,6 +106,8 @@ double *rho_modify_h, *rho_modify_d;
 
 // GPU reduction partial sums for mass conservation (replaces SendDataToCPU every step)
 double *rho_partial_h, *rho_partial_d;
+double *rho_cv_weight_h, *rho_cv_weight_d;  // control-volume weights for volume-weighted mass correction
+double rho_cv_global_volume = 0.0;          // Σ control-volume weights across all ranks
 
 // Time-average accumulation (FTT-gated)
 // u=spanwise, v=streamwise, w=wall-normal; GPU-side accumulation
@@ -519,6 +521,8 @@ int main(int argc, char *argv[])
 
     // 1.3 讀取外部二維 (y, z) 座標 (取代 GenerateMesh_Y + GenerateMesh_Z)
     ReadExternalGrid_YZ(y_2d_h, z_h, myid);
+
+    InitializeMassCorrectionWeights();
 
     // 初始化 monitor RS 代表點 (需在座標填充後)
     InitMonitorCheckPoint();
@@ -1414,28 +1418,7 @@ int main(int argc, char *argv[])
 #if USE_TIMING && TIMING_DETAIL
             double t_mc_start = MPI_Wtime();
 #endif
-            const int rho_total_mid = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads_mid = 256;
-            const int rho_blocks_mid = (rho_total_mid + rho_threads_mid - 1) / rho_threads_mid;
-
-            ReduceRhoSum_Kernel<<<rho_blocks_mid, rho_threads_mid, rho_threads_mid * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks_mid * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum_mid = 0.0;
-            for (int b = 0; b < rho_blocks_mid; b++) rho_LocalSum_mid += rho_partial_h[b];
-
-            double rho_GlobalSum_mid = 0.0;
-            MPI_Reduce(&rho_LocalSum_mid, &rho_GlobalSum_mid, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            if (myid == 0) {
-                // Bug fix: 使用實際 MPI 分解後的全域格點數 jp*(NYD6-7)，
-                // 而非 (NY6-7)=(NY-1)，避免 (NY-1)%jp!=0 時的虛假質量虧損。
-                // 此公式對任意 jp (1~8) 皆正確，無論 (NY-1) 是否整除 jp。
-                const double N_global_interior = (double)(NX6 - 7) * (double)(jp * (NYD6 - 7)) * (double)(NZ6 - 6);
-                double rho_global_mid = 1.0 * N_global_interior;
-                rho_modify_h[0] = (rho_global_mid - rho_GlobalSum_mid) / N_global_interior;
-            }
-            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
+            UpdateVolumeWeightedMassCorrection();
 
 #if USE_TIMING && TIMING_DETAIL
             g_timing.last_masscorr_ms = (MPI_Wtime() - t_mc_start) * 1000.0;
@@ -1943,29 +1926,7 @@ int main(int argc, char *argv[])
         // ===== Global Mass Conservation Modify (GPU reduction — no SendDataToCPU) =====
         cudaDeviceSynchronize();
         cudaMemcpy(Force_h, Force_d, sizeof(double), cudaMemcpyDeviceToHost);
-        {
-            const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads = 256;
-            const int rho_blocks = (rho_total + rho_threads - 1) / rho_threads;
-
-            ReduceRhoSum_Kernel<<<rho_blocks, rho_threads, rho_threads * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum = 0.0;
-            for (int b = 0; b < rho_blocks; b++) rho_LocalSum += rho_partial_h[b];
-
-            double rho_GlobalSum = 0.0;
-            MPI_Reduce(&rho_LocalSum, &rho_GlobalSum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            if (myid == 0) {
-                // Bug fix: 同 mid-step，使用 jp*(NYD6-7) 取代 (NY6-7)
-                const double N_global_interior = (double)(NX6 - 7) * (double)(jp * (NYD6 - 7)) * (double)(NZ6 - 6);
-                double rho_global = 1.0 * N_global_interior;
-                rho_modify_h[0] = (rho_global - rho_GlobalSum) / N_global_interior;
-            }
-            // Broadcast mass correction to ALL ranks (Bug #16 fix: was rank 0 only)
-            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
-        }
+        UpdateVolumeWeightedMassCorrection();
 
         // ===== Mass Conservation Check + NaN early stop (every 100 steps, GPU reduction) =====
         if (step % 100 == 1) {

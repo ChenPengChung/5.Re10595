@@ -229,6 +229,11 @@ void AllocateMemory() {
     rho_modify_h[0] = 0.0;
     CHECK_CUDA( cudaMemset(rho_modify_d, 0, nBytes) );
 
+    AllocateHostArray( nBytes, 1,  &rho_cv_weight_h );
+    AllocateDeviceArray(nBytes, 1,  &rho_cv_weight_d );
+    memset(rho_cv_weight_h, 0, nBytes);
+    CHECK_CUDA( cudaMemset(rho_cv_weight_d, 0, nBytes) );
+
     CHECK_CUDA( cudaStreamCreate( &stream0 ) );
     CHECK_CUDA( cudaStreamCreate( &stream1 ) );
     CHECK_CUDA( cudaStreamCreate( &stream2 ) );
@@ -264,6 +269,8 @@ void FreeSource() {
     // GPU reduction partial sums
     CHECK_CUDA( cudaFreeHost(rho_partial_h) );
     CHECK_CUDA( cudaFree(rho_partial_d) );
+    CHECK_CUDA( cudaFreeHost(rho_cv_weight_h) );
+    CHECK_CUDA( cudaFree(rho_cv_weight_d) );
 
     FreeHostArray(  1,  x_h);
     FreeDeviceArray(1,  x_d);
