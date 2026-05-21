@@ -59,7 +59,8 @@ def resolve_grid_path(cli_grid, meta, checkpoint_dir):
     for c in candidates:
         if os.path.isabs(c) and os.path.isfile(c):
             return c
-        for base in (os.getcwd(), checkpoint_dir, os.path.dirname(checkpoint_dir)):
+        for base in (os.getcwd(), checkpoint_dir, os.path.dirname(checkpoint_dir),
+                     PROJECT_ROOT, PHASE2_DIR):
             p = os.path.abspath(os.path.join(base, c))
             if os.path.isfile(p):
                 return p
@@ -97,6 +98,7 @@ def read_checkpoint_macros(checkpoint_dir, cfg, want_fneq_ratio=True):
             path = os.path.join(checkpoint_dir, 'f{:02d}_{}.bin'.format(q, r))
             per_rank.append(read_rank_bin(path, cfg))
         f = stitch_y(per_rank, cfg)
+        fill_ghost(f, cfg)
         nonfinite_f += int(np.size(f) - np.count_nonzero(np.isfinite(f)))
         negative_f += int(np.count_nonzero(f <= 0.0))
         min_f = min(min_f, float(np.nanmin(f)))
@@ -121,6 +123,7 @@ def read_checkpoint_macros(checkpoint_dir, cfg, want_fneq_ratio=True):
             read_rank_bin(os.path.join(checkpoint_dir, 'rho_{}.bin'.format(r)), cfg)
             for r in range(cfg.JP)
         ], cfg)
+        fill_ghost(rho_file, cfg)
         rho_file_diff = float(np.nanmax(np.abs(rho_file - rho_sum)))
     except (IOError, OSError, ValueError):
         pass
@@ -134,6 +137,7 @@ def read_checkpoint_macros(checkpoint_dir, cfg, want_fneq_ratio=True):
                 path = os.path.join(checkpoint_dir, 'f{:02d}_{}.bin'.format(q, r))
                 per_rank.append(read_rank_bin(path, cfg))
             f = stitch_y(per_rank, cfg)
+            fill_ghost(f, cfg)
             feq = compute_feq_q(rho_sum, ux, uy, uz, q)
             ratio = np.abs(f - feq) / np.maximum(np.abs(feq), 1e-30)
             max_fneq_ratio = max(max_fneq_ratio, float(np.nanmax(ratio)))
@@ -168,6 +172,32 @@ def seam_stats(a):
     }
 
 
+def gpu_rank_seam_stats(a, cfg):
+    """Detect artificial jumps at MPI/GPU rank cuts in the global j direction."""
+    if cfg.JP <= 1:
+        return {'max_abs': 0.0, 'ratio_max': 0.0}
+
+    row_jump = np.nanmax(np.abs(np.diff(a, axis=0)), axis=(1, 2))
+    seam_values = []
+    seam_ratios = []
+    for r in range(1, cfg.JP):
+        idx = r * cfg.CHUNK - 1
+        if idx < 0 or idx >= row_jump.size:
+            continue
+        lo = max(0, idx - 3)
+        hi = min(row_jump.size, idx + 4)
+        neighbors = np.concatenate((row_jump[lo:idx], row_jump[idx+1:hi]))
+        baseline = float(np.nanmedian(neighbors)) if neighbors.size else float(np.nanmedian(row_jump))
+        seam = float(row_jump[idx])
+        seam_values.append(seam)
+        seam_ratios.append(seam / max(baseline, 1e-30))
+
+    return {
+        'max_abs': max(seam_values) if seam_values else 0.0,
+        'ratio_max': max(seam_ratios) if seam_ratios else 0.0,
+    }
+
+
 def classify_metrics(m):
     checks = {}
     checks['finite_f'] = 'PASS' if m['nonfinite_f_count'] == 0 else 'FAIL'
@@ -187,6 +217,12 @@ def classify_metrics(m):
         checks['fneq_ratio'] = 'WARN'
     else:
         checks['fneq_ratio'] = 'PASS'
+    checks['gpu_rank_density_seam'] = (
+        'PASS' if m.get('rho_gpu_rank_seam_ratio_max', 0.0) < 2.0 else 'WARN')
+    vel_gpu_ratio = max(m.get('ux_gpu_rank_seam_ratio_max', 0.0),
+                        m.get('uy_gpu_rank_seam_ratio_max', 0.0),
+                        m.get('uz_gpu_rank_seam_ratio_max', 0.0))
+    checks['gpu_rank_velocity_seam'] = 'PASS' if vel_gpu_ratio < 2.0 else 'WARN'
     checks['z_monotone'] = 'PASS' if m['grid_min_dz_dk'] > 0.0 else 'FAIL'
     overall = 'PASS'
     if any(v == 'FAIL' for v in checks.values()):
@@ -235,6 +271,10 @@ def compute_audit_metrics(cfg, fields, metric_order=6):
     max_grad = max(max_abs(a) for a in (dudx, dudy, dudz, dvdx, dvdy, dvdz, dwdx, dwdy, dwdz))
 
     rho_seam = seam_stats(rho)
+    rho_gpu = gpu_rank_seam_stats(rho, cfg)
+    ux_gpu = gpu_rank_seam_stats(ux, cfg)
+    uy_gpu = gpu_rank_seam_stats(uy, cfg)
+    uz_gpu = gpu_rank_seam_stats(uz, cfg)
     metrics = {
         'shape_NX_NY_NZ_jp': [cfg.NX, cfg.NY, cfg.NZ, cfg.JP],
         'rho_min': float(np.nanmin(rho)),
@@ -245,6 +285,14 @@ def compute_audit_metrics(cfg, fields, metric_order=6):
         'wall_speed_max': wall_speed,
         'rho_i_periodic_jump_max': rho_seam['i_periodic_max_abs'],
         'rho_j_periodic_jump_max': rho_seam['j_periodic_max_abs'],
+        'rho_gpu_rank_seam_jump_max': rho_gpu['max_abs'],
+        'rho_gpu_rank_seam_ratio_max': rho_gpu['ratio_max'],
+        'ux_gpu_rank_seam_jump_max': ux_gpu['max_abs'],
+        'ux_gpu_rank_seam_ratio_max': ux_gpu['ratio_max'],
+        'uy_gpu_rank_seam_jump_max': uy_gpu['max_abs'],
+        'uy_gpu_rank_seam_ratio_max': uy_gpu['ratio_max'],
+        'uz_gpu_rank_seam_jump_max': uz_gpu['max_abs'],
+        'uz_gpu_rank_seam_ratio_max': uz_gpu['ratio_max'],
         'velocity_i_periodic_jump_max': float(np.nanmax(vel_i_jump)),
         'velocity_j_periodic_jump_max': float(np.nanmax(vel_j_jump)),
         'max_div_u': max_abs(div_u),
@@ -401,6 +449,21 @@ def write_vtk_suite(out_dir, cfg, fields):
     path = os.path.join(out_dir, 'periodic_i_jump.vtk')
     write_polydata(path, pts, dims, scalars, {'jump_velocity': jump_v})
     written.append(path)
+
+    # Internal GPU/MPI rank-cut jumps in the streamwise j direction.
+    for r in range(1, cfg.JP):
+        cut = r * cfg.CHUNK
+        if cut <= 0 or cut >= cfg.NY:
+            continue
+        pts, dims = surface_points(cfg, x, y, z, 'j', cut - 1)
+        jump_v = vel[cut, :, :, :] - vel[cut-1, :, :, :]
+        scalars = {
+            'jump_rho': rho[cut, :, :] - rho[cut-1, :, :],
+            'jump_velocity_norm': np.sqrt(np.sum(jump_v * jump_v, axis=-1)),
+        }
+        path = os.path.join(out_dir, 'gpu_rank_{:02d}_j{:03d}_jump.vtk'.format(r, cut))
+        write_polydata(path, pts, dims, scalars, {'jump_velocity': jump_v})
+        written.append(path)
     return written
 
 
