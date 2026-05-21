@@ -10,15 +10,17 @@
 // C-E BC formula at no-slip wall (u=v=w=0), Imamura Eq.(A.9):
 //   f_i|wall = w_i * rho_wall * (1 + C_i)
 //
-//   CE non-equilibrium (NS level): f^neq = -ρ w_i (τ-0.5)Δt / c_s² × Σ(e·e - c_s² δ) × S
+//   CE non-equilibrium for the evolved transformed distribution:
+//   f^neq = -ρ w_i · omega·Δt / c_s² × Σ(e·e - c_s² δ) × S
+//   omega = 3ν/Δt + 0.5  (main.cu:577), so omega·Δt = 3ν + 0.5Δt
 //   c=1, c_s²=1/3 → 1/c_s² = 3 → tensor coeff: 3·c_{iα}·c_{iβ} - δ_{αβ}
 //   α = 1~3 (x,y,z 速度分量),  β = 2~3 (ξ,ζ 方向; β=1(η) 因 dk/dx=0 消去)
 //
-//   C_i = -(omega - 0.5)·Δt · Σ_α Σ_{β=y,z} [3·c_{iα}·c_{iβ} - δ_{αβ}] · (∂u_α/∂x_β)
+//   C_i = -(omega)·Δt · Σ_α Σ_{β=y,z} [3·c_{iα}·c_{iβ} - δ_{αβ}] · (∂u_α/∂x_β)
 //
 //   壁面 chain rule: ∂u_α/∂x_β = (du_α/dk)·(dk/dx_β)，展開 3α × 2β = 6 項：
 //
-//   C_i = -(omega - 0.5)·Δt × {              [= -(τ-0.5Δt), where τ-0.5Δt = 3ν]
+//   C_i = -(omega)·Δt × {              [omega = 3ν/Δt + 0.5]
 //     ① 3·c_{ix}·c_{iy} · (du/dk)·(dk/dy)        α=x, β=y  (δ_{xy}=0)
 //   + ② 3·c_{ix}·c_{iz} · (du/dk)·(dk/dz)        α=x, β=z  (δ_{xz}=0)
 //   + ③ (3·c_{iy}²−1)   · (dv/dk)·(dk/dy)        α=y, β=y  (δ_{yy}=1)
@@ -27,17 +29,20 @@
 //   + ⑥ (3·c_{iz}²−1)   · (dw/dk)·(dk/dz)        α=z, β=z  (δ_{zz}=1)
 //   }
 //
-// Wall velocity gradient: 6th-order one-sided finite difference (u[wall]=0):
-//   du/dk|wall = (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60 + O(h⁶)
-//   Bottom: u₁=u[k=4], u₂=u[k=5], u₃=u[k=6], u₄=u[k=7], u₅=u[k=8], u₆=u[k=9]
-//   Top:    u₁=u[k=NZ6-5], ..., u₆=u[k=NZ6-10] (reversed sign)
+// Wall velocity gradient: controlled by WALL_GRAD_ORDER in variables.h
 //
-//   Derivation: solve Σ cᵢ·iⁿ = δ_{n,1} for n=1..6 (with u(0)=0 known)
-//   Coefficients: (360, -450, 400, -225, 72, -10) / 60
-//   Leading error: O(h⁶) — Σ cᵢ·i⁷ ≠ 0 enters at h⁷
+//   WALL_GRAD_ORDER=2:
+//     du/dk|wall = (4u₁ - u₂)/2 + O(h²)
+//     Bottom: u₁=u[k=4], u₂=u[k=5]
+//     Top:    u₁=u[k=NZ6-5], u₂=u[k=NZ6-6] (reversed sign)
+//     Derivation: Taylor expand u₁=h·f'+h²f''/2+..., u₂=2h·f'+(2h)²f''/2+...
+//                 4u₁-u₂ = 2h·f' + O(h³) → f' = (4u₁-u₂)/(2h), h=1
+//     Leading error: -(1/3)·h²·f'''(0)
 //
-//   [v1 was 2nd-order: (4*u₁ - u₂)/2, error = -(1/3)·h²·f'''(0), insufficient for Re≥700]
-//   [v2 was 4th-order: (48u₁ - 36u₂ + 16u₃ - 3u₄)/12, error = O(h⁴)]
+//   WALL_GRAD_ORDER=6:
+//     du/dk|wall = (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60 + O(h⁶)
+//     Derivation: solve Σ cᵢ·iⁿ = δ_{n,1} for n=1..6 (with u(0)=0 known)
+//     [v2 was 4th-order: (48u₁ - 36u₂ + 16u₃ - 3u₄)/12, error = O(h⁴)]
 //
 // Wall density: rho_wall = rho[k=3] (zero normal pressure gradient, Imamura S3.2)
 
@@ -105,8 +110,7 @@ __device__ double ChapmanEnskogBC(
         (3.0 * ez * ez - 1.0) * dw_dk * zeta_z_val   // ⑥ (3·c_z²−1) · (dw/dζ)·(ζ_z)
     );
 
-    // CE 理論: f^neq ∝ -(τ-0.5)·Δt = -3ν (Navier-Stokes 一致)
-    // omega_global = τ = 0.5 + 3ν/Δt, 因此 (τ-0.5)·Δt = 3ν
+    // CE: f^neq ∝ -(omega)·Δt, where omega = 3ν/Δt + 0.5 (main.cu:577)
     C_alpha *= -(omega_global) * dt_global;
     double f_eq_atwall = GILBM_W[alpha] * rho_wall;
     return f_eq_atwall * (1.0 + C_alpha);

@@ -265,10 +265,19 @@ void DiagnoseGILBM_Phase1(
     double uy8 = (f8[3]+f8[7]+f8[8]+f8[15]+f8[17] - (f8[4]+f8[9]+f8[10]+f8[16]+f8[18])) / rho8;
     double uz8 = (f8[5]+f8[11]+f8[12]+f8[15]+f8[16] - (f8[6]+f8[13]+f8[14]+f8[17]+f8[18])) / rho8;
 
-    // 6th-order: du/dk = (360*u₁ - 450*u₂ + 400*u₃ - 225*u₄ + 72*u₅ - 10*u₆) / 60
+#if WALL_GRAD_ORDER >= 6
     double du_x_dk = (360.0*ux3 - 450.0*ux4 + 400.0*ux5 - 225.0*ux6 + 72.0*ux7 - 10.0*ux8) / 60.0;
     double du_y_dk = (360.0*uy3 - 450.0*uy4 + 400.0*uy5 - 225.0*uy6 + 72.0*uy7 - 10.0*uy8) / 60.0;
     double du_z_dk = (360.0*uz3 - 450.0*uz4 + 400.0*uz5 - 225.0*uz6 + 72.0*uz7 - 10.0*uz8) / 60.0;
+#elif WALL_GRAD_ORDER >= 4
+    double du_x_dk = (48.0*ux3 - 36.0*ux4 + 16.0*ux5 - 3.0*ux6) / 12.0;
+    double du_y_dk = (48.0*uy3 - 36.0*uy4 + 16.0*uy5 - 3.0*uy6) / 12.0;
+    double du_z_dk = (48.0*uz3 - 36.0*uz4 + 16.0*uz5 - 3.0*uz6) / 12.0;
+#else
+    double du_x_dk = (4.0*ux3 - ux4) / 2.0;
+    double du_y_dk = (4.0*uy3 - uy4) / 2.0;
+    double du_z_dk = (4.0*uz3 - uz4) / 2.0;
+#endif
 
     bc_rho_wall = rho3;
     printf("  rho_wall (from k=4) = %.10f\n", rho3);
@@ -291,7 +300,7 @@ void DiagnoseGILBM_Phase1(
         C_alpha += du_x_dk * ((3.0*ex*ey)*bc_ztay + (3.0*ex*ez)*bc_ztaz);
         C_alpha += du_y_dk * ((3.0*ey*ey - 1.0)*bc_ztay + (3.0*ey*ez)*bc_ztaz);
         C_alpha += du_z_dk * ((3.0*ez*ey)*bc_ztay + (3.0*ez*ez - 1.0)*bc_ztaz);
-        // [GTS] CE 理論: f^neq ∝ -(τ-0.5)·Δt = -3ν
+        // [GTS] CE: f^neq ∝ -(omega)·Δt, omega = 3ν/Δt + 0.5
         C_alpha *= -(omega_global) * dt_global_val;
 
         double f_CE = W[alpha] * rho3 * (1.0 + C_alpha);
