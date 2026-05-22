@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/s8313697/D3Q27_PeriodicHill/Edit1_PeriodicHIllchannel/J_Frohlich/**)",
+      "Read(//home/s8313697/D3Q27_PeriodicHill/Edit1_PeriodicHIllchannel/**)"
+    ]
+  }
+}
