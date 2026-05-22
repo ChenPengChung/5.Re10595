@@ -294,6 +294,9 @@
 //   3 = 三次外推 (cubic, 4-point),     O(h⁴), Σ|c|_max=34 (d=3)
 //   k=3 壁面點有 4 個 stencil 內部點 → cubic 為不擴展 stencil 的全域上限
 #define     GHOST_EXTRAP_ORDER  3
+#if GHOST_EXTRAP_ORDER < 2 || GHOST_EXTRAP_ORDER > 3
+#error "GHOST_EXTRAP_ORDER must be 2 (quadratic) or 3 (cubic)"
+#endif
 
 
 
