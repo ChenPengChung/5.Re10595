@@ -1355,6 +1355,236 @@ def validate_grid_dimensions(dat_path, NY, NZ):
 
 
 # ============================================================
+#  7b. Grid Spacing Ratio Limiter
+# ============================================================
+#
+#  網格間距比率限制器
+#  ==================
+#
+#  計算公式:
+#    Δy(ξ,ζ) = (|y(ξ+1,ζ) - y(ξ,ζ)| + |y(ξ,ζ) - y(ξ-1,ζ)|) / 2
+#    Δz(ξ,ζ) = (|z(ξ,ζ+1) - z(ξ,ζ)| + |z(ξ,ζ) - z(ξ,ζ-1)|) / 2
+#
+#  限制:
+#    max(Δy,Δz) / min(Δy,Δz) ∈ [RATIO_LO, RATIO_HI]
+#    全場全域搜索，兩方向合併計算
+#
+#  流程:
+#    1. 生成 Poisson 基礎網格 (gamma=0, 無拉伸)
+#    2. 對候選 GAMMA 套用 Vinokur 重分布 (O(NI×NJ), ~ms)
+#    3. 計算間距比率
+#    4. 二分法調整 GAMMA 直到比率落入範圍
+#    5. 逐步紀錄調整過程
+#
+#  Poisson solve 只執行一次，GAMMA 調整只做重分布 + 比率計算
+# ============================================================
+
+RATIO_LO_DEFAULT = 12.0
+RATIO_HI_DEFAULT = 20.0
+
+
+def compute_local_spacing(x_grid, y_grid, scale_factor=1.0):
+    """
+    Compute local grid spacing using central averaging (dimensionless code units).
+
+    Parameters
+    ----------
+    x_grid : ndarray (nj, ni)  — streamwise coordinate (= y in LBM)
+    y_grid : ndarray (nj, ni)  — wall-normal coordinate (= z in LBM)
+    scale_factor : float — multiply to convert to code units (H_HILL=1.0)
+
+    Returns
+    -------
+    delta_y : ndarray (nj, ni) — local streamwise spacing
+    delta_z : ndarray (nj, ni) — local wall-normal spacing
+    """
+    x_c = x_grid * scale_factor
+    y_c = y_grid * scale_factor
+
+    # Δy: streamwise (i-direction differences of x_grid)
+    dy_fwd = np.abs(np.diff(x_c, axis=1))          # (nj, ni-1)
+    delta_y = np.empty_like(x_c)
+    delta_y[:, 0] = dy_fwd[:, 0]
+    delta_y[:, -1] = dy_fwd[:, -1]
+    delta_y[:, 1:-1] = 0.5 * (dy_fwd[:, 1:] + dy_fwd[:, :-1])
+
+    # Δz: wall-normal (j-direction differences of y_grid)
+    dz_fwd = np.abs(np.diff(y_c, axis=0))           # (nj-1, ni)
+    delta_z = np.empty_like(y_c)
+    delta_z[0, :] = dz_fwd[0, :]
+    delta_z[-1, :] = dz_fwd[-1, :]
+    delta_z[1:-1, :] = 0.5 * (dz_fwd[1:, :] + dz_fwd[:-1, :])
+
+    return delta_y, delta_z
+
+
+def compute_spacing_ratio(delta_y, delta_z):
+    """
+    Compute combined global spacing ratio: max(Δy,Δz) / min(Δy,Δz).
+
+    Returns dict with ratio, extremes, and source labels.
+    """
+    dy_pos = delta_y[delta_y > 1e-30]
+    dz_pos = delta_z[delta_z > 1e-30]
+
+    dy_min = float(dy_pos.min()) if len(dy_pos) > 0 else float('inf')
+    dy_max = float(dy_pos.max()) if len(dy_pos) > 0 else 0.0
+    dz_min = float(dz_pos.min()) if len(dz_pos) > 0 else float('inf')
+    dz_max = float(dz_pos.max()) if len(dz_pos) > 0 else 0.0
+
+    max_val = max(dy_max, dz_max)
+    min_val = min(dy_min, dz_min)
+    max_src = 'Δy' if dy_max >= dz_max else 'Δz'
+    min_src = 'Δy' if dy_min <= dz_min else 'Δz'
+
+    ratio = max_val / min_val if min_val > 0 else float('inf')
+
+    return {
+        "ratio": ratio,
+        "max_val": max_val, "min_val": min_val,
+        "dy_min": dy_min, "dy_max": dy_max,
+        "dz_min": dz_min, "dz_max": dz_max,
+        "max_src": max_src, "min_src": min_src,
+    }
+
+
+def _ratio_at_gamma(x_base, y_base, gamma, alpha, scale_factor):
+    """Apply Vinokur redistribution at candidate gamma, return spacing ratio info."""
+    if gamma > 1e-14:
+        x_t, y_t = redistribute_vertical_physical(
+            x_base, y_base, gamma=gamma, alpha=alpha)
+    else:
+        x_t, y_t = x_base, y_base
+    dy, dz = compute_local_spacing(x_t, y_t, scale_factor)
+    return compute_spacing_ratio(dy, dz)
+
+
+def auto_adjust_gamma(x_base, y_base, gamma_init, alpha, scale_factor,
+                      ratio_lo=RATIO_LO_DEFAULT, ratio_hi=RATIO_HI_DEFAULT,
+                      max_iter=50):
+    """
+    Auto-adjust GAMMA via bisection on a base grid (Poisson-solved, no stretching).
+
+    The base grid's topology is fixed; only the Vinokur redistribution is varied.
+    Each iteration is O(NI×NJ) — no Poisson re-solve.
+
+    Returns
+    -------
+    gamma_adjusted : float
+    log_entries : list of str — per-step adjustment log
+    final_info : dict — compute_spacing_ratio result for the adjusted GAMMA
+    """
+    log = []
+
+    if alpha < 0.5:
+        log.append(f"  ⚠ alpha={alpha:.2f} < 0.5: vinokur_tanh 可能非單調，結果需人工確認")
+
+    # Step 0: evaluate initial GAMMA
+    info0 = _ratio_at_gamma(x_base, y_base, gamma_init, alpha, scale_factor)
+    r0 = info0["ratio"]
+    log.append(f"Step 0: GAMMA={gamma_init:.4f} → ratio={r0:.2f} "
+               f"(Δy=[{info0['dy_min']:.4e}, {info0['dy_max']:.4e}], "
+               f"Δz=[{info0['dz_min']:.4e}, {info0['dz_max']:.4e}])")
+
+    if not np.isfinite(r0):
+        log.append(f"  → ratio={r0} 非有限值，無法調整 ✗")
+        return gamma_init, log, info0
+
+    if ratio_lo <= r0 <= ratio_hi:
+        log.append(f"  → ratio {r0:.2f} ∈ [{ratio_lo}, {ratio_hi}] — 無需調整 ✓")
+        return gamma_init, log, info0
+
+    if r0 < ratio_lo:
+        log.append(f"  → ratio {r0:.2f} < {ratio_lo}: 拉伸不足，需增加 GAMMA")
+        g_lo, g_hi = gamma_init, 20.0
+        target = ratio_lo
+    else:
+        log.append(f"  → ratio {r0:.2f} > {ratio_hi}: 拉伸過強，需減少 GAMMA")
+        if gamma_init < 0.1:
+            log.append(f"  → GAMMA≈0 但 ratio 已超標 — "
+                       f"Poisson 基礎網格本身間距比率過大，無法透過調整 GAMMA 修正")
+            return gamma_init, log, info0
+        g_lo, g_hi = 0.01, gamma_init
+        target = ratio_hi
+
+    for step in range(1, max_iter + 1):
+        g_mid = 0.5 * (g_lo + g_hi)
+        info_mid = _ratio_at_gamma(x_base, y_base, g_mid, alpha, scale_factor)
+        r_mid = info_mid["ratio"]
+
+        if not np.isfinite(r_mid):
+            g_hi = g_mid
+            log.append(f"Step {step}: GAMMA={g_mid:.6f} → ratio=非有限值，收縮上界")
+            continue
+
+        in_range = ratio_lo <= r_mid <= ratio_hi
+        mark = "✓" if in_range else "✗"
+        log.append(f"Step {step}: GAMMA={g_mid:.6f} → ratio={r_mid:.4f} "
+                   f"(Δz_min={info_mid['dz_min']:.4e}) {mark}")
+
+        if in_range:
+            stretch_a = float(np.tanh(g_mid / 2.0))
+            log.append(f"  → 收斂: GAMMA={g_mid:.6f} (STRETCH_A={stretch_a:.6f})")
+            return g_mid, log, info_mid
+
+        if r_mid < target:
+            g_lo = g_mid
+        else:
+            g_hi = g_mid
+
+        if abs(g_hi - g_lo) < 1e-10:
+            break
+
+    # Fallback: return last midpoint (may be outside target range)
+    g_final = 0.5 * (g_lo + g_hi)
+    info_final = _ratio_at_gamma(x_base, y_base, g_final, alpha, scale_factor)
+    r_final = info_final["ratio"]
+    stretch_a = float(np.tanh(g_final / 2.0))
+    in_range = ratio_lo <= r_final <= ratio_hi
+    mark = "✓" if in_range else "✗ (未收斂)"
+    log.append(f"  → 最大迭代: GAMMA={g_final:.6f} → ratio={r_final:.4f} "
+               f"(STRETCH_A={stretch_a:.6f}) {mark}")
+    return g_final, log, info_final
+
+
+def print_spacing_ratio_result(gamma_original, gamma_adjusted, ratio_lo, ratio_hi,
+                               final_info, log_entries, NZ, alpha):
+    """Print formatted spacing ratio adjustment report."""
+    print()
+    print("  " + "=" * 68)
+    print("   Grid Spacing Ratio Limiter")
+    print("  " + "=" * 68)
+    print(f"    Constraint: max(Δy,Δz)/min(Δy,Δz) ∈ [{ratio_lo:.1f}, {ratio_hi:.1f}]")
+    print(f"    NZ = {NZ}, ALPHA = {alpha:.2f}")
+    print()
+    print("  Adjustment Log:")
+    for entry in log_entries:
+        print(f"    {entry}")
+    print()
+    print(f"    Δy range: [{final_info['dy_min']:.6e}, {final_info['dy_max']:.6e}]")
+    print(f"    Δz range: [{final_info['dz_min']:.6e}, {final_info['dz_max']:.6e}]")
+    print(f"    Combined ratio: {final_info['ratio']:.4f}")
+    print(f"      max from: {final_info['max_src']} = {final_info['max_val']:.6e}")
+    print(f"      min from: {final_info['min_src']} = {final_info['min_val']:.6e}")
+
+    if abs(gamma_original - gamma_adjusted) > 1e-6:
+        sa_old = float(np.tanh(gamma_original / 2.0))
+        sa_new = float(np.tanh(gamma_adjusted / 2.0))
+        print()
+        print(f"    ⚠ GAMMA 已調整: {gamma_original:.4f} → {gamma_adjusted:.6f}")
+        print(f"      STRETCH_A:    {sa_old:.6f} → {sa_new:.6f}")
+        print()
+        print(f"    請更新 variables.h:")
+        print(f"      #define  STRETCH_A  {sa_new:.6f}")
+    else:
+        print()
+        print(f"    ✓ GAMMA={gamma_adjusted:.4f} 滿足限制（無需調整）")
+
+    print("  " + "=" * 68)
+    print()
+
+
+# ============================================================
 #  8.  Interactive helpers
 # ============================================================
 
@@ -1434,15 +1664,20 @@ def parse_variables_h(path):
         if m:
             result[key] = int(m.group(1))
     # Float defines (may have parentheses)
-    for key in ("GAMMA", "ALPHA", "CFL", "Uref", "Re"):
+    for key in ("GAMMA", "ALPHA", "CFL", "Uref", "Re", "STRETCH_A"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
     # Float defines that may be in parentheses like (3.036)
-    for key in ("LZ", "LY", "H_HILL"):
+    for key in ("LZ", "LY", "H_HILL", "RATIO_LO", "RATIO_HI"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
+    # Derive GAMMA from STRETCH_A when GAMMA is an expression (not a literal number)
+    if "GAMMA" not in result and "STRETCH_A" in result:
+        a = result["STRETCH_A"]
+        if 0.0 < a < 1.0:
+            result["GAMMA"] = float(np.log((1.0 + a) / (1.0 - a)))
     # String defines
     for key in ("GRID_DAT_DIR", "GRID_DAT_REF"):
         m = re.search(rf'#define\s+{key}\s+"([^"]+)"', text)
@@ -1548,25 +1783,58 @@ def auto_generate(variables_h_path, script_dir=None):
             print(f"  [預估穩定]")
         print()
 
-    # ── 生成網格 (階段 B 的前置: Poisson solve) ──
-    x_out, y_out, conv = generate_adaptive_grid(
+    # ── 讀取間距比率限制 ──
+    ratio_lo = params.get("RATIO_LO", RATIO_LO_DEFAULT)
+    ratio_hi = params.get("RATIO_HI", RATIO_HI_DEFAULT)
+    if ratio_lo > ratio_hi:
+        print(f"  [ERROR] RATIO_LO ({ratio_lo}) > RATIO_HI ({ratio_hi}), 請修正 variables.h")
+        return None
+    print(f"  [auto] Spacing ratio constraint: [{ratio_lo}, {ratio_hi}]")
+
+    # ── 計算 scale factor (物理單位 → 無因次 code 單位) ──
+    x_fro_max = x_ref[0, -1]
+    h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
+    scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
+
+    # ── 生成基礎網格 (Poisson solve, gamma=0 無拉伸) ──
+    #    Poisson solve 只執行一次; GAMMA 調整只做 Vinokur 重分布
+    x_base, y_base, _ = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
-        gamma=gamma, alpha=alpha,
+        gamma=0.0, alpha=alpha,
         poisson_iter=50000, poisson_tol=1e-12,
         LZ=LZ)
 
-    # ── Validate generated grid dimensions ──
-    nj_out, ni_out = x_out.shape
+    # ── Validate base grid dimensions ──
+    nj_out, ni_out = x_base.shape
     if ni_out != NI or nj_out != NJ:
         print(f"  !! INTERNAL ERROR: generated grid {ni_out}x{nj_out} "
               f"≠ expected {NI}x{NJ} !!")
         sys.exit(1)
-    print(f"  [auto] Generated grid: I={ni_out} x J={nj_out} ✓")
+    print(f"  [auto] Base grid: I={ni_out} x J={nj_out} ✓")
 
-    # ── GILBM stability post-check (階段 B: 2D 精確計算, 需已生成網格) ──
-    x_fro_max = x_ref[0, -1]
-    h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
-    scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
+    # ── 網格間距比率限制器：自動調整 GAMMA ──
+    gamma_original = gamma
+    gamma, adjust_log, ratio_info = auto_adjust_gamma(
+        x_base, y_base, gamma, alpha, scale, ratio_lo, ratio_hi)
+    print_spacing_ratio_result(
+        gamma_original, gamma, ratio_lo, ratio_hi,
+        ratio_info, adjust_log, NZ, alpha)
+
+    # ── 套用調整後的 Vinokur 拉伸 ──
+    if gamma > 1e-14:
+        print(f"  [auto] Applying Vinokur stretching: GAMMA={gamma:.6f}, ALPHA={alpha}")
+        x_out, y_out = redistribute_vertical_physical(
+            x_base, y_base, gamma=gamma, alpha=alpha)
+    else:
+        print(f"  [auto] No stretching (gamma≈0)")
+        x_out, y_out = x_base.copy(), y_base.copy()
+
+    # ── 更新 minSize (使用調整後的 GAMMA) ──
+    if gamma > 0:
+        minSize_val = gamma_to_minSize(gamma, LZ, NZ_cells, LY)
+        print(f"  [auto] minSize={minSize_val:.6e} (adjusted GAMMA={gamma:.6f})")
+
+    # ── GILBM stability post-check (階段 B: 2D 精確計算) ──
     stab = estimate_gilbm_stability(
         x_out, y_out, scale_factor=scale,
         Uref=Uref, Re=Re_val, H_HILL=H_HILL,
@@ -1578,10 +1846,13 @@ def auto_generate(variables_h_path, script_dir=None):
         CFL_lambda=stab["CFL_lambda"], niu=stab["niu"])
 
     # 比較階段 A 預估 vs 階段 B 精確值
-    if gamma > 0:
-        print(f"  [對照] 階段A預估 omega={pre['omega_est']:.4f} vs "
-              f"階段B精確 omega={stab['omega']:.4f} "
-              f"(誤差 {abs(pre['omega_est']-stab['omega'])/stab['omega']*100:.1f}%)")
+    if gamma > 0 and 'pre' in dir():
+        pre_g = estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re_val,
+                                       H_HILL=H_HILL, CFL=CFL_val, LY=LY,
+                                       alpha=alpha)
+        print(f"  [對照] 調整後 1D預估 omega={pre_g['omega_est']:.4f} vs "
+              f"2D精確 omega={stab['omega']:.4f} "
+              f"(誤差 {abs(pre_g['omega_est']-stab['omega'])/stab['omega']*100:.1f}%)")
 
     if stab["status"] == "UNSTABLE":
         print("  !! Grid generation completed but omega > 2.0 !!")
@@ -1589,11 +1860,20 @@ def auto_generate(variables_h_path, script_dir=None):
         print("  !! Reduce GAMMA in variables.h and regenerate. !!")
         print()
 
-    # Output filename must match C code sprintf format:
-    #   "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat"
-    #   with ("3.fine grid", NY, NZ, GAMMA, ALPHA)
-    #   I = NY (streamwise nodes), J = NZ (wall-normal nodes)
-    # ★ CRITICAL: use :.2f for GAMMA and :.1f for ALPHA to match C's format exactly
+    # ── Post-generation 間距比率驗證 ──
+    dy_post, dz_post = compute_local_spacing(x_out, y_out, scale)
+    post_info = compute_spacing_ratio(dy_post, dz_post)
+    print(f"  [post-verify] Final spacing ratio: {post_info['ratio']:.4f} "
+          f"(Δy=[{post_info['dy_min']:.4e}, {post_info['dy_max']:.4e}], "
+          f"Δz=[{post_info['dz_min']:.4e}, {post_info['dz_max']:.4e}])")
+    if not (ratio_lo <= post_info['ratio'] <= ratio_hi):
+        print(f"  !! WARNING: Post-generation ratio {post_info['ratio']:.4f} "
+              f"outside [{ratio_lo}, {ratio_hi}] !!")
+        print(f"  !! Grid .dat NOT written. !!")
+        return None
+
+    # Output filename uses adjusted GAMMA
+    # ★ CRITICAL: :.2f for GAMMA and :.1f for ALPHA to match C code sprintf
     grid_key = ref_path.stem          # "3.fine grid"
     out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.dat"
     out_path = script_dir / out_name
@@ -1622,6 +1902,14 @@ def auto_generate(variables_h_path, script_dir=None):
                  labels=["Reference", f"New ({NI}x{NJ})"],
                  title=f"Auto: GAMMA={gamma:.4f}, ALPHA={alpha}, Grid={NI}x{NJ}",
                  savepath=script_dir / f"compare_auto_{tag}.png")
+
+    if abs(gamma_original - gamma) > 1e-6:
+        sa_new = float(np.tanh(gamma / 2.0))
+        print()
+        print(f"  ★ GAMMA 已從 {gamma_original:.4f} 自動調整為 {gamma:.6f}")
+        print(f"    對應 STRETCH_A = {sa_new:.6f}")
+        print(f"    請更新 variables.h: #define STRETCH_A {sa_new:.6f}")
+        print(f"    輸出檔名使用調整後的 GAMMA")
 
     print(f"  [auto] Output: {out_path}")
     return str(out_path)
@@ -1663,6 +1951,10 @@ if __name__ == "__main__":
 
         out = auto_generate(str(variables_h), script_dir)
         print("=" * 62)
+        if out is None:
+            print("  FAILED: 網格生成未通過驗證，未寫入檔案")
+            print("=" * 62)
+            sys.exit(1)
         print(f"  DONE: {out}")
         print("=" * 62)
         sys.exit(0)
@@ -1808,6 +2100,24 @@ if __name__ == "__main__":
     print()
     ALPHA = ask_float("ALPHA", default=0.5, lo=0.01, hi=0.99)
 
+    # ── 間距比率限制 ──
+    ratio_lo_default = RATIO_LO_DEFAULT
+    ratio_hi_default = RATIO_HI_DEFAULT
+    if variables_h_for_flow.exists():
+        try:
+            _vhp = parse_variables_h(variables_h_for_flow)
+            ratio_lo_default = _vhp.get("RATIO_LO", ratio_lo_default)
+            ratio_hi_default = _vhp.get("RATIO_HI", ratio_hi_default)
+        except Exception:
+            pass
+    print()
+    print("  RATIO_LO / RATIO_HI -- 網格間距比率限制")
+    print("    max(Δy,Δz)/min(Δy,Δz) must be in [RATIO_LO, RATIO_HI]")
+    print("    GAMMA will be auto-adjusted to satisfy this constraint")
+    print()
+    RATIO_LO_VAL = ask_float("RATIO_LO", default=ratio_lo_default, lo=1.0, hi=100.0)
+    RATIO_HI_VAL = ask_float("RATIO_HI", default=ratio_hi_default, lo=RATIO_LO_VAL, hi=200.0)
+
     if mode == 2:
         print()
         print("  Poisson solver iterations")
@@ -1821,6 +2131,7 @@ if __name__ == "__main__":
     print(f"  -> Mode:  {'Zeta-only' if mode == 1 else 'Adaptive (Poisson + P,Q)'}")
     print(f"  -> Grid:  I={NI} x J={NJ}")
     print(f"  -> GAMMA: {GAMMA}  |  ALPHA: {ALPHA}")
+    print(f"  -> Spacing ratio: [{RATIO_LO_VAL}, {RATIO_HI_VAL}]")
     if mode == 2:
         print(f"  -> Poisson iterations: {POISSON_ITER}")
 
@@ -1860,27 +2171,46 @@ if __name__ == "__main__":
     print(f"  Arclength identity:  max|dx| = {dx_err:.2e},  max|dy| = {dy_err:.2e}  ->  {tag}")
 
     # -----------------------------------------------------------
-    #  Step 6 -- generate new grid
+    #  Step 6 -- generate base grid + auto-adjust GAMMA
     # -----------------------------------------------------------
     print("\n" + "-" * 62)
-    print("  [Step 6] Generating new grid ...")
+    print("  [Step 6] Generating grid (base Poisson + GAMMA auto-adjust) ...")
     print("-" * 62)
 
-    if mode == 1:
-        x_new, y_new = redistribute_vertical_physical(x_ref, y_ref,
-                                              gamma=GAMMA, alpha=ALPHA)
-    else:
-        x_new, y_new, poisson_conv = generate_adaptive_grid(
-            x_ref, y_ref, NI, NJ,
-            gamma=GAMMA, alpha=ALPHA,
-            poisson_iter=POISSON_ITER, poisson_tol=1e-12)
-
-    print(f"  Generated grid: I={NI}, J={NJ}")
-
-    # ── GILBM stability post-check (階段 B: 2D 精確計算) ──
+    # Compute scale factor
     x_fro_max = x_ref[0, -1]
     h_phys = x_fro_max / stability_LY if x_fro_max < 1.0 else 1.0
     scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
+
+    poisson_conv = None
+    if mode == 1:
+        x_base, y_base = x_ref.copy(), y_ref.copy()
+    else:
+        x_base, y_base, poisson_conv = generate_adaptive_grid(
+            x_ref, y_ref, NI, NJ,
+            gamma=0.0, alpha=ALPHA,
+            poisson_iter=POISSON_ITER, poisson_tol=1e-12)
+
+    print(f"  Base grid: I={NI}, J={NJ}")
+
+    # ── 自動調整 GAMMA ──
+    GAMMA_original = GAMMA
+    GAMMA, adjust_log, ratio_info = auto_adjust_gamma(
+        x_base, y_base, GAMMA, ALPHA, scale, RATIO_LO_VAL, RATIO_HI_VAL)
+    print_spacing_ratio_result(
+        GAMMA_original, GAMMA, RATIO_LO_VAL, RATIO_HI_VAL,
+        ratio_info, adjust_log, NJ, ALPHA)
+
+    # ── 套用調整後的拉伸 ──
+    if GAMMA > 1e-14:
+        x_new, y_new = redistribute_vertical_physical(
+            x_base, y_base, gamma=GAMMA, alpha=ALPHA)
+    else:
+        x_new, y_new = x_base.copy(), y_base.copy()
+
+    print(f"  Final grid: I={NI}, J={NJ}, GAMMA={GAMMA:.6f}")
+
+    # ── GILBM stability post-check (階段 B: 2D 精確計算) ──
     stab = estimate_gilbm_stability(
         x_new, y_new, scale_factor=scale, **stability_flow)
     print_gilbm_stability_warning(
@@ -1891,8 +2221,20 @@ if __name__ == "__main__":
 
     if pre_interactive is not None:
         print(f"  [對照] 階段A預估 omega={pre_interactive['omega_est']:.4f} vs "
-              f"階段B��確 omega={stab['omega']:.4f} "
+              f"階段B精確 omega={stab['omega']:.4f} "
               f"(誤差 {abs(pre_interactive['omega_est']-stab['omega'])/max(stab['omega'],1e-30)*100:.1f}%)")
+
+    # ── Post-generation 間距比率驗證 ──
+    dy_post, dz_post = compute_local_spacing(x_new, y_new, scale)
+    post_info = compute_spacing_ratio(dy_post, dz_post)
+    print(f"  [post-verify] ratio={post_info['ratio']:.4f}")
+    if not (RATIO_LO_VAL <= post_info['ratio'] <= RATIO_HI_VAL):
+        print(f"  !! ERROR: ratio {post_info['ratio']:.4f} outside "
+              f"[{RATIO_LO_VAL}, {RATIO_HI_VAL}] !!")
+        ans = input("  仍然寫入網格？(y/N): ").strip().lower()
+        if ans != 'y':
+            print("  [aborted] 網格未寫入。請調整 GAMMA/ALPHA 後重試。")
+            sys.exit(1)
 
     # -----------------------------------------------------------
     #  Step 7 -- output
