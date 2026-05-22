@@ -105,15 +105,19 @@
 #error "FATAL: (NY-1) must be divisible by jp! Fix: change NY or jp in variables.h so that (NY-1) % jp == 0. For jp=8, valid NY: 9,17,25,...,129,137,145,153,..."
 #endif
 
-// ── 非均勻網格拉伸 ──
-//   本專案使用 variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere)
-//   GAMMA: 取 gamma(y) 場最大值作為 minSize 參考 (保守值)
-//          實際網格由 J_Frohlich/grid_zeta_tool.py Mode 3 生成 (main 自動觸發)
-//          gamma 範圍: [2.8493, 4.3217], mean=3.3230
+// ── 非均勻網格拉伸 (Abe 2001 / Shi & Lin 2020) ──
+//   STRETCH_A ∈ (0,1): tanh 拉伸參數
+//     a → 0: 均勻網格, a → 1: 壁面極密
+//     a=0.60 → 壁面 2x 密, a=0.80 → 3x, a=0.95 → 7.7x
+//   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
-//   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距 (參考值; runtime 由 Jacobian 計算 dt_global)
-#define     GAMMA               2.0
+//   minSize: 壁面最小格距 ≈ uniform_dz × Ratio
+#define     STRETCH_A           0.97
 #define     ALPHA               0.5
+#define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
+#if ALPHA != 0.5
+#error "STRETCH_A → GAMMA 轉換僅在 ALPHA=0.5 (對稱拉伸) 時有效"
+#endif
 
 #define     CFL                 0.5
 #define     minSize             (                                              \
