@@ -129,6 +129,15 @@
 #define     Uniform_In_Ydir     0       // y-z 平面非均勻 (外部網格)
 #define     Uniform_In_Zdir     0       // 法向非均勻 (壁面加密)
 
+// ── 網格間距比率限制 (Grid Spacing Ratio Limiter) ──
+//   grid_zeta_tool.py 使用: max(Δy,Δz)/min(Δy,Δz) ∈ [RATIO_LO, RATIO_HI]
+//   Δy = 流向 (streamwise) 相鄰格點 y 座標差的局部平均
+//   Δz = 法向 (wall-normal) 相鄰格點 z 座標差的局部平均
+//   全場全域搜索，超出範圍則自動調整 GAMMA 後才生成網格
+//   --auto 模式讀取此值; 互動模式可另行輸入
+#define     RATIO_LO    12.0    // 網格間距比率下限
+#define     RATIO_HI    20.0    // 網格間距比率上限
+
 // ── 展向映射參數 ──
 #define     LXi     (10.0)
 
