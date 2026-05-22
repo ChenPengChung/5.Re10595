@@ -191,6 +191,39 @@ before the sequence above:
    ```
 7. Then proceed with the standard sequence (steps 1–7 above).
 
+## Quick clean shortcut (triggered by user command)
+
+When the user types **`lbm-clean`**, delete the following simulation-generated
+files from the **current project directory only**. This removes build artifacts,
+logs, mesh files, and heavy output — but preserves all tracked source code,
+scripts, and DNS benchmark data.
+
+```bash
+# Logs and lock
+rm -f slurm_*.log slurm_*.err .run.lock nan_monitor_log.txt
+
+# Build artifacts
+rm -f a.out a.out.H200
+
+# Mesh and metrics files
+rm -f meshX.DAT meshYZ.DAT gilbm_metrics_full.dat
+
+# Heavy result outputs (keep tracked .py scripts and DNS data)
+rm -f result/*.bin result/*_Final.vtk
+
+# Statistics directory
+rm -rf statistics/
+```
+
+**Safety notes:**
+- Does NOT touch `restart/`, `live/`, `checkrho.dat`, `Ustar_Force_record.dat`,
+  `timing_log.dat`, or `gilbm_metrics_full.dat` — use `periodichill-testing reset`
+  for a full reset.
+- Does NOT touch `result/*.py`, `result/*.dat` (DNS benchmark), or
+  `result/*.png`/`result/*.pdf` — only `*.bin` and `*_Final.vtk`.
+- Does NOT cancel any running jobs or stop the dispatcher/watcher.
+- Report what was deleted (file count / size freed) after execution.
+
 ## GILBM 效能優化架構 — MRT 預計算 + eta 權重共享 + Forcing 開關
 
 本專案已完成三項 host-side 預計算優化，所有表格在 `main.cu` 初始化階段
