@@ -6,7 +6,7 @@
 // §S  Shared Helpers — 消除 2D/3D/smem 路徑間的代碼重複
 //
 //   gilbm_rk2_displacement:       RK2 midpoint → (d_xi, delta_zeta_q)     ~35 lines × 3 copies → 1
-//   gilbm_ghost_zone_extrapolate: interp2[7] ghost linear extrapolation   ~15 lines × 3 copies → 1
+//   gilbm_ghost_zone_extrapolate: interp2[7] ghost Lagrange extrapolation ~15 lines × 3 copies → 1
 //   gilbm_zeta_collapse:          ζ 7→1 (Lagrange or WENO7-Z)            ~20 lines × 3 copies → 1
 // ════════════════════════════════════════════════════════════════════════
 
@@ -58,38 +58,64 @@ __device__ __forceinline__ void gilbm_rk2_displacement(
     delta_zeta_out = dt_val * e_tzeta_half;
 }
 
-// ── Ghost zone 二次外推 (居中 stencil bk_min=0) ──
-// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部三點二次 Lagrange 外推替代
-// 二次外推公式 (距離 d = p0 - g):
-//   c0 = (d+1)(d+2)/2,  c1 = -d(d+2),  c2 = d(d+1)/2
-//   ghost[g] = c0 * f[p0] + c1 * f[p1] + c2 * f[p2]
-// 直接從 3 個內部點外推，不使用級聯（避免誤差累積）
+// ── Ghost zone Lagrange 外推 (GHOST_EXTRAP_ORDER 切換) ──
+// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部點 Lagrange 外推替代
+// 直接從內部點外推，不使用級聯（避免誤差累積）
+//   GHOST_EXTRAP_ORDER=2 (quadratic, 3-point): c0=(d+1)(d+2)/2, ...
+//   GHOST_EXTRAP_ORDER=3 (cubic, 4-point):     c0=(d+1)(d+2)(d+3)/6, ...
+//     k=3 最壞情況有 4 個內部點 → cubic 全域可用，無需降階
 __device__ __forceinline__ void gilbm_ghost_zone_extrapolate(double interp2[7], int bk_val)
 {
     const int n_ghost_bot = (3 - bk_val > 0) ? (3 - bk_val) : 0;
     const int n_ghost_top = (bk_val + 6 > (int)NZ6 - 4) ? (bk_val + 6 - ((int)NZ6 - 4)) : 0;
     if (n_ghost_bot > 0) {
-        const int p0 = n_ghost_bot;      // 最近內部點
-        const int p1 = n_ghost_bot + 1;  // 第二內部點
-        const int p2 = n_ghost_bot + 2;  // 第三內部點
+        const int p0 = n_ghost_bot;
+        const int p1 = n_ghost_bot + 1;
+        const int p2 = n_ghost_bot + 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int p3 = n_ghost_bot + 3;
+#endif
         for (int g = n_ghost_bot - 1; g >= 0; g--) {
             const double d = (double)(p0 - g);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[p0] + c1 * interp2[p1]
+                       + c2 * interp2[p2] + c3 * interp2[p3];
+#else
             const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
             const double c1 = -d * (d + 2.0);
             const double c2 = d * (d + 1.0) * 0.5;
             interp2[g] = c0 * interp2[p0] + c1 * interp2[p1] + c2 * interp2[p2];
+#endif
         }
     }
     if (n_ghost_top > 0) {
-        const int pN  = 6 - n_ghost_top;      // 最近內部點
-        const int pN1 = 6 - n_ghost_top - 1;  // 第二內部點
-        const int pN2 = 6 - n_ghost_top - 2;  // 第三內部點
+        const int pN  = 6 - n_ghost_top;
+        const int pN1 = 6 - n_ghost_top - 1;
+        const int pN2 = 6 - n_ghost_top - 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int pN3 = 6 - n_ghost_top - 3;
+#endif
         for (int g = pN + 1; g <= 6; g++) {
             const double d = (double)(g - pN);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1]
+                       + c2 * interp2[pN2] + c3 * interp2[pN3];
+#else
             const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
             const double c1 = -d * (d + 2.0);
             const double c2 = d * (d + 1.0) * 0.5;
             interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1] + c2 * interp2[pN2];
+#endif
         }
     }
 }
