@@ -1611,7 +1611,7 @@ void fileIO_velocity_vtk_merged(int step) {
         }
 
         // 輸出座標點 (binary, big-endian)
-        const int stride = nyLocal - 1;  // = 32 (unique y-points per rank, overlap=1)
+        const int stride = nyLocal - 1;  // = (NY-1)/jp (unique y-points per rank, overlap=1)
         for( int k = 0; k < nzLocal; k++ ){
         for( int jg = 0; jg < nyGlobal; jg++ ){
         for( int i = 0; i < nxLocal; i++ ){
