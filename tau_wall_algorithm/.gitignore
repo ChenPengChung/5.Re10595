@@ -1,0 +1,19 @@
+# Large data files (excluded from version control)
+*.vtk
+*.dat
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Claude Code
+.claude/
