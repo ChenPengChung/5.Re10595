@@ -1,19 +1,28 @@
-# Large data files (excluded from version control)
-*.vtk
-*.dat
+# ── Pipeline output (large data) ──
+Output/
 
-# Python
+# ── Input data files (user-provided, large) ──
+Input/*.vtk
+Input/*.dat
+# Keep metadata and helper scripts
+!Input/*_metadata.dat
+!Input/generate_metadata.py
+
+# ── Verify output images (regenerable) ──
+verify/*.png
+
+# ── Python ──
 __pycache__/
 *.pyc
 *.pyo
 
-# Editor / IDE
+# ── Editor / IDE ──
 .vscode/
 .idea/
 
-# OS
+# ── OS ──
 Thumbs.db
 .DS_Store
 
-# Claude Code
+# ── Claude Code ──
 .claude/
