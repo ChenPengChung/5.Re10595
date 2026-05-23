@@ -251,9 +251,9 @@ static void BuildCurrentGridDatPath(char *grid_dat_path, size_t n)
     { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
 
     snprintf(grid_dat_path, n,
-             "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat",
+             "%s/adaptive_%s_I%d_J%d_s%.6f.dat",
              GRID_DAT_DIR, grid_ref_stem,
-             NY, NZ, (double)GAMMA, (double)ALPHA);
+             NY, NZ, (double)STRETCH_A);
 }
 
 static void TrimLineValue(char *s)
@@ -529,9 +529,9 @@ int main(int argc, char *argv[])
 
         char grid_dat_path[512];
         snprintf(grid_dat_path, sizeof(grid_dat_path),
-                 "%s/adaptive_%s_I%d_J%d_g%.2f_a%.1f.dat",
+                 "%s/adaptive_%s_I%d_J%d_s%.6f.dat",
                  GRID_DAT_DIR, grid_ref_stem,
-                 NY, NZ, (double)GAMMA, (double)ALPHA);
+                 NY, NZ, (double)STRETCH_A);
 
         // need_generate: 0=OK, 1=missing, 2=stale(input newer), 3=diagnostics missing
         int need_generate = 0;
@@ -572,7 +572,7 @@ int main(int argc, char *argv[])
                 if (!need_generate) {
                     char prefix[512];
                     snprintf(prefix, sizeof(prefix),
-                             "adaptive_%s_I%d_J%d_g%.2f_", grid_ref_stem, NY, NZ, (double)GAMMA);
+                             "adaptive_%s_I%d_J%d_s%.6f", grid_ref_stem, NY, NZ, (double)STRETCH_A);
                     int pfx_len = (int)strlen(prefix);
                     DIR *dp = opendir(GRID_DAT_DIR);
                     if (dp) {
@@ -600,8 +600,8 @@ int main(int argc, char *argv[])
             if (!need_generate) {
                 char diag_path[512];
                 snprintf(diag_path, sizeof(diag_path),
-                         "%s/grid_data_I%d_J%d_g%.2f_a%.1f.txt",
-                         GRID_DAT_DIR, NY, NZ, (double)GAMMA, (double)ALPHA);
+                         "%s/grid_data_I%d_J%d_s%.6f.txt",
+                         GRID_DAT_DIR, NY, NZ, (double)STRETCH_A);
                 if (stat(diag_path, &dep_st) != 0)
                     need_generate = 3;
             }
@@ -618,8 +618,8 @@ int main(int argc, char *argv[])
                 else
                     fprintf(stderr, "║  Grid OK, diagnostics missing — regenerating ...        ║\n");
                 fprintf(stderr, "║  Target: %s\n", grid_dat_path);
-                fprintf(stderr, "║  NY=%d, NZ=%d, ALPHA=%.1f, REF=%s\n",
-                        NY, NZ, (double)ALPHA, GRID_DAT_REF);
+                fprintf(stderr, "║  NY=%d, NZ=%d, STRETCH_A=%.6f, REF=%s\n",
+                        NY, NZ, (double)STRETCH_A, GRID_DAT_REF);
                 fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
 
                 char cmd[1024];

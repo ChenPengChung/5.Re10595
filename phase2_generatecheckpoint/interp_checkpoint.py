@@ -123,7 +123,7 @@ _DOMAIN_FROM_VH = False
 # Grid configurations
 # ---------------------------------------------------------------
 class GridConfig:
-    def __init__(self, nx, ny, nz, jp, gamma, alpha, grid_dat):
+    def __init__(self, nx, ny, nz, jp, gamma, alpha, grid_dat, stretch_a=None):
         if (ny - 1) % jp != 0:
             raise ValueError('(NY-1)={} is not divisible by jp={}'.format(ny - 1, jp))
         self.NX = nx
@@ -132,6 +132,7 @@ class GridConfig:
         self.JP = jp
         self.GAMMA = gamma
         self.ALPHA = alpha
+        self.STRETCH_A = stretch_a if stretch_a is not None else math.tanh(gamma / 2.0)
         self.GRID_DAT = grid_dat
         self.NX6 = nx + 6
         self.NY6 = ny + 6
@@ -263,8 +264,8 @@ def derive_solver_grid_dat(variables_h, cfg):
     if not grid_dir or not grid_ref:
         return None
     ref_stem = os.path.splitext(grid_ref)[0]
-    fname = 'adaptive_{}_I{}_J{}_g{:.2f}_a{:.1f}.dat'.format(
-        ref_stem, cfg.NY, cfg.NZ, float(cfg.GAMMA), float(cfg.ALPHA))
+    fname = 'adaptive_{}_I{}_J{}_s{:.6f}.dat'.format(
+        ref_stem, cfg.NY, cfg.NZ, float(cfg.STRETCH_A))
     base = os.path.dirname(os.path.abspath(variables_h))
     if os.path.isabs(grid_dir):
         return os.path.abspath(os.path.join(grid_dir, fname))
@@ -541,13 +542,16 @@ def _grid_dat_search_dirs(grid_dat_dir=None):
 def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
     """Try to find grid .dat file by naming convention.
 
-    Searches for both formats:
-      - I{NY}_J{NZ}_g{G}_a{A}.dat  (Mode 2, uniform gamma)
-      - I{NY}_J{NZ}_a{A}.dat       (Mode 3, variable gamma)
+    Searches for formats:
+      - I{NY}_J{NZ}_s{STRETCH_A:.6f}.dat  (current: STRETCH_A-based)
+      - I{NY}_J{NZ}_g{G}_a{A}.dat         (legacy: gamma+alpha)
+      - I{NY}_J{NZ}_a{A}.dat              (legacy: Mode 3)
     """
     if search_dirs is None:
         search_dirs = _grid_dat_search_dirs()
     candidates = set()
+    sa = math.tanh(gamma / 2.0)
+    candidates.add('I{}_J{}_s{:.6f}'.format(ny, nz, sa))
     for fmt in (str, lambda x: '{:g}'.format(x)):
         g_str = fmt(gamma)
         a_str = fmt(alpha)
@@ -568,14 +572,16 @@ def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
 def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
     """Find grid .dat by I{NY}_J{NZ} pattern; extract gamma/alpha from filename.
 
-    Handles both formats:
-      _g{G}_a{A}.dat  → gamma=G, alpha=A  (Mode 2)
-      _a{A}.dat        → gamma=None, alpha=A (Mode 3)
+    Handles formats:
+      _s{A}.dat        → gamma=derived, alpha=0.5  (current: STRETCH_A-based)
+      _g{G}_a{A}.dat   → gamma=G, alpha=A          (legacy Mode 2)
+      _a{A}.dat        → gamma=None, alpha=A        (legacy Mode 3)
     """
     import re
     if search_dirs is None:
         search_dirs = _grid_dat_search_dirs()
     pattern = 'I{}_J{}'.format(ny, nz)
+    sa_re = re.compile(r'_s([\d.]+)\.dat$')
     ga_re = re.compile(r'_g([\d.]+)_a([\d.]+)\.dat$')
     a_re = re.compile(r'_a([\d.]+)\.dat$')
     for d in search_dirs:
@@ -586,6 +592,11 @@ def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
                 continue
             if pattern in fname:
                 path = os.path.join(d, fname)
+                m = sa_re.search(fname)
+                if m:
+                    sa = float(m.group(1))
+                    gamma = math.log((1.0 + sa) / (1.0 - sa))
+                    return path, gamma, 0.5
                 m = ga_re.search(fname)
                 if m:
                     return path, float(m.group(1)), float(m.group(2))
@@ -856,8 +867,10 @@ def build_new_config(args):
         else:
             grid_dat = ask_value('  NEW grid .dat 路徑 (path to Tecplot grid file)', str)
 
+    stretch_a = vh_defs.get('STRETCH_A')
     cfg = GridConfig(nx=nx, ny=ny, nz=nz, jp=jp,
-                     gamma=gamma, alpha=alpha, grid_dat=grid_dat)
+                     gamma=gamma, alpha=alpha, grid_dat=grid_dat,
+                     stretch_a=stretch_a)
     if not cross_validate_grid_dat(cfg, 'NEW'):
         sys.exit('FATAL: NEW grid .dat cross-validation failed')
     print()
