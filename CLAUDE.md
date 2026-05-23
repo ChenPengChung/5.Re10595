@@ -81,11 +81,13 @@ missing.
    - Always runs `result/4.Ma_U_Time.py --Re <Re>` against the latest stable
      VTK; copies the produced `monitor_convergence_Re*.{png,pdf}` to
      `live/monitor_latest.{png,pdf}`.
-   - When `accu > 0` in the slurm log (= statistics started, FTT crossed
-     `FTT_STATS_START` from `variables.h`), additionally runs
-     `result/2.Benchmark.py --Re <Re> --no-ask-scales --no-ask-density` and
-     copies `benchmark_Umean_Re*`, `benchmark_RS_Re*`, `benchmark_all_Re*`
-     to `live/`.
+   - When FTT >= FTT_STATS_START + CV_WINDOW_FTT (G2 gate, CV window full),
+     additionally runs:
+     - `result/2.Benchmark.py --Re <Re> --no-ask-scales --no-ask-density` →
+       copies `fig_mean_u.png`, `fig_uu.png`, etc. to `live/`.
+     - `result/10.tau_wall_benchmark.py --Re <Re> --auto` →
+       copies `tau_wall_signed_Re<Re>_cf.png` and
+       `tau_wall_signed_Re<Re>_cp.png` to `live/`.
    - Emits NaN/divergence alerts based on the slurm tail.
    Open `live/monitor_latest.png` to view the single rolling status image.
 6. **Arm one Monitor watcher** (Monitor tool, not bare bash):
@@ -188,6 +190,7 @@ before the sequence above:
    rm -f result/*.vtk result/*.bin
    rm -f result/monitor_convergence_*.png result/monitor_convergence_*.pdf
    rm -f result/benchmark_*.png result/benchmark_*.pdf
+   rm -f result/tau_wall_signed_*.png result/tau_wall_signed_*.pdf
    ```
 7. Then proceed with the standard sequence (steps 1–7 above).
 
