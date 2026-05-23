@@ -1256,9 +1256,9 @@ elif has_velocity:
             # 在裁切後的圖上標箭頭名稱 (Krank convention)
             # x=streamwise(+Y), y=wall-normal(+Z), z=spanwise(-X)
             _arrow_labels = [
-                ([4.5 - _AX_LEN - 0.15, 0.0, 0.0], "z", "spanwise"),
-                ([4.5, _AX_LEN + 0.15, 0.0],        "x", "streamwise"),
-                ([4.5, 0.0, _AX_LEN + 0.15],         "y", "wall-normal"),
+                ([4.5 - _AX_LEN - 0.20, 0.0, 0.0],  "z", "spanwise"),
+                ([4.5, _AX_LEN + 0.20, 0.0],          "x", "streamwise"),
+                ([4.5 - 0.20, 0.12, _AX_LEN + 0.12], "y", "wall-normal"),
             ]
             _arrow_px = []
             try:
@@ -1283,21 +1283,29 @@ elif has_velocity:
                 ]
 
             _draw = _PILDraw.Draw(_im_crop)
-            _font_it = None
-            for _fpath in [
-                "/usr/share/fonts/liberation/LiberationSerif-Italic.ttf",
-                "/usr/share/fonts/dejavu/DejaVuSerif-Italic.ttf",
-                "/usr/share/fonts/dejavu/DejaVuSans-Oblique.ttf",
-            ]:
-                try:
-                    _font_it = _PILFont.truetype(_fpath, 32)
-                    break
-                except: pass
-            if _font_it is None:
-                _font_it = _PILFont.load_default()
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as _plt
+            from io import BytesIO as _BytesIO
+            matplotlib.rcParams["mathtext.fontset"] = "cm"
+
+            def _latex_label(tex, fontsize=22, dpi=120):
+                fig = _plt.figure(figsize=(0.4, 0.4))
+                fig.text(0.5, 0.5, tex, fontsize=fontsize,
+                         ha="center", va="center", color="black")
+                buf = _BytesIO()
+                fig.savefig(buf, format="png", dpi=dpi, transparent=True,
+                            bbox_inches="tight", pad_inches=0.01)
+                _plt.close(fig)
+                buf.seek(0)
+                return _PILImage.open(buf).convert("RGBA")
+
             for _apx, _apy, _altr, _adir in _arrow_px:
-                _draw.text((_apx, _apy), _altr, fill=(0, 0, 0),
-                           font=_font_it, anchor="mm")
+                _lbl_img = _latex_label("$%s$" % _altr)
+                _lw, _lh = _lbl_img.size
+                _paste_x = _apx - _lw // 2
+                _paste_y = _apy - _lh // 2
+                _im_crop.paste(_lbl_img, (_paste_x, _paste_y), _lbl_img)
 
             _im_crop.save(OUT_QCRIT)
             log("Path D top-crop + arrow labels: new size %dx%d"

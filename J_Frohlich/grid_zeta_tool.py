@@ -1698,6 +1698,37 @@ def parse_variables_h(path):
     return result
 
 
+def update_stretch_a_in_variables_h(path, new_stretch_a):
+    """
+    Atomically update #define STRETCH_A in variables.h.
+
+    Replaces the numeric literal on the STRETCH_A line while preserving
+    all surrounding text, comments, and whitespace.  Only writes the file
+    if the value actually changed (avoids unnecessary recompilation).
+
+    Returns True if the file was modified, False if unchanged.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8", errors="replace")
+
+    pattern = r'(#define\s+STRETCH_A\s+)[\d.eE+\-]+'
+    m = re.search(pattern, text)
+    if m is None:
+        print(f"  [WARNING] Cannot find #define STRETCH_A in {path}")
+        return False
+
+    old_val_str = text[m.start(0) + len(m.group(1)):m.end(0)]
+    new_val_str = f"{new_stretch_a:.6f}"
+
+    if old_val_str.strip() == new_val_str.strip():
+        return False
+
+    new_text = text[:m.start(0)] + m.group(1) + new_val_str + text[m.end(0):]
+    p.write_text(new_text, encoding="utf-8")
+    print(f"  [auto-update] variables.h: STRETCH_A {old_val_str} → {new_val_str}")
+    return True
+
+
 def auto_generate(variables_h_path, script_dir=None):
     """
     Fully automatic grid generation:
@@ -1920,7 +1951,13 @@ def auto_generate(variables_h_path, script_dir=None):
         print()
         print(f"  ★ GAMMA 已從 {gamma_original:.4f} 自動調整為 {gamma:.6f}")
         print(f"    對應 STRETCH_A = {sa_new:.6f}")
-        print(f"    請更新 variables.h: #define STRETCH_A {sa_new:.6f}")
+        updated = update_stretch_a_in_variables_h(variables_h_path, sa_new)
+        if updated:
+            print(f"    ✓ variables.h 已自動更新 STRETCH_A = {sa_new:.6f}")
+            print(f"      → main.cu 重編譯後 GAMMA 將匹配網格檔名")
+        else:
+            print(f"    ⚠ variables.h 自動更新失敗，請手動修改:")
+            print(f"      #define STRETCH_A {sa_new:.6f}")
         print(f"    輸出檔名使用調整後的 GAMMA")
 
     print(f"  [auto] Output: {out_path}")
