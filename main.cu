@@ -515,8 +515,8 @@ int main(int argc, char *argv[])
     //  兩條 pipeline 的目的不同, 切勿混用 (執行路徑 / 輸出目錄 / 工具腳本).
     //
     //  檔名約定 (Python 與 C 必須一致):
-    //    adaptive_<grid_stem>_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.dat
-    //    grid_data_I<NY>_J<NZ>_g<GAMMA>_a<ALPHA>.txt
+    //    adaptive_<grid_stem>_I<NY>_J<NZ>_s<STRETCH_A>.dat
+    //    grid_data_I<NY>_J<NZ>_s<STRETCH_A>.txt
     // ════════════════════════════════════════════════════════════════
 
     // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在 + 新鮮度檢查
