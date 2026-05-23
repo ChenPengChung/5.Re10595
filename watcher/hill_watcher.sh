@@ -12,6 +12,7 @@ PID_FILE="$LIVE_DIR/watcher.pid"
 
 CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
+TAUWALL_SCRIPT="$RESULT_DIR/10.tau_wall_benchmark.py"
 
 RE=5600
 POLL_SEC=30
@@ -176,12 +177,44 @@ run_benchmark() {
     return 0
 }
 
+
+run_tauwall() {
+    local step="$1" capture rc
+    local before_marker="$LIVE_DIR/.tauwall.marker.$$"
+    : > "$before_marker"
+
+    capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$TAUWALL_SCRIPT" \
+        --Re "$RE" --auto 2>&1)
+    rc=$?
+
+    if (( rc == 124 )); then
+        log "TAUWALL step=$step  TIMEOUT after ${BENCH_TIMEOUT}s"; rm -f "$before_marker"; return 1
+    fi
+    if (( rc != 0 )); then
+        log "TAUWALL step=$step  FAILED rc=$rc :: $(printf '%s' "$capture" | tail -c 300 | tr '\n' ' ')"
+        rm -f "$before_marker"; return 1
+    fi
+
+    local src copied=""
+    for pat in "tau_wall_signed_Re${RE}_cf.png" "tau_wall_signed_Re${RE}_cp.png"; do
+        src="$RESULT_DIR/$pat"
+        if [[ -f "$src" ]] && [[ "$src" -nt "$before_marker" ]]; then
+            cp -f "$src" "$LIVE_DIR/$pat"; copied="$copied $pat"
+        fi
+    done
+    rm -f "$before_marker"
+
+    log "TAUWALL step=$step  Re=$RE  outputs:${copied:- (none)}"
+    return 0
+}
+
 log "=========================================="
 log "Periodic Hill Re$RE watcher started"
 log "  pid=$$  ppid=$PPID  poll=${POLL_SEC}s"
 log "  project  = $PROJECT_DIR"
 log "  conv     = $CONV_SCRIPT"
 log "  bench    = $BENCH_SCRIPT"
+log "  tauwall  = $TAUWALL_SCRIPT"
 log "=========================================="
 
 last_processed=""
@@ -214,6 +247,7 @@ while :; do
                 if [[ "$last_bench_step" != "$step" ]]; then
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
+                    run_tauwall "$step" || true
                     last_bench_step="$step"
                 fi
             else
