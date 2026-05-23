@@ -1757,33 +1757,35 @@ def parse_variables_h(path):
 
 def update_stretch_a_in_variables_h(path, new_stretch_a):
     """
-    Atomically update #define STRETCH_A in variables.h.
-
-    Replaces the numeric literal on the STRETCH_A line while preserving
-    all surrounding text, comments, and whitespace.  Only writes the file
-    if the value actually changed (avoids unnecessary recompilation).
+    Update #define STRETCH_A in variables.h.
+    If STRETCH_A_X exists, synchronize it to the same value.
 
     Returns True if the file was modified, False if unchanged.
     """
     p = Path(path)
     text = p.read_text(encoding="utf-8", errors="replace")
-
-    pattern = r'(#define\s+STRETCH_A\s+)[\d.eE+\-]+'
-    m = re.search(pattern, text)
-    if m is None:
-        print(f"  [WARNING] Cannot find #define STRETCH_A in {path}")
-        return False
-
-    old_val_str = text[m.start(0) + len(m.group(1)):m.end(0)]
     new_val_str = f"{new_stretch_a:.6f}"
+    modified = False
 
-    if old_val_str.strip() == new_val_str.strip():
-        return False
+    for name in ("STRETCH_A", "STRETCH_A_X"):
+        pattern = rf'(#define\s+{name}\s+)[\d.eE+\-]+'
+        m = re.search(pattern, text)
+        if m is None:
+            if name == "STRETCH_A":
+                print(f"  [WARNING] Cannot find #define STRETCH_A in {path}")
+                return False
+            continue
+        old_val_str = text[m.start(0) + len(m.group(1)):m.end(0)]
+        if old_val_str.strip() != new_val_str.strip():
+            text = text[:m.start(0)] + m.group(1) + new_val_str + text[m.end(0):]
+            print(f"  [auto-update] variables.h: {name} {old_val_str} → {new_val_str}")
+            modified = True
 
-    new_text = text[:m.start(0)] + m.group(1) + new_val_str + text[m.end(0):]
-    p.write_text(new_text, encoding="utf-8")
-    print(f"  [auto-update] variables.h: STRETCH_A {old_val_str} → {new_val_str}")
-    return True
+    if modified:
+        p.write_text(text, encoding="utf-8")
+    return modified
+
+
 
 
 def auto_generate(variables_h_path, script_dir=None,
@@ -1978,9 +1980,10 @@ def auto_generate(variables_h_path, script_dir=None,
     # Output filename uses adjusted GAMMA
     # CRITICAL: :.2f for GAMMA and :.1f for ALPHA to match C code sprintf
     grid_key = ref_path.stem          # "3.fine grid"
-    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.dat"
+    sa_for_file = float(np.tanh(gamma / 2.0))
+    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_s{sa_for_file:.6f}.dat"
     out_path = script_dir / out_name
-    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.txt"
+    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_s{sa_for_file:.6f}.txt"
     grid_metadata = make_grid_metadata(
         NI, NJ, gamma, alpha, ref_path.name, ly=LY, lz=LZ,
         poisson_iter=poisson_iter, poisson_tol=poisson_tol,
@@ -2021,7 +2024,7 @@ def auto_generate(variables_h_path, script_dir=None,
     print(f"  [auto] Output validated: I={ni_a} J={nj_a} ok (matches NY={ni_e}, NZ={nj_e})")
 
     # Also save comparison plot
-    tag = f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}"
+    tag = f"I{NI}_J{NJ}_s{sa_for_file:.6f}"
     plot_compare(x_ref, y_ref, x_out, y_out,
                  labels=["Reference", f"New ({NI}x{NJ})"],
                  title=f"Auto: GAMMA={gamma:.4f}, ALPHA={alpha}, Grid={NI}x{NJ}",
@@ -2395,7 +2398,8 @@ if __name__ == "__main__":
     print("  [Step 7] Saving outputs ...")
     print("-" * 62)
 
-    tag_str = f"I{NI}_J{NJ}_g{GAMMA:.2f}_a{ALPHA}"
+    SA_val = float(np.tanh(GAMMA / 2.0))
+    tag_str = f"I{NI}_J{NJ}_s{SA_val:.6f}"
 
     out_cmp = base / f"compare_{grid_key}_{tag_str}.png"
     plot_compare(x_ref, y_ref, x_new, y_new,
