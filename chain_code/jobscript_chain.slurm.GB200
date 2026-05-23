@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=Edit6_5600DNS 
-#SBATCH --account=MST114348
+#SBATCH --account=MST115169
 #SBATCH --partition=gb200-dev
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=4
