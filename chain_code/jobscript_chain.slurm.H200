@@ -2,7 +2,7 @@
 #SBATCH --job-name=Edit6_5600DNS 
 #SBATCH --account=MST114348
 #SBATCH --partition=dev
-#SBATCH --nodes=4
+#SBATCH --nodes=1
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
@@ -22,13 +22,13 @@
 # jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
-#   (1) partition/nodes/gres — dev / 4 nodes / 8 GPU×4=32   (GB200: gb200-dev / 8 / 4)
-#       對應 variables.h jp=32 (32 streamwise MPI ranks)
+#   (1) partition/nodes/gres — dev / 1 node / 8 GPU×1=8    (GB200: gb200-dev / 2 / 4)
+#       對應 variables.h jp=8 (8 streamwise MPI ranks)
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
 #                              (GB200: /usr/local/cuda-13.0 on compute node)
-#   (4) mpirun 對映          — -np 32 --map-by ppr:8:node (4 nodes 8 GPU)
-#                              (GB200: -np 32 --map-by ppr:4:node on 8 nodes)
+#   (4) mpirun 對映          — -np 8 --map-by ppr:8:node (1 node 8 GPU)
+#                              (GB200: -np 8 --map-by ppr:4:node on 2 nodes)
 #   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
 #
 # 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.
@@ -250,7 +250,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-16}
+NP=${SLURM_NTASKS:-8}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -516,9 +516,9 @@ rm -f "$WATCHDOG_SENTINEL"
 WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
-# [H200] 4 節點 32 GPU: -np 32 --map-by ppr:8:node (對應 variables.h jp=32)
+# [H200] 1 節點 8 GPU: -np 8 --map-by ppr:8:node (對應 variables.h jp=8)
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 32 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np 8 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 
