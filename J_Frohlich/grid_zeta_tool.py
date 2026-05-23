@@ -1750,8 +1750,8 @@ def auto_generate(variables_h_path, script_dir=None):
         script_dir = Path(__file__).parent
 
     params = parse_variables_h(variables_h_path)
-    required = ["NY", "NZ", "LZ", "ALPHA", "GAMMA", "GRID_DAT_REF",
-                "Uref", "Re"]
+    required = ["NY", "NZ", "LZ", "ALPHA", "GAMMA", "STRETCH_A",
+                "GRID_DAT_REF", "Uref", "Re"]
     for k in required:
         if k not in params:
             raise ValueError(f"Missing #define {k} in {variables_h_path}")
@@ -1760,6 +1760,7 @@ def auto_generate(variables_h_path, script_dir=None):
     NZ = params["NZ"]          # node count (格點數)
     alpha = params["ALPHA"]
     gamma = params["GAMMA"]
+    stretch_a = params["STRETCH_A"]
     ref_name = params["GRID_DAT_REF"]
     LZ = params["LZ"]
     LY = params.get("LY", 9.0)
@@ -1915,18 +1916,18 @@ def auto_generate(variables_h_path, script_dir=None):
         print(f"  !! Grid .dat NOT written. !!")
         return None
 
-    # Output filename uses adjusted GAMMA
-    # ★ CRITICAL: :.2f for GAMMA and :.1f for ALPHA to match C code sprintf
+    # Recompute STRETCH_A from (possibly adjusted) gamma for filename
+    sa_for_file = float(np.tanh(gamma / 2.0))
     grid_key = ref_path.stem          # "3.fine grid"
-    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.dat"
+    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_s{sa_for_file:.6f}.dat"
     out_path = script_dir / out_name
 
     write_tecplot_dat(out_path, x_out, y_out,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}")
+                      zone_title=f"I{NI}_J{NJ}_s{sa_for_file:.6f}")
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
-    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_g{gamma:.2f}_a{alpha:.1f}.txt"
+    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_s{sa_for_file:.6f}.txt"
     write_grid_data(grid_data_path, x_out, y_out,
                     NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha, LZ=LZ,
                     source_dat=out_path.name)
@@ -1940,25 +1941,25 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Output validated: I={ni_a} J={nj_a} ✓ (matches NY={ni_e}, NZ={nj_e})")
 
     # Also save comparison plot
-    tag = f"I{NI}_J{NJ}_g{gamma:.2f}_a{alpha}"
+    tag = f"I{NI}_J{NJ}_s{sa_for_file:.6f}"
     plot_compare(x_ref, y_ref, x_out, y_out,
                  labels=["Reference", f"New ({NI}x{NJ})"],
-                 title=f"Auto: GAMMA={gamma:.4f}, ALPHA={alpha}, Grid={NI}x{NJ}",
+                 title=f"Auto: GAMMA={gamma:.4f}, STRETCH_A={sa_for_file:.6f}, Grid={NI}x{NJ}",
                  savepath=script_dir / f"compare_auto_{tag}.png")
 
     if abs(gamma_original - gamma) > 1e-6:
-        sa_new = float(np.tanh(gamma / 2.0))
+        sa_new = sa_for_file
         print()
         print(f"  ★ GAMMA 已從 {gamma_original:.4f} 自動調整為 {gamma:.6f}")
         print(f"    對應 STRETCH_A = {sa_new:.6f}")
         updated = update_stretch_a_in_variables_h(variables_h_path, sa_new)
         if updated:
             print(f"    ✓ variables.h 已自動更新 STRETCH_A = {sa_new:.6f}")
-            print(f"      → main.cu 重編譯後 GAMMA 將匹配網格檔名")
+            print(f"      → main.cu 重編譯後 STRETCH_A 將匹配網格檔名")
         else:
             print(f"    ⚠ variables.h 自動更新失敗，請手動修改:")
             print(f"      #define STRETCH_A {sa_new:.6f}")
-        print(f"    輸出檔名使用調整後的 GAMMA")
+        print(f"    輸出檔名使用調整後的 STRETCH_A")
 
     print(f"  [auto] Output: {out_path}")
     return str(out_path)
@@ -2292,12 +2293,13 @@ if __name__ == "__main__":
     print("  [Step 7] Saving outputs ...")
     print("-" * 62)
 
-    tag_str = f"I{NI}_J{NJ}_g{GAMMA:.2f}_a{ALPHA}"
+    SA_val = float(np.tanh(GAMMA / 2.0))
+    tag_str = f"I{NI}_J{NJ}_s{SA_val:.6f}"
 
     out_cmp = base / f"compare_{grid_key}_{tag_str}.png"
     plot_compare(x_ref, y_ref, x_new, y_new,
                  labels=["Reference", f"New ({NI}x{NJ})"],
-                 title=f"GAMMA={GAMMA}, ALPHA={ALPHA}, Grid={NI}x{NJ}",
+                 title=f"GAMMA={GAMMA}, STRETCH_A={SA_val:.6f}, Grid={NI}x{NJ}",
                  savepath=out_cmp)
 
     mid_col = NI // 2
@@ -2309,7 +2311,7 @@ if __name__ == "__main__":
     out_dat = base / f"adaptive_{grid_key}_{tag_str}.dat"
     write_tecplot_dat(out_dat, x_new, y_new,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_g{GAMMA}_a{ALPHA}")
+                      zone_title=f"I{NI}_J{NJ}_s{SA_val:.6f}")
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
     # Try to read LZ from variables.h (same search paths as auto mode);
