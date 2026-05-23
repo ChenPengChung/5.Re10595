@@ -112,7 +112,7 @@
 //   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 壁面最小格距 ≈ uniform_dz × Ratio (Ratio=0.5 時 a≈0.60)
-#define     STRETCH_A           0.97
+#define     STRETCH_A           0.958113
 #define     ALPHA               0.5
 #define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
 #if ALPHA != 0.5
