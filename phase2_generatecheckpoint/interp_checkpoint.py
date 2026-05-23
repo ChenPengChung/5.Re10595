@@ -3605,6 +3605,10 @@ def main():
         ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
     final_div_rms = div_rms
     final_div_max = div_max
+    if not (np.isfinite(final_div_rms) and np.isfinite(final_div_max)):
+        sys.exit('FATAL: u* divergence gate FAILED: non-finite divergence diagnostic '
+                 '(rms={}, max={}). Checkpoint NOT written.'.format(
+                     final_div_rms, final_div_max))
     print('      u* divergence check (CD2, unique physical DOFs): '
           'rms = {:.6e}, max|div(u*)| = {:.6e}'.format(div_rms, div_max))
 
