@@ -429,6 +429,12 @@ int main(int argc, char *argv[])
 
 	int iDeviceCount = 0;
     CHECK_CUDA( cudaGetDeviceCount( &iDeviceCount ) );
+    if (iDeviceCount < jp) {
+        if (myid == 0)
+            fprintf(stderr, "[FATAL] cudaGetDeviceCount=%d < jp=%d — node has missing GPUs, refusing to share.\n",
+                    iDeviceCount, (int)jp);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
     CHECK_CUDA( cudaSetDevice( myid % iDeviceCount ) );
 
     if (myid == 0)  printf("\n%s running with %d GPUs...\n\n", argv[0], (int)(jp));          CHECK_MPI( MPI_Barrier(MPI_COMM_WORLD) );
