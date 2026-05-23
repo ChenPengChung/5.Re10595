@@ -1788,7 +1788,9 @@ def auto_generate(variables_h_path, script_dir=None):
     if not ref_path.exists():
         raise FileNotFoundError(f"Reference grid not found: {ref_path}")
 
-    # ── Idempotency check: skip generation if matching grid already exists ──
+    # ── Idempotency check: parameter-based, not mtime-based ──
+    # Skip conditions: .dat exists + header I/J == NY/NZ + filename s{STRETCH_A} matches.
+    # If .dat is valid but grid_data diagnostic is missing, only regenerate grid_data.
     sa_expected = float(np.tanh(gamma / 2.0))
     grid_key_early = ref_path.stem
     expected_name = f"adaptive_{grid_key_early}_I{NI}_J{NJ}_s{sa_expected:.6f}.dat"
@@ -1798,9 +1800,23 @@ def auto_generate(variables_h_path, script_dir=None):
             ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(
                 str(expected_path), NY, NZ)
             if ok:
-                print(f"  [auto] Grid already exists and dimensions match: {expected_name}")
-                print(f"  [auto] I={ni_a} J={nj_a} ✓ — skipping generation")
-                return str(expected_path)
+                sa_in_name = abs(sa_expected - stretch_a) < 1e-8
+                if not sa_in_name:
+                    print(f"  [auto] Grid exists but STRETCH_A mismatch: "
+                          f"file={sa_expected:.6f} vs variables.h={stretch_a:.6f}")
+                else:
+                    print(f"  [auto] Grid already exists and parameters match: {expected_name}")
+                    print(f"  [auto] I={ni_a} J={nj_a}, s={sa_expected:.6f} ✓")
+                    diag_name = f"grid_data_I{NI}_J{NJ}_s{sa_expected:.6f}.txt"
+                    diag_path = script_dir / diag_name
+                    if not diag_path.exists():
+                        print(f"  [auto] Diagnostics missing — regenerating {diag_name} only")
+                        x_dat, y_dat, _, _ = parse_tecplot_dat(expected_path)
+                        write_grid_data(diag_path, x_dat, y_dat,
+                                        NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha,
+                                        LZ=LZ, source_dat=expected_name)
+                        print(f"  [auto] Diagnostics written: {diag_name}")
+                    return str(expected_path)
         except Exception:
             pass
 

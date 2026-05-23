@@ -552,11 +552,11 @@ int main(int argc, char *argv[])
             need_generate = 1;
         } else {
             fclose(grid_test);
-            // 新鮮度: 全部輸入依賴 vs 格點檔 mtime
+            // 新鮮度: 只比較實際影響網格座標的資料依賴
+            // grid_zeta_tool.py 不列入 — 改註解/防呆不應觸發重生
             struct stat grid_st, dep_st;
             if (stat(grid_dat_path, &grid_st) == 0) {
                 const char *deps[] = {
-                    GRID_DAT_DIR "/grid_zeta_tool.py",
                     GRID_DAT_DIR "/" GRID_DAT_REF,
 #ifdef UTAU_BOT_DAT
                     GRID_DAT_DIR "/" UTAU_BOT_DAT,
