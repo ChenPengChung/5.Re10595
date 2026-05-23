@@ -250,7 +250,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-8}
+NP=${SLURM_NTASKS:-16}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
