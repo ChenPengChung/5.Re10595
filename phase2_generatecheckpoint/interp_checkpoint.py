@@ -29,7 +29,10 @@ Pipeline:
          Preserve wall rho so restart pressure stays consistent with the
          interpolated source field and with the runtime solver policy.
      5c. Global density correction: uniform additive offset on the full
-         physical domain, matching the runtime mass-correction kernel.
+         physical domain, using the same control-volume weights as the
+         runtime mass-correction kernel. --rho-volume-method auto mirrors
+         variables.h CELL_VOLUME_METHOD (0=shoelace, 1=Jacobian 3x3 GL
+         with FD6/Fornberg J_2D and 6-point Lagrange interpolation).
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
      5e. Velocity projection (--project-velocity poisson, default):
@@ -81,6 +84,11 @@ Usage:
       --output-root restart/checkpoint --step 1 \\
       --interp-mode phys --fneq-mode zero
 
+  # Interactive jp override:
+  #   omit --auto and --new-jp; when variables.h is available the prompt
+  #   shows its jp value as the default, and rejects jp values that do not
+  #   divide (NY-1).  Example: origin metadata jp=8 -> prompt NEW jp=16.
+
 Expected folder structure:
   workspace/
   +-- variables.h                     (optional, project mode)
@@ -123,7 +131,9 @@ _DOMAIN_FROM_VH = False
 # Grid configurations
 # ---------------------------------------------------------------
 class GridConfig:
-    def __init__(self, nx, ny, nz, jp, gamma, alpha, grid_dat):
+    def __init__(self, nx, ny, nz, jp, gamma, alpha, grid_dat, stretch_a=None):
+        if jp <= 0:
+            raise ValueError('jp must be positive, got {}'.format(jp))
         if (ny - 1) % jp != 0:
             raise ValueError('(NY-1)={} is not divisible by jp={}'.format(ny - 1, jp))
         self.NX = nx
@@ -132,6 +142,7 @@ class GridConfig:
         self.JP = jp
         self.GAMMA = gamma
         self.ALPHA = alpha
+        self.STRETCH_A = stretch_a if stretch_a is not None else math.tanh(gamma / 2.0)
         self.GRID_DAT = grid_dat
         self.NX6 = nx + 6
         self.NY6 = ny + 6
@@ -149,8 +160,9 @@ NEW = None
 def parse_variables_h(path):
     """Parse selected numeric #define values from variables.h."""
     targets = {'NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'CFL',
-               'LX', 'LY', 'LZ', 'H_HILL'}
-    int_keys = {'NX', 'NY', 'NZ', 'jp'}
+               'LX', 'LY', 'LZ', 'H_HILL', 'STRETCH_A'}
+    targets.add('CELL_VOLUME_METHOD')
+    int_keys = {'NX', 'NY', 'NZ', 'jp', 'CELL_VOLUME_METHOD'}
     defines = {}
     with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
@@ -168,6 +180,10 @@ def parse_variables_h(path):
                 defines[key] = int(val_str) if key in int_keys else float(val_str)
             except ValueError:
                 pass
+    if 'GAMMA' not in defines and 'STRETCH_A' in defines:
+        sa = defines['STRETCH_A']
+        if abs(sa) < 1.0:
+            defines['GAMMA'] = math.log((1.0 + sa) / (1.0 - sa))
     return defines
 
 
@@ -259,8 +275,8 @@ def derive_solver_grid_dat(variables_h, cfg):
     if not grid_dir or not grid_ref:
         return None
     ref_stem = os.path.splitext(grid_ref)[0]
-    fname = 'adaptive_{}_I{}_J{}_g{:.2f}_a{:.1f}.dat'.format(
-        ref_stem, cfg.NY, cfg.NZ, float(cfg.GAMMA), float(cfg.ALPHA))
+    fname = 'adaptive_{}_I{}_J{}_s{:.6f}.dat'.format(
+        ref_stem, cfg.NY, cfg.NZ, float(cfg.STRETCH_A))
     base = os.path.dirname(os.path.abspath(variables_h))
     if os.path.isabs(grid_dir):
         return os.path.abspath(os.path.join(grid_dir, fname))
@@ -442,6 +458,20 @@ def infer_new_grid_alpha(path):
     return float(m.group(1))
 
 
+def infer_grid_gamma_alpha(path):
+    """Infer optional gamma/alpha from grid filenames used by phase1 assets."""
+    gamma, alpha = infer_old_grid_params(path)
+    if gamma is not None or alpha is not None:
+        return gamma, alpha
+    import re
+    m = re.search(r'_s([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
+    if m:
+        sa = float(m.group(1))
+        if abs(sa) < 1.0:
+            return math.log((1.0 + sa) / (1.0 - sa)), None
+    return None, infer_new_grid_alpha(path)
+
+
 def project_root():
     """Return repository root inferred from this phase2 script location."""
     return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -537,13 +567,16 @@ def _grid_dat_search_dirs(grid_dat_dir=None):
 def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
     """Try to find grid .dat file by naming convention.
 
-    Searches for both formats:
-      - I{NY}_J{NZ}_g{G}_a{A}.dat  (Mode 2, uniform gamma)
-      - I{NY}_J{NZ}_a{A}.dat       (Mode 3, variable gamma)
+    Searches for formats:
+      - I{NY}_J{NZ}_s{STRETCH_A:.6f}.dat  (current: STRETCH_A-based)
+      - I{NY}_J{NZ}_g{G}_a{A}.dat         (legacy: gamma+alpha)
+      - I{NY}_J{NZ}_a{A}.dat              (legacy: Mode 3)
     """
     if search_dirs is None:
         search_dirs = _grid_dat_search_dirs()
     candidates = set()
+    sa = math.tanh(gamma / 2.0)
+    candidates.add('I{}_J{}_s{:.6f}'.format(ny, nz, sa))
     for fmt in (str, lambda x: '{:g}'.format(x)):
         g_str = fmt(gamma)
         a_str = fmt(alpha)
@@ -564,16 +597,19 @@ def try_find_grid_dat(ny, nz, gamma, alpha, search_dirs=None):
 def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
     """Find grid .dat by I{NY}_J{NZ} pattern; extract gamma/alpha from filename.
 
-    Handles both formats:
-      _g{G}_a{A}.dat  → gamma=G, alpha=A  (Mode 2)
-      _a{A}.dat        → gamma=None, alpha=A (Mode 3)
+    Handles formats:
+      _s{A}.dat        → gamma=derived, alpha=0.5  (current: STRETCH_A-based)
+      _g{G}_a{A}.dat   → gamma=G, alpha=A          (legacy Mode 2)
+      _a{A}.dat        → gamma=None, alpha=A        (legacy Mode 3)
     """
     import re
     if search_dirs is None:
         search_dirs = _grid_dat_search_dirs()
     pattern = 'I{}_J{}'.format(ny, nz)
+    sa_re = re.compile(r'_s([\d.]+)\.dat$')
     ga_re = re.compile(r'_g([\d.]+)_a([\d.]+)\.dat$')
     a_re = re.compile(r'_a([\d.]+)\.dat$')
+    matches = []
     for d in search_dirs:
         if not os.path.isdir(d):
             continue
@@ -582,12 +618,27 @@ def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
                 continue
             if pattern in fname:
                 path = os.path.join(d, fname)
+                m = sa_re.search(fname)
+                if m:
+                    sa = float(m.group(1))
+                    gamma = math.log((1.0 + sa) / (1.0 - sa))
+                    matches.append((path, gamma, 0.5))
+                    continue
                 m = ga_re.search(fname)
                 if m:
-                    return path, float(m.group(1)), float(m.group(2))
+                    matches.append((path, float(m.group(1)), float(m.group(2))))
+                    continue
                 m = a_re.search(fname)
                 if m:
-                    return path, None, float(m.group(1))
+                    matches.append((path, None, float(m.group(1))))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        msg = 'ambiguous grid .dat candidates for I{}_J{}: {}'.format(
+            ny, nz, ', '.join(os.path.basename(m[0]) for m in matches))
+        if _AUTO_MODE:
+            sys.exit('FATAL: {}'.format(msg))
+        print('  WARNING: {}'.format(msg))
     return None, None, None
 
 
@@ -614,6 +665,81 @@ def ask_value(prompt_text, cast_fn=str, default=None):
             return cast_fn(val)
         except (ValueError, TypeError):
             print('  (格式錯誤, 請重新輸入 / invalid format)')
+
+
+def jp_candidates_for_ny(ny, max_candidate=256):
+    """Return practical jp divisors for (NY-1), capped for readable prompts."""
+    if ny is None or ny <= 1:
+        return []
+    n = ny - 1
+    return [j for j in range(1, max_candidate + 1) if n % j == 0]
+
+
+def format_jp_candidates(ny, max_candidate=256):
+    candidates = jp_candidates_for_ny(ny, max_candidate=max_candidate)
+    if not candidates:
+        return 'none'
+    text = ', '.join(str(x) for x in candidates)
+    if (ny - 1) > max_candidate and (ny - 1) not in candidates:
+        text += ', ...'
+    return text
+
+
+def validate_jp_partition(ny, jp, label):
+    """Validate that jp is usable for this NY and give actionable hints."""
+    if jp is None:
+        sys.exit('FATAL: {} jp is missing'.format(label))
+    if jp <= 0:
+        sys.exit('FATAL: {} jp={} must be positive'.format(label, jp))
+    if ny is None:
+        sys.exit('FATAL: {} NY is missing; cannot validate jp={}'.format(label, jp))
+    if (ny - 1) % jp != 0:
+        sys.exit(
+            'FATAL: {} (NY-1)={} cannot be divided by jp={}.\n'
+            '  Fix variables.h or pass a valid --new-jp/--old-jp.\n'
+            '  Practical jp candidates for NY={}: {}'.format(
+                label, ny - 1, jp, ny, format_jp_candidates(ny)))
+
+
+def ask_jp_value(prompt_text, ny, default=None):
+    """Interactive jp prompt that refuses values incompatible with NY."""
+    if _AUTO_MODE:
+        if default is not None:
+            validate_jp_partition(ny, int(default), prompt_text.strip())
+            return int(default)
+        sys.exit('FATAL: --auto mode requires jp but missing: {}'.format(prompt_text))
+
+    suffix = '  valid jp for NY={}: {}'.format(ny, format_jp_candidates(ny))
+    while True:
+        jp = ask_value(prompt_text + suffix, int, default)
+        if jp > 0 and ny is not None and (ny - 1) % jp == 0:
+            return jp
+        print('  (jp={} 不合法: (NY-1)={} 必須可被 jp 整除 / valid: {})'.format(
+            jp, ny - 1 if ny is not None else 'unknown', format_jp_candidates(ny)))
+
+
+def require_variables_defs(defs, keys, path, context):
+    """Fail with a clear message when variables.h lacks required defines."""
+    missing = [k for k in keys if k not in defs]
+    if missing:
+        sys.exit('FATAL: {} requires {} in {}. Missing: {}'.format(
+            context, ', '.join(keys), path, ', '.join(missing)))
+
+
+def resolve_rho_volume_method(requested, variables_h=None):
+    """Resolve density control-volume method to the solver-equivalent choice."""
+    if requested != 'auto':
+        return requested, 'cli'
+    if variables_h and os.path.isfile(variables_h):
+        method = parse_variables_h(variables_h).get('CELL_VOLUME_METHOD')
+        if method is not None:
+            method = int(method)
+            if method == 0:
+                return 'shoelace', 'variables.h:CELL_VOLUME_METHOD=0'
+            if method == 1:
+                return 'jacobian-gl', 'variables.h:CELL_VOLUME_METHOD=1'
+            sys.exit('FATAL: CELL_VOLUME_METHOD={} is unsupported; expected 0 or 1'.format(method))
+    return 'shoelace', 'default-no-CELL_VOLUME_METHOD'
 
 
 def origin_search_dirs(primary_dir=None):
@@ -659,6 +785,28 @@ def find_origin_checkpoint(search_dir=None):
         sys.exit('FATAL: multiple origin checkpoints found ({}): {}'.format(
             len(candidates), ', '.join(candidates)))
     return candidates[0] if candidates else None
+
+
+def find_single_legacy_phase2_checkpoint(search_dir):
+    """Return one legacy phase2 step_* source checkpoint, or None if ambiguous."""
+    if not search_dir or not os.path.isdir(search_dir):
+        return None
+    candidates = []
+    for name in sorted(os.listdir(search_dir)):
+        if not name.startswith('step_') or name.endswith('.WRITING'):
+            continue
+        if _is_origin_dir_name(name):
+            continue
+        path = os.path.join(search_dir, name)
+        if os.path.isfile(os.path.join(path, 'metadata.dat')):
+            candidates.append(os.path.abspath(path))
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        sys.exit('FATAL: multiple legacy phase2 step_* checkpoints found ({}): {}. '
+                 'Rename the intended source to step_*_origin* or pass --old-dir.'.format(
+                     len(candidates), ', '.join(candidates)))
+    return None
 
 
 def resolve_old_dir(old_dir):
@@ -757,7 +905,9 @@ def build_old_config(args):
     if nz is None:
         nz = ask_value('  OLD NZ (法向格點 / wall-normal nodes)', int)
     if jp is None:
-        jp = ask_value('  OLD jp (GPU/rank count)', int)
+        jp = ask_jp_value('  OLD jp (GPU/rank count)', ny)
+    else:
+        validate_jp_partition(ny, int(jp), 'OLD')
 
     if grid_dat is None and ny is not None and nz is not None:
         if gamma is not None and alpha is not None:
@@ -835,15 +985,17 @@ def build_new_config(args):
     if nz is None:
         nz = ask_value('  NEW NZ (法向格點 / wall-normal nodes)', int)
     if jp is None:
-        jp = ask_value('  NEW jp (GPU/rank count)', int)
+        jp = ask_jp_value('  NEW jp (GPU/rank count)', ny)
+    elif args.new_jp is None and not args.auto and sys.stdin.isatty():
+        jp = ask_jp_value('  NEW jp (GPU/rank count; Enter uses variables.h)', ny, int(jp))
+    else:
+        validate_jp_partition(ny, int(jp), 'NEW')
     if gamma is None:
         gamma = ask_value('  NEW GAMMA (tanh stretching param)', float)
     if alpha is None:
         alpha = ask_value('  NEW ALPHA (stretching center)', float, 0.5)
 
-    if (ny - 1) % jp != 0:
-        sys.exit('FATAL: (NY-1)={} 不能被 jp={} 整除 — 無法平均分割 MPI 子域'.format(
-            ny - 1, jp))
+    validate_jp_partition(ny, int(jp), 'NEW')
 
     if grid_dat is None:
         grid_dat = try_find_grid_dat(ny, nz, gamma, alpha)
@@ -852,8 +1004,10 @@ def build_new_config(args):
         else:
             grid_dat = ask_value('  NEW grid .dat 路徑 (path to Tecplot grid file)', str)
 
+    stretch_a = vh_defs.get('STRETCH_A')
     cfg = GridConfig(nx=nx, ny=ny, nz=nz, jp=jp,
-                     gamma=gamma, alpha=alpha, grid_dat=grid_dat)
+                     gamma=gamma, alpha=alpha, grid_dat=grid_dat,
+                     stretch_a=stretch_a)
     if not cross_validate_grid_dat(cfg, 'NEW'):
         sys.exit('FATAL: NEW grid .dat cross-validation failed')
     print()
@@ -1051,6 +1205,20 @@ def split_y(global_arr, cfg):
         j0 = r * cfg.CHUNK
         out.append(global_arr[j0:j0 + cfg.NYD6, :, :].copy())
     return out
+
+
+def print_repartition_plan(cfg_old, cfg_new):
+    """Explain how old rank files are rebuilt when jp changes."""
+    print('Rank repartition plan:')
+    print('  OLD jp={}  unique j/rank={}  local NYD6={}  input files: 19*f + rho per rank'.format(
+        cfg_old.JP, cfg_old.CHUNK, cfg_old.NYD6))
+    print('  NEW jp={}  unique j/rank={}  local NYD6={}  output files: 19*f + rho per rank'.format(
+        cfg_new.JP, cfg_new.CHUNK, cfg_new.NYD6))
+    if cfg_old.JP != cfg_new.JP:
+        print('  Repartition: stitch OLD ranks into one global field, apply conservation/projection globally, then split into NEW ranks.')
+    else:
+        print('  Repartition: jp unchanged; still rebuilds via global field for identical conservation checks.')
+    print()
 
 
 def enforce_periodic_physical_duplicates(field, cfg):
@@ -1255,23 +1423,17 @@ def bilinear_inverse_triangle_fallback(y_n, z_n, y_corners, z_corners, eps=5e-5)
 
 
 def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
-                            eps_phys=5e-6, eps_param=5e-5,
-                            snap_tol=5e-2):
+                            eps_phys=5e-6, eps_param=5e-5):
     """Locate OLD cell containing (y_n, z_n). Returns (j*, k*, xi, eta).
 
     eps_phys  — physical-space tolerance for bbox pre-filter
     eps_param — parametric-space tolerance for xi/eta in-bounds check
-    snap_tol  — parametric-space tolerance for nearest-cell snap fallback;
-                when strict search fails (e.g. NEW wall points slightly outside
-                OLD grid due to cubic-vs-analytical boundary mismatch), accept
-                the best candidate if its parametric overshoot < snap_tol.
 
     Per-candidate strategy:
       1. Newton 2x2; accept if converged AND in [0,1]^2 (with eps_param).
       2. If Newton failed OR converged out-of-bounds -> triangle fallback.
-      3. Both failed -> track best (closest) candidate, try next.
-      4. All candidates exhausted -> accept best if overshoot < snap_tol,
-         otherwise ValueError.
+      3. Both failed -> next candidate.
+      4. All candidates exhausted -> ValueError.
     """
     bbox_y_min, bbox_y_max, bbox_z_min, bbox_z_max = bboxes
     candidates = ((bbox_y_min - eps_phys <= y_n) & (y_n <= bbox_y_max + eps_phys) &
@@ -1282,11 +1444,6 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
 
     def _in_bounds(xi, eta):
         return -eps_param <= xi <= 1 + eps_param and -eps_param <= eta <= 1 + eps_param
-
-    def _overshoot(xi, eta):
-        return max(max(-xi, xi - 1), max(-eta, eta - 1), 0.0)
-
-    best_j, best_k, best_xi, best_eta, best_over = None, None, None, None, 1e30
 
     for j, k in cand_jk:
         y_corners = (y_old[j, k],   y_old[j+1, k],
@@ -1300,10 +1457,6 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
             xi_n, eta_n = bilinear_inverse_newton(y_n, z_n, y_corners, z_corners)
             if _in_bounds(xi_n, eta_n):
                 xi, eta = xi_n, eta_n
-            else:
-                ov = _overshoot(xi_n, eta_n)
-                if ov < best_over:
-                    best_j, best_k, best_xi, best_eta, best_over = j, k, xi_n, eta_n, ov
         except _DegenerateCellError:
             pass
 
@@ -1314,22 +1467,14 @@ def find_containing_cell_2d(y_n, z_n, y_old, z_old, bboxes,
                                                                  y_corners, z_corners, eps=eps_param)
                 if _in_bounds(xi_t, eta_t):
                     xi, eta = xi_t, eta_t
-                else:
-                    ov = _overshoot(xi_t, eta_t)
-                    if ov < best_over:
-                        best_j, best_k, best_xi, best_eta, best_over = j, k, xi_t, eta_t, ov
             except _DegenerateCellError:
                 pass
 
         if xi is not None:
             return int(j), int(k), float(np.clip(xi, 0, 1)), float(np.clip(eta, 0, 1))
 
-    if best_j is not None and best_over < snap_tol:
-        return int(best_j), int(best_k), float(np.clip(best_xi, 0, 1)), float(np.clip(best_eta, 0, 1))
-
     raise ValueError(
-        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle '
-        '(best overshoot={:.3e}, snap_tol={:.3e})'.format(y_n, z_n, best_over, snap_tol))
+        'Point ({:.6e}, {:.6e}) not in any OLD cell after Newton+triangle'.format(y_n, z_n))
 
 
 class PhysMapping2D:
@@ -1370,13 +1515,17 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     # OLD domain so the bbox prefilter doesn't reject boundary points.
     y_old_min, y_old_max = float(y_int_old.min()), float(y_int_old.max())
     z_old_min, z_old_max = float(z_int_old.min()), float(z_int_old.max())
-    z_col_min = z_int_old.min(axis=1)   # shape (NY_old,)
-    z_col_max = z_int_old.max(axis=1)
 
     jstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     kstar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.int32)
     xistar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
     etastar = np.empty((cfg_new.NY, cfg_new.NZ), dtype=np.float64)
+    # Per-column z bounds for local hill-surface clamping.
+    # Global clamp (z_old_min/max) misses curved-wall cases where
+    # z_old_min ≈ 0 (flat region) but the local hill surface is ≈ 1.0.
+    z_col_min = z_int_old.min(axis=1)   # shape (NY_old,)
+    z_col_max = z_int_old.max(axis=1)
+
     n_clamped = 0
     n_nearest = 0
     for j_n in range(cfg_new.NY):
@@ -1707,7 +1856,7 @@ def clamp_wall_macros(rho, ux, uy, uz, cfg):
 
 
 def compute_cv_weights(y_2d, z_2d, cfg):
-    """Build per-node control-volume weights matching the solver.
+    """Build per-node shoelace control-volume weights matching solver method 0.
 
     Mirrors evolution.h:InitializeMassCorrectionWeights + MassCorrectionCellVolume.
     Each interior node weight = 1/8 * sum of volumes of all cells sharing
@@ -1781,7 +1930,7 @@ def compute_cv_weights(y_2d, z_2d, cfg):
     nk_node = cfg.NZ6 - 6   # k in [BFR, NZ6-3)
     w2d = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
 
-    # Each cell (j_cell, k_cell) → scatter to 4 corner nodes in (j, k)
+    # Each cell (j_cell, k_cell) -> scatter to 4 corner nodes in (j, k)
     nj_cells = j_hi - j_lo
     nk_cells = k_hi - k_lo
     for dj in (0, 1):
@@ -1810,18 +1959,411 @@ def compute_cv_weights(y_2d, z_2d, cfg):
     return weights, global_volume
 
 
-def apply_rho_mass_correction(rho, cfg, y_2d, z_2d):
-    """Volume-weighted mass correction matching the solver exactly.
+GL3_NODES = np.array([
+    0.5 * (1.0 - 0.7745966692414834),
+    0.5,
+    0.5 * (1.0 + 0.7745966692414834),
+], dtype=np.float64)
+GL3_WEIGHTS = np.array([5.0 / 18.0, 8.0 / 18.0, 5.0 / 18.0], dtype=np.float64)
+FD5_FWD = np.array([-137.0, 300.0, -300.0, 200.0, -75.0, 12.0],
+                   dtype=np.float64) / 60.0
+FD5_BWD = np.array([-12.0, 75.0, -200.0, 300.0, -300.0, 137.0],
+                   dtype=np.float64) / 60.0
+
+
+def lagrange6_weights(x, start):
+    """Mirror evolution.h Lagrange6Weights for nodes start..start+5."""
+    w = np.empty(6, dtype=np.float64)
+    for m in range(6):
+        val = 1.0
+        xm = float(start + m)
+        for r in range(6):
+            if r != m:
+                xr = float(start + r)
+                val *= (x - xr) / (xm - xr)
+        w[m] = val
+    return w
+
+
+def select_stencil_start(cell_idx, lo, hi):
+    """Mirror evolution.h SelectStencilStart."""
+    ideal = cell_idx - 2
+    max_start = hi - 5
+    if max_start - lo < 0:
+        return None
+    return lo if ideal < lo else max_start if ideal > max_start else ideal
+
+
+def compute_j2d_solver_fornberg(y_2d, z_2d, cfg):
+    """Compute J_2D with the same FD6/FD5 rules as ComputeMetricTerms_Full."""
+    ny6, nz6 = y_2d.shape
+    if ny6 != cfg.NY6 or nz6 != cfg.NZ6:
+        raise ValueError('J_2D shape mismatch: got {}, expected ({}, {})'.format(
+            y_2d.shape, cfg.NY6, cfg.NZ6))
+
+    y_xi = np.zeros_like(y_2d)
+    z_xi = np.zeros_like(z_2d)
+    y_zeta = np.zeros_like(y_2d)
+    z_zeta = np.zeros_like(z_2d)
+
+    # j-direction: solver's 6th-order central FD, valid for physical rows
+    # because build_grid_xyz has already populated 3 periodic ghost rows.
+    j_lo, j_hi = BFR, cfg.NY6 - BFR - 1
+    k_lo_compute, k_hi_compute = BFR - 1, cfg.NZ6 - BFR
+    coef_j = FD6_COEFF[3]
+    for m in range(7):
+        off = m - 3
+        y_xi[j_lo:j_hi+1, k_lo_compute:k_hi_compute+1] += (
+            coef_j[m] * y_2d[j_lo+off:j_hi+1+off, k_lo_compute:k_hi_compute+1])
+        z_xi[j_lo:j_hi+1, k_lo_compute:k_hi_compute+1] += (
+            coef_j[m] * z_2d[j_lo+off:j_hi+1+off, k_lo_compute:k_hi_compute+1])
+
+    # k-direction: solver's FD6_k_adaptive, including FD5 one-sided rows
+    # k=2 and k=NZ6-3.  Jacobian-GL itself uses only k=3..NZ6-4, but
+    # computing the full solver range keeps diagnostics identical.
+    k_lo, k_hi = BFR, cfg.NZ6 - BFR - 1
+    for j in range(j_lo, j_hi + 1):
+        base = j
+        # Bottom buffer k=2
+        kb = BFR - 1
+        y_zeta[base, kb] = float(np.dot(FD5_FWD, y_2d[base, kb:kb+6]))
+        z_zeta[base, kb] = float(np.dot(FD5_FWD, z_2d[base, kb:kb+6]))
+        # Physical k rows
+        for k in range(k_lo, k_hi + 1):
+            s = k - 3
+            if s < k_lo:
+                s = k_lo
+            if s > k_hi - 6:
+                s = k_hi - 6
+            p = k - s
+            coef = FD6_COEFF[p]
+            y_zeta[base, k] = float(np.dot(coef, y_2d[base, s:s+7]))
+            z_zeta[base, k] = float(np.dot(coef, z_2d[base, s:s+7]))
+        # Top buffer k=NZ6-3
+        kt = cfg.NZ6 - BFR
+        s_top = cfg.NZ6 - 8
+        y_zeta[base, kt] = float(np.dot(FD5_BWD, y_2d[base, s_top:s_top+6]))
+        z_zeta[base, kt] = float(np.dot(FD5_BWD, z_2d[base, s_top:s_top+6]))
+
+    j2d = y_xi * z_zeta - y_zeta * z_xi
+
+    # Solver receives J_2D ghost rows from neighbouring ranks.  In a global
+    # representation this is exactly a periodic copy; J is invariant to the
+    # +/-LY coordinate shift used for y_2d ghost rows.
+    j2d[2, :] = j2d[ny6 - 5, :]
+    j2d[1, :] = j2d[ny6 - 6, :]
+    j2d[0, :] = j2d[ny6 - 7, :]
+    j2d[ny6 - 3, :] = j2d[4, :]
+    j2d[ny6 - 2, :] = j2d[5, :]
+    j2d[ny6 - 1, :] = j2d[6, :]
+
+    interior = j2d[BFR:BFR+cfg.NY, BFR:BFR+cfg.NZ]
+    bad = ~(np.isfinite(interior) & (interior > 0.0))
+    if np.any(bad):
+        first = np.argwhere(bad)[0]
+        raise ValueError('FATAL: non-positive solver J_2D at j={}, k={}: {:.17e}'.format(
+            BFR + int(first[0]), BFR + int(first[1]),
+            float(interior[first[0], first[1]])))
+    return j2d
+
+
+def interpolate_j2d_lagrange6(j2d, xi_pos, zeta_pos, sj, sk):
+    """Mirror evolution.h InterpolateJ2D_Lagrange6."""
+    wj = lagrange6_weights(xi_pos, sj)
+    wk = lagrange6_weights(zeta_pos, sk)
+    block = j2d[sj:sj+6, sk:sk+6]
+    return float(np.sum(block * wj[:, np.newaxis] * wk[np.newaxis, :]))
+
+
+def compute_jacobian_gl_cell_areas(j2d, cfg, fallback_area=None):
+    """Cell areas from J_2D using solver's 3x3 GL + Lagrange6 rule."""
+    j_cell_lo, j_cell_hi = BFR - 1, cfg.NY6 - 5
+    k_cell_lo, k_cell_hi = BFR, cfg.NZ6 - 5
+    areas = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    fallback_count = 0
+
+    j_lo_J, j_hi_J = 0, cfg.NY6 - 1
+    k_lo_J, k_hi_J = BFR, cfg.NZ6 - BFR - 1
+
+    for jc in range(j_cell_lo, j_cell_hi + 1):
+        sj = select_stencil_start(jc, j_lo_J, j_hi_J)
+        for kc in range(k_cell_lo, k_cell_hi + 1):
+            sk = select_stencil_start(kc, k_lo_J, k_hi_J)
+            used_fallback = sj is None or sk is None
+            area = 0.0
+            if not used_fallback:
+                for a, wa in zip(GL3_NODES, GL3_WEIGHTS):
+                    for b, wb in zip(GL3_NODES, GL3_WEIGHTS):
+                        j_val = interpolate_j2d_lagrange6(
+                            j2d, float(jc) + float(a), float(kc) + float(b),
+                            sj, sk)
+                        if not np.isfinite(j_val) or j_val <= 0.0:
+                            used_fallback = True
+                            break
+                        area += float(wa * wb) * j_val
+                    if used_fallback:
+                        break
+            if used_fallback:
+                if fallback_area is None:
+                    raise ValueError('Jacobian-GL volume fallback requested but no shoelace area is available')
+                area = float(fallback_area[jc, kc])
+                fallback_count += 1
+            areas[jc, kc] = area
+
+    return areas, fallback_count
+
+
+def compute_shoelace_cell_areas(y_2d, z_2d, cfg):
+    """2D shoelace areas for all cells that can contribute to mass weights."""
+    j_lo, j_hi = BFR - 1, cfg.NY6 - 4
+    k_lo, k_hi = BFR,     cfg.NZ6 - 4
+
+    y0 = y_2d[j_lo:j_hi,     k_lo:k_hi]
+    z0 = z_2d[j_lo:j_hi,     k_lo:k_hi]
+    y1 = y_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    z1 = z_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    y2 = y_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    z2 = z_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    y3 = y_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+    z3 = z_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+
+    area_yz = 0.5 * np.abs(y0*z1 - z0*y1
+                          + y1*z2 - z1*y2
+                          + y2*z3 - z2*y3
+                          + y3*z0 - z3*y0)
+
+    areas = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    areas[j_lo:j_hi, k_lo:k_hi] = area_yz
+    return areas
+
+
+def compute_cv_weights_from_cell_areas(cell_area, cfg):
+    """Scatter 2D cell areas to 3D node weights exactly like the solver."""
+    dx_span = LX / (cfg.NX - 1)
+    j_lo, j_hi = BFR - 1, cfg.NY6 - 4
+    k_lo, k_hi = BFR,     cfg.NZ6 - 4
+    cell_vol = abs(dx_span) * cell_area[j_lo:j_hi, k_lo:k_hi]
+
+    bad_mask = ~(np.isfinite(cell_vol) & (cell_vol > 0.0))
+    if np.any(bad_mask):
+        first = np.argwhere(bad_mask)[0]
+        raise ValueError(
+            'FATAL: invalid cell volume at (j_cell={}, k_cell={}): {:.17e}. '
+            '{} of {} cells are invalid.'.format(
+                j_lo + int(first[0]), k_lo + int(first[1]),
+                float(cell_vol[first[0], first[1]]),
+                int(bad_mask.sum()), cell_vol.size))
+
+    w2d = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    nj_cells = j_hi - j_lo
+    nk_cells = k_hi - k_lo
+    for dj in (0, 1):
+        for dk in (0, 1):
+            j_nodes = np.arange(j_lo + dj, j_lo + dj + nj_cells)
+            k_nodes = np.arange(k_lo + dk, k_lo + dk + nk_cells)
+            w2d[np.ix_(j_nodes, k_nodes)] += cell_vol
+
+    # 1/8 per 3D cell corner, times 2 spanwise neighbour cells.
+    w2d *= 0.25
+
+    ni_node = cfg.NX6 - 7
+    weights = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
+    for i in range(BFR, BFR + ni_node):
+        weights[:, :, i] = w2d
+
+    nj_node = cfg.NY6 - 7
+    nk_node = cfg.NZ6 - 6
+    global_volume = float(np.sum(weights[BFR:BFR+nj_node,
+                                          BFR:BFR+nk_node,
+                                          BFR:BFR+ni_node]))
+    if not (global_volume > 0.0) or not np.isfinite(global_volume):
+        raise ValueError('Invalid global control volume: {:.17e}'.format(global_volume))
+    return weights, global_volume
+
+
+def compute_jacobian_gl_cv_weights_rank_local(y_2d, z_2d, cfg, shoe_area):
+    """Solver-exact Jacobian-GL weights with rank-local stencil selection.
+
+    ComputeJacobianMassCorrectionWeights() runs on each MPI rank after J_2D
+    ghost exchange.  Its Lagrange6 stencil is constrained by local NYD6, not by
+    the full global NY6, so seam-adjacent cells intentionally use local
+    one-sided stencils.  This routine mirrors that rank-local construction and
+    then stitches the unique node weights into one global weight array.
+    """
+    dx_span = LX / (cfg.NX - 1)
+    j2d_global = compute_j2d_solver_fornberg(y_2d, z_2d, cfg)
+
+    w2d_global = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    fallback_count = 0
+    rel_max = 0.0
+    rel_sum = 0.0
+    rel_count = 0
+
+    local_j_lo, local_j_hi = BFR - 1, cfg.NYD6 - 4
+    k_lo, k_hi = BFR, cfg.NZ6 - 4
+    j_lo_J, j_hi_J = 0, cfg.NYD6 - 1
+    k_lo_J, k_hi_J = BFR, cfg.NZ6 - BFR - 1
+
+    for r in range(cfg.JP):
+        j0 = r * cfg.CHUNK
+        j2d_local = j2d_global[j0:j0 + cfg.NYD6, :]
+        local_area = np.zeros((cfg.NYD6, cfg.NZ6), dtype=np.float64)
+
+        for jc in range(local_j_lo, local_j_hi):
+            sj = select_stencil_start(jc, j_lo_J, j_hi_J)
+            for kc in range(k_lo, k_hi):
+                sk = select_stencil_start(kc, k_lo_J, k_hi_J)
+                used_fallback = sj is None or sk is None
+                area = 0.0
+                if not used_fallback:
+                    for a, wa in zip(GL3_NODES, GL3_WEIGHTS):
+                        for b, wb in zip(GL3_NODES, GL3_WEIGHTS):
+                            j_val = interpolate_j2d_lagrange6(
+                                j2d_local,
+                                float(jc) + float(a),
+                                float(kc) + float(b),
+                                sj, sk)
+                            if not np.isfinite(j_val) or j_val <= 0.0:
+                                used_fallback = True
+                                break
+                            area += float(wa * wb) * j_val
+                        if used_fallback:
+                            break
+
+                shoe = float(shoe_area[j0 + jc, kc])
+                if used_fallback:
+                    area = shoe
+                    fallback_count += 1
+                if shoe > 0.0:
+                    rd = abs(area - shoe) / shoe
+                    rel_max = max(rel_max, rd)
+                    rel_sum += rd
+                    rel_count += 1
+                local_area[jc, kc] = area
+
+        cell_vol = abs(dx_span) * local_area[local_j_lo:local_j_hi, k_lo:k_hi]
+        bad_mask = ~(np.isfinite(cell_vol) & (cell_vol > 0.0))
+        if np.any(bad_mask):
+            first = np.argwhere(bad_mask)[0]
+            raise ValueError(
+                'FATAL: invalid Jacobian-GL cell volume at rank={} local cell(j={}, k={}): {:.17e}. '
+                '{} of {} cells are invalid.'.format(
+                    r, local_j_lo + int(first[0]), k_lo + int(first[1]),
+                    float(cell_vol[first[0], first[1]]),
+                    int(bad_mask.sum()), cell_vol.size))
+
+        w2d_local = np.zeros((cfg.NYD6, cfg.NZ6), dtype=np.float64)
+        nj_cells = local_j_hi - local_j_lo
+        nk_cells = k_hi - k_lo
+        for dj in (0, 1):
+            for dk in (0, 1):
+                j_nodes = np.arange(local_j_lo + dj, local_j_lo + dj + nj_cells)
+                k_nodes = np.arange(k_lo + dk, k_lo + dk + nk_cells)
+                w2d_local[np.ix_(j_nodes, k_nodes)] += cell_vol
+        w2d_local *= 0.25
+
+        src = slice(BFR, cfg.NYD6 - 4)
+        dst = slice(j0 + BFR, j0 + cfg.NYD6 - 4)
+        w2d_global[dst, :] = w2d_local[src, :]
+
+    ni_node = cfg.NX6 - 7
+    weights = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
+    for i in range(BFR, BFR + ni_node):
+        weights[:, :, i] = w2d_global
+
+    nj_node = cfg.NY6 - 7
+    nk_node = cfg.NZ6 - 6
+    global_volume = float(np.sum(weights[BFR:BFR+nj_node,
+                                          BFR:BFR+nk_node,
+                                          BFR:BFR+ni_node]))
+    if not (global_volume > 0.0) or not np.isfinite(global_volume):
+        raise ValueError('Invalid Jacobian-GL global control volume: {:.17e}'.format(global_volume))
+
+    return weights, global_volume, {
+        'jacobian_gl_fallback_cells': int(fallback_count),
+        'jacobian_gl_max_rel_diff': float(rel_max),
+        'jacobian_gl_mean_rel_diff': float(rel_sum / rel_count if rel_count else 0.0),
+    }
+
+
+def compute_cv_weights_strict(y_2d, z_2d, cfg, volume_method='shoelace',
+                              return_diagnostics=False):
+    """Build solver-matched control-volume weights for density correction."""
+    if not _DOMAIN_FROM_VH:
+        raise RuntimeError(
+            'FATAL: LX={} is the hardcoded default — variables.h was not parsed. '
+            'Volume-weighted mass correction requires LX from variables.h to '
+            'match the solver. Pass --variables-h or run from a project directory '
+            'containing variables.h.'.format(LX))
+
+    shoe_area = compute_shoelace_cell_areas(y_2d, z_2d, cfg)
+    shoe_weights, shoe_volume = compute_cv_weights_from_cell_areas(shoe_area, cfg)
+    diag = {
+        'volume_method': volume_method,
+        'shoelace_volume': shoe_volume,
+        'jacobian_gl_fallback_cells': 0,
+        'jacobian_gl_max_rel_diff': 0.0,
+        'jacobian_gl_mean_rel_diff': 0.0,
+    }
+
+    if volume_method == 'shoelace':
+        return (shoe_weights, shoe_volume, diag) if return_diagnostics else (shoe_weights, shoe_volume)
+    if volume_method != 'jacobian-gl':
+        raise ValueError('unknown rho volume method: {}'.format(volume_method))
+
+    jac_weights, jac_volume, jac_diag = compute_jacobian_gl_cv_weights_rank_local(
+        y_2d, z_2d, cfg, shoe_area)
+    diag.update({
+        'jacobian_gl_volume': jac_volume,
+        'jacobian_gl_fallback_cells': jac_diag['jacobian_gl_fallback_cells'],
+        'jacobian_gl_max_rel_diff': jac_diag['jacobian_gl_max_rel_diff'],
+        'jacobian_gl_mean_rel_diff': jac_diag['jacobian_gl_mean_rel_diff'],
+        'jacobian_gl_rel_volume_diff': float(abs(jac_volume - shoe_volume) / shoe_volume),
+    })
+    return (jac_weights, jac_volume, diag) if return_diagnostics else (jac_weights, jac_volume)
+
+
+def compute_rho_mass_stats(rho, cfg, y_2d, z_2d, volume_method='shoelace'):
+    """Return volume-weighted rho mass statistics on the solver domain."""
+    ni = cfg.NX6 - 7
+    nj = cfg.NY6 - 7
+    nk = cfg.NZ6 - 6
+
+    full_domain = (slice(BFR, BFR + nj),
+                   slice(BFR, BFR + nk),
+                   slice(BFR, BFR + ni))
+
+    weights, global_volume, diag = compute_cv_weights_strict(
+        y_2d, z_2d, cfg, volume_method=volume_method,
+        return_diagnostics=True)
+    weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
+    rho_global_avg = weighted_rho_sum / global_volume
+    return {
+        'mass': weighted_rho_sum,
+        'mean': rho_global_avg,
+        'volume': global_volume,
+        'volume_diag': diag,
+    }
+
+
+def apply_rho_mass_correction(rho, cfg, y_2d, z_2d,
+                              target_avg=1.0, target_mass=None,
+                              volume_method='shoelace'):
+    """Volume-weighted mass correction on the solver reduction domain.
 
     Mirrors evolution.h:ComputeVolumeWeightedRhoAverageRoot +
     UpdateVolumeWeightedMassCorrection:
       rho_avg    = Σ(rho * cv_weight) / Σ(cv_weight)
-      rho_modify = 1 - rho_avg
+      rho_modify = target_avg - rho_avg
       rho[domain] += rho_modify   (uniform additive to all physical nodes)
 
     The conserved domain matches the solver reduction domain:
       i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
     including both physical wall rows and excluding periodic duplicates.
+
+    target_avg=1.0 matches the runtime mass-correction kernel.  Passing
+    target_mass preserves an absolute OLD-grid mass by converting it to the
+    equivalent NEW-grid target average.
     """
     ni = cfg.NX6 - 7
     nj = cfg.NY6 - 7
@@ -1831,18 +2373,37 @@ def apply_rho_mass_correction(rho, cfg, y_2d, z_2d):
                    slice(BFR, BFR + nk),
                    slice(BFR, BFR + ni))
 
-    weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
+    weights, global_volume, diag = compute_cv_weights_strict(
+        y_2d, z_2d, cfg, volume_method=volume_method,
+        return_diagnostics=True)
     weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
     rho_global_avg = weighted_rho_sum / global_volume
-    rho_modify = 1.0 - rho_global_avg
+    if target_mass is not None:
+        target_avg = float(target_mass) / global_volume
+    else:
+        target_avg = float(target_avg)
+    target_mass = target_avg * global_volume
+    rho_modify = target_avg - rho_global_avg
 
     mean_before = rho_global_avg
+    mass_before = weighted_rho_sum
     rho[full_domain] += rho_modify
 
     weighted_rho_sum_after = float(np.sum(rho[full_domain] * weights[full_domain]))
     mean_after = weighted_rho_sum_after / global_volume
+    mass_after = weighted_rho_sum_after
 
-    return rho_modify, mean_before, mean_after, global_volume
+    return {
+        'rho_modify': rho_modify,
+        'mean_before': mean_before,
+        'mean_after': mean_after,
+        'mass_before': mass_before,
+        'mass_after': mass_after,
+        'target_avg': target_avg,
+        'target_mass': target_mass,
+        'global_volume': global_volume,
+        'volume_diag': diag,
+    }
 
 
 def compute_Ub(uy, z_2d, cfg):
@@ -2343,6 +2904,18 @@ def main():
                         'gradients via CE expansion (default). '
                         '"zero" = pure equilibrium f=f_eq for stability A/B testing. '
                         '"interp" = legacy linear interp of f_neq (loses gradient info).')
+    p.add_argument('--rho-mass-target', choices=['unit', 'old'], default='unit',
+                   help='density mass correction target. "unit" sets the NEW volume-weighted '
+                        'rho mean to 1.0, matching the runtime mass-correction kernel '
+                        '(default). "old" preserves the OLD absolute volume-weighted '
+                        'rho mass when remapping to the NEW grid.')
+    p.add_argument('--rho-volume-method', choices=['auto', 'shoelace', 'jacobian-gl'],
+                   default='auto',
+                   help='control-volume weights for density correction. "auto" mirrors '
+                        'variables.h CELL_VOLUME_METHOD: 0=shoelace, 1=jacobian-gl '
+                        '(default). "jacobian-gl" uses solver-matched J_2D from '
+                        'FD6/Fornberg metrics plus 3x3 Gauss-Legendre and 6-point '
+                        'Lagrange interpolation.')
     p.add_argument('--project-velocity', choices=['poisson', 'dg-exact', 'div-exact', 'none'],
                    default='div-exact',
                    help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
@@ -2360,7 +2933,8 @@ def main():
                         '(default: %(default)s)')
     p.add_argument('--div-gate-tol', type=float, default=1e-10,
                    help='max|div(u*)| gate before f_eq output. '
-                        'Checkpoint is NOT written if exceeded (default: %(default)s)')
+                        'Checkpoint is NOT written unless max|div(u*)| is strictly '
+                        'below this threshold (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2444,6 +3018,13 @@ def main():
         args.variables_h = vh_path
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
+        require_variables_defs(
+            vh, ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'),
+            vh_path, '--auto')
+        validate_jp_partition(int(vh['NY']), int(vh['jp']), 'NEW variables.h')
+        print('[auto] NEW grid from variables.h: NX={} NY={} NZ={} jp={} GAMMA={} ALPHA={}'.format(
+            int(vh['NX']), int(vh['NY']), int(vh['NZ']), int(vh['jp']),
+            vh['GAMMA'], vh['ALPHA']))
 
         # ── GRID PIPELINE REGULATION ──────────────────────────────────
         # Phase 2 (initial-data-point checkpoint 生成) 的觸發條件：
@@ -2481,6 +3062,10 @@ def main():
             sys.exit(0)
 
         origin = resolve_old_dir(args.old_dir) if args.old_dir else find_origin_checkpoint(phase2_dir)
+        if not origin and not args.old_dir:
+            origin = find_single_legacy_phase2_checkpoint(phase2_dir)
+            if origin:
+                print('[auto] Legacy phase2 step checkpoint selected as origin: {}'.format(origin))
         if not origin:
             sys.exit('FATAL: --auto: no origin checkpoint found '
                      '(searched step_*_origin* and oldcheckpoint_* in phase2/restart)')
@@ -2489,7 +3074,7 @@ def main():
 
         dim_tag = '_I{}_J{}'.format(NY_vh, NZ_vh)
         old_grid = old_fname = old_gamma = old_alpha = None
-        new_grid = new_fname = new_alpha = None
+        new_grid = new_fname = new_gamma = new_alpha = None
         resolve_bases = (grid_dir, vh_dir, project_root())
 
         if args.old_grid_dat:
@@ -2510,7 +3095,8 @@ def main():
             if new_old_gamma is not None and not new_fname.startswith('newgrid_'):
                 sys.exit('FATAL: --new-grid-dat appears to be an OLD uniform-gamma grid: {}'.format(
                     new_fname))
-            inferred_alpha = infer_new_grid_alpha(new_grid)
+            inferred_gamma, inferred_alpha = infer_grid_gamma_alpha(new_grid)
+            new_gamma = args.new_gamma if args.new_gamma is not None else inferred_gamma
             new_alpha = ALPHA_vh
             if inferred_alpha is not None and abs(float(inferred_alpha) - float(ALPHA_vh)) > 1e-12:
                 sys.exit('FATAL: --new-grid-dat alpha {} does not match variables.h ALPHA {}'.format(
@@ -2522,7 +3108,7 @@ def main():
             new_candidates = []
 
             for f in sorted(os.listdir(grid_dir)):
-                if not f.endswith('.dat') or dim_tag not in f:
+                if not f.endswith('.dat'):
                     continue
                 full = os.path.join(grid_dir, f)
                 if f.startswith('oldgrid_'):
@@ -2533,16 +3119,17 @@ def main():
                         continue
                     old_candidates.append((full, f, gamma, alpha))
                 elif f.startswith('newgrid_'):
-                    alpha = infer_new_grid_alpha(f)
+                    if dim_tag not in f:
+                        continue
+                    gamma, alpha = infer_grid_gamma_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
-                    new_candidates.append((full, f, ALPHA_vh if alpha is None else alpha))
+                    new_candidates.append((full, f, gamma, ALPHA_vh if alpha is None else alpha))
 
             if not old_grid:
                 if len(old_candidates) == 0:
-                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*.dat containing {} '
-                             'and *_g{{G}}_a{{A}}.dat (ALPHA={}) in {}'.format(
-                                 dim_tag, ALPHA_vh, grid_dir))
+                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*_g{{G}}_a{{A}}.dat '
+                             '(ALPHA={}) in {}'.format(ALPHA_vh, grid_dir))
                 if len(old_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
                         len(old_candidates), ', '.join(c[1] for c in old_candidates)))
@@ -2555,15 +3142,17 @@ def main():
                 if len(new_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
                         len(new_candidates), ', '.join(c[1] for c in new_candidates)))
-                new_grid, new_fname, new_alpha = new_candidates[0]
+                new_grid, new_fname, new_gamma, new_alpha = new_candidates[0]
 
         print('[auto] OLD grid (uniform gamma={}, alpha={}): {}'.format(old_gamma, old_alpha, old_fname))
-        print('[auto] NEW grid (variable gamma, alpha={}): {}'.format(new_alpha, new_fname))
+        print('[auto] NEW grid (variable gamma={}, alpha={}): {}'.format(new_gamma, new_alpha, new_fname))
 
         args.old_dir = origin
         args.old_gamma = old_gamma
         args.old_alpha = old_alpha
         args.old_grid_dat = old_grid
+        if args.new_gamma is None and new_gamma is not None:
+            args.new_gamma = new_gamma
         args.new_grid_dat = new_grid
         args.variables_h = vh_path
 
@@ -2587,6 +3176,9 @@ def main():
             if detected_vh:
                 args.variables_h = resolve_variables_h_arg(detected_vh)
 
+    args.rho_volume_method, args.rho_volume_method_source = resolve_rho_volume_method(
+        args.rho_volume_method, args.variables_h)
+
     args.old_dir = resolve_old_dir(args.old_dir)
 
     print()
@@ -2599,10 +3191,15 @@ def main():
     GAMMA_WARN_THRESHOLD = 0.1
     GAMMA_FATAL_THRESHOLD = 2.0
     if gamma_diff > GAMMA_FATAL_THRESHOLD:
-        sys.exit('FATAL: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f} '
-                 '(> {:.1f}). This will cause massive interpolation '
-                 'mis-placement. Verify OLD grid provenance.'.format(
-                     OLD.GAMMA, NEW.GAMMA, gamma_diff, GAMMA_FATAL_THRESHOLD))
+        msg = ('OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f} (> {:.1f}). '
+               'Verify OLD/NEW grid provenance.'.format(
+                   OLD.GAMMA, NEW.GAMMA, gamma_diff, GAMMA_FATAL_THRESHOLD))
+        if args.interp_mode == 'phys':
+            print('  WARNING: {}'.format(msg))
+            print('           Continuing because physical-space interpolation is enabled.')
+        else:
+            sys.exit('FATAL: {} This will cause massive computational-space '
+                     'interpolation mis-placement. Checkpoint NOT written.'.format(msg))
     if gamma_diff > GAMMA_WARN_THRESHOLD:
         print('  WARNING: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f}'.format(
             OLD.GAMMA, NEW.GAMMA, gamma_diff))
@@ -2622,7 +3219,12 @@ def main():
     print('NEW: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
     print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
+    print('Density control-volume method: {} ({})'.format(
+        args.rho_volume_method, args.rho_volume_method_source))
+    print('u* divergence output gate: max|div(u*)| < {:.6e} before f_eq'.format(
+        args.div_gate_tol))
     print()
+    print_repartition_plan(OLD, NEW)
 
     solver_grid_dat = None
     if args.solver_grid_dat:
@@ -2754,6 +3356,19 @@ def main():
         np.abs(uz_g[interior_slice]).max()))
     Ub_old = compute_Ub(uy_g, z2d_old, OLD)
     print('      OLD Ub (j=BFR cross-section) = {:.15e}'.format(Ub_old))
+    old_rho_mass_stats = compute_rho_mass_stats(
+        rho_g, OLD, y2d_old, z2d_old,
+        volume_method=args.rho_volume_method)
+    print('      OLD rho volume-weighted mean = {:.15f}'.format(
+        old_rho_mass_stats['mean']))
+    print('      OLD absolute rho mass = {:.15e}, control volume = {:.15e}'.format(
+        old_rho_mass_stats['mass'], old_rho_mass_stats['volume']))
+    if args.rho_volume_method == 'jacobian-gl':
+        vd = old_rho_mass_stats['volume_diag']
+        print('      OLD Jacobian-GL volume: rel diff vs shoelace = {:.6e}, '
+              'fallback cells = {}'.format(
+                  vd.get('jacobian_gl_rel_volume_diff', 0.0),
+                  vd.get('jacobian_gl_fallback_cells', 0)))
 
     # Cross-check stored rho against sum(f).  In a running LBM with mass
     # correction (checkrho.dat), rho is adjusted independently of f each step,
@@ -2841,11 +3456,41 @@ def main():
     print('      max |u_wall| before clamp = {:.3e}'.format(wall_residual_max))
     print('      max |rho_wall - 1| preserved = {:.3e}'.format(wall_rho_delta_max))
 
-    rho_modify, mean_before, mean_after, cv_volume = apply_rho_mass_correction(
-        rho_new, NEW, y2d_new, z2d_new)
-    print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(rho_modify))
-    print('      global control volume = {:.15e}'.format(cv_volume))
-    print('      rho volume-weighted mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
+    if args.rho_mass_target == 'old':
+        rho_mass_info = apply_rho_mass_correction(
+            rho_new, NEW, y2d_new, z2d_new,
+            target_mass=old_rho_mass_stats['mass'],
+            volume_method=args.rho_volume_method)
+        print('      rho mass correction target: preserve OLD absolute mass')
+    else:
+        rho_mass_info = apply_rho_mass_correction(
+            rho_new, NEW, y2d_new, z2d_new,
+            target_avg=1.0,
+            volume_method=args.rho_volume_method)
+        print('      rho mass correction target: volume-weighted mean rho = 1.0')
+    print('      rho control-volume method: {} ({})'.format(
+        args.rho_volume_method, args.rho_volume_method_source))
+    if args.rho_volume_method == 'jacobian-gl':
+        vd = rho_mass_info['volume_diag']
+        print('      Jacobian-GL volume: shoelace = {:.15e}, jacobian = {:.15e}'.format(
+            vd.get('shoelace_volume', float('nan')),
+            vd.get('jacobian_gl_volume', rho_mass_info['global_volume'])))
+        print('      Jacobian-GL diagnostics: rel volume diff = {:.6e}, '
+              'max cell rel diff = {:.6e}, mean cell rel diff = {:.6e}, '
+              'fallback cells = {}'.format(
+                  vd.get('jacobian_gl_rel_volume_diff', 0.0),
+                  vd.get('jacobian_gl_max_rel_diff', 0.0),
+                  vd.get('jacobian_gl_mean_rel_diff', 0.0),
+                  vd.get('jacobian_gl_fallback_cells', 0)))
+    print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(
+        rho_mass_info['rho_modify']))
+    print('      global control volume = {:.15e}'.format(rho_mass_info['global_volume']))
+    print('      rho volume-weighted mean: {:.15f} -> {:.15f} (target {:.15f})'.format(
+        rho_mass_info['mean_before'], rho_mass_info['mean_after'],
+        rho_mass_info['target_avg']))
+    print('      rho absolute mass: {:.15e} -> {:.15e} (target {:.15e})'.format(
+        rho_mass_info['mass_before'], rho_mass_info['mass_after'],
+        rho_mass_info['target_mass']))
 
     print('      Enforcing periodic duplicate nodes and filling ghost cells')
     for arr in (rho_new, ux_new, uy_new, uz_new):
@@ -2953,38 +3598,25 @@ def main():
     if divergence_diagnostic_fn is None:
         try:
             from poisson_projection import divergence_diagnostic as divergence_diagnostic_fn
-        except Exception:
-            divergence_diagnostic_fn = None
-    if divergence_diagnostic_fn is not None:
-        div_rms, div_max = divergence_diagnostic_fn(
-            ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
-        final_div_rms = div_rms
-        final_div_max = div_max
-        print('      divergence check: rms = {:.6e}, max|div(u)| = {:.6e}'.format(
-            div_rms, div_max))
-    else:
-        j_mid = slice(BFR + 1, BFR + NEW.NY - 1)
-        k_mid = slice(BFR + 1, BFR + NEW.NZ - 1)
-        i_mid = slice(BFR + 1, BFR + NEW.NX - 1)
-        dudx = (ux_new[j_mid, k_mid, BFR + 2:BFR + NEW.NX]
-                - ux_new[j_mid, k_mid, BFR:BFR + NEW.NX - 2]) / (2.0 * dx_new)
-        dy = (y2d_new[BFR + 2:BFR + NEW.NY, k_mid]
-              - y2d_new[BFR:BFR + NEW.NY - 2, k_mid])[:, :, np.newaxis]
-        dudy = ((uy_new[BFR + 2:BFR + NEW.NY, k_mid, i_mid]
-                 - uy_new[BFR:BFR + NEW.NY - 2, k_mid, i_mid]) / dy)
-        dz = (z2d_new[j_mid, BFR + 2:BFR + NEW.NZ]
-              - z2d_new[j_mid, BFR:BFR + NEW.NZ - 2])[:, :, np.newaxis]
-        dwdz = ((uz_new[j_mid, BFR + 2:BFR + NEW.NZ, i_mid]
-                 - uz_new[j_mid, BFR:BFR + NEW.NZ - 2, i_mid]) / dz)
-        div_max = float(np.max(np.abs(dudx + dudy + dwdz)))
-        final_div_max = div_max
-        print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
-            div_max))
+        except Exception as exc:
+            sys.exit('FATAL: cannot import exact divergence diagnostic for u* gate: {}\n'
+                     '  Checkpoint NOT written because max|div(u*)| cannot be verified.'.format(exc))
+    div_rms, div_max = divergence_diagnostic_fn(
+        ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+    final_div_rms = div_rms
+    final_div_max = div_max
+    print('      u* divergence check (CD2, unique physical DOFs): '
+          'rms = {:.6e}, max|div(u*)| = {:.6e}'.format(div_rms, div_max))
 
-    # ---- Divergence gate: abort if max|div(u*)| exceeds tolerance ----
-    if final_div_max is not None and final_div_max > args.div_gate_tol:
-        sys.exit('FATAL: max|div(u*)| = {:.6e} exceeds --div-gate-tol {:.6e}; '
-                 'checkpoint NOT written.'.format(final_div_max, args.div_gate_tol))
+    # ---- Divergence gate: u* must be solenoidal before f_eq ----
+    div_gate_tol = args.div_gate_tol
+    if final_div_max >= div_gate_tol:
+        sys.exit('FATAL: u* divergence gate FAILED: max|div(u*)| = {:.6e} >= {:.0e}\n'
+                 '  u* is the corrected velocity field entering f_eq.\n'
+                 '  Checkpoint NOT written. Use --project-velocity div-exact or '
+                 'tighten --projection-div-tol.'.format(final_div_max, div_gate_tol))
+    print('      u* divergence gate PASSED: max|div(u*)| = {:.6e} < {:.0e}'.format(
+        final_div_max, div_gate_tol))
 
     # ---- Step 7: f_eq + per-rank write ----
     print('[7/8] Reconstructing f_eq and writing per-rank files')
@@ -3232,12 +3864,38 @@ def main():
         'interp_source': args.old_dir,
         'interp_old_grid': OLD.GRID_DAT,
         'interp_new_grid': NEW.GRID_DAT,
+        'interp_old_jp': str(OLD.JP),
+        'interp_new_jp': str(NEW.JP),
+        'interp_old_chunk_j': str(OLD.CHUNK),
+        'interp_new_chunk_j': str(NEW.CHUNK),
         'interp_old_gamma': str(OLD.GAMMA),
         'interp_new_gamma': str(NEW.GAMMA),
         'interp_fneq_mode': args.fneq_mode,
         'interp_macro_mode': args.interp_mode,
         'interp_macro_order': str(args.interp_order),
         'interp_metric_order': str(args.metric_order),
+        'interp_rho_mass_target': args.rho_mass_target,
+        'interp_rho_volume_method': args.rho_volume_method,
+        'interp_rho_volume_method_source': args.rho_volume_method_source,
+        'interp_rho_old_mass': '{:.15e}'.format(old_rho_mass_stats['mass']),
+        'interp_rho_old_mean': '{:.15e}'.format(old_rho_mass_stats['mean']),
+        'interp_rho_old_volume': '{:.15e}'.format(old_rho_mass_stats['volume']),
+        'interp_rho_new_mass_before': '{:.15e}'.format(rho_mass_info['mass_before']),
+        'interp_rho_new_mass_after': '{:.15e}'.format(rho_mass_info['mass_after']),
+        'interp_rho_new_target_mass': '{:.15e}'.format(rho_mass_info['target_mass']),
+        'interp_rho_new_mean_before': '{:.15e}'.format(rho_mass_info['mean_before']),
+        'interp_rho_new_mean_after': '{:.15e}'.format(rho_mass_info['mean_after']),
+        'interp_rho_new_target_mean': '{:.15e}'.format(rho_mass_info['target_avg']),
+        'interp_rho_shoelace_volume': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('shoelace_volume', rho_mass_info['global_volume'])),
+        'interp_rho_jacobian_gl_fallback_cells': str(
+            rho_mass_info['volume_diag'].get('jacobian_gl_fallback_cells', 0)),
+        'interp_rho_jacobian_gl_rel_volume_diff': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('jacobian_gl_rel_volume_diff', 0.0)),
+        'interp_rho_jacobian_gl_max_cell_rel_diff': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('jacobian_gl_max_rel_diff', 0.0)),
+        'interp_rho_jacobian_gl_mean_cell_rel_diff': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('jacobian_gl_mean_rel_diff', 0.0)),
         'interp_cfl': str(args.cfl),
         'interp_cfl_source': args.cfl_source,
         'interp_dt_max_component': dt_max_component,
@@ -3252,6 +3910,8 @@ def main():
         'interp_project_velocity': args.project_velocity,
         'interp_projection_max_outer': str(args.projection_max_outer),
         'interp_projection_div_tol': '{:.6e}'.format(args.projection_div_tol),
+        'interp_u_star_div_gate_tol': '{:.6e}'.format(args.div_gate_tol),
+        'interp_u_star_div_gate_passed': '1',
     }
     if final_div_rms is not None:
         new_meta['interp_final_div_rms'] = '{:.6e}'.format(final_div_rms)
@@ -3335,6 +3995,12 @@ def main():
     prov = {
         'new_grid': os.path.abspath(NEW.GRID_DAT),
         'old_grid': os.path.abspath(OLD.GRID_DAT),
+        'old_jp': str(OLD.JP),
+        'new_jp': str(NEW.JP),
+        'old_chunk_j': str(OLD.CHUNK),
+        'new_chunk_j': str(NEW.CHUNK),
+        'rho_volume_method': args.rho_volume_method,
+        'rho_volume_method_source': args.rho_volume_method_source,
         'origin': os.path.abspath(args.old_dir),
         'origin_metadata_mtime': str(int(os.path.getmtime(origin_meta_path))) if os.path.isfile(origin_meta_path) else '',
         'variables_h': os.path.abspath(vh_for_prov) if vh_for_prov else '',
