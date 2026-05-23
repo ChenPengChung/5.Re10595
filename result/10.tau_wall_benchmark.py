@@ -364,7 +364,11 @@ def main(argv=None):
     ap.add_argument("--no-plot", action="store_true")
     ap.add_argument("--no-ask-density", action="store_true",
                     help="Use default benchmark density, skip interactive")
+    ap.add_argument("--auto", action="store_true",
+                    help="Non-interactive: default density, png only")
     args = ap.parse_args(argv)
+    if args.auto:
+        args.no_ask_density = True
 
     # ── locate inputs ──
     vtk_path = args.vtk or find_latest_vtk(SCRIPT_DIR)
@@ -592,97 +596,100 @@ def main(argv=None):
                 matplotlib.use("Agg")
             import matplotlib.pyplot as plt
 
+            # ── output format selection ──
+            if args.auto or args.no_ask_density:
+                save_fmts = ["png"]
+            else:
+                print(f"\n{'='*60}")
+                print(f"  Plot output format")
+                print(f"  1 = png only (default)")
+                print(f"  2 = pdf only")
+                print(f"  3 = png + pdf")
+                print(f"{'='*60}")
+                try:
+                    choice = input("  選擇 [1]: ").strip() or "1"
+                except EOFError:
+                    choice = "1"
+                if choice == "2":
+                    save_fmts = ["pdf"]
+                elif choice == "3":
+                    save_fmts = ["png", "pdf"]
+                else:
+                    save_fmts = ["png"]
+
             setup_academic_style()
-            n_rows = 2 if cp_bot is not None else 1
-            fig, axes = plt.subplots(n_rows, 1, figsize=(9, 4.8 * n_rows),
-                                     sharex=True)
-            if n_rows == 1:
-                axes = [axes]
 
-            # ── cf subplot ──
-            ax = axes[0]
-            ax.plot(y_wall, cf_bot, "-",
-                    color="#D62728", lw=1.6,
-                    label=r"GILBM (bot)")
-            ax.plot(y_wall, cf_top, "-",
-                    color="#1F77B4", lw=1.6,
-                    label=r"GILBM (top)")
-            ax.axhline(0, color="k", lw=0.5, ls="--")
-
-            for idx in sign_changes:
-                y_cross = y_wall[idx] + (y_wall[idx+1]-y_wall[idx]) * (
-                    -tau_bot_avg[idx]/(tau_bot_avg[idx+1]-tau_bot_avg[idx]+1e-30))
-                ax.axvline(y_cross, color="0.6", lw=0.7, ls=":")
-
-            for src_id, walls in bench_data.items():
-                info = BENCH_SOURCES[src_id]
-                density = bench_density.get(src_id, 100)
-                if density <= 0:
-                    continue
-                for wall, d in walls.items():
-                    xh_sub, cf_sub = subsample_uniform(
-                        d['xH'], d['cf'], density)
-                    suffix = " (bot)" if wall == "bottom" else " (top)"
-                    ax.scatter(xh_sub, cf_sub,
-                               marker=info['marker'],
-                               s=info['markersize']**2,
-                               facecolors='none',
-                               edgecolors=info['color'],
-                               linewidths=0.6,
-                               label=info['label'] + suffix,
-                               zorder=3)
-
-            ax.set_ylabel(r"$c_f = \dfrac{\tau_w}{\frac{1}{2}\,\rho\,U_b^2}$")
-            ax.set_xlim(y_wall.min(), y_wall.max())
-            ax.legend(frameon=True, fancybox=False, edgecolor="0.4",
-                      framealpha=1.0, loc="upper left", fontsize=9)
-
-            # ── cp subplot ──
-            if cp_bot is not None:
-                ax2 = axes[1]
-                ax2.plot(y_wall, cp_bot, "-",
-                         color="#D62728", lw=1.6,
-                         label=r"GILBM (bot)")
-                ax2.plot(y_wall, cp_top, "-",
-                         color="#1F77B4", lw=1.6,
-                         label=r"GILBM (top)")
-                ax2.axhline(0, color="k", lw=0.5, ls="--")
-
+            def _bench_scatter(ax_target, field):
                 for src_id, walls in bench_data.items():
                     info = BENCH_SOURCES[src_id]
                     density = bench_density.get(src_id, 100)
                     if density <= 0:
                         continue
                     for wall, d in walls.items():
-                        if 'cp' not in d:
+                        if field not in d:
                             continue
-                        xh_sub, cp_sub = subsample_uniform(
-                            d['xH'], d['cp'], density)
+                        xh_sub, val_sub = subsample_uniform(
+                            d['xH'], d[field], density)
                         suffix = " (bot)" if wall == "bottom" else " (top)"
-                        ax2.scatter(xh_sub, cp_sub,
-                                    marker=info['marker'],
-                                    s=info['markersize']**2,
-                                    facecolors='none',
-                                    edgecolors=info['color'],
-                                    linewidths=0.6,
-                                    label=info['label'] + suffix,
-                                    zorder=3)
+                        ax_target.scatter(
+                            xh_sub, val_sub,
+                            marker=info['marker'],
+                            s=info['markersize']**2,
+                            facecolors='none',
+                            edgecolors=info['color'],
+                            linewidths=0.6,
+                            label=info['label'] + suffix,
+                            zorder=3)
 
-                ax2.set_ylabel(r"$c_p = \dfrac{p - p_\mathrm{ref}}{\frac{1}{2}\,\rho\,U_b^2}$")
-                ax2.set_xlim(y_wall.min(), y_wall.max())
-                ax2.legend(frameon=True, fancybox=False, edgecolor="0.4",
-                           framealpha=1.0, loc="best", fontsize=9)
+            def _save_fig(fig_obj, base_path, tag=""):
+                stem = base_path.replace(".dat", tag)
+                for fmt in save_fmts:
+                    p = f"{stem}.{fmt}"
+                    fig_obj.savefig(p)
+                    print(f"    plot: {p}")
 
-            axes[-1].set_xlabel(r"$y \,/\, h$")
+            # ── (a) cf ──
+            fig_cf, ax_cf = plt.subplots(figsize=(9, 4.8))
+            ax_cf.plot(y_wall, cf_bot, "-", color="#D62728", lw=1.6,
+                       label=r"GILBM (bot)")
+            ax_cf.plot(y_wall, cf_top, "-", color="#1F77B4", lw=1.6,
+                       label=r"GILBM (top)")
+            ax_cf.axhline(0, color="k", lw=0.5, ls="--")
+            for idx in sign_changes:
+                y_cross = y_wall[idx] + (y_wall[idx+1]-y_wall[idx]) * (
+                    -tau_bot_avg[idx]/(tau_bot_avg[idx+1]-tau_bot_avg[idx]+1e-30))
+                ax_cf.axvline(y_cross, color="0.6", lw=0.7, ls=":")
+            _bench_scatter(ax_cf, 'cf')
+            ax_cf.set_xlabel(r"$y \,/\, h$")
+            ax_cf.set_ylabel(r"$c_f = \dfrac{\tau_w}{\frac{1}{2}\,\rho\,U_b^2}$")
+            ax_cf.set_xlim(y_wall.min(), y_wall.max())
+            ax_cf.legend(frameon=True, fancybox=False, edgecolor="0.4",
+                         framealpha=1.0, loc="upper left", fontsize=9)
+            ax_cf.text(0.02, 0.02, r"$\mathrm{(a)}$", transform=ax_cf.transAxes,
+                       fontsize=14, va="bottom", ha="left")
+            fig_cf.tight_layout()
+            _save_fig(fig_cf, out_path)
+            plt.close(fig_cf)
 
-            fig.tight_layout()
-            fig_path = out_path.replace(".dat", ".png")
-            fig.savefig(fig_path)
-            print(f"    plot: {fig_path}")
-            pdf_path = out_path.replace(".dat", ".pdf")
-            fig.savefig(pdf_path)
-            print(f"    plot: {pdf_path}")
-            plt.close(fig)
+            # ── (b) cp ──
+            if cp_bot is not None:
+                fig_cp, ax_cp = plt.subplots(figsize=(9, 4.8))
+                ax_cp.plot(y_wall, cp_bot, "-", color="#D62728", lw=1.6,
+                           label=r"GILBM (bot)")
+                ax_cp.plot(y_wall, cp_top, "-", color="#1F77B4", lw=1.6,
+                           label=r"GILBM (top)")
+                ax_cp.axhline(0, color="k", lw=0.5, ls="--")
+                _bench_scatter(ax_cp, 'cp')
+                ax_cp.set_xlabel(r"$y \,/\, h$")
+                ax_cp.set_ylabel(r"$c_p = \dfrac{p - p_\mathrm{ref}}{\frac{1}{2}\,\rho\,U_b^2}$")
+                ax_cp.set_xlim(y_wall.min(), y_wall.max())
+                ax_cp.legend(frameon=True, fancybox=False, edgecolor="0.4",
+                             framealpha=1.0, loc="best", fontsize=9)
+                ax_cp.text(0.02, 0.02, r"$\mathrm{(b)}$", transform=ax_cp.transAxes,
+                           fontsize=14, va="bottom", ha="left")
+                fig_cp.tight_layout()
+                _save_fig(fig_cp, out_path, "_cp")
+                plt.close(fig_cp)
 
         except ImportError:
             print("    (matplotlib not available — skipping plot)")
