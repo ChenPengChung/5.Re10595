@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH -p gb200-rack1
-#SBATCH --account=MST114348
+#SBATCH --account=MST115169
 #SBATCH --gres=gpu:1
 #SBATCH --time=00:10:00
 #SBATCH --job-name=pip_aarch64
