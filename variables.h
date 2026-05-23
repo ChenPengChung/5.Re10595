@@ -115,9 +115,7 @@
 #define     STRETCH_A           0.95
 #define     ALPHA               0.5     // 歷史遺留，固定 0.5，檔名不再包含 ALPHA
 #define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
-#if ALPHA != 0.5
-#error "STRETCH_A → GAMMA 轉換僅在 ALPHA=0.5 (對稱拉伸) 時有效"
-#endif
+// ALPHA 必須為 0.5 — 若修改此值需同步驗證 minSize 與 grid 生成邏輯
 
 #define     CFL                 0.5
 
