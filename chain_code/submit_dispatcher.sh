@@ -271,26 +271,6 @@ pick_cluster() {
             log "    [$target] 略過: jobscript $js 不存在" >&2
             continue
         fi
-        # ─── [POLICY-D1] partition-level cooldown 檢查 ───
-        # jobscript GUARD 觸發後會寫 restart/cooldown_<partition>.sentinel
-        # TTL 內 dispatcher 跳過此 partition, 改投其他, 讓 chain 持續跑
-        local cd_file="restart/cooldown_${part}.sentinel"
-        if [ -f "$cd_file" ]; then
-            local cd_epoch cd_ttl now_epoch age left
-            cd_epoch=$(grep '^trigger_at_epoch=' "$cd_file" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
-            cd_ttl=$(grep '^ttl_sec=' "$cd_file" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
-            now_epoch=$(date +%s)
-            age=$(( now_epoch - ${cd_epoch:-0} ))
-            if [ "$age" -lt "${cd_ttl:-3600}" ]; then
-                left=$(( ${cd_ttl:-3600} - age ))
-                log "    [$target] 略過 (cooldown): partition=$part 冷卻中, 剩 $((left/60))min" >&2
-                continue
-            else
-                log "    [$target] cooldown TTL 已過 (age=$((age/60))min >= ttl=$((cd_ttl/60))min), 解除 sentinel" >&2
-                rm -f "$cd_file"
-            fi
-        fi
-
         local eta; eta="$(_pick_cluster_eta_epoch "$js" "$part")"
         if [ "$eta" -lt 0 ]; then
             log "    [$target] ETA 查詢失敗 (sbatch --test-only 無解析結果)" >&2
