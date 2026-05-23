@@ -149,7 +149,7 @@ NEW = None
 def parse_variables_h(path):
     """Parse selected numeric #define values from variables.h."""
     targets = {'NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'CFL',
-               'LX', 'LY', 'LZ', 'H_HILL'}
+               'LX', 'LY', 'LZ', 'H_HILL', 'STRETCH_A'}
     int_keys = {'NX', 'NY', 'NZ', 'jp'}
     defines = {}
     with open(path, encoding='utf-8', errors='replace') as f:
@@ -168,6 +168,10 @@ def parse_variables_h(path):
                 defines[key] = int(val_str) if key in int_keys else float(val_str)
             except ValueError:
                 pass
+    if 'GAMMA' not in defines and 'STRETCH_A' in defines:
+        sa = defines['STRETCH_A']
+        if abs(sa) < 1.0:
+            defines['GAMMA'] = math.log((1.0 + sa) / (1.0 - sa))
     return defines
 
 
@@ -2503,7 +2507,7 @@ def main():
             new_candidates = []
 
             for f in sorted(os.listdir(grid_dir)):
-                if not f.endswith('.dat') or dim_tag not in f:
+                if not f.endswith('.dat'):
                     continue
                 full = os.path.join(grid_dir, f)
                 if f.startswith('oldgrid_'):
@@ -2514,6 +2518,8 @@ def main():
                         continue
                     old_candidates.append((full, f, gamma, alpha))
                 elif f.startswith('newgrid_'):
+                    if dim_tag not in f:
+                        continue
                     alpha = infer_new_grid_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
@@ -2521,9 +2527,8 @@ def main():
 
             if not old_grid:
                 if len(old_candidates) == 0:
-                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*.dat containing {} '
-                             'and *_g{{G}}_a{{A}}.dat (ALPHA={}) in {}'.format(
-                                 dim_tag, ALPHA_vh, grid_dir))
+                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*_g{{G}}_a{{A}}.dat '
+                             '(ALPHA={}) in {}'.format(ALPHA_vh, grid_dir))
                 if len(old_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
                         len(old_candidates), ', '.join(c[1] for c in old_candidates)))
