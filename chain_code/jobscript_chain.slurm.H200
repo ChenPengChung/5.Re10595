@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=Edit5_Rebuild
-#SBATCH --account=MST114348
+#SBATCH --account=MST115169
 #SBATCH --partition=dev
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=8

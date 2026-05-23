@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=regrid_phase2
-#SBATCH --account=MST114348
+#SBATCH --account=MST115169
 #SBATCH --partition=dev
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
