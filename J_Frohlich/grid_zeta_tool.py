@@ -1538,6 +1538,10 @@ def auto_adjust_gamma(x_base, y_base, gamma_init, alpha, scale_factor,
         g_lo, g_hi = 0.01, gamma_init
         target = ratio_hi
 
+    best_gamma = None
+    best_info = None
+    best_dist = float('inf')
+
     for step in range(1, max_iter + 1):
         g_mid = 0.5 * (g_lo + g_hi)
         info_mid = _ratio_at_gamma(x_base, y_base, g_mid, alpha, scale_factor)
@@ -1554,19 +1558,27 @@ def auto_adjust_gamma(x_base, y_base, gamma_init, alpha, scale_factor,
                    f"(Δz_min={info_mid['dz_min']:.4e}) {mark}")
 
         if in_range:
-            stretch_a = float(np.tanh(g_mid / 2.0))
-            log.append(f"  → 收斂: GAMMA={g_mid:.6f} (STRETCH_A={stretch_a:.6f})")
-            return g_mid, log, info_mid
+            dist = abs(r_mid - target)
+            if dist < best_dist:
+                best_gamma = g_mid
+                best_info = info_mid
+                best_dist = dist
 
         if r_mid < target:
             g_lo = g_mid
         else:
             g_hi = g_mid
 
-        if abs(g_hi - g_lo) < 1e-10:
+        if abs(g_hi - g_lo) < 1e-6:
             break
 
-    # Fallback: return last midpoint (may be outside target range)
+    if best_gamma is not None:
+        stretch_a = float(np.tanh(best_gamma / 2.0))
+        log.append(f"  → 收斂: GAMMA={best_gamma:.6f} → ratio={best_info['ratio']:.4f} "
+                   f"(STRETCH_A={stretch_a:.6f}, 目標={target:.1f})")
+        return best_gamma, log, best_info
+
+    # Fallback: no in-range result found
     g_final = 0.5 * (g_lo + g_hi)
     info_final = _ratio_at_gamma(x_base, y_base, g_final, alpha, scale_factor)
     r_final = info_final["ratio"]
