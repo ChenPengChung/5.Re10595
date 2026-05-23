@@ -593,9 +593,14 @@ def main(argv=None):
             import matplotlib.pyplot as plt
 
             setup_academic_style()
-            fig, ax = plt.subplots(figsize=(9, 4.8))
+            n_rows = 2 if cp_bot is not None else 1
+            fig, axes = plt.subplots(n_rows, 1, figsize=(9, 4.8 * n_rows),
+                                     sharex=True)
+            if n_rows == 1:
+                axes = [axes]
 
-            # simulation lines
+            # ── cf subplot ──
+            ax = axes[0]
             ax.plot(y_wall, cf_bot, "-",
                     color="#D62728", lw=1.6,
                     label=r"GILBM (bot)")
@@ -604,13 +609,11 @@ def main(argv=None):
                     label=r"GILBM (top)")
             ax.axhline(0, color="k", lw=0.5, ls="--")
 
-            # separation markers
             for idx in sign_changes:
                 y_cross = y_wall[idx] + (y_wall[idx+1]-y_wall[idx]) * (
                     -tau_bot_avg[idx]/(tau_bot_avg[idx+1]-tau_bot_avg[idx]+1e-30))
                 ax.axvline(y_cross, color="0.6", lw=0.7, ls=":")
 
-            # benchmark scatter
             for src_id, walls in bench_data.items():
                 info = BENCH_SOURCES[src_id]
                 density = bench_density.get(src_id, 100)
@@ -629,26 +632,14 @@ def main(argv=None):
                                label=info['label'] + suffix,
                                zorder=3)
 
-            ax.set_xlabel(r"$y \,/\, h$")
-            ax.set_ylabel(r"$c_f = \tau_w \,/\, (\frac{1}{2}\,U_b^2)$")
+            ax.set_ylabel(r"$c_f = \dfrac{\tau_w}{\frac{1}{2}\,\rho\,U_b^2}$")
             ax.set_xlim(y_wall.min(), y_wall.max())
-
             ax.legend(frameon=True, fancybox=False, edgecolor="0.4",
                       framealpha=1.0, loc="upper left", fontsize=9)
 
-            fig.tight_layout()
-            fig_path = out_path.replace(".dat", ".png")
-            fig.savefig(fig_path)
-            print(f"    plot: {fig_path}")
-            pdf_path = out_path.replace(".dat", ".pdf")
-            fig.savefig(pdf_path)
-            print(f"    plot: {pdf_path}")
-            plt.close(fig)
-
-            # ── cp plot ──
+            # ── cp subplot ──
             if cp_bot is not None:
-                fig2, ax2 = plt.subplots(figsize=(9, 4.8))
-
+                ax2 = axes[1]
                 ax2.plot(y_wall, cp_bot, "-",
                          color="#D62728", lw=1.6,
                          label=r"GILBM (bot)")
@@ -677,21 +668,21 @@ def main(argv=None):
                                     label=info['label'] + suffix,
                                     zorder=3)
 
-                ax2.set_xlabel(r"$y \,/\, h$")
-                ax2.set_ylabel(r"$c_p = (p - p_\mathrm{ref}) \,/\, (\frac{1}{2}\,U_b^2)$")
+                ax2.set_ylabel(r"$c_p = \dfrac{p - p_\mathrm{ref}}{\frac{1}{2}\,\rho\,U_b^2}$")
                 ax2.set_xlim(y_wall.min(), y_wall.max())
-
                 ax2.legend(frameon=True, fancybox=False, edgecolor="0.4",
                            framealpha=1.0, loc="best", fontsize=9)
 
-                fig2.tight_layout()
-                cp_png = out_path.replace(".dat", "_cp.png")
-                fig2.savefig(cp_png)
-                print(f"    plot: {cp_png}")
-                cp_pdf = out_path.replace(".dat", "_cp.pdf")
-                fig2.savefig(cp_pdf)
-                print(f"    plot: {cp_pdf}")
-                plt.close(fig2)
+            axes[-1].set_xlabel(r"$y \,/\, h$")
+
+            fig.tight_layout()
+            fig_path = out_path.replace(".dat", ".png")
+            fig.savefig(fig_path)
+            print(f"    plot: {fig_path}")
+            pdf_path = out_path.replace(".dat", ".pdf")
+            fig.savefig(pdf_path)
+            print(f"    plot: {pdf_path}")
+            plt.close(fig)
 
         except ImportError:
             print("    (matplotlib not available — skipping plot)")
