@@ -458,6 +458,20 @@ def infer_new_grid_alpha(path):
     return float(m.group(1))
 
 
+def infer_grid_gamma_alpha(path):
+    """Infer optional gamma/alpha from grid filenames used by phase1 assets."""
+    gamma, alpha = infer_old_grid_params(path)
+    if gamma is not None or alpha is not None:
+        return gamma, alpha
+    import re
+    m = re.search(r'_s([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
+    if m:
+        sa = float(m.group(1))
+        if abs(sa) < 1.0:
+            return math.log((1.0 + sa) / (1.0 - sa)), None
+    return None, infer_new_grid_alpha(path)
+
+
 def project_root():
     """Return repository root inferred from this phase2 script location."""
     return os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
@@ -595,6 +609,7 @@ def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
     sa_re = re.compile(r'_s([\d.]+)\.dat$')
     ga_re = re.compile(r'_g([\d.]+)_a([\d.]+)\.dat$')
     a_re = re.compile(r'_a([\d.]+)\.dat$')
+    matches = []
     for d in search_dirs:
         if not os.path.isdir(d):
             continue
@@ -607,13 +622,23 @@ def try_find_grid_dat_by_dims(ny, nz, search_dirs=None):
                 if m:
                     sa = float(m.group(1))
                     gamma = math.log((1.0 + sa) / (1.0 - sa))
-                    return path, gamma, 0.5
+                    matches.append((path, gamma, 0.5))
+                    continue
                 m = ga_re.search(fname)
                 if m:
-                    return path, float(m.group(1)), float(m.group(2))
+                    matches.append((path, float(m.group(1)), float(m.group(2))))
+                    continue
                 m = a_re.search(fname)
                 if m:
-                    return path, None, float(m.group(1))
+                    matches.append((path, None, float(m.group(1))))
+    if len(matches) == 1:
+        return matches[0]
+    if len(matches) > 1:
+        msg = 'ambiguous grid .dat candidates for I{}_J{}: {}'.format(
+            ny, nz, ', '.join(os.path.basename(m[0]) for m in matches))
+        if _AUTO_MODE:
+            sys.exit('FATAL: {}'.format(msg))
+        print('  WARNING: {}'.format(msg))
     return None, None, None
 
 
@@ -760,6 +785,28 @@ def find_origin_checkpoint(search_dir=None):
         sys.exit('FATAL: multiple origin checkpoints found ({}): {}'.format(
             len(candidates), ', '.join(candidates)))
     return candidates[0] if candidates else None
+
+
+def find_single_legacy_phase2_checkpoint(search_dir):
+    """Return one legacy phase2 step_* source checkpoint, or None if ambiguous."""
+    if not search_dir or not os.path.isdir(search_dir):
+        return None
+    candidates = []
+    for name in sorted(os.listdir(search_dir)):
+        if not name.startswith('step_') or name.endswith('.WRITING'):
+            continue
+        if _is_origin_dir_name(name):
+            continue
+        path = os.path.join(search_dir, name)
+        if os.path.isfile(os.path.join(path, 'metadata.dat')):
+            candidates.append(os.path.abspath(path))
+    if len(candidates) == 1:
+        return candidates[0]
+    if len(candidates) > 1:
+        sys.exit('FATAL: multiple legacy phase2 step_* checkpoints found ({}): {}. '
+                 'Rename the intended source to step_*_origin* or pass --old-dir.'.format(
+                     len(candidates), ', '.join(candidates)))
+    return None
 
 
 def resolve_old_dir(old_dir):
@@ -3015,6 +3062,10 @@ def main():
             sys.exit(0)
 
         origin = resolve_old_dir(args.old_dir) if args.old_dir else find_origin_checkpoint(phase2_dir)
+        if not origin and not args.old_dir:
+            origin = find_single_legacy_phase2_checkpoint(phase2_dir)
+            if origin:
+                print('[auto] Legacy phase2 step checkpoint selected as origin: {}'.format(origin))
         if not origin:
             sys.exit('FATAL: --auto: no origin checkpoint found '
                      '(searched step_*_origin* and oldcheckpoint_* in phase2/restart)')
@@ -3023,7 +3074,7 @@ def main():
 
         dim_tag = '_I{}_J{}'.format(NY_vh, NZ_vh)
         old_grid = old_fname = old_gamma = old_alpha = None
-        new_grid = new_fname = new_alpha = None
+        new_grid = new_fname = new_gamma = new_alpha = None
         resolve_bases = (grid_dir, vh_dir, project_root())
 
         if args.old_grid_dat:
@@ -3044,7 +3095,8 @@ def main():
             if new_old_gamma is not None and not new_fname.startswith('newgrid_'):
                 sys.exit('FATAL: --new-grid-dat appears to be an OLD uniform-gamma grid: {}'.format(
                     new_fname))
-            inferred_alpha = infer_new_grid_alpha(new_grid)
+            inferred_gamma, inferred_alpha = infer_grid_gamma_alpha(new_grid)
+            new_gamma = args.new_gamma if args.new_gamma is not None else inferred_gamma
             new_alpha = ALPHA_vh
             if inferred_alpha is not None and abs(float(inferred_alpha) - float(ALPHA_vh)) > 1e-12:
                 sys.exit('FATAL: --new-grid-dat alpha {} does not match variables.h ALPHA {}'.format(
@@ -3069,10 +3121,10 @@ def main():
                 elif f.startswith('newgrid_'):
                     if dim_tag not in f:
                         continue
-                    alpha = infer_new_grid_alpha(f)
+                    gamma, alpha = infer_grid_gamma_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
-                    new_candidates.append((full, f, ALPHA_vh if alpha is None else alpha))
+                    new_candidates.append((full, f, gamma, ALPHA_vh if alpha is None else alpha))
 
             if not old_grid:
                 if len(old_candidates) == 0:
@@ -3090,15 +3142,17 @@ def main():
                 if len(new_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
                         len(new_candidates), ', '.join(c[1] for c in new_candidates)))
-                new_grid, new_fname, new_alpha = new_candidates[0]
+                new_grid, new_fname, new_gamma, new_alpha = new_candidates[0]
 
         print('[auto] OLD grid (uniform gamma={}, alpha={}): {}'.format(old_gamma, old_alpha, old_fname))
-        print('[auto] NEW grid (variable gamma, alpha={}): {}'.format(new_alpha, new_fname))
+        print('[auto] NEW grid (variable gamma={}, alpha={}): {}'.format(new_gamma, new_alpha, new_fname))
 
         args.old_dir = origin
         args.old_gamma = old_gamma
         args.old_alpha = old_alpha
         args.old_grid_dat = old_grid
+        if args.new_gamma is None and new_gamma is not None:
+            args.new_gamma = new_gamma
         args.new_grid_dat = new_grid
         args.variables_h = vh_path
 
@@ -3137,10 +3191,15 @@ def main():
     GAMMA_WARN_THRESHOLD = 0.1
     GAMMA_FATAL_THRESHOLD = 2.0
     if gamma_diff > GAMMA_FATAL_THRESHOLD:
-        sys.exit('FATAL: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f} '
-                 '(> {:.1f}). This will cause massive interpolation '
-                 'mis-placement. Verify OLD grid provenance.'.format(
-                     OLD.GAMMA, NEW.GAMMA, gamma_diff, GAMMA_FATAL_THRESHOLD))
+        msg = ('OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f} (> {:.1f}). '
+               'Verify OLD/NEW grid provenance.'.format(
+                   OLD.GAMMA, NEW.GAMMA, gamma_diff, GAMMA_FATAL_THRESHOLD))
+        if args.interp_mode == 'phys':
+            print('  WARNING: {}'.format(msg))
+            print('           Continuing because physical-space interpolation is enabled.')
+        else:
+            sys.exit('FATAL: {} This will cause massive computational-space '
+                     'interpolation mis-placement. Checkpoint NOT written.'.format(msg))
     if gamma_diff > GAMMA_WARN_THRESHOLD:
         print('  WARNING: OLD GAMMA={} vs NEW GAMMA={} differ by {:.2f}'.format(
             OLD.GAMMA, NEW.GAMMA, gamma_diff))
