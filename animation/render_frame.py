@@ -961,11 +961,130 @@ elif has_velocity:
             outlineD.Representation = "Outline"
             outlineD.AmbientColor = [0.3, 0.3, 0.3]
             outlineD.DiffuseColor = [0.3, 0.3, 0.3]
-            outlineD.LineWidth = 1.5 
-            
+            outlineD.LineWidth = 1.5
             outlineD.Opacity = 0.3
         except:
             pass
+
+        # ── Step 4a: 底部曲面山丘壁面 (curvilinear bottom wall) ──
+        # 薄殼：只取 NormalZ < -0.3 的朝下面（底壁），排除側壁與頂壁
+        WALL_OPACITY = 0.4
+        try:
+            surfD = ExtractSurface(Input=reader)
+            surfD.UpdatePipeline()
+
+            normD = GenerateSurfaceNormals(Input=surfD)
+            normD.ComputeCellNormals = 1
+            normD.UpdatePipeline()
+
+            calcNz = Calculator(Input=normD)
+            calcNz.ResultArrayName = "NormalZ"
+            calcNz.Function = "Normals_Z"
+            calcNz.UpdatePipeline()
+
+            wallBot = Threshold(Input=calcNz)
+            wallBot.Scalars = ['POINTS', 'NormalZ']
+            wallBot.LowerThreshold = -1.0
+            wallBot.UpperThreshold = -0.3
+            wallBot.ThresholdMethod = 'Between'
+            wallBot.UpdatePipeline()
+
+            nWall = wallBot.GetDataInformation().GetNumberOfPoints()
+            log("Bottom wall (NormalZ < -0.3): %d points" % nWall)
+
+            if nWall > 0:
+                dispWall = Show(wallBot, renD)
+                dispWall.Representation = "Surface"
+                dispWall.Opacity = WALL_OPACITY
+                dispWall.AmbientColor = [0.7, 0.7, 0.7]
+                dispWall.DiffuseColor = [0.7, 0.7, 0.7]
+                ColorBy(dispWall, None)
+                dispWall.SetScalarBarVisibility(renD, False)
+                log("Bottom wall displayed at opacity %.2f" % WALL_OPACITY)
+        except Exception as _we:
+            log("Bottom wall skipped: " + str(_we))
+
+        # ── Step 4b: 在 Q-criterion 3D 視圖上疊加 2D slice contour 平面 ──
+        # Slice 1: Y=9.0 (streamwise 末端, XZ 平面) → 用 Y=8.95 避開邊界
+        # Slice 2: X=0.0 (spanwise 邊緣, YZ 平面) → 用 X=0.05 避開邊界
+        # 著色: streamwise velocity (velocity_Y), Rainbow Desaturated, 半透明
+        SLICE_OPACITY = 0.7
+        SLICE_Y_POS = ymax - 0.05
+        SLICE_X_POS = xmin + 0.05
+        try:
+            # ── Slice @ Y ≈ 9.0 ──
+            sliceY9 = Slice(Input=reader)
+            sliceY9.SliceType.Normal = [0, 1, 0]
+            sliceY9.SliceType.Origin = [(xmin+xmax)/2, SLICE_Y_POS, (zmin+zmax)/2]
+            sliceY9.UpdatePipeline()
+
+            nY9 = sliceY9.GetDataInformation().GetNumberOfPoints()
+            log("Slice Y=%.2f: %d points" % (SLICE_Y_POS, nY9))
+
+            calcY9 = Calculator(Input=sliceY9)
+            calcY9.ResultArrayName = "u_slice_Y"
+            calcY9.Function = "velocity_Y"
+            calcY9.UpdatePipeline()
+
+            dispY9 = Show(calcY9, renD)
+            dispY9.Representation = "Surface"
+            dispY9.Opacity = SLICE_OPACITY
+
+            ColorBy(dispY9, ('POINTS', 'u_slice_Y'))
+            lutSliceY = GetColorTransferFunction("u_slice_Y")
+            infoSliceY = calcY9.GetDataInformation().GetPointDataInformation().GetArrayInformation("u_slice_Y")
+            if infoSliceY:
+                slo_y = infoSliceY.GetComponentRange(0)[0]
+                shi_y = infoSliceY.GetComponentRange(0)[1]
+            else:
+                slo_y, shi_y = -0.5, 1.4
+            if abs(shi_y - slo_y) < 1e-10:
+                slo_y, shi_y = -0.5, 1.4
+            try: lutSliceY.RescaleTransferFunction(slo_y, shi_y)
+            except: pass
+            try: lutSliceY.ApplyPreset('Rainbow Desaturated', True)
+            except: pass
+            harden_lut(lutSliceY)
+            dispY9.SetScalarBarVisibility(renD, False)
+            log("Slice Y=%.2f: u_slice range [%.4f, %.4f]" % (SLICE_Y_POS, slo_y, shi_y))
+
+            # ── Slice @ X ≈ 0.0 ──
+            sliceX0 = Slice(Input=reader)
+            sliceX0.SliceType.Normal = [1, 0, 0]
+            sliceX0.SliceType.Origin = [SLICE_X_POS, (ymin+ymax)/2, (zmin+zmax)/2]
+            sliceX0.UpdatePipeline()
+
+            nX0 = sliceX0.GetDataInformation().GetNumberOfPoints()
+            log("Slice X=%.2f: %d points" % (SLICE_X_POS, nX0))
+
+            calcX0 = Calculator(Input=sliceX0)
+            calcX0.ResultArrayName = "u_slice_X"
+            calcX0.Function = "velocity_Y"
+            calcX0.UpdatePipeline()
+
+            dispX0 = Show(calcX0, renD)
+            dispX0.Representation = "Surface"
+            dispX0.Opacity = SLICE_OPACITY
+
+            ColorBy(dispX0, ('POINTS', 'u_slice_X'))
+            lutSliceX = GetColorTransferFunction("u_slice_X")
+            infoSliceX = calcX0.GetDataInformation().GetPointDataInformation().GetArrayInformation("u_slice_X")
+            if infoSliceX:
+                slo_x = infoSliceX.GetComponentRange(0)[0]
+                shi_x = infoSliceX.GetComponentRange(0)[1]
+            else:
+                slo_x, shi_x = -0.5, 1.4
+            if abs(shi_x - slo_x) < 1e-10:
+                slo_x, shi_x = -0.5, 1.4
+            try: lutSliceX.RescaleTransferFunction(slo_x, shi_x)
+            except: pass
+            try: lutSliceX.ApplyPreset('Rainbow Desaturated', True)
+            except: pass
+            harden_lut(lutSliceX)
+            dispX0.SetScalarBarVisibility(renD, False)
+            log("Slice X=%.2f: u_slice range [%.4f, %.4f]" % (SLICE_X_POS, slo_x, shi_x))
+        except Exception as _se:
+            log("Slice contours skipped: " + str(_se))
 
         # ── Step 5: (已移除) 上方文字標註 FTT / Ma_max → 保留純粹瞬間快照 ──
 
@@ -983,11 +1102,9 @@ elif has_velocity:
         try:
             agD = renD.AxesGrid
             agD.Visibility = 1
-            # 三軸標題全部移除（底部已有 OrientationAxes 指示方向，避免與刻度數字重疊）
             agD.XTitle = ""
             agD.YTitle = ""
             agD.ZTitle = ""
-            # 字體：Times Bold 黑
             try:
                 agD.XTitleFontFamily = "Times"
                 agD.YTitleFontFamily = "Times"
@@ -1005,7 +1122,6 @@ elif has_velocity:
                 agD.XLabelColor = [0,0,0]; agD.YLabelColor = [0,0,0]; agD.ZLabelColor = [0,0,0]
                 agD.GridColor = [0,0,0]
             except: pass
-            # 字級：Title 保持適中，Label 縮小避免與標題重疊（對齊 Path A/B/C 視覺大小）
             agD.XTitleFontSize = 36
             agD.YTitleFontSize = 36
             agD.ZTitleFontSize = 36
@@ -1014,8 +1130,6 @@ elif has_velocity:
                 agD.YLabelFontSize = 20
                 agD.ZLabelFontSize = 20
             except: pass
-            # 軸標題 ↔ 刻度數字 固定距離
-            # X/Y 維持 65/40；Z 單獨再拉大到 95/60（z/H 與 1.5 數字重疊問題）
             try:
                 agD.XAxisLabelOffset = 40
                 agD.YAxisLabelOffset = 40
