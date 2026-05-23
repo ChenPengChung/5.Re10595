@@ -427,10 +427,21 @@ int main(int argc, char *argv[])
 
 	int iDeviceCount = 0;
     CHECK_CUDA( cudaGetDeviceCount( &iDeviceCount ) );
-    CHECK_CUDA( cudaSetDevice( myid % iDeviceCount ) );
+    MPI_Comm local_comm;
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, myid, MPI_INFO_NULL, &local_comm);
+    int local_rank, local_size;
+    MPI_Comm_rank(local_comm, &local_rank);
+    MPI_Comm_size(local_comm, &local_size);
+    MPI_Comm_free(&local_comm);
+    if (iDeviceCount < local_size) {
+        fprintf(stderr, "[FATAL] Rank %d: node has %d GPUs but %d local ranks — GPU sharing detected.\n",
+                myid, iDeviceCount, local_size);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    CHECK_CUDA( cudaSetDevice( local_rank ) );
 
     if (myid == 0)  printf("\n%s running with %d GPUs...\n\n", argv[0], (int)(jp));          CHECK_MPI( MPI_Barrier(MPI_COMM_WORLD) );
-    printf( "[ Info ] Rank Rank %2d/%2d, localrank: %d/%d\n", myid, nProcs-1, myid, iDeviceCount );
+    printf( "[ Info ] Rank %2d/%2d, local_rank: %d/%d, GPUs_on_node: %d\n", myid, nProcs-1, local_rank, local_size, iDeviceCount );
 
     // ── Runtime 安全檢查:MPI 分解相容性 ──
     // [POLICY-C1] 分解 / grid 不匹配是 compile-time 配置錯誤,續跑也不會修好 → 停鏈
