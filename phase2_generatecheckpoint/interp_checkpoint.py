@@ -29,7 +29,10 @@ Pipeline:
          Preserve wall rho so restart pressure stays consistent with the
          interpolated source field and with the runtime solver policy.
      5c. Global density correction: uniform additive offset on the full
-         physical domain, matching the runtime mass-correction kernel.
+         physical domain, using the same control-volume weights as the
+         runtime mass-correction kernel. --rho-volume-method auto mirrors
+         variables.h CELL_VOLUME_METHOD (0=shoelace, 1=Jacobian 3x3 GL
+         with FD6/Fornberg J_2D and 6-point Lagrange interpolation).
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
      5e. Velocity projection (--project-velocity poisson, default):
@@ -158,7 +161,8 @@ def parse_variables_h(path):
     """Parse selected numeric #define values from variables.h."""
     targets = {'NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'CFL',
                'LX', 'LY', 'LZ', 'H_HILL', 'STRETCH_A'}
-    int_keys = {'NX', 'NY', 'NZ', 'jp'}
+    targets.add('CELL_VOLUME_METHOD')
+    int_keys = {'NX', 'NY', 'NZ', 'jp', 'CELL_VOLUME_METHOD'}
     defines = {}
     with open(path, encoding='utf-8', errors='replace') as f:
         for line in f:
@@ -695,6 +699,22 @@ def require_variables_defs(defs, keys, path, context):
     if missing:
         sys.exit('FATAL: {} requires {} in {}. Missing: {}'.format(
             context, ', '.join(keys), path, ', '.join(missing)))
+
+
+def resolve_rho_volume_method(requested, variables_h=None):
+    """Resolve density control-volume method to the solver-equivalent choice."""
+    if requested != 'auto':
+        return requested, 'cli'
+    if variables_h and os.path.isfile(variables_h):
+        method = parse_variables_h(variables_h).get('CELL_VOLUME_METHOD')
+        if method is not None:
+            method = int(method)
+            if method == 0:
+                return 'shoelace', 'variables.h:CELL_VOLUME_METHOD=0'
+            if method == 1:
+                return 'jacobian-gl', 'variables.h:CELL_VOLUME_METHOD=1'
+            sys.exit('FATAL: CELL_VOLUME_METHOD={} is unsupported; expected 0 or 1'.format(method))
+    return 'shoelace', 'default-no-CELL_VOLUME_METHOD'
 
 
 def origin_search_dirs(primary_dir=None):
@@ -1789,7 +1809,7 @@ def clamp_wall_macros(rho, ux, uy, uz, cfg):
 
 
 def compute_cv_weights(y_2d, z_2d, cfg):
-    """Build per-node control-volume weights matching the solver.
+    """Build per-node shoelace control-volume weights matching solver method 0.
 
     Mirrors evolution.h:InitializeMassCorrectionWeights + MassCorrectionCellVolume.
     Each interior node weight = 1/8 * sum of volumes of all cells sharing
@@ -1892,7 +1912,371 @@ def compute_cv_weights(y_2d, z_2d, cfg):
     return weights, global_volume
 
 
-def compute_rho_mass_stats(rho, cfg, y_2d, z_2d):
+GL3_NODES = np.array([
+    0.5 * (1.0 - 0.7745966692414834),
+    0.5,
+    0.5 * (1.0 + 0.7745966692414834),
+], dtype=np.float64)
+GL3_WEIGHTS = np.array([5.0 / 18.0, 8.0 / 18.0, 5.0 / 18.0], dtype=np.float64)
+FD5_FWD = np.array([-137.0, 300.0, -300.0, 200.0, -75.0, 12.0],
+                   dtype=np.float64) / 60.0
+FD5_BWD = np.array([-12.0, 75.0, -200.0, 300.0, -300.0, 137.0],
+                   dtype=np.float64) / 60.0
+
+
+def lagrange6_weights(x, start):
+    """Mirror evolution.h Lagrange6Weights for nodes start..start+5."""
+    w = np.empty(6, dtype=np.float64)
+    for m in range(6):
+        val = 1.0
+        xm = float(start + m)
+        for r in range(6):
+            if r != m:
+                xr = float(start + r)
+                val *= (x - xr) / (xm - xr)
+        w[m] = val
+    return w
+
+
+def select_stencil_start(cell_idx, lo, hi):
+    """Mirror evolution.h SelectStencilStart."""
+    ideal = cell_idx - 2
+    max_start = hi - 5
+    if max_start - lo < 0:
+        return None
+    return lo if ideal < lo else max_start if ideal > max_start else ideal
+
+
+def compute_j2d_solver_fornberg(y_2d, z_2d, cfg):
+    """Compute J_2D with the same FD6/FD5 rules as ComputeMetricTerms_Full."""
+    ny6, nz6 = y_2d.shape
+    if ny6 != cfg.NY6 or nz6 != cfg.NZ6:
+        raise ValueError('J_2D shape mismatch: got {}, expected ({}, {})'.format(
+            y_2d.shape, cfg.NY6, cfg.NZ6))
+
+    y_xi = np.zeros_like(y_2d)
+    z_xi = np.zeros_like(z_2d)
+    y_zeta = np.zeros_like(y_2d)
+    z_zeta = np.zeros_like(z_2d)
+
+    # j-direction: solver's 6th-order central FD, valid for physical rows
+    # because build_grid_xyz has already populated 3 periodic ghost rows.
+    j_lo, j_hi = BFR, cfg.NY6 - BFR - 1
+    k_lo_compute, k_hi_compute = BFR - 1, cfg.NZ6 - BFR
+    coef_j = FD6_COEFF[3]
+    for m in range(7):
+        off = m - 3
+        y_xi[j_lo:j_hi+1, k_lo_compute:k_hi_compute+1] += (
+            coef_j[m] * y_2d[j_lo+off:j_hi+1+off, k_lo_compute:k_hi_compute+1])
+        z_xi[j_lo:j_hi+1, k_lo_compute:k_hi_compute+1] += (
+            coef_j[m] * z_2d[j_lo+off:j_hi+1+off, k_lo_compute:k_hi_compute+1])
+
+    # k-direction: solver's FD6_k_adaptive, including FD5 one-sided rows
+    # k=2 and k=NZ6-3.  Jacobian-GL itself uses only k=3..NZ6-4, but
+    # computing the full solver range keeps diagnostics identical.
+    k_lo, k_hi = BFR, cfg.NZ6 - BFR - 1
+    for j in range(j_lo, j_hi + 1):
+        base = j
+        # Bottom buffer k=2
+        kb = BFR - 1
+        y_zeta[base, kb] = float(np.dot(FD5_FWD, y_2d[base, kb:kb+6]))
+        z_zeta[base, kb] = float(np.dot(FD5_FWD, z_2d[base, kb:kb+6]))
+        # Physical k rows
+        for k in range(k_lo, k_hi + 1):
+            s = k - 3
+            if s < k_lo:
+                s = k_lo
+            if s > k_hi - 6:
+                s = k_hi - 6
+            p = k - s
+            coef = FD6_COEFF[p]
+            y_zeta[base, k] = float(np.dot(coef, y_2d[base, s:s+7]))
+            z_zeta[base, k] = float(np.dot(coef, z_2d[base, s:s+7]))
+        # Top buffer k=NZ6-3
+        kt = cfg.NZ6 - BFR
+        s_top = cfg.NZ6 - 8
+        y_zeta[base, kt] = float(np.dot(FD5_BWD, y_2d[base, s_top:s_top+6]))
+        z_zeta[base, kt] = float(np.dot(FD5_BWD, z_2d[base, s_top:s_top+6]))
+
+    j2d = y_xi * z_zeta - y_zeta * z_xi
+
+    # Solver receives J_2D ghost rows from neighbouring ranks.  In a global
+    # representation this is exactly a periodic copy; J is invariant to the
+    # +/-LY coordinate shift used for y_2d ghost rows.
+    j2d[2, :] = j2d[ny6 - 5, :]
+    j2d[1, :] = j2d[ny6 - 6, :]
+    j2d[0, :] = j2d[ny6 - 7, :]
+    j2d[ny6 - 3, :] = j2d[4, :]
+    j2d[ny6 - 2, :] = j2d[5, :]
+    j2d[ny6 - 1, :] = j2d[6, :]
+
+    interior = j2d[BFR:BFR+cfg.NY, BFR:BFR+cfg.NZ]
+    bad = ~(np.isfinite(interior) & (interior > 0.0))
+    if np.any(bad):
+        first = np.argwhere(bad)[0]
+        raise ValueError('FATAL: non-positive solver J_2D at j={}, k={}: {:.17e}'.format(
+            BFR + int(first[0]), BFR + int(first[1]),
+            float(interior[first[0], first[1]])))
+    return j2d
+
+
+def interpolate_j2d_lagrange6(j2d, xi_pos, zeta_pos, sj, sk):
+    """Mirror evolution.h InterpolateJ2D_Lagrange6."""
+    wj = lagrange6_weights(xi_pos, sj)
+    wk = lagrange6_weights(zeta_pos, sk)
+    block = j2d[sj:sj+6, sk:sk+6]
+    return float(np.sum(block * wj[:, np.newaxis] * wk[np.newaxis, :]))
+
+
+def compute_jacobian_gl_cell_areas(j2d, cfg, fallback_area=None):
+    """Cell areas from J_2D using solver's 3x3 GL + Lagrange6 rule."""
+    j_cell_lo, j_cell_hi = BFR - 1, cfg.NY6 - 5
+    k_cell_lo, k_cell_hi = BFR, cfg.NZ6 - 5
+    areas = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    fallback_count = 0
+
+    j_lo_J, j_hi_J = 0, cfg.NY6 - 1
+    k_lo_J, k_hi_J = BFR, cfg.NZ6 - BFR - 1
+
+    for jc in range(j_cell_lo, j_cell_hi + 1):
+        sj = select_stencil_start(jc, j_lo_J, j_hi_J)
+        for kc in range(k_cell_lo, k_cell_hi + 1):
+            sk = select_stencil_start(kc, k_lo_J, k_hi_J)
+            used_fallback = sj is None or sk is None
+            area = 0.0
+            if not used_fallback:
+                for a, wa in zip(GL3_NODES, GL3_WEIGHTS):
+                    for b, wb in zip(GL3_NODES, GL3_WEIGHTS):
+                        j_val = interpolate_j2d_lagrange6(
+                            j2d, float(jc) + float(a), float(kc) + float(b),
+                            sj, sk)
+                        if not np.isfinite(j_val) or j_val <= 0.0:
+                            used_fallback = True
+                            break
+                        area += float(wa * wb) * j_val
+                    if used_fallback:
+                        break
+            if used_fallback:
+                if fallback_area is None:
+                    raise ValueError('Jacobian-GL volume fallback requested but no shoelace area is available')
+                area = float(fallback_area[jc, kc])
+                fallback_count += 1
+            areas[jc, kc] = area
+
+    return areas, fallback_count
+
+
+def compute_shoelace_cell_areas(y_2d, z_2d, cfg):
+    """2D shoelace areas for all cells that can contribute to mass weights."""
+    j_lo, j_hi = BFR - 1, cfg.NY6 - 4
+    k_lo, k_hi = BFR,     cfg.NZ6 - 4
+
+    y0 = y_2d[j_lo:j_hi,     k_lo:k_hi]
+    z0 = z_2d[j_lo:j_hi,     k_lo:k_hi]
+    y1 = y_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    z1 = z_2d[j_lo+1:j_hi+1, k_lo:k_hi]
+    y2 = y_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    z2 = z_2d[j_lo+1:j_hi+1, k_lo+1:k_hi+1]
+    y3 = y_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+    z3 = z_2d[j_lo:j_hi,     k_lo+1:k_hi+1]
+
+    area_yz = 0.5 * np.abs(y0*z1 - z0*y1
+                          + y1*z2 - z1*y2
+                          + y2*z3 - z2*y3
+                          + y3*z0 - z3*y0)
+
+    areas = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    areas[j_lo:j_hi, k_lo:k_hi] = area_yz
+    return areas
+
+
+def compute_cv_weights_from_cell_areas(cell_area, cfg):
+    """Scatter 2D cell areas to 3D node weights exactly like the solver."""
+    dx_span = LX / (cfg.NX - 1)
+    j_lo, j_hi = BFR - 1, cfg.NY6 - 4
+    k_lo, k_hi = BFR,     cfg.NZ6 - 4
+    cell_vol = abs(dx_span) * cell_area[j_lo:j_hi, k_lo:k_hi]
+
+    bad_mask = ~(np.isfinite(cell_vol) & (cell_vol > 0.0))
+    if np.any(bad_mask):
+        first = np.argwhere(bad_mask)[0]
+        raise ValueError(
+            'FATAL: invalid cell volume at (j_cell={}, k_cell={}): {:.17e}. '
+            '{} of {} cells are invalid.'.format(
+                j_lo + int(first[0]), k_lo + int(first[1]),
+                float(cell_vol[first[0], first[1]]),
+                int(bad_mask.sum()), cell_vol.size))
+
+    w2d = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    nj_cells = j_hi - j_lo
+    nk_cells = k_hi - k_lo
+    for dj in (0, 1):
+        for dk in (0, 1):
+            j_nodes = np.arange(j_lo + dj, j_lo + dj + nj_cells)
+            k_nodes = np.arange(k_lo + dk, k_lo + dk + nk_cells)
+            w2d[np.ix_(j_nodes, k_nodes)] += cell_vol
+
+    # 1/8 per 3D cell corner, times 2 spanwise neighbour cells.
+    w2d *= 0.25
+
+    ni_node = cfg.NX6 - 7
+    weights = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
+    for i in range(BFR, BFR + ni_node):
+        weights[:, :, i] = w2d
+
+    nj_node = cfg.NY6 - 7
+    nk_node = cfg.NZ6 - 6
+    global_volume = float(np.sum(weights[BFR:BFR+nj_node,
+                                          BFR:BFR+nk_node,
+                                          BFR:BFR+ni_node]))
+    if not (global_volume > 0.0) or not np.isfinite(global_volume):
+        raise ValueError('Invalid global control volume: {:.17e}'.format(global_volume))
+    return weights, global_volume
+
+
+def compute_jacobian_gl_cv_weights_rank_local(y_2d, z_2d, cfg, shoe_area):
+    """Solver-exact Jacobian-GL weights with rank-local stencil selection.
+
+    ComputeJacobianMassCorrectionWeights() runs on each MPI rank after J_2D
+    ghost exchange.  Its Lagrange6 stencil is constrained by local NYD6, not by
+    the full global NY6, so seam-adjacent cells intentionally use local
+    one-sided stencils.  This routine mirrors that rank-local construction and
+    then stitches the unique node weights into one global weight array.
+    """
+    dx_span = LX / (cfg.NX - 1)
+    j2d_global = compute_j2d_solver_fornberg(y_2d, z_2d, cfg)
+
+    w2d_global = np.zeros((cfg.NY6, cfg.NZ6), dtype=np.float64)
+    fallback_count = 0
+    rel_max = 0.0
+    rel_sum = 0.0
+    rel_count = 0
+
+    local_j_lo, local_j_hi = BFR - 1, cfg.NYD6 - 4
+    k_lo, k_hi = BFR, cfg.NZ6 - 4
+    j_lo_J, j_hi_J = 0, cfg.NYD6 - 1
+    k_lo_J, k_hi_J = BFR, cfg.NZ6 - BFR - 1
+
+    for r in range(cfg.JP):
+        j0 = r * cfg.CHUNK
+        j2d_local = j2d_global[j0:j0 + cfg.NYD6, :]
+        local_area = np.zeros((cfg.NYD6, cfg.NZ6), dtype=np.float64)
+
+        for jc in range(local_j_lo, local_j_hi):
+            sj = select_stencil_start(jc, j_lo_J, j_hi_J)
+            for kc in range(k_lo, k_hi):
+                sk = select_stencil_start(kc, k_lo_J, k_hi_J)
+                used_fallback = sj is None or sk is None
+                area = 0.0
+                if not used_fallback:
+                    for a, wa in zip(GL3_NODES, GL3_WEIGHTS):
+                        for b, wb in zip(GL3_NODES, GL3_WEIGHTS):
+                            j_val = interpolate_j2d_lagrange6(
+                                j2d_local,
+                                float(jc) + float(a),
+                                float(kc) + float(b),
+                                sj, sk)
+                            if not np.isfinite(j_val) or j_val <= 0.0:
+                                used_fallback = True
+                                break
+                            area += float(wa * wb) * j_val
+                        if used_fallback:
+                            break
+
+                shoe = float(shoe_area[j0 + jc, kc])
+                if used_fallback:
+                    area = shoe
+                    fallback_count += 1
+                if shoe > 0.0:
+                    rd = abs(area - shoe) / shoe
+                    rel_max = max(rel_max, rd)
+                    rel_sum += rd
+                    rel_count += 1
+                local_area[jc, kc] = area
+
+        cell_vol = abs(dx_span) * local_area[local_j_lo:local_j_hi, k_lo:k_hi]
+        bad_mask = ~(np.isfinite(cell_vol) & (cell_vol > 0.0))
+        if np.any(bad_mask):
+            first = np.argwhere(bad_mask)[0]
+            raise ValueError(
+                'FATAL: invalid Jacobian-GL cell volume at rank={} local cell(j={}, k={}): {:.17e}. '
+                '{} of {} cells are invalid.'.format(
+                    r, local_j_lo + int(first[0]), k_lo + int(first[1]),
+                    float(cell_vol[first[0], first[1]]),
+                    int(bad_mask.sum()), cell_vol.size))
+
+        w2d_local = np.zeros((cfg.NYD6, cfg.NZ6), dtype=np.float64)
+        nj_cells = local_j_hi - local_j_lo
+        nk_cells = k_hi - k_lo
+        for dj in (0, 1):
+            for dk in (0, 1):
+                j_nodes = np.arange(local_j_lo + dj, local_j_lo + dj + nj_cells)
+                k_nodes = np.arange(k_lo + dk, k_lo + dk + nk_cells)
+                w2d_local[np.ix_(j_nodes, k_nodes)] += cell_vol
+        w2d_local *= 0.25
+
+        src = slice(BFR, cfg.NYD6 - 4)
+        dst = slice(j0 + BFR, j0 + cfg.NYD6 - 4)
+        w2d_global[dst, :] = w2d_local[src, :]
+
+    ni_node = cfg.NX6 - 7
+    weights = np.zeros((cfg.NY6, cfg.NZ6, cfg.NX6), dtype=np.float64)
+    for i in range(BFR, BFR + ni_node):
+        weights[:, :, i] = w2d_global
+
+    nj_node = cfg.NY6 - 7
+    nk_node = cfg.NZ6 - 6
+    global_volume = float(np.sum(weights[BFR:BFR+nj_node,
+                                          BFR:BFR+nk_node,
+                                          BFR:BFR+ni_node]))
+    if not (global_volume > 0.0) or not np.isfinite(global_volume):
+        raise ValueError('Invalid Jacobian-GL global control volume: {:.17e}'.format(global_volume))
+
+    return weights, global_volume, {
+        'jacobian_gl_fallback_cells': int(fallback_count),
+        'jacobian_gl_max_rel_diff': float(rel_max),
+        'jacobian_gl_mean_rel_diff': float(rel_sum / rel_count if rel_count else 0.0),
+    }
+
+
+def compute_cv_weights_strict(y_2d, z_2d, cfg, volume_method='shoelace',
+                              return_diagnostics=False):
+    """Build solver-matched control-volume weights for density correction."""
+    if not _DOMAIN_FROM_VH:
+        raise RuntimeError(
+            'FATAL: LX={} is the hardcoded default — variables.h was not parsed. '
+            'Volume-weighted mass correction requires LX from variables.h to '
+            'match the solver. Pass --variables-h or run from a project directory '
+            'containing variables.h.'.format(LX))
+
+    shoe_area = compute_shoelace_cell_areas(y_2d, z_2d, cfg)
+    shoe_weights, shoe_volume = compute_cv_weights_from_cell_areas(shoe_area, cfg)
+    diag = {
+        'volume_method': volume_method,
+        'shoelace_volume': shoe_volume,
+        'jacobian_gl_fallback_cells': 0,
+        'jacobian_gl_max_rel_diff': 0.0,
+        'jacobian_gl_mean_rel_diff': 0.0,
+    }
+
+    if volume_method == 'shoelace':
+        return (shoe_weights, shoe_volume, diag) if return_diagnostics else (shoe_weights, shoe_volume)
+    if volume_method != 'jacobian-gl':
+        raise ValueError('unknown rho volume method: {}'.format(volume_method))
+
+    jac_weights, jac_volume, jac_diag = compute_jacobian_gl_cv_weights_rank_local(
+        y_2d, z_2d, cfg, shoe_area)
+    diag.update({
+        'jacobian_gl_volume': jac_volume,
+        'jacobian_gl_fallback_cells': jac_diag['jacobian_gl_fallback_cells'],
+        'jacobian_gl_max_rel_diff': jac_diag['jacobian_gl_max_rel_diff'],
+        'jacobian_gl_mean_rel_diff': jac_diag['jacobian_gl_mean_rel_diff'],
+        'jacobian_gl_rel_volume_diff': float(abs(jac_volume - shoe_volume) / shoe_volume),
+    })
+    return (jac_weights, jac_volume, diag) if return_diagnostics else (jac_weights, jac_volume)
+
+
+def compute_rho_mass_stats(rho, cfg, y_2d, z_2d, volume_method='shoelace'):
     """Return volume-weighted rho mass statistics on the solver domain."""
     ni = cfg.NX6 - 7
     nj = cfg.NY6 - 7
@@ -1902,18 +2286,22 @@ def compute_rho_mass_stats(rho, cfg, y_2d, z_2d):
                    slice(BFR, BFR + nk),
                    slice(BFR, BFR + ni))
 
-    weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
+    weights, global_volume, diag = compute_cv_weights_strict(
+        y_2d, z_2d, cfg, volume_method=volume_method,
+        return_diagnostics=True)
     weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
     rho_global_avg = weighted_rho_sum / global_volume
     return {
         'mass': weighted_rho_sum,
         'mean': rho_global_avg,
         'volume': global_volume,
+        'volume_diag': diag,
     }
 
 
 def apply_rho_mass_correction(rho, cfg, y_2d, z_2d,
-                              target_avg=1.0, target_mass=None):
+                              target_avg=1.0, target_mass=None,
+                              volume_method='shoelace'):
     """Volume-weighted mass correction on the solver reduction domain.
 
     Mirrors evolution.h:ComputeVolumeWeightedRhoAverageRoot +
@@ -1938,7 +2326,9 @@ def apply_rho_mass_correction(rho, cfg, y_2d, z_2d,
                    slice(BFR, BFR + nk),
                    slice(BFR, BFR + ni))
 
-    weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
+    weights, global_volume, diag = compute_cv_weights_strict(
+        y_2d, z_2d, cfg, volume_method=volume_method,
+        return_diagnostics=True)
     weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
     rho_global_avg = weighted_rho_sum / global_volume
     if target_mass is not None:
@@ -1965,6 +2355,7 @@ def apply_rho_mass_correction(rho, cfg, y_2d, z_2d,
         'target_avg': target_avg,
         'target_mass': target_mass,
         'global_volume': global_volume,
+        'volume_diag': diag,
     }
 
 
@@ -2471,6 +2862,13 @@ def main():
                         'rho mean to 1.0, matching the runtime mass-correction kernel '
                         '(default). "old" preserves the OLD absolute volume-weighted '
                         'rho mass when remapping to the NEW grid.')
+    p.add_argument('--rho-volume-method', choices=['auto', 'shoelace', 'jacobian-gl'],
+                   default='auto',
+                   help='control-volume weights for density correction. "auto" mirrors '
+                        'variables.h CELL_VOLUME_METHOD: 0=shoelace, 1=jacobian-gl '
+                        '(default). "jacobian-gl" uses solver-matched J_2D from '
+                        'FD6/Fornberg metrics plus 3x3 Gauss-Legendre and 6-point '
+                        'Lagrange interpolation.')
     p.add_argument('--project-velocity', choices=['poisson', 'dg-exact', 'div-exact', 'none'],
                    default='div-exact',
                    help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
@@ -2488,7 +2886,8 @@ def main():
                         '(default: %(default)s)')
     p.add_argument('--div-gate-tol', type=float, default=1e-10,
                    help='max|div(u*)| gate before f_eq output. '
-                        'Checkpoint is NOT written if exceeded (default: %(default)s)')
+                        'Checkpoint is NOT written unless max|div(u*)| is strictly '
+                        'below this threshold (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2723,6 +3122,9 @@ def main():
             if detected_vh:
                 args.variables_h = resolve_variables_h_arg(detected_vh)
 
+    args.rho_volume_method, args.rho_volume_method_source = resolve_rho_volume_method(
+        args.rho_volume_method, args.variables_h)
+
     args.old_dir = resolve_old_dir(args.old_dir)
 
     print()
@@ -2758,6 +3160,10 @@ def main():
     print('NEW: NX={} NY={} NZ={} jp={} GAMMA={} grid={}'.format(
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
     print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
+    print('Density control-volume method: {} ({})'.format(
+        args.rho_volume_method, args.rho_volume_method_source))
+    print('u* divergence output gate: max|div(u*)| < {:.6e} before f_eq'.format(
+        args.div_gate_tol))
     print()
     print_repartition_plan(OLD, NEW)
 
@@ -2891,11 +3297,19 @@ def main():
         np.abs(uz_g[interior_slice]).max()))
     Ub_old = compute_Ub(uy_g, z2d_old, OLD)
     print('      OLD Ub (j=BFR cross-section) = {:.15e}'.format(Ub_old))
-    old_rho_mass_stats = compute_rho_mass_stats(rho_g, OLD, y2d_old, z2d_old)
+    old_rho_mass_stats = compute_rho_mass_stats(
+        rho_g, OLD, y2d_old, z2d_old,
+        volume_method=args.rho_volume_method)
     print('      OLD rho volume-weighted mean = {:.15f}'.format(
         old_rho_mass_stats['mean']))
     print('      OLD absolute rho mass = {:.15e}, control volume = {:.15e}'.format(
         old_rho_mass_stats['mass'], old_rho_mass_stats['volume']))
+    if args.rho_volume_method == 'jacobian-gl':
+        vd = old_rho_mass_stats['volume_diag']
+        print('      OLD Jacobian-GL volume: rel diff vs shoelace = {:.6e}, '
+              'fallback cells = {}'.format(
+                  vd.get('jacobian_gl_rel_volume_diff', 0.0),
+                  vd.get('jacobian_gl_fallback_cells', 0)))
 
     # Cross-check stored rho against sum(f).  In a running LBM with mass
     # correction (checkrho.dat), rho is adjusted independently of f each step,
@@ -2986,13 +3400,29 @@ def main():
     if args.rho_mass_target == 'old':
         rho_mass_info = apply_rho_mass_correction(
             rho_new, NEW, y2d_new, z2d_new,
-            target_mass=old_rho_mass_stats['mass'])
+            target_mass=old_rho_mass_stats['mass'],
+            volume_method=args.rho_volume_method)
         print('      rho mass correction target: preserve OLD absolute mass')
     else:
         rho_mass_info = apply_rho_mass_correction(
             rho_new, NEW, y2d_new, z2d_new,
-            target_avg=1.0)
+            target_avg=1.0,
+            volume_method=args.rho_volume_method)
         print('      rho mass correction target: volume-weighted mean rho = 1.0')
+    print('      rho control-volume method: {} ({})'.format(
+        args.rho_volume_method, args.rho_volume_method_source))
+    if args.rho_volume_method == 'jacobian-gl':
+        vd = rho_mass_info['volume_diag']
+        print('      Jacobian-GL volume: shoelace = {:.15e}, jacobian = {:.15e}'.format(
+            vd.get('shoelace_volume', float('nan')),
+            vd.get('jacobian_gl_volume', rho_mass_info['global_volume'])))
+        print('      Jacobian-GL diagnostics: rel volume diff = {:.6e}, '
+              'max cell rel diff = {:.6e}, mean cell rel diff = {:.6e}, '
+              'fallback cells = {}'.format(
+                  vd.get('jacobian_gl_rel_volume_diff', 0.0),
+                  vd.get('jacobian_gl_max_rel_diff', 0.0),
+                  vd.get('jacobian_gl_mean_rel_diff', 0.0),
+                  vd.get('jacobian_gl_fallback_cells', 0)))
     print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(
         rho_mass_info['rho_modify']))
     print('      global control volume = {:.15e}'.format(rho_mass_info['global_volume']))
@@ -3109,46 +3539,25 @@ def main():
     if divergence_diagnostic_fn is None:
         try:
             from poisson_projection import divergence_diagnostic as divergence_diagnostic_fn
-        except Exception:
-            divergence_diagnostic_fn = None
-    if divergence_diagnostic_fn is not None:
-        div_rms, div_max = divergence_diagnostic_fn(
-            ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
-        final_div_rms = div_rms
-        final_div_max = div_max
-        print('      divergence check: rms = {:.6e}, max|div(u)| = {:.6e}'.format(
-            div_rms, div_max))
-    else:
-        j_mid = slice(BFR + 1, BFR + NEW.NY - 1)
-        k_mid = slice(BFR + 1, BFR + NEW.NZ - 1)
-        i_mid = slice(BFR + 1, BFR + NEW.NX - 1)
-        dudx = (ux_new[j_mid, k_mid, BFR + 2:BFR + NEW.NX]
-                - ux_new[j_mid, k_mid, BFR:BFR + NEW.NX - 2]) / (2.0 * dx_new)
-        dy = (y2d_new[BFR + 2:BFR + NEW.NY, k_mid]
-              - y2d_new[BFR:BFR + NEW.NY - 2, k_mid])[:, :, np.newaxis]
-        dudy = ((uy_new[BFR + 2:BFR + NEW.NY, k_mid, i_mid]
-                 - uy_new[BFR:BFR + NEW.NY - 2, k_mid, i_mid]) / dy)
-        dz = (z2d_new[j_mid, BFR + 2:BFR + NEW.NZ]
-              - z2d_new[j_mid, BFR:BFR + NEW.NZ - 2])[:, :, np.newaxis]
-        dwdz = ((uz_new[j_mid, BFR + 2:BFR + NEW.NZ, i_mid]
-                 - uz_new[j_mid, BFR:BFR + NEW.NZ - 2, i_mid]) / dz)
-        div_max = float(np.max(np.abs(dudx + dudy + dwdz)))
-        final_div_max = div_max
-        print('      divergence check (finite-difference fallback): max|div(u)| = {:.6e}'.format(
-            div_max))
+        except Exception as exc:
+            sys.exit('FATAL: cannot import exact divergence diagnostic for u* gate: {}\n'
+                     '  Checkpoint NOT written because max|div(u*)| cannot be verified.'.format(exc))
+    div_rms, div_max = divergence_diagnostic_fn(
+        ux_new, uy_new, uz_new, NEW, y2d_new, z2d_new)
+    final_div_rms = div_rms
+    final_div_max = div_max
+    print('      u* divergence check (CD2, unique physical DOFs): '
+          'rms = {:.6e}, max|div(u*)| = {:.6e}'.format(div_rms, div_max))
 
     # ---- Divergence gate: u* must be solenoidal before f_eq ----
     div_gate_tol = args.div_gate_tol
-    if final_div_max is not None:
-        if final_div_max >= div_gate_tol:
-            sys.exit('FATAL: u* divergence gate FAILED: max|div(u*)| = {:.6e} >= {:.0e}\n'
-                     '  The velocity field entering f_eq is not sufficiently solenoidal.\n'
-                     '  Checkpoint NOT written. Use --project-velocity div-exact or '
-                     'tighten --projection-div-tol.'.format(final_div_max, div_gate_tol))
-        print('      u* divergence gate PASSED: max|div(u*)| = {:.6e} < {:.0e}'.format(
-            final_div_max, div_gate_tol))
-    else:
-        print('      WARNING: divergence could not be computed; gate skipped')
+    if final_div_max >= div_gate_tol:
+        sys.exit('FATAL: u* divergence gate FAILED: max|div(u*)| = {:.6e} >= {:.0e}\n'
+                 '  u* is the corrected velocity field entering f_eq.\n'
+                 '  Checkpoint NOT written. Use --project-velocity div-exact or '
+                 'tighten --projection-div-tol.'.format(final_div_max, div_gate_tol))
+    print('      u* divergence gate PASSED: max|div(u*)| = {:.6e} < {:.0e}'.format(
+        final_div_max, div_gate_tol))
 
     # ---- Step 7: f_eq + per-rank write ----
     print('[7/8] Reconstructing f_eq and writing per-rank files')
@@ -3407,6 +3816,8 @@ def main():
         'interp_macro_order': str(args.interp_order),
         'interp_metric_order': str(args.metric_order),
         'interp_rho_mass_target': args.rho_mass_target,
+        'interp_rho_volume_method': args.rho_volume_method,
+        'interp_rho_volume_method_source': args.rho_volume_method_source,
         'interp_rho_old_mass': '{:.15e}'.format(old_rho_mass_stats['mass']),
         'interp_rho_old_mean': '{:.15e}'.format(old_rho_mass_stats['mean']),
         'interp_rho_old_volume': '{:.15e}'.format(old_rho_mass_stats['volume']),
@@ -3416,6 +3827,16 @@ def main():
         'interp_rho_new_mean_before': '{:.15e}'.format(rho_mass_info['mean_before']),
         'interp_rho_new_mean_after': '{:.15e}'.format(rho_mass_info['mean_after']),
         'interp_rho_new_target_mean': '{:.15e}'.format(rho_mass_info['target_avg']),
+        'interp_rho_shoelace_volume': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('shoelace_volume', rho_mass_info['global_volume'])),
+        'interp_rho_jacobian_gl_fallback_cells': str(
+            rho_mass_info['volume_diag'].get('jacobian_gl_fallback_cells', 0)),
+        'interp_rho_jacobian_gl_rel_volume_diff': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('jacobian_gl_rel_volume_diff', 0.0)),
+        'interp_rho_jacobian_gl_max_cell_rel_diff': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('jacobian_gl_max_rel_diff', 0.0)),
+        'interp_rho_jacobian_gl_mean_cell_rel_diff': '{:.15e}'.format(
+            rho_mass_info['volume_diag'].get('jacobian_gl_mean_rel_diff', 0.0)),
         'interp_cfl': str(args.cfl),
         'interp_cfl_source': args.cfl_source,
         'interp_dt_max_component': dt_max_component,
@@ -3430,6 +3851,8 @@ def main():
         'interp_project_velocity': args.project_velocity,
         'interp_projection_max_outer': str(args.projection_max_outer),
         'interp_projection_div_tol': '{:.6e}'.format(args.projection_div_tol),
+        'interp_u_star_div_gate_tol': '{:.6e}'.format(args.div_gate_tol),
+        'interp_u_star_div_gate_passed': '1',
     }
     if final_div_rms is not None:
         new_meta['interp_final_div_rms'] = '{:.6e}'.format(final_div_rms)
@@ -3517,6 +3940,8 @@ def main():
         'new_jp': str(NEW.JP),
         'old_chunk_j': str(OLD.CHUNK),
         'new_chunk_j': str(NEW.CHUNK),
+        'rho_volume_method': args.rho_volume_method,
+        'rho_volume_method_source': args.rho_volume_method_source,
         'origin': os.path.abspath(args.old_dir),
         'origin_metadata_mtime': str(int(os.path.getmtime(origin_meta_path))) if os.path.isfile(origin_meta_path) else '',
         'variables_h': os.path.abspath(vh_for_prov) if vh_for_prov else '',
