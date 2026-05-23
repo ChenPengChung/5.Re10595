@@ -668,7 +668,7 @@ def main(argv=None):
             ax_cf.text(0.02, 0.02, r"$\mathrm{(a)}$", transform=ax_cf.transAxes,
                        fontsize=14, va="bottom", ha="left")
             fig_cf.tight_layout()
-            _save_fig(fig_cf, out_path)
+            _save_fig(fig_cf, out_path, "_cf")
             plt.close(fig_cf)
 
             # ── (b) cp ──
