@@ -4,15 +4,16 @@
 10.tau_wall_benchmark.py
 ========================
 Compute SIGNED span-averaged tau_wall on bottom and top walls from a
-time-averaged VTK and the 2D Periodic Hill mesh.
+time-averaged VTK and overlay benchmark DNS data (Krank, MGLET).
 
 Output:
     tau_wall_signed_Re{N}.dat   — y/H, tau_bot, tau_top, cf_bot, cf_top
+    tau_wall_signed_Re{N}.png   — cf plot with benchmark scatter
 
 Usage:
-    python3 10.tau_wall_benchmark.py                    # auto-detect latest VTK
+    python3 10.tau_wall_benchmark.py                    # interactive
     python3 10.tau_wall_benchmark.py --Re 5600
-    python3 10.tau_wall_benchmark.py --vtk path/to.vtk
+    python3 10.tau_wall_benchmark.py --Re 5600 --no-ask-density
 
 Convention:
     tau_wall = niu * du_t/dn        (signed, lattice stress, rho=1)
@@ -25,6 +26,7 @@ import numpy as np
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
+BENCH_DIR  = os.path.join(SCRIPT_DIR, "benchmark")
 
 # ====================================================================
 #  6th-order Fornberg FD coefficients (7-point stencil, unit spacing)
@@ -47,7 +49,6 @@ FD6_BWD = FD6_COEFF[6]
 #  6th-order periodic central FD (1D row and 2D axis-0)
 # ====================================================================
 def fd6_periodic_row(f, period_offset=0.0):
-    """1D 6th-order central FD with periodic wrap. f shape (J,)."""
     J = f.shape[0]
     lo = f[J-4:J-1] - period_offset
     hi = f[1:4]     + period_offset
@@ -57,7 +58,6 @@ def fd6_periodic_row(f, period_offset=0.0):
 
 
 def fd6_periodic_2d_axis0(f2d):
-    """2D 6th-order central FD along axis-0 (j), periodic, no offset."""
     J = f2d.shape[0]
     lo = f2d[J-4:J-1]
     hi = f2d[1:4]
@@ -113,7 +113,7 @@ def get_const(defs, names):
 
 
 # ====================================================================
-#  VTK BINARY/ASCII reader (self-contained, from 2.Benchmark.py)
+#  VTK BINARY/ASCII reader
 # ====================================================================
 def parse_vtk(filepath):
     dims = None; npts = 0; npts_from_dims = 0
@@ -218,33 +218,22 @@ def metric_at_wall(y2d, z2d, wall):
 #  Core: compute signed tau_wall on one wall
 # ====================================================================
 def compute_tau_wall(u_t_7layers, wall_metric, niu, wall):
-    """
-    u_t_7layers : (7, Ny, Nx) — wall-tangent velocity on 7 layers
-    wall_metric : dict from metric_at_wall
-    wall        : 'bottom' or 'top'
-
-    Returns tau_wall(Ny, Nx) — SIGNED.
-    """
-    # [1] du_t/dzeta — 6th-order single-sided Fornberg
     if wall == "bottom":
         dut_dzeta = np.einsum('m,mji->ji', FD6_FWD, u_t_7layers)
     else:
         dut_dzeta = np.einsum('m,mji->ji', FD6_BWD, u_t_7layers)
 
-    # [2] du_t/dxi — 6th-order central + periodic wrap (wall row only)
     if wall == "bottom":
-        u_t_wall = u_t_7layers[0]    # k=0
+        u_t_wall = u_t_7layers[0]
     else:
-        u_t_wall = u_t_7layers[-1]   # k=K-1
+        u_t_wall = u_t_7layers[-1]
     dut_dxi = fd6_periodic_2d_axis0(u_t_wall)
 
-    # [3] du_t/dn = (h_xi/J)*du_t/dzeta - (eXZ/(h_xi*J))*du_t/dxi
     m = wall_metric
     A = (m["h_xi"] / m["J"])[:, None]
     B = (m["eXZ"] / (m["h_xi"] * m["J"]))[:, None]
     dut_dn = A * dut_dzeta - B * dut_dxi
 
-    # [4] tau_wall = niu * du_t/dn  (signed)
     return niu * dut_dn
 
 
@@ -253,9 +242,114 @@ def compute_tau_wall(u_t_7layers, wall_metric, niu, wall):
 # ====================================================================
 def find_latest_vtk(folder, pattern="*velocity_merged_*.vtk"):
     hits = sorted(glob.glob(os.path.join(folder, pattern)))
+    return hits[-1] if hits else None
+
+
+# ====================================================================
+#  Benchmark data loaders
+# ====================================================================
+BENCH_SOURCES = {
+    'Krank': {
+        'dir_name':  'Benjamin Krank et al. 2018',
+        'label':     r'Krank $\mathit{et\;al.}$ (2018) DNS',
+        'color':     '#7B2D8E',
+        'marker':    'o',
+        'markersize': 3.5,
+        'default_density': 20,
+    },
+    'MGLET': {
+        'dir_name':  'MGLET (Breuer et al. 2009)',
+        'label':     r'Breuer $\mathit{et\;al.}$ (2009) DNS',
+        'color':     '#228B22',
+        'marker':    'D',
+        'markersize': 3.5,
+        'default_density': 6,
+    },
+}
+
+
+def load_krank_cf(Re):
+    d = os.path.join(BENCH_DIR, 'Benjamin Krank et al. 2018', f'Re{Re}')
+    out = {}
+    for wall in ('bottom', 'top'):
+        pat = os.path.join(d, f'*Re{Re}_cf_cp_{wall}.dat')
+        hits = glob.glob(pat)
+        if not hits:
+            continue
+        raw = np.loadtxt(hits[0], comments='%', delimiter=',')
+        out[wall] = {'xH': raw[:, 0], 'cf': raw[:, 1], 'cp': raw[:, 2]}
+    return out
+
+
+def load_mglet_cf(Re):
+    re_map = {2800: 'Re2800', 5600: 'Re5600', 1400: 'Re1400',
+              10595: 'Re10595'}
+    redir = re_map.get(Re)
+    if redir is None:
+        return {}
+    d = os.path.join(BENCH_DIR, 'MGLET (Breuer et al. 2009)', redir)
+    pat = os.path.join(d, f'*_wall.dat')
+    hits = glob.glob(pat)
     if not hits:
-        return None
-    return hits[-1]
+        return {}
+    raw = np.loadtxt(hits[0])
+    # MGLET data uses 1/(ρu_b²) normalization; standard uses 1/(½ρu_b²) → multiply by 2
+    return {'bottom': {'xH': raw[:, 0], 'cf': raw[:, 1] * 2.0, 'cp': raw[:, 2] * 2.0}}
+
+
+def subsample_uniform(arr_x, arr_y, density_pct):
+    if density_pct >= 100 or len(arr_x) <= 2:
+        return arr_x, arr_y
+    n = len(arr_x)
+    n_keep = max(2, int(round(n * density_pct / 100.0)))
+    idx = np.round(np.linspace(0, n - 1, n_keep)).astype(int)
+    return arr_x[idx], arr_y[idx]
+
+
+def compute_l2_error(y_sim, cf_sim, y_ref, cf_ref):
+    cf_interp = np.interp(y_ref, y_sim, cf_sim)
+    mask = ~(np.isnan(cf_interp) | np.isnan(cf_ref))
+    if mask.sum() < 2:
+        return np.nan
+    diff = cf_interp[mask] - cf_ref[mask]
+    ref_rms = np.sqrt(np.mean(cf_ref[mask]**2))
+    if ref_rms < 1e-30:
+        return np.nan
+    return np.sqrt(np.mean(diff**2)) / ref_rms * 100.0
+
+
+# ====================================================================
+#  Academic plot style (from plot_lodic.py)
+# ====================================================================
+def setup_academic_style():
+    import matplotlib.pyplot as plt
+    plt.rcParams.update({
+        "font.family":          "serif",
+        "font.serif":           ["Times New Roman", "Computer Modern Roman",
+                                 "DejaVu Serif"],
+        "mathtext.fontset":     "cm",
+        "axes.labelsize":       14,
+        "font.size":            12,
+        "legend.fontsize":      9.5,
+        "xtick.labelsize":      12,
+        "ytick.labelsize":      12,
+        "axes.linewidth":       0.8,
+        "lines.linewidth":      1.5,
+        "xtick.direction":      "in",
+        "ytick.direction":      "in",
+        "xtick.top":            True,
+        "ytick.right":          True,
+        "xtick.major.size":     5,
+        "ytick.major.size":     5,
+        "xtick.minor.size":     3,
+        "ytick.minor.size":     3,
+        "xtick.minor.visible":  True,
+        "ytick.minor.visible":  True,
+        "figure.dpi":           150,
+        "savefig.dpi":          300,
+        "savefig.bbox":         "tight",
+        "savefig.pad_inches":   0.05,
+    })
 
 
 # ====================================================================
@@ -268,6 +362,8 @@ def main(argv=None):
     ap.add_argument("--vtk", default=None)
     ap.add_argument("--output", default=None)
     ap.add_argument("--no-plot", action="store_true")
+    ap.add_argument("--no-ask-density", action="store_true",
+                    help="Use default benchmark density, skip interactive")
     args = ap.parse_args(argv)
 
     # ── locate inputs ──
@@ -283,7 +379,14 @@ def main(argv=None):
         return 1
 
     defs  = parse_defines(var_h)
-    Re    = args.Re or int(get_const(defs, ["Re"]))
+    if args.Re is not None:
+        Re = args.Re
+    else:
+        try:
+            Re = int(input(f"Reynolds number (default {int(get_const(defs, ['Re']))}): ")
+                     or str(int(get_const(defs, ["Re"]))))
+        except (ValueError, EOFError):
+            Re = int(get_const(defs, ["Re"]))
     Uref  = get_const(defs, ["Uref", "U_ref"])
     niu   = get_const(defs, ["niu", "nu"])
 
@@ -297,8 +400,7 @@ def main(argv=None):
     Nx, Ny, Nz = dims
     print(f"    dims ({Nx}, {Ny}, {Nz})  ({time.time()-t0:.1f}s)")
 
-    # ERCOFTAC → project: U_mean=stream→V_mean, V_mean=normal→W_mean
-    V_stream = scalars["U_mean"].reshape(Nz, Ny, Nx) * Uref   # lattice units
+    V_stream = scalars["U_mean"].reshape(Nz, Ny, Nx) * Uref
     W_normal = scalars["V_mean"].reshape(Nz, Ny, Nx) * Uref
 
     print(f"    V_stream [{V_stream.min():.6e}, {V_stream.max():.6e}]")
@@ -307,8 +409,8 @@ def main(argv=None):
     # ── [2] extract 2D mesh from VTK points (already in h-units, H=1) ──
     print("[2] extracting 2D mesh from VTK POINTS (h-units) ...")
     pts3d = points.reshape(Nz, Ny, Nx, 3)
-    y2d = pts3d[:, :, 0, 1]   # (Nz, Ny) — streamwise, h-units
-    z2d = pts3d[:, :, 0, 2]   # (Nz, Ny) — wall-normal, h-units
+    y2d = pts3d[:, :, 0, 1]
+    z2d = pts3d[:, :, 0, 2]
     H_check = z2d[0, :].max() - z2d[0, :].min()
     print(f"    mesh (Nz={Nz}, Ny={Ny})  y/H=[{y2d.min():.4f}, {y2d.max():.4f}]  "
           f"z/H=[{z2d.min():.4f}, {z2d.max():.4f}]  H={H_check:.4f}")
@@ -322,17 +424,14 @@ def main(argv=None):
 
     # ── [4] slice 7 layers + project onto wall tangent ──
     print("[4] wall-tangent velocity (strict-orthonormal at bottom, identity at top) ...")
-    x_arr = pts3d[0, 0, :, 0].copy()
-    # Bottom: strict-orthonormal projection
     V_bot = V_stream[0:7]
     W_bot = W_normal[0:7]
     yxi = bot_m["y_xi"][None, :, None]
     zxi = bot_m["z_xi"][None, :, None]
     hxi = bot_m["h_xi"][None, :, None]
-    ut_bot = (V_bot * yxi + W_bot * zxi) / hxi    # (7, Ny, Nx)
+    ut_bot = (V_bot * yxi + W_bot * zxi) / hxi
 
-    # Top: flat wall — u_tangent = V_stream (identity)
-    ut_top = V_stream[Nz-7:Nz]                    # (7, Ny, Nx)
+    ut_top = V_stream[Nz-7:Nz]
 
     print(f"    bottom u_t(k=0) |max| = {np.abs(ut_bot[0]).max():.3e}  (no-slip)")
     print(f"    top    u_t(k={Nz-1}) |max| = {np.abs(ut_top[-1]).max():.3e}  (no-slip)")
@@ -340,24 +439,26 @@ def main(argv=None):
     # ── [5] compute signed tau_wall ──
     print("[5] tau_wall = niu * du_t/dn  (signed) ...")
     t0 = time.time()
-    tau_bot = compute_tau_wall(ut_bot, bot_m, niu, "bottom")   # (Ny, Nx)
-    tau_top = compute_tau_wall(ut_top, top_m, niu, "top")      # (Ny, Nx)
+    tau_bot = compute_tau_wall(ut_bot, bot_m, niu, "bottom")
+    tau_top = compute_tau_wall(ut_top, top_m, niu, "top")
     print(f"    bottom tau [{tau_bot.min():+.4e}, {tau_bot.max():+.4e}]")
     print(f"    top    tau [{tau_top.min():+.4e}, {tau_top.max():+.4e}]")
     print(f"    ({time.time()-t0:.1f}s)")
 
     # ── [6] span-average ──
     print("[6] span-averaging over i (Nx={}) ...".format(Nx))
-    tau_bot_avg = tau_bot.mean(axis=1)    # (Ny,)
-    tau_top_avg = tau_top.mean(axis=1)    # (Ny,)
+    tau_bot_avg = tau_bot.mean(axis=1)
+    tau_top_avg = tau_top.mean(axis=1)
 
-    # wall y-coordinate (streamwise) — from mesh k=0 row
-    y_wall = y2d[0, :]                    # (Ny,) = J points, h-normalized
+    y_wall = y2d[0, :]
     cf_bot = tau_bot_avg / (0.5 * Uref**2)
-    cf_top = tau_top_avg / (0.5 * Uref**2)
+    # Negate top wall: wall-normal n points outward (upward) → τ < 0 for attached flow;
+    # Krank convention: cf > 0 = flow in streamwise direction → negate
+    cf_top = -tau_top_avg / (0.5 * Uref**2)
 
+    tau_top_conv = -tau_top_avg  # sign-flipped for output consistency
     utau_bot = np.sign(tau_bot_avg) * np.sqrt(np.abs(tau_bot_avg))
-    utau_top = np.sign(tau_top_avg) * np.sqrt(np.abs(tau_top_avg))
+    utau_top = np.sign(tau_top_conv) * np.sqrt(np.abs(tau_top_conv))
 
     # ── separation / reattachment ──
     sign_changes = np.where(np.diff(np.sign(tau_bot_avg)))[0]
@@ -366,28 +467,104 @@ def main(argv=None):
         y_cross = y_wall[idx] + (y_wall[idx+1]-y_wall[idx]) * (
             -tau_bot_avg[idx] / (tau_bot_avg[idx+1]-tau_bot_avg[idx]+1e-30))
         label = "separation" if tau_bot_avg[idx] > 0 else "reattachment"
-        print(f"      {label:14s} at y/H ≈ {y_cross:.4f}")
+        print(f"      {label:14s} at y/H = {y_cross:.4f}")
 
-    # global signed average
-    tau_bot_global = tau_bot_avg.mean()
-    tau_top_global = tau_top_avg.mean()
-    print(f"\n    <tau_bot>_signed = {tau_bot_global:+.6e}")
-    print(f"    <tau_top>_signed = {tau_top_global:+.6e}")
-    print(f"    <cf_bot>_signed  = {tau_bot_global/(0.5*Uref**2):+.6e}")
-    print(f"    <cf_top>_signed  = {tau_top_global/(0.5*Uref**2):+.6e}")
+    print(f"\n    <cf_bot> = {cf_bot.mean():+.6e}")
+    print(f"    <cf_top> = {cf_top.mean():+.6e}  (negated: positive = streamwise flow)")
 
-    # ── [7] write output ──
+    # ── [6b] wall pressure → cp ──
+    has_pressure = "P_mean" in scalars
+    if has_pressure:
+        print("\n[6b] computing cp from P_mean ...")
+        P3d = scalars["P_mean"].reshape(Nz, Ny, Nx)
+        # Wall nodes (k=0, k=Nz-1) are bounce-back → P=0; use first fluid node
+        p_bot_avg = P3d[1, :, :].mean(axis=1)
+        p_top_avg = P3d[Nz-2, :, :].mean(axis=1)
+        # p_ref at top wall, y/H ≈ 0 (Krank convention)
+        j_ref = np.argmin(np.abs(y_wall - 0.0))
+        p_ref = p_top_avg[j_ref]
+        q_dyn = 0.5 * Uref**2
+        cp_bot = (p_bot_avg - p_ref) / q_dyn
+        cp_top = (p_top_avg - p_ref) / q_dyn
+        print(f"    p_ref = P_mean(top k=1, y/H={y_wall[j_ref]:.4f}) = {p_ref:.6e}")
+        print(f"    cp_bot [{cp_bot.min():+.4f}, {cp_bot.max():+.4f}]")
+        print(f"    cp_top [{cp_top.min():+.4f}, {cp_top.max():+.4f}]")
+    else:
+        print("\n    (P_mean not in VTK — skipping cp)")
+        cp_bot = cp_top = None
+
+    # ── [7] load benchmark data ──
+    print("\n[7] loading benchmark data ...")
+    bench_data = {}
+    krank = load_krank_cf(Re)
+    if krank:
+        bench_data['Krank'] = krank
+        for wall, d in krank.items():
+            print(f"    Krank {wall}: {len(d['xH'])} pts, "
+                  f"cf=[{d['cf'].min():.4e}, {d['cf'].max():.4e}]")
+    mglet = load_mglet_cf(Re)
+    if mglet:
+        bench_data['MGLET'] = mglet
+        for wall, d in mglet.items():
+            print(f"    MGLET {wall}: {len(d['xH'])} pts, "
+                  f"cf=[{d['cf'].min():.4e}, {d['cf'].max():.4e}]")
+    if not bench_data:
+        print("    (no benchmark cf data found for this Re)")
+
+    # ── benchmark density (interactive or default) ──
+    bench_density = {}
+    if bench_data:
+        if args.no_ask_density:
+            for src_id in bench_data:
+                bench_density[src_id] = BENCH_SOURCES[src_id]['default_density']
+            print(f"\n    benchmark density (--no-ask-density): {bench_density}")
+        else:
+            print(f"\n{'='*60}")
+            print(f"  Benchmark scatter density")
+            print(f"  100% = all points, 20% = every 5th, 0% = hide")
+            print(f"{'='*60}")
+            for src_id in bench_data:
+                info = BENCH_SOURCES[src_id]
+                default = info['default_density']
+                n_total = sum(len(d['xH']) for d in bench_data[src_id].values())
+                try:
+                    raw = input(f"  {info['label']:40s} "
+                                f"({n_total} pts, default {default}%): ").strip()
+                    d = max(0, min(100, int(raw))) if raw else default
+                except (ValueError, EOFError):
+                    d = default
+                bench_density[src_id] = d
+                print(f"    -> {d}%")
+            print(f"{'='*60}")
+
+    # ── L2 error ──
+    if bench_data:
+        print("\n    L2 error (cf, bottom wall):")
+        for src_id, walls in bench_data.items():
+            if 'bottom' in walls:
+                ref = walls['bottom']
+                err = compute_l2_error(y_wall, cf_bot, ref['xH'], ref['cf'])
+                print(f"      vs {src_id:>8s}: {err:.2f}%")
+        if cp_bot is not None:
+            print("    L2 error (cp, bottom wall):")
+            for src_id, walls in bench_data.items():
+                if 'bottom' in walls and 'cp' in walls['bottom']:
+                    ref = walls['bottom']
+                    err = compute_l2_error(y_wall, cp_bot, ref['xH'], ref['cp'])
+                    print(f"      vs {src_id:>8s}: {err:.2f}%")
+
+    # ── [8] write output ──
     out_path = args.output or os.path.join(
         SCRIPT_DIR, f"tau_wall_signed_Re{Re}.dat")
-    print(f"\n[7] writing {out_path} ...")
+    print(f"\n[8] writing {out_path} ...")
     with open(out_path, "w") as f:
         f.write(f"# Signed span-averaged tau_wall — Periodic Hill Re={Re}\n")
         f.write(f"# VTK: {os.path.basename(vtk_path)}\n")
         f.write(f"# Mesh: from VTK POINTS (h-units, H={H_check:.4f})\n")
         f.write(f"# Re={Re}  Uref={Uref}  niu={niu:.6e}  Nx={Nx} Ny={Ny} Nz={Nz}\n")
         f.write(f"# tau = niu * du_t/dn (signed, lattice stress, rho=1)\n")
-        f.write(f"# cf  = tau / (0.5 * Uref^2)\n")
-        f.write(f"# u_tau = sign(tau) * sqrt(|tau|)\n")
+        f.write(f"# cf  = tau / (0.5 * Uref^2)  (top wall negated: positive = streamwise)\n")
+        f.write(f"# u_tau = sign(cf) * sqrt(|tau|)\n")
         f.write(f"#\n")
         sep_pts = []
         for idx in sign_changes:
@@ -402,12 +579,12 @@ def main(argv=None):
                 f"{'utau_bot':>14s}  {'utau_top':>14s}\n")
         for j in range(Ny):
             f.write(f"  {y_wall[j]:10.6f}  {tau_bot_avg[j]:+14.8e}  "
-                    f"{tau_top_avg[j]:+14.8e}  {cf_bot[j]:+14.8e}  "
+                    f"{tau_top_conv[j]:+14.8e}  {cf_bot[j]:+14.8e}  "
                     f"{cf_top[j]:+14.8e}  {utau_bot[j]:+14.8e}  "
                     f"{utau_top[j]:+14.8e}\n")
     print(f"    wrote {os.path.getsize(out_path):,} bytes  ({Ny} points)")
 
-    # ── [8] optional plot ──
+    # ── [9] plot ──
     if not args.no_plot:
         try:
             import matplotlib
@@ -415,36 +592,107 @@ def main(argv=None):
                 matplotlib.use("Agg")
             import matplotlib.pyplot as plt
 
-            fig, axes = plt.subplots(2, 1, figsize=(10, 7), sharex=True)
+            setup_academic_style()
+            fig, ax = plt.subplots(figsize=(9, 4.8))
 
-            axes[0].plot(y_wall, cf_bot, "b-", lw=1.2, label="bottom (hill)")
-            axes[0].plot(y_wall, cf_top, "r-", lw=1.2, label="top (flat)")
-            axes[0].axhline(0, color="k", lw=0.5, ls="--")
+            # simulation lines
+            ax.plot(y_wall, cf_bot, "-",
+                    color="#D62728", lw=1.6,
+                    label=r"GILBM (bot)")
+            ax.plot(y_wall, cf_top, "-",
+                    color="#1F77B4", lw=1.6,
+                    label=r"GILBM (top)")
+            ax.axhline(0, color="k", lw=0.5, ls="--")
+
+            # separation markers
             for idx in sign_changes:
                 y_cross = y_wall[idx] + (y_wall[idx+1]-y_wall[idx]) * (
                     -tau_bot_avg[idx]/(tau_bot_avg[idx+1]-tau_bot_avg[idx]+1e-30))
-                axes[0].axvline(y_cross, color="gray", lw=0.8, ls=":")
-            axes[0].set_ylabel(r"$c_f = \tau_w / (0.5\,U_b^2)$")
-            axes[0].set_title(f"Signed skin friction — Periodic Hill Re={Re}")
-            axes[0].legend(fontsize=9)
-            axes[0].grid(True, alpha=0.3)
+                ax.axvline(y_cross, color="0.6", lw=0.7, ls=":")
 
-            axes[1].plot(y_wall, tau_bot_avg, "b-", lw=1.2, label="bottom")
-            axes[1].plot(y_wall, tau_top_avg, "r-", lw=1.2, label="top")
-            axes[1].axhline(0, color="k", lw=0.5, ls="--")
-            axes[1].set_xlabel("y / H  (streamwise)")
-            axes[1].set_ylabel(r"$\tau_w$ (signed, lattice)")
-            axes[1].legend(fontsize=9)
-            axes[1].grid(True, alpha=0.3)
+            # benchmark scatter
+            for src_id, walls in bench_data.items():
+                info = BENCH_SOURCES[src_id]
+                density = bench_density.get(src_id, 100)
+                if density <= 0:
+                    continue
+                for wall, d in walls.items():
+                    xh_sub, cf_sub = subsample_uniform(
+                        d['xH'], d['cf'], density)
+                    suffix = " (bot)" if wall == "bottom" else " (top)"
+                    ax.scatter(xh_sub, cf_sub,
+                               marker=info['marker'],
+                               s=info['markersize']**2,
+                               facecolors='none',
+                               edgecolors=info['color'],
+                               linewidths=0.6,
+                               label=info['label'] + suffix,
+                               zorder=3)
 
-            plt.tight_layout()
+            ax.set_xlabel(r"$y \,/\, h$")
+            ax.set_ylabel(r"$c_f = \tau_w \,/\, (\frac{1}{2}\,U_b^2)$")
+            ax.set_xlim(y_wall.min(), y_wall.max())
+
+            ax.legend(frameon=True, fancybox=False, edgecolor="0.4",
+                      framealpha=1.0, loc="upper left", fontsize=9)
+
+            fig.tight_layout()
             fig_path = out_path.replace(".dat", ".png")
-            plt.savefig(fig_path, dpi=150)
+            fig.savefig(fig_path)
             print(f"    plot: {fig_path}")
             pdf_path = out_path.replace(".dat", ".pdf")
-            plt.savefig(pdf_path)
+            fig.savefig(pdf_path)
             print(f"    plot: {pdf_path}")
-            plt.close()
+            plt.close(fig)
+
+            # ── cp plot ──
+            if cp_bot is not None:
+                fig2, ax2 = plt.subplots(figsize=(9, 4.8))
+
+                ax2.plot(y_wall, cp_bot, "-",
+                         color="#D62728", lw=1.6,
+                         label=r"GILBM (bot)")
+                ax2.plot(y_wall, cp_top, "-",
+                         color="#1F77B4", lw=1.6,
+                         label=r"GILBM (top)")
+                ax2.axhline(0, color="k", lw=0.5, ls="--")
+
+                for src_id, walls in bench_data.items():
+                    info = BENCH_SOURCES[src_id]
+                    density = bench_density.get(src_id, 100)
+                    if density <= 0:
+                        continue
+                    for wall, d in walls.items():
+                        if 'cp' not in d:
+                            continue
+                        xh_sub, cp_sub = subsample_uniform(
+                            d['xH'], d['cp'], density)
+                        suffix = " (bot)" if wall == "bottom" else " (top)"
+                        ax2.scatter(xh_sub, cp_sub,
+                                    marker=info['marker'],
+                                    s=info['markersize']**2,
+                                    facecolors='none',
+                                    edgecolors=info['color'],
+                                    linewidths=0.6,
+                                    label=info['label'] + suffix,
+                                    zorder=3)
+
+                ax2.set_xlabel(r"$y \,/\, h$")
+                ax2.set_ylabel(r"$c_p = (p - p_\mathrm{ref}) \,/\, (\frac{1}{2}\,U_b^2)$")
+                ax2.set_xlim(y_wall.min(), y_wall.max())
+
+                ax2.legend(frameon=True, fancybox=False, edgecolor="0.4",
+                           framealpha=1.0, loc="best", fontsize=9)
+
+                fig2.tight_layout()
+                cp_png = out_path.replace(".dat", "_cp.png")
+                fig2.savefig(cp_png)
+                print(f"    plot: {cp_png}")
+                cp_pdf = out_path.replace(".dat", "_cp.pdf")
+                fig2.savefig(cp_pdf)
+                print(f"    plot: {cp_pdf}")
+                plt.close(fig2)
+
         except ImportError:
             print("    (matplotlib not available — skipping plot)")
 
