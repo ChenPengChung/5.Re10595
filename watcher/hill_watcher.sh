@@ -14,7 +14,12 @@ CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
 TAUWALL_SCRIPT="$RESULT_DIR/10.tau_wall_benchmark.py"
 
-RE=5600
+_read_re() {
+    local re
+    re=$(awk '$1=="#define" && $2=="Re" {print $3; exit}' "$PROJECT_DIR/variables.h" 2>/dev/null | tr -d '[:space:]')
+    printf '%s\n' "${re:-5600}"
+}
+RE=$(_read_re)
 POLL_SEC=30
 SIZE_STABLE_WAIT=3
 CONV_TIMEOUT=180
@@ -220,6 +225,8 @@ last_processed=""
 last_bench_step=""
 
 while :; do
+    RE=$(_read_re)
+
     if ! check_nan_divergence; then
         log "ALERT: simulation may be diverging — check slurm log immediately"
     fi
