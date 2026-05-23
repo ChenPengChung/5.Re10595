@@ -367,20 +367,6 @@ if [ -z "$CLUSTER" ] \
         _js="$CHAIN_DIR/jobscript_chain.slurm.${_c}"
         [ -f "$_js" ] || continue
 
-        # cooldown sentinel 檢查 (與 dispatcher 一致)
-        _cd_file="restart/cooldown_${_part}.sentinel"
-        if [ -f "$_cd_file" ]; then
-            _cd_epoch=$(grep '^trigger_at_epoch=' "$_cd_file" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
-            _cd_ttl=$(grep '^ttl_sec=' "$_cd_file" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')
-            _age=$(( $(date +%s) - ${_cd_epoch:-0} ))
-            if [ "$_age" -lt "${_cd_ttl:-3600}" ]; then
-                _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: cooldown (skip)\n"
-                continue
-            else
-                rm -f "$_cd_file"
-            fi
-        fi
-
         _eta=$(_eta_epoch "$_js" "$_part")
         if [ "$_eta" -lt 0 ]; then
             _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: ETA unknown (skip)\n"
