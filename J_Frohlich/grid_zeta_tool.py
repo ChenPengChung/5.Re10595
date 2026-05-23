@@ -1700,33 +1700,33 @@ def parse_variables_h(path):
 
 def update_stretch_a_in_variables_h(path, new_stretch_a):
     """
-    Atomically update #define STRETCH_A in variables.h.
-
-    Replaces the numeric literal on the STRETCH_A line while preserving
-    all surrounding text, comments, and whitespace.  Only writes the file
-    if the value actually changed (avoids unnecessary recompilation).
+    Update #define STRETCH_A in variables.h.
+    If STRETCH_A_X exists, synchronize it to the same value.
 
     Returns True if the file was modified, False if unchanged.
     """
     p = Path(path)
     text = p.read_text(encoding="utf-8", errors="replace")
-
-    pattern = r'(#define\s+STRETCH_A\s+)[\d.eE+\-]+'
-    m = re.search(pattern, text)
-    if m is None:
-        print(f"  [WARNING] Cannot find #define STRETCH_A in {path}")
-        return False
-
-    old_val_str = text[m.start(0) + len(m.group(1)):m.end(0)]
     new_val_str = f"{new_stretch_a:.6f}"
+    modified = False
 
-    if old_val_str.strip() == new_val_str.strip():
-        return False
+    for name in ("STRETCH_A", "STRETCH_A_X"):
+        pattern = rf'(#define\s+{name}\s+)[\d.eE+\-]+'
+        m = re.search(pattern, text)
+        if m is None:
+            if name == "STRETCH_A":
+                print(f"  [WARNING] Cannot find #define STRETCH_A in {path}")
+                return False
+            continue
+        old_val_str = text[m.start(0) + len(m.group(1)):m.end(0)]
+        if old_val_str.strip() != new_val_str.strip():
+            text = text[:m.start(0)] + m.group(1) + new_val_str + text[m.end(0):]
+            print(f"  [auto-update] variables.h: {name} {old_val_str} → {new_val_str}")
+            modified = True
 
-    new_text = text[:m.start(0)] + m.group(1) + new_val_str + text[m.end(0):]
-    p.write_text(new_text, encoding="utf-8")
-    print(f"  [auto-update] variables.h: STRETCH_A {old_val_str} → {new_val_str}")
-    return True
+    if modified:
+        p.write_text(text, encoding="utf-8")
+    return modified
 
 
 def auto_generate(variables_h_path, script_dir=None):
