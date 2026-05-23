@@ -1788,6 +1788,22 @@ def auto_generate(variables_h_path, script_dir=None):
     if not ref_path.exists():
         raise FileNotFoundError(f"Reference grid not found: {ref_path}")
 
+    # ── Idempotency check: skip generation if matching grid already exists ──
+    sa_expected = float(np.tanh(gamma / 2.0))
+    grid_key_early = ref_path.stem
+    expected_name = f"adaptive_{grid_key_early}_I{NI}_J{NJ}_s{sa_expected:.6f}.dat"
+    expected_path = script_dir / expected_name
+    if expected_path.exists():
+        try:
+            ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(
+                str(expected_path), NY, NZ)
+            if ok:
+                print(f"  [auto] Grid already exists and dimensions match: {expected_name}")
+                print(f"  [auto] I={ni_a} J={nj_a} ✓ — skipping generation")
+                return str(expected_path)
+        except Exception:
+            pass
+
     # Load reference grid
     x_ref, y_ref, ni_ref, nj_ref = parse_tecplot_dat(ref_path)
 
