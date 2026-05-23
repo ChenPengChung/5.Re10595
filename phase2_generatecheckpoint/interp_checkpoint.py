@@ -81,6 +81,11 @@ Usage:
       --output-root restart/checkpoint --step 1 \\
       --interp-mode phys --fneq-mode zero
 
+  # Interactive jp override:
+  #   omit --auto and --new-jp; when variables.h is available the prompt
+  #   shows its jp value as the default, and rejects jp values that do not
+  #   divide (NY-1).  Example: origin metadata jp=8 -> prompt NEW jp=16.
+
 Expected folder structure:
   workspace/
   +-- variables.h                     (optional, project mode)
@@ -124,6 +129,8 @@ _DOMAIN_FROM_VH = False
 # ---------------------------------------------------------------
 class GridConfig:
     def __init__(self, nx, ny, nz, jp, gamma, alpha, grid_dat, stretch_a=None):
+        if jp <= 0:
+            raise ValueError('jp must be positive, got {}'.format(jp))
         if (ny - 1) % jp != 0:
             raise ValueError('(NY-1)={} is not divisible by jp={}'.format(ny - 1, jp))
         self.NX = nx
@@ -631,6 +638,65 @@ def ask_value(prompt_text, cast_fn=str, default=None):
             print('  (格式錯誤, 請重新輸入 / invalid format)')
 
 
+def jp_candidates_for_ny(ny, max_candidate=256):
+    """Return practical jp divisors for (NY-1), capped for readable prompts."""
+    if ny is None or ny <= 1:
+        return []
+    n = ny - 1
+    return [j for j in range(1, max_candidate + 1) if n % j == 0]
+
+
+def format_jp_candidates(ny, max_candidate=256):
+    candidates = jp_candidates_for_ny(ny, max_candidate=max_candidate)
+    if not candidates:
+        return 'none'
+    text = ', '.join(str(x) for x in candidates)
+    if (ny - 1) > max_candidate and (ny - 1) not in candidates:
+        text += ', ...'
+    return text
+
+
+def validate_jp_partition(ny, jp, label):
+    """Validate that jp is usable for this NY and give actionable hints."""
+    if jp is None:
+        sys.exit('FATAL: {} jp is missing'.format(label))
+    if jp <= 0:
+        sys.exit('FATAL: {} jp={} must be positive'.format(label, jp))
+    if ny is None:
+        sys.exit('FATAL: {} NY is missing; cannot validate jp={}'.format(label, jp))
+    if (ny - 1) % jp != 0:
+        sys.exit(
+            'FATAL: {} (NY-1)={} cannot be divided by jp={}.\n'
+            '  Fix variables.h or pass a valid --new-jp/--old-jp.\n'
+            '  Practical jp candidates for NY={}: {}'.format(
+                label, ny - 1, jp, ny, format_jp_candidates(ny)))
+
+
+def ask_jp_value(prompt_text, ny, default=None):
+    """Interactive jp prompt that refuses values incompatible with NY."""
+    if _AUTO_MODE:
+        if default is not None:
+            validate_jp_partition(ny, int(default), prompt_text.strip())
+            return int(default)
+        sys.exit('FATAL: --auto mode requires jp but missing: {}'.format(prompt_text))
+
+    suffix = '  valid jp for NY={}: {}'.format(ny, format_jp_candidates(ny))
+    while True:
+        jp = ask_value(prompt_text + suffix, int, default)
+        if jp > 0 and ny is not None and (ny - 1) % jp == 0:
+            return jp
+        print('  (jp={} 不合法: (NY-1)={} 必須可被 jp 整除 / valid: {})'.format(
+            jp, ny - 1 if ny is not None else 'unknown', format_jp_candidates(ny)))
+
+
+def require_variables_defs(defs, keys, path, context):
+    """Fail with a clear message when variables.h lacks required defines."""
+    missing = [k for k in keys if k not in defs]
+    if missing:
+        sys.exit('FATAL: {} requires {} in {}. Missing: {}'.format(
+            context, ', '.join(keys), path, ', '.join(missing)))
+
+
 def origin_search_dirs(primary_dir=None):
     """Default direct parent folders that may contain step_*_origin* checkpoints."""
     root = project_root()
@@ -772,7 +838,9 @@ def build_old_config(args):
     if nz is None:
         nz = ask_value('  OLD NZ (法向格點 / wall-normal nodes)', int)
     if jp is None:
-        jp = ask_value('  OLD jp (GPU/rank count)', int)
+        jp = ask_jp_value('  OLD jp (GPU/rank count)', ny)
+    else:
+        validate_jp_partition(ny, int(jp), 'OLD')
 
     if grid_dat is None and ny is not None and nz is not None:
         if gamma is not None and alpha is not None:
@@ -850,15 +918,17 @@ def build_new_config(args):
     if nz is None:
         nz = ask_value('  NEW NZ (法向格點 / wall-normal nodes)', int)
     if jp is None:
-        jp = ask_value('  NEW jp (GPU/rank count)', int)
+        jp = ask_jp_value('  NEW jp (GPU/rank count)', ny)
+    elif args.new_jp is None and not args.auto and sys.stdin.isatty():
+        jp = ask_jp_value('  NEW jp (GPU/rank count; Enter uses variables.h)', ny, int(jp))
+    else:
+        validate_jp_partition(ny, int(jp), 'NEW')
     if gamma is None:
         gamma = ask_value('  NEW GAMMA (tanh stretching param)', float)
     if alpha is None:
         alpha = ask_value('  NEW ALPHA (stretching center)', float, 0.5)
 
-    if (ny - 1) % jp != 0:
-        sys.exit('FATAL: (NY-1)={} 不能被 jp={} 整除 — 無法平均分割 MPI 子域'.format(
-            ny - 1, jp))
+    validate_jp_partition(ny, int(jp), 'NEW')
 
     if grid_dat is None:
         grid_dat = try_find_grid_dat(ny, nz, gamma, alpha)
@@ -1068,6 +1138,20 @@ def split_y(global_arr, cfg):
         j0 = r * cfg.CHUNK
         out.append(global_arr[j0:j0 + cfg.NYD6, :, :].copy())
     return out
+
+
+def print_repartition_plan(cfg_old, cfg_new):
+    """Explain how old rank files are rebuilt when jp changes."""
+    print('Rank repartition plan:')
+    print('  OLD jp={}  unique j/rank={}  local NYD6={}  input files: 19*f + rho per rank'.format(
+        cfg_old.JP, cfg_old.CHUNK, cfg_old.NYD6))
+    print('  NEW jp={}  unique j/rank={}  local NYD6={}  output files: 19*f + rho per rank'.format(
+        cfg_new.JP, cfg_new.CHUNK, cfg_new.NYD6))
+    if cfg_old.JP != cfg_new.JP:
+        print('  Repartition: stitch OLD ranks into one global field, apply conservation/projection globally, then split into NEW ranks.')
+    else:
+        print('  Repartition: jp unchanged; still rebuilds via global field for identical conservation checks.')
+    print()
 
 
 def enforce_periodic_physical_duplicates(field, cfg):
@@ -1808,18 +1892,43 @@ def compute_cv_weights(y_2d, z_2d, cfg):
     return weights, global_volume
 
 
-def apply_rho_mass_correction(rho, cfg, y_2d, z_2d):
-    """Volume-weighted mass correction matching the solver exactly.
+def compute_rho_mass_stats(rho, cfg, y_2d, z_2d):
+    """Return volume-weighted rho mass statistics on the solver domain."""
+    ni = cfg.NX6 - 7
+    nj = cfg.NY6 - 7
+    nk = cfg.NZ6 - 6
+
+    full_domain = (slice(BFR, BFR + nj),
+                   slice(BFR, BFR + nk),
+                   slice(BFR, BFR + ni))
+
+    weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
+    weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
+    rho_global_avg = weighted_rho_sum / global_volume
+    return {
+        'mass': weighted_rho_sum,
+        'mean': rho_global_avg,
+        'volume': global_volume,
+    }
+
+
+def apply_rho_mass_correction(rho, cfg, y_2d, z_2d,
+                              target_avg=1.0, target_mass=None):
+    """Volume-weighted mass correction on the solver reduction domain.
 
     Mirrors evolution.h:ComputeVolumeWeightedRhoAverageRoot +
     UpdateVolumeWeightedMassCorrection:
       rho_avg    = Σ(rho * cv_weight) / Σ(cv_weight)
-      rho_modify = 1 - rho_avg
+      rho_modify = target_avg - rho_avg
       rho[domain] += rho_modify   (uniform additive to all physical nodes)
 
     The conserved domain matches the solver reduction domain:
       i∈[3, NX6-4), j∈[3, NY6-4), k∈[3, NZ6-3)
     including both physical wall rows and excluding periodic duplicates.
+
+    target_avg=1.0 matches the runtime mass-correction kernel.  Passing
+    target_mass preserves an absolute OLD-grid mass by converting it to the
+    equivalent NEW-grid target average.
     """
     ni = cfg.NX6 - 7
     nj = cfg.NY6 - 7
@@ -1832,15 +1941,31 @@ def apply_rho_mass_correction(rho, cfg, y_2d, z_2d):
     weights, global_volume = compute_cv_weights(y_2d, z_2d, cfg)
     weighted_rho_sum = float(np.sum(rho[full_domain] * weights[full_domain]))
     rho_global_avg = weighted_rho_sum / global_volume
-    rho_modify = 1.0 - rho_global_avg
+    if target_mass is not None:
+        target_avg = float(target_mass) / global_volume
+    else:
+        target_avg = float(target_avg)
+    target_mass = target_avg * global_volume
+    rho_modify = target_avg - rho_global_avg
 
     mean_before = rho_global_avg
+    mass_before = weighted_rho_sum
     rho[full_domain] += rho_modify
 
     weighted_rho_sum_after = float(np.sum(rho[full_domain] * weights[full_domain]))
     mean_after = weighted_rho_sum_after / global_volume
+    mass_after = weighted_rho_sum_after
 
-    return rho_modify, mean_before, mean_after, global_volume
+    return {
+        'rho_modify': rho_modify,
+        'mean_before': mean_before,
+        'mean_after': mean_after,
+        'mass_before': mass_before,
+        'mass_after': mass_after,
+        'target_avg': target_avg,
+        'target_mass': target_mass,
+        'global_volume': global_volume,
+    }
 
 
 def compute_Ub(uy, z_2d, cfg):
@@ -2341,6 +2466,11 @@ def main():
                         'gradients via CE expansion (default). '
                         '"zero" = pure equilibrium f=f_eq for stability A/B testing. '
                         '"interp" = legacy linear interp of f_neq (loses gradient info).')
+    p.add_argument('--rho-mass-target', choices=['unit', 'old'], default='unit',
+                   help='density mass correction target. "unit" sets the NEW volume-weighted '
+                        'rho mean to 1.0, matching the runtime mass-correction kernel '
+                        '(default). "old" preserves the OLD absolute volume-weighted '
+                        'rho mass when remapping to the NEW grid.')
     p.add_argument('--project-velocity', choices=['poisson', 'dg-exact', 'div-exact', 'none'],
                    default='div-exact',
                    help='Velocity projection after interpolation. "poisson" = Helmholtz-Hodge '
@@ -2442,6 +2572,13 @@ def main():
         args.variables_h = vh_path
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
+        require_variables_defs(
+            vh, ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'),
+            vh_path, '--auto')
+        validate_jp_partition(int(vh['NY']), int(vh['jp']), 'NEW variables.h')
+        print('[auto] NEW grid from variables.h: NX={} NY={} NZ={} jp={} GAMMA={} ALPHA={}'.format(
+            int(vh['NX']), int(vh['NY']), int(vh['NZ']), int(vh['jp']),
+            vh['GAMMA'], vh['ALPHA']))
 
         # ── GRID PIPELINE REGULATION ──────────────────────────────────
         # Phase 2 (initial-data-point checkpoint 生成) 的觸發條件：
@@ -2622,6 +2759,7 @@ def main():
         NEW.NX, NEW.NY, NEW.NZ, NEW.JP, NEW.GAMMA, NEW.GRID_DAT))
     print('Domain: LX={} LY={} LZ={} H_HILL={}'.format(LX, LY, LZ, H_HILL))
     print()
+    print_repartition_plan(OLD, NEW)
 
     solver_grid_dat = None
     if args.solver_grid_dat:
@@ -2753,6 +2891,11 @@ def main():
         np.abs(uz_g[interior_slice]).max()))
     Ub_old = compute_Ub(uy_g, z2d_old, OLD)
     print('      OLD Ub (j=BFR cross-section) = {:.15e}'.format(Ub_old))
+    old_rho_mass_stats = compute_rho_mass_stats(rho_g, OLD, y2d_old, z2d_old)
+    print('      OLD rho volume-weighted mean = {:.15f}'.format(
+        old_rho_mass_stats['mean']))
+    print('      OLD absolute rho mass = {:.15e}, control volume = {:.15e}'.format(
+        old_rho_mass_stats['mass'], old_rho_mass_stats['volume']))
 
     # Cross-check stored rho against sum(f).  In a running LBM with mass
     # correction (checkrho.dat), rho is adjusted independently of f each step,
@@ -2840,11 +2983,25 @@ def main():
     print('      max |u_wall| before clamp = {:.3e}'.format(wall_residual_max))
     print('      max |rho_wall - 1| preserved = {:.3e}'.format(wall_rho_delta_max))
 
-    rho_modify, mean_before, mean_after, cv_volume = apply_rho_mass_correction(
-        rho_new, NEW, y2d_new, z2d_new)
-    print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(rho_modify))
-    print('      global control volume = {:.15e}'.format(cv_volume))
-    print('      rho volume-weighted mean: {:.15f} -> {:.15f}'.format(mean_before, mean_after))
+    if args.rho_mass_target == 'old':
+        rho_mass_info = apply_rho_mass_correction(
+            rho_new, NEW, y2d_new, z2d_new,
+            target_mass=old_rho_mass_stats['mass'])
+        print('      rho mass correction target: preserve OLD absolute mass')
+    else:
+        rho_mass_info = apply_rho_mass_correction(
+            rho_new, NEW, y2d_new, z2d_new,
+            target_avg=1.0)
+        print('      rho mass correction target: volume-weighted mean rho = 1.0')
+    print('      rho mass correction (volume-weighted): rho_modify = {:.6e}'.format(
+        rho_mass_info['rho_modify']))
+    print('      global control volume = {:.15e}'.format(rho_mass_info['global_volume']))
+    print('      rho volume-weighted mean: {:.15f} -> {:.15f} (target {:.15f})'.format(
+        rho_mass_info['mean_before'], rho_mass_info['mean_after'],
+        rho_mass_info['target_avg']))
+    print('      rho absolute mass: {:.15e} -> {:.15e} (target {:.15e})'.format(
+        rho_mass_info['mass_before'], rho_mass_info['mass_after'],
+        rho_mass_info['target_mass']))
 
     print('      Enforcing periodic duplicate nodes and filling ghost cells')
     for arr in (rho_new, ux_new, uy_new, uz_new):
@@ -3239,12 +3396,26 @@ def main():
         'interp_source': args.old_dir,
         'interp_old_grid': OLD.GRID_DAT,
         'interp_new_grid': NEW.GRID_DAT,
+        'interp_old_jp': str(OLD.JP),
+        'interp_new_jp': str(NEW.JP),
+        'interp_old_chunk_j': str(OLD.CHUNK),
+        'interp_new_chunk_j': str(NEW.CHUNK),
         'interp_old_gamma': str(OLD.GAMMA),
         'interp_new_gamma': str(NEW.GAMMA),
         'interp_fneq_mode': args.fneq_mode,
         'interp_macro_mode': args.interp_mode,
         'interp_macro_order': str(args.interp_order),
         'interp_metric_order': str(args.metric_order),
+        'interp_rho_mass_target': args.rho_mass_target,
+        'interp_rho_old_mass': '{:.15e}'.format(old_rho_mass_stats['mass']),
+        'interp_rho_old_mean': '{:.15e}'.format(old_rho_mass_stats['mean']),
+        'interp_rho_old_volume': '{:.15e}'.format(old_rho_mass_stats['volume']),
+        'interp_rho_new_mass_before': '{:.15e}'.format(rho_mass_info['mass_before']),
+        'interp_rho_new_mass_after': '{:.15e}'.format(rho_mass_info['mass_after']),
+        'interp_rho_new_target_mass': '{:.15e}'.format(rho_mass_info['target_mass']),
+        'interp_rho_new_mean_before': '{:.15e}'.format(rho_mass_info['mean_before']),
+        'interp_rho_new_mean_after': '{:.15e}'.format(rho_mass_info['mean_after']),
+        'interp_rho_new_target_mean': '{:.15e}'.format(rho_mass_info['target_avg']),
         'interp_cfl': str(args.cfl),
         'interp_cfl_source': args.cfl_source,
         'interp_dt_max_component': dt_max_component,
@@ -3342,6 +3513,10 @@ def main():
     prov = {
         'new_grid': os.path.abspath(NEW.GRID_DAT),
         'old_grid': os.path.abspath(OLD.GRID_DAT),
+        'old_jp': str(OLD.JP),
+        'new_jp': str(NEW.JP),
+        'old_chunk_j': str(OLD.CHUNK),
+        'new_chunk_j': str(NEW.CHUNK),
         'origin': os.path.abspath(args.old_dir),
         'origin_metadata_mtime': str(int(os.path.getmtime(origin_meta_path))) if os.path.isfile(origin_meta_path) else '',
         'variables_h': os.path.abspath(vh_for_prov) if vh_for_prov else '',
