@@ -1004,6 +1004,74 @@ elif has_velocity:
         except Exception as _we:
             log("Bottom wall skipped: " + str(_we))
 
+        # 補缺角邊線 (4.5, 0, 0) → (4.5, 0, 1)
+        try:
+            edgeLine = Line()
+            edgeLine.Point1 = [4.5, 0.0, 0.0]
+            edgeLine.Point2 = [4.5, 0.0, 1.0]
+            edgeLine.Resolution = 1
+            edgeLine.UpdatePipeline()
+            dispEdgeLine = Show(edgeLine, renD)
+            dispEdgeLine.Representation = "Wireframe"
+            dispEdgeLine.AmbientColor = [0.3, 0.3, 0.3]
+            dispEdgeLine.DiffuseColor = [0.3, 0.3, 0.3]
+            dispEdgeLine.LineWidth = 1.5
+            dispEdgeLine.Opacity = 0.3
+            dispEdgeLine.SetScalarBarVisibility(renD, False)
+            log("Edge line (4.5,0,0)→(4.5,0,1) added")
+        except Exception as _el:
+            log("Edge line skipped: " + str(_el))
+
+        # ── 座標箭頭 — Krank 風格，服貼 (4.5, 0, 0) 角落 ──
+        renD.OrientationAxesVisibility = 0
+        _AX_LEN = 0.7
+        _AX_R = 0.012
+        _AX_O = [4.5, 0.0, 0.0]
+        _arrows = [
+            ([-1, 0, 0], "x"),
+            ([0, 1, 0],  "y"),
+            ([0, 0, 1],  "z"),
+        ]
+        _col = [0.0, 0.0, 0.0]
+        for _dir, _lbl in _arrows:
+            try:
+                _ep = [_AX_O[i] + _dir[i] * _AX_LEN for i in range(3)]
+                _ln = Line()
+                _ln.Point1 = _AX_O
+                _ln.Point2 = _ep
+                _ln.Resolution = 1
+                _tb = Tube(Input=_ln)
+                _tb.Radius = _AX_R
+                _tb.NumberofSides = 8
+                _tb.UpdatePipeline()
+                _dp = Show(_tb, renD)
+                _dp.Representation = "Surface"
+                _dp.AmbientColor = _col
+                _dp.DiffuseColor = _col
+                _dp.MapScalars = 0
+                _dp.SetScalarBarVisibility(renD, False)
+
+                _cn = Cone()
+                _tip = [_ep[i] + _dir[i] * 0.05 for i in range(3)]
+                _cn.Center = _tip
+                _cn.Direction = _dir
+                _cn.Height = 0.12
+                _cn.Radius = 0.035
+                _cn.Resolution = 12
+                _cn.Capping = 1
+                _cn.UpdatePipeline()
+                _dpc = Show(_cn, renD)
+                _dpc.Representation = "Surface"
+                _dpc.AmbientColor = _col
+                _dpc.DiffuseColor = _col
+                _dpc.MapScalars = 0
+                _dpc.SetScalarBarVisibility(renD, False)
+
+                # (x/y/z 標籤改用 PIL 後製疊加，避免 Text3D 方向問題)
+                log("Arrow '%s' at (4.5,0,0) placed" % _lbl)
+            except Exception as _ae:
+                log("Arrow '%s' skipped: %s" % (_lbl, str(_ae)))
+
         # ── Step 4b: 在 Q-criterion 3D 視圖上疊加 2D slice contour 平面 ──
         # Slice 1: Y=9.0 (streamwise 末端, XZ 平面) → 用 Y=8.95 避開邊界
         # Slice 2: X=0.0 (spanwise 邊緣, YZ 平面) → 用 X=0.05 避開邊界
@@ -1150,6 +1218,22 @@ elif has_velocity:
                 agD.YLabelOffset = 40
                 agD.ZLabelOffset = 60
             except: pass
+            # 整數刻度: X=[0,1,2,3,4], Y=[0,1,...,9], Z=[0,1,2,3]
+            try:
+                for _ax in ("X", "Y", "Z"):
+                    try: setattr(agD, _ax+"AxisNotation", "Printf")
+                    except: pass
+                    try: setattr(agD, _ax+"AxisPrintfFormat", "%g")
+                    except: pass
+            except: pass
+            try:
+                agD.XAxisUseCustomLabels = 1
+                agD.XAxisLabels = [0, 1, 2, 3, 4, 4.5]
+                agD.YAxisUseCustomLabels = 1
+                agD.YAxisLabels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                agD.ZAxisUseCustomLabels = 1
+                agD.ZAxisLabels = [0, 1, 2, 3.036]
+            except: pass
         except Exception as e:
             log("Q-crit axes grid skipped: " + str(e))
 
@@ -1161,18 +1245,65 @@ elif has_velocity:
                        TransparentBackground=0)
         log("Path D saved: " + OUT_QCRIT)
 
-        # ── Step 9: 後製裁切頂端過大空白（三軸標題已移除，無需貼標籤）──
+        # ── Step 9: 後製裁切 + PIL 疊加 x/y/z 箭頭標籤 ──
         try:
-            from PIL import Image as _PILImage
+            from PIL import Image as _PILImage, ImageDraw as _PILDraw, ImageFont as _PILFont
             _im = _PILImage.open(OUT_QCRIT)
             _w, _h = _im.size
             _top_cut = int(_h * 0.15)
             _im_crop = _im.crop((0, _top_cut, _w, _h))
+
+            # 在裁切後的圖上標箭頭名稱 (Krank convention)
+            # x=streamwise(+Y), y=wall-normal(+Z), z=spanwise(-X)
+            _arrow_labels = [
+                ([4.5 - _AX_LEN - 0.15, 0.0, 0.0], "z", "spanwise"),
+                ([4.5, _AX_LEN + 0.15, 0.0],        "x", "streamwise"),
+                ([4.5, 0.0, _AX_LEN + 0.15],         "y", "wall-normal"),
+            ]
+            _arrow_px = []
+            try:
+                _ren = renD.GetRenderWindow().GetRenderers().GetFirstRenderer()
+                from vtkmodules.vtkRenderingCore import vtkCoordinate as _vtkC
+                for _apos, _altr, _adir in _arrow_labels:
+                    _vc = _vtkC()
+                    _vc.SetCoordinateSystemToWorld()
+                    _vc.SetValue(*_apos)
+                    _dp = _vc.GetComputedDisplayValue(_ren)
+                    _px = int(_dp[0])
+                    _py = int(Q_IMG_H - _dp[1]) - _top_cut
+                    _arrow_px.append((_px, _py, _altr, _adir))
+                log("Arrow label pixels: %s" % str(_arrow_px))
+            except Exception as _vce:
+                log("WorldToDisplay fallback: %s" % str(_vce))
+                _cw, _ch = _w, _h - _top_cut
+                _arrow_px = [
+                    (int(_cw*0.09), int(_ch*0.88), "z", "spanwise"),
+                    (int(_cw*0.15), int(_ch*0.90), "x", "streamwise"),
+                    (int(_cw*0.11), int(_ch*0.74), "y", "wall-normal"),
+                ]
+
+            _draw = _PILDraw.Draw(_im_crop)
+            _font_it = None
+            for _fpath in [
+                "/usr/share/fonts/liberation/LiberationSerif-Italic.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSerif-Italic.ttf",
+                "/usr/share/fonts/dejavu/DejaVuSans-Oblique.ttf",
+            ]:
+                try:
+                    _font_it = _PILFont.truetype(_fpath, 32)
+                    break
+                except: pass
+            if _font_it is None:
+                _font_it = _PILFont.load_default()
+            for _apx, _apy, _altr, _adir in _arrow_px:
+                _draw.text((_apx, _apy), _altr, fill=(0, 0, 0),
+                           font=_font_it, anchor="mm")
+
             _im_crop.save(OUT_QCRIT)
-            log("Path D top-crop: removed top %d px, new size %dx%d"
-                % (_top_cut, _w, _h - _top_cut))
+            log("Path D top-crop + arrow labels: new size %dx%d"
+                % (_w, _h - _top_cut))
         except Exception as _e:
-            log("Path D top-crop skipped: " + str(_e))
+            log("Path D post-process skipped: " + str(_e))
 
         Delete(renD)
         del renD
