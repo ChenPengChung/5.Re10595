@@ -135,8 +135,15 @@ bl_sync_with_nchc() {
             printf '%s\n' "$line" >> "$tmp"
             kept=$((kept+1))
         elif _bl_state_is_healthy "$state"; then
-            released=$((released+1))
-            printf '[blacklist] RELEASE %s (NCHC state=%s, 本地黑名單釋放)\n' "$node" "$state" >&2
+            local src; src=$(printf '%s' "$line" | cut -f4)
+            if [ "$src" = "manual-blacklist" ]; then
+                printf '%s\n' "$line" >> "$tmp"
+                kept=$((kept+1))
+                printf '[blacklist] KEEP %s (NCHC state=%s, manual-blacklist 不自動釋放)\n' "$node" "$state" >&2
+            else
+                released=$((released+1))
+                printf '[blacklist] RELEASE %s (NCHC state=%s, 本地黑名單釋放)\n' "$node" "$state" >&2
+            fi
         else
             printf '%s\n' "$line" >> "$tmp"
             kept=$((kept+1))
