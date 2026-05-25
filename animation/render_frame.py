@@ -244,10 +244,9 @@ def setup_axes_grid(ren, bounds):
     ag = ren.AxesGrid
     ag.Visibility = 1
 
-    # 軸標題：對應參考圖格式（MathText 排版）
     ag.XTitle = ""
-    ag.YTitle = r"$x/H$"
-    ag.ZTitle = r"$y/H$"
+    ag.YTitle = "x/H"
+    ag.ZTitle = "y/H"
 
     black = [0.0, 0.0, 0.0]
     ag.XTitleColor = black
@@ -333,7 +332,7 @@ def setup_scalar_bar(lut, ren, title="u_streamwise", value_range=None, n_ticks=8
     （只給 Path A/B/C 的 7 張圖用；Path D Q-criterion 有獨立 barD 不受影響）
     value_range=(lo,hi) 指定後會強制顯示 n_ticks 個 tick（避開 ParaView 的自動密集 tick）"""
     bar = GetScalarBar(lut, ren)
-    bar.Title = title
+    bar.Title = ""
     bar.ComponentTitle = ""
     # 字體放大：Title 80pt, Label 40pt
     bar.TitleFontSize = 80
@@ -631,7 +630,7 @@ lutA.RGBPoints = build_rgb_points(lo_A, hi_A, KEY_COLORS)
 harden_lut(lutA)
 dispA.LookupTable = lutA
 dispA.SetScalarBarVisibility(renA, True)
-setup_scalar_bar(lutA, renA, r"$u/U_{ref}$", value_range=(lo_A, hi_A))
+setup_scalar_bar(lutA, renA, "", value_range=(lo_A, hi_A))
 
 setup_camera(renA, bounds)
 setup_axes_grid(renA, bounds)

@@ -32,8 +32,12 @@ Estimation/
 
 # Animation frames and videos
 animation/png_frames/
+animation/png_uniform_*/
+animation/enc_tmp_*/
 animation/flow_*.mp4
 animation/short_*.mp4
+animation/*.gif
+animation/*.log
 png_frames/
 
 # Result data files (keep Python scripts)
