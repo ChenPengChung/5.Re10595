@@ -1026,9 +1026,9 @@ elif has_velocity:
         renD.OrientationAxesVisibility = 0
         _AX_LEN = 0.7
         _AX_R = 0.012
-        _AX_O = [4.5, 0.0, 0.0]
+        _AX_O = [0.0, 0.0, 0.0]
         _arrows = [
-            ([-1, 0, 0], "x"),
+            ([1, 0, 0], "x"),
             ([0, 1, 0],  "y"),
             ([0, 0, 1],  "z"),
         ]
@@ -1256,9 +1256,9 @@ elif has_velocity:
             # 在裁切後的圖上標箭頭名稱 (Krank convention)
             # x=streamwise(+Y), y=wall-normal(+Z), z=spanwise(-X)
             _arrow_labels = [
-                ([4.5 - _AX_LEN - 0.20, 0.0, 0.0],  "z", "spanwise"),
-                ([4.5, _AX_LEN + 0.20, 0.0],          "x", "streamwise"),
-                ([4.5 - 0.20, 0.12, _AX_LEN + 0.12], "y", "wall-normal"),
+                ([0.0 + _AX_LEN + 0.20, 0.0, 0.0],  "z", "spanwise"),
+                ([0.0, _AX_LEN + 0.20, 0.0],          "x", "streamwise"),
+                ([0.0 - 0.20, 0.12, _AX_LEN + 0.12], "y", "wall-normal"),
             ]
             _arrow_px = []
             try:
