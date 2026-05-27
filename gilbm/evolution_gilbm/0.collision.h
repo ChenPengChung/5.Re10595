@@ -90,13 +90,16 @@ __device__ void gilbm_mrt_collision_GTS(
     double C16 = (1.0 - 1.98);
     double C_visc = (1.0 - s_visc);
 
-    // Combined: m*_k = m_eq_k + C_k × (m_k - m_eq_k)
+    // Combined: non-conserved moments use
+    //   m*_k = m_eq_k + (1 - s_k) * (m_k - m_eq_k).
+    // Conserved moments (rho, jx, jy, jz) have s_k = 0 and must remain m_B[k];
+    // body-force increments are injected below.
     double m_star[19];
 
-    m_star[0] = m_eq[0];
-    m_star[3] = m_eq[3];
-    m_star[5] = m_eq[5];
-    m_star[7] = m_eq[7];
+    m_star[0] = m_B[0];
+    m_star[3] = m_B[3];
+    m_star[5] = m_B[5];
+    m_star[7] = m_B[7];
 
     m_star[1]  = m_eq[1]  + C1  * (m_B[1]  - m_eq[1]);
     m_star[2]  = m_eq[2]  + C2  * (m_B[2]  - m_eq[2]);
@@ -125,7 +128,7 @@ __device__ void gilbm_mrt_collision_GTS(
     // 特化: F_body = (0, Force0, 0) — streamwise body force only
     //       cs² = 1/3  ⇒  1/cs² = 3, 1/cs⁴ = 9
     //
-    // 守恆 moment k∈{0,3,5,7}: s_k = 0 → (1 − s_k/2) = 1 (完整投注)
+    // 守恆 moment k∈{0,3,5,7}: s_k = 0 → (1 − s_k/2) = 1 (完整注入)
     // 非守恆 moment: 依 Relaxation 表乘 (1 − s_k/2)
     // ═══════════════════════════════════════════════════════════════════
     //在二階空間精度mrt，裡面，外力也要經過矩陣變換
