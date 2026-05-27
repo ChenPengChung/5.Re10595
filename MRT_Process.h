@@ -120,7 +120,9 @@
 	meq18 = F0_eq*M[18][0] + F1_eq*M[18][1] + F2_eq*M[18][2] + F3_eq*M[18][3] + F4_eq*M[18][4] + F5_eq*M[18][5] + F6_eq*M[18][6] + F7_eq*M[18][7] + F8_eq*M[18][8] + F9_eq*M[18][9] + 					\
          F10_eq*M[18][10] + F11_eq*M[18][11] + F12_eq*M[18][12] + F13_eq*M[18][13] + F14_eq*M[18][14] + F15_eq*M[18][15] + F16_eq*M[18][16] + F17_eq*M[18][17] + F18_eq*M[18][18];															
 
-// collision macro: caller must define `double dt_val` before invocation.
+// Legacy collision macro kept for reference/debug.
+// The active GILBM fused path uses gilbm/evolution_gilbm/0.collision.h.
+// Caller must define `double dt_val` before invocation.
 //   GTS (Global Time Stepping): dt_val = dt_global (the only mode)
 //   Note: do NOT use compile-time `dt` (= minSize), which is only valid for Cartesian grids.
 #define collision	\

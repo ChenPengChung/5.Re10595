@@ -244,7 +244,7 @@
 //      Premnath & Abraham, JCP 224 (2007) 539–559
 // ================================================================
 #ifndef USE_GUO_FORCING
-#define     USE_GUO_FORCING     1   // 預設關, Poiseuille 驗證通過後翻 1
+#define     USE_GUO_FORCING     1   // 預設開: 使用 Guo + MRT moment-space forcing
 #endif
 
 
