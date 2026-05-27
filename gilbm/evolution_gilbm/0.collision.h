@@ -18,7 +18,7 @@
 // 用途:
 //   Algorithm1 Step3_GTS 呼叫 gilbm_collision_GTS
 // ════════════════════════════════════════════════════════════════════════════
-//本篇為採用d'Humries的定義 : 定義鬆弛因子為 1/omega_k 其中 omega_k 不是鬆弛時間，而是無因次化鬆弛時間
+// 本檔採用 d'Humières MRT 定義: s_k = 1/tau_k, tau_k 為無因次鬆弛時間。
 
 // ╔════════════════════════════════════════════════════════════════════════╗
 // ║  §1. MRT Collision Functions                                          ║
@@ -31,6 +31,8 @@
 // ────────────────────────────────────────────────────────────────────────
 // GTS 碰撞 (R=1, no re-estimation) — gilbm_mrt_combined_LTS 的 R=1 特化
 //   m*_k = m_eq_k + (1 - s_k) × (m_k - m_eq_k)
+//   conserved moments k={0,3,5,7}: s_k=0, so m*_k=m_k before forcing
+//     m0=rho, m3=rho*u_x, m5=rho*u_y, m7=rho*u_z
 //
 // 消除: R_visc, R_const, omegadt_B, dt_B 參數
 // 使用者: Algorithm1-GTS Step3
@@ -93,10 +95,13 @@ __device__ void gilbm_mrt_collision_GTS(
     // Combined: m*_k = m_eq_k + C_k × (m_k - m_eq_k)
     double m_star[19];
 
-    m_star[0] = m_eq[0];
-    m_star[3] = m_eq[3];
-    m_star[5] = m_eq[5];
-    m_star[7] = m_eq[7];
+    // Conserved moments are identified by M rows:
+    //   row 0 = 1, row 3 = c_x, row 5 = c_y, row 7 = c_z.
+    // Their relaxation rates are zero, so collision must leave them as m_B.
+    m_star[0] = m_B[0];
+    m_star[3] = m_B[3];
+    m_star[5] = m_B[5];
+    m_star[7] = m_B[7];
 
     m_star[1]  = m_eq[1]  + C1  * (m_B[1]  - m_eq[1]);
     m_star[2]  = m_eq[2]  + C2  * (m_B[2]  - m_eq[2]);
@@ -125,10 +130,10 @@ __device__ void gilbm_mrt_collision_GTS(
     // 特化: F_body = (0, Force0, 0) — streamwise body force only
     //       cs² = 1/3  ⇒  1/cs² = 3, 1/cs⁴ = 9
     //
-    // 守恆 moment k∈{0,3,5,7}: s_k = 0 → (1 − s_k/2) = 1 (完整投注)
+    // 守恆 moment k∈{0,3,5,7}: s_k = 0 → (1 − s_k/2) = 1 (完整注入)
     // 非守恆 moment: 依 Relaxation 表乘 (1 − s_k/2)
     // ═══════════════════════════════════════════════════════════════════
-    //在二階空間精度mrt，裡面，外力也要經過矩陣變換
+    // 二階 MRT forcing: 先在 particle space 計算 Guo F_q, 再投影到 moment space.
     double F_particle[19];
     #pragma unroll
     for (int q = 0; q < 19; q++) {
@@ -151,11 +156,11 @@ __device__ void gilbm_mrt_collision_GTS(
         F_moment[n] = sum_F;
     }
 
-    // Inject δt · (1 − s_k/2) · F_moment[k] into m_star[k]
-    m_star[0]  += dt_global * F_moment[0];                         // s0  = 0
-    m_star[3]  += dt_global * F_moment[3];                         // s3  = 0
-    m_star[5]  += dt_global * F_moment[5];                         // s5  = 0
-    m_star[7]  += dt_global * F_moment[7];                         // s7  = 0
+    // Inject force after collision; the conserved force increments are not overwritten.
+    m_star[0]  += dt_global * F_moment[0];                         // s0  = 0, density increment should be 0
+    m_star[3]  += dt_global * F_moment[3];                         // s3  = 0, x-momentum
+    m_star[5]  += dt_global * F_moment[5];                         // s5  = 0, y/streamwise momentum
+    m_star[7]  += dt_global * F_moment[7];                         // s7  = 0, z-momentum
     m_star[1]  += dt_global * (1.0 - 1.19 * 0.5)   * F_moment[1];
     m_star[2]  += dt_global * (1.0 - 1.40 * 0.5)   * F_moment[2];
     m_star[4]  += dt_global * (1.0 - 1.20 * 0.5)   * F_moment[4];
