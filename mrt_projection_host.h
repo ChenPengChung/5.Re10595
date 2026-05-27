@@ -19,6 +19,9 @@ struct MrtProjectionVerification {
 
 static inline void BuildD3Q19RatesHost(double s_visc, double s[19])
 {
+    // Conserved moments for the M matrix in MRT_Matrix.h:
+    //   m0 = rho, m3 = rho*u, m5 = rho*v, m7 = rho*w.
+    // Keep their relaxation rates at zero so collision does not relax them.
     s[0] = 0.0;
     s[1] = 1.19;
     s[2] = 1.4;
@@ -297,7 +300,7 @@ static inline MrtProjectionVerification VerifyMrtProjectionHost(
         }
     }
 
-    const int conserved[4] = {0, 3, 5, 7};
+    const int conserved[4] = {0, 3, 5, 7};  // rho, rho*u, rho*v, rho*w
     for (int ci = 0; ci < 4; ci++) {
         const int n_cons = conserved[ci];
         for (int b = 0; b < 19; b++) {

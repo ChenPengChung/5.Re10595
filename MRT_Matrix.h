@@ -1,6 +1,10 @@
 #ifndef MRT_Matrix_FILE
 #define MRT_Matrix_FILE
 
+// Conserved moments in this MRT basis:
+//   m0 = rho, m3 = rho*u, m5 = rho*v, m7 = rho*w.
+// These use s=0 so collision relaxation leaves them unchanged; body force
+// changes momentum through the forcing term, not through relaxation.
 #define Relaxation		\
 	s0  = 0.0;			\
 	s1  = 1.19;			\
