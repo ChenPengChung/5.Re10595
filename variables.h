@@ -78,10 +78,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      257         // 展向格點
-#define     NY      513         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      257         // 法向格點
-#define     jp      16         //  GPU 數量 (流向分割)
+#define     NX      449         // 展向格點
+#define     NY      897         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
+#define     NZ      449         // 法向格點
+#define     jp      64          //  GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -112,7 +112,7 @@
 //   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 壁面最小格距 ≈ uniform_dz × Ratio (Ratio=0.5 時 a≈0.60)
-#define     STRETCH_A           0.95
+#define     STRETCH_A           0.97
 #define     ALPHA               0.5     // 歷史遺留，固定 0.5，檔名不再包含 ALPHA
 #define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
 // ALPHA 必須為 0.5 — 若修改此值需同步驗證 minSize 與 grid 生成邏輯
@@ -135,7 +135,7 @@
 //   全場全域搜索，超出範圍則自動調整 GAMMA 後才生成網格
 //   --auto 模式讀取此值; 互動模式可另行輸入
 #define     RATIO_LO    12.0    // 網格間距比率下限
-#define     RATIO_HI    20.0    // 網格間距比率上限
+#define     RATIO_HI    25.0    // 網格間距比率上限
 
 // ── 展向映射參數 ──
 #define     LXi     (10.0)
@@ -156,8 +156,8 @@
 // ================================================================
 //  §4. 物理參數
 // ================================================================
-#define     Re      5600       // Reynolds number (基於 H_HILL 和 Uref)
-#define     Uref    0.015       // 參考速度 (bulk velocity)
+#define     Re      10595       // Reynolds number (基於 H_HILL 和 Uref)
+#define     Uref    0.004       // 參考速度 (bulk velocity)
                                 // Re700:0.0583, Re1400/2800:0.0776
                                 // Re5600:0.0464, Re10595:0.0878
                                 // 限制: Uref <= cs = 0.1732 (Ma < 1)
