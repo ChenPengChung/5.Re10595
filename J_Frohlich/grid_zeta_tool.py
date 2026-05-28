@@ -1877,7 +1877,7 @@ def auto_generate(variables_h_path, script_dir=None):
     x_base, y_base, _ = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
         gamma=0.0, alpha=alpha,
-        poisson_iter=50000, poisson_tol=1e-12,
+        poisson_iter=1000000, poisson_tol=1e-12,
         LZ=LZ)
 
     # ── Validate base grid dimensions ──

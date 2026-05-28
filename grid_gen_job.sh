@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=gridgen_10595
 #SBATCH --account=MST114348
-#SBATCH --partition=normal
+#SBATCH --partition=dev
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --gres=gpu:1
-#SBATCH --time=02:00:00
+#SBATCH --time=01:00:00
 #SBATCH --output=grid_gen_%j.log
 #SBATCH --error=grid_gen_%j.err
 
@@ -19,7 +19,7 @@ echo "Grid: NY=897 x NZ=449 (Re=10595)"
 echo "Poisson tol: 1e-12, max_iter: 50000"
 echo ""
 
-time python3 J_Frohlich/grid_zeta_tool.py --auto
+time python3 -u J_Frohlich/grid_zeta_tool.py --auto
 
 EXIT_CODE=$?
 echo ""
