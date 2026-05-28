@@ -250,6 +250,10 @@ def enforce_analytical_physical_boundaries(x, y, LZ=None, LY=_HILL_LY):
 def tanh_wall(L, a, j, N):
     """tanhFunction_wall macro from initializationTool.h (Python version)."""
     import math
+    if a <= 0.0:
+        return L * j / N
+    if a >= 1.0:
+        a = 1.0 - 1e-15
     return L/2.0 + (L/2.0/a) * math.tanh((-1.0 + 2.0*j/N) / 2.0 * math.log((1.0+a)/(1.0-a)))
 
 
@@ -1161,6 +1165,7 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
 
         safe_sig = 0.005 * scale_ref_now / max(max_res, 1e-30)
         sig_hi = max(safe_sig, sig_lo * 4.0)
+        sig_hi = min(sig_hi, 1e10)
         sigma_cycle = _adi_cycle_params_direct(sig_lo, sig_hi, n_adi_params)
         if it == 0:
             print(f"    ADI sigma: [{sigma_cycle[0]:.4e}, {sigma_cycle[-1]:.4e}]  "
@@ -1315,7 +1320,10 @@ def _resample_boundary(xb, yb, n_new):
     if n_new == n_old:
         return xb.copy(), yb.copy()
     ds = np.sqrt(np.diff(xb)**2 + np.diff(yb)**2)
-    s = np.concatenate(([0], np.cumsum(ds))); s /= s[-1]
+    s = np.concatenate(([0], np.cumsum(ds)))
+    if s[-1] < 1e-30:
+        return np.full(n_new, xb[0]), np.full(n_new, yb[0])
+    s /= s[-1]
     s_norm_old = np.linspace(0, 1, n_old)
     s_new = np.interp(np.linspace(0, 1, n_new), s_norm_old, s)
 
