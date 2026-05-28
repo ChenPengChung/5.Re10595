@@ -94,8 +94,8 @@ Expected folder structure:
   +-- variables.h                     (optional, project mode)
   +-- phase2_generatecheckpoint/interp_checkpoint.py
   +-- phase1_generategrid/
-  |   +-- oldgrid_*_I{NY}_J{NZ}_g{G}_a{A}.dat    (OLD uniform gamma grid)
-  |   +-- newgrid_*_I{NY}_J{NZ}_a{A}.dat         (NEW variable gamma grid)
+  |   +-- oldgrid_*_I{NY}_J{NZ}_s{A}.dat         (OLD STRETCH_A grid)
+  |   +-- newgrid_*_I{NY}_J{NZ}_s{A}.dat         (NEW STRETCH_A grid)
   +-- phase2_generatecheckpoint/step_*_origin*/ or oldcheckpoint_*/  (source checkpoint)
       +-- metadata.dat
       +-- f00_0.bin ... f18_{jp-1}.bin
@@ -468,7 +468,7 @@ def infer_grid_gamma_alpha(path):
     if m:
         sa = float(m.group(1))
         if abs(sa) < 1.0:
-            return math.log((1.0 + sa) / (1.0 - sa)), None
+            return math.log((1.0 + sa) / (1.0 - sa)), 0.5
     return None, infer_new_grid_alpha(path)
 
 
@@ -3081,12 +3081,12 @@ def main():
             old_grid = resolve_existing_file(args.old_grid_dat, '--old-grid-dat',
                                              base_dirs=resolve_bases)
             old_fname = os.path.basename(old_grid)
-            inferred_gamma, inferred_alpha = infer_old_grid_params(old_grid)
+            inferred_gamma, inferred_alpha = infer_grid_gamma_alpha(old_grid)
             old_gamma = args.old_gamma if args.old_gamma is not None else inferred_gamma
             old_alpha = args.old_alpha if args.old_alpha is not None else inferred_alpha
             if old_gamma is None or old_alpha is None:
-                sys.exit('FATAL: --auto with explicit --old-grid-dat requires filename *_g{G}_a{A}.dat '
-                         'or explicit --old-gamma/--old-alpha')
+                sys.exit('FATAL: --auto with explicit --old-grid-dat requires filename '
+                         '*_s{STRETCH_A}.dat / *_g{G}_a{A}.dat or explicit --old-gamma/--old-alpha')
         if args.new_grid_dat:
             new_grid = resolve_existing_file(args.new_grid_dat, '--new-grid-dat',
                                              base_dirs=resolve_bases)
@@ -3112,7 +3112,7 @@ def main():
                     continue
                 full = os.path.join(grid_dir, f)
                 if f.startswith('oldgrid_'):
-                    gamma, alpha = infer_old_grid_params(f)
+                    gamma, alpha = infer_grid_gamma_alpha(f)
                     if gamma is None or alpha is None:
                         continue
                     if abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
@@ -3128,7 +3128,8 @@ def main():
 
             if not old_grid:
                 if len(old_candidates) == 0:
-                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*_g{{G}}_a{{A}}.dat '
+                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*_s{{STRETCH_A}}.dat '
+                             'or oldgrid_*_g{{G}}_a{{A}}.dat '
                              '(ALPHA={}) in {}'.format(ALPHA_vh, grid_dir))
                 if len(old_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
