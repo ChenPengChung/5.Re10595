@@ -1031,8 +1031,8 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
       3. Xi-sweep: Thomas solve along i for every j-row  (batched)
       4. Eta-sweep: Thomas solve along j for every i-col (batched)
       5. r += omega * delta
-      6. Adaptive omega: auto-reduce on residual increase
-      7. Safety: NaN / Jacobian-fold / divergence → abort
+      6. Convergence: max |residual| < tol  (hard stop on residual)
+      7. Safety: NaN / Jacobian-fold / divergence → return None
 
     Cross-derivative  -2*beta * r_xieta  and first-derivative source
     terms  J^2*(P*r_xi + Q*r_eta)  stay in R (explicit).
@@ -1045,25 +1045,25 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
     x_init, y_init : (nj, ni) arrays — initial guess (boundaries fixed)
     P, Q           : (nj, ni) arrays — control functions
     n_iter         : max outer iterations
-    omega          : initial under-relaxation factor  (0 < omega <= 1)
-    tol            : convergence tolerance on max |residual|
+    omega          : under-relaxation factor  (0 < omega <= 1)
+    tol            : convergence tolerance on max |Poisson residual|
     print_every    : reporting interval (0 = silent)
     n_adi_params   : number of Wachspress cycling sigmas (≥1)
 
     Returns
     -------
-    x, y        : (nj, ni) arrays — converged grid
-    convergence : list of float — max |residual| at each iteration
+    x, y        : (nj, ni) arrays — converged grid, or (None, None) on failure
+    convergence : list of float — max |Poisson residual| per iteration
     """
     nj, ni = x_init.shape
     x = x_init.copy()
     y = y_init.copy()
-    convergence = []           # max |residual| per iteration
-    convergence_corr = []      # max |correction| per iteration
+    convergence = []           # max |Poisson residual| per iteration
+    diverged = False
 
     if ni < 3 or nj < 3:
-        print("    ADI: grid too small (need ni,nj >= 3), returning input")
-        return x, y, convergence_corr
+        print("    ADI: grid too small (need ni,nj >= 3)")
+        return None, None, convergence
 
     sigma_cycle = [1.0]
 
@@ -1140,6 +1140,7 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
         # ── 3. Safety checks ──────────────────────────────────────
         if np.isnan(max_res) or max_res > 1e15:
             print(f"    ADI DIVERGED at iter {it}, residual = {max_res:.4e}")
+            diverged = True
             break
 
         if it % 500 == 0:
@@ -1149,25 +1150,12 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
                 print(f"    ADI iter {it}: {n_neg} non-positive Jacobian "
                       f"(J_min={J_min_now:.4e})")
 
-        # Cycle-averaged correction: smoother than per-iteration
-        p = max(n_adi_params, 1)
-        if len(convergence_corr) >= p:
-            corr_cycle = max(convergence_corr[-p:])
-        elif convergence_corr:
-            corr_cycle = convergence_corr[-1]
-        else:
-            corr_cycle = max_res
-
         if print_every and (it % print_every == 0 or it == n_iter - 1):
-            print(f"    iter {it:6d}:  max_corr = {corr_cycle:.6e}  "
-                  f"res = {max_res:.6e}  sigma={sig:.3e}")
+            print(f"    iter {it:6d}:  res = {max_res:.6e}  sigma={sig:.3e}")
 
-        if it >= p and corr_cycle < tol:
-            print(f"    ADI converged at iter {it}, max_corr = {corr_cycle:.6e}  "
-                  f"(res = {max_res:.6e})")
+        if max_res < tol:
+            print(f"    ADI converged at iter {it}, res = {max_res:.6e}")
             break
-
-        # omega is fixed — the adaptive sigma cap handles stability
 
         # ── 5. Xi-sweep: (I - sig*alpha*D²_xi) delta* = sig*R ────
         # system dim = ni-2 (first axis), batch dim = nj-2 (second)
@@ -1187,13 +1175,8 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
         dy = _thomas_solve_vec(a_eta, b_eta, c_eta, dsy.T)
 
         # ── 7. Update ─────────────────────────────────────────────
-        cx = omega * dx
-        cy = omega * dy
-        max_corr = max(float(np.max(np.abs(cx))),
-                       float(np.max(np.abs(cy))))
-        convergence_corr.append(max_corr)
-        x[sj, si] += cx
-        y[sj, si] += cy
+        x[sj, si] += omega * dx
+        y[sj, si] += omega * dy
 
     # ── Final Jacobian positivity check ──
     xxi_f  = np.zeros_like(x);  xxi_f[:, 1:-1]  = 0.5 * (x[:, 2:] - x[:, :-2])
@@ -1202,14 +1185,18 @@ def _poisson_solve_adi(x_init, y_init, P, Q,
     yet_f  = np.zeros_like(y);  yet_f[1:-1, :]  = 0.5 * (y[2:, :] - y[:-2, :])
     J_fin  = xxi_f * yet_f - xet_f * yxi_f
     Jmf    = float(np.min(J_fin[sj, si]))
-    if Jmf <= 0:
+    folded = Jmf <= 0
+    if folded:
         n_neg = int(np.sum(J_fin[sj, si] <= 0))
         print(f"    !! ADI FINAL: {n_neg} non-positive Jacobian "
-              f"(J_min={Jmf:.4e}) — grid may be folded !!")
+              f"(J_min={Jmf:.4e}) — GRID REJECTED !!")
     else:
         print(f"    ADI Jacobian OK: J_min = {Jmf:.4e} > 0")
 
-    return x, y, convergence_corr
+    if diverged or folded:
+        return None, None, convergence
+
+    return x, y, convergence
 
 
 def _tfi(x_bot, y_bot, x_top, y_top, x_lft, y_lft, x_rgt, y_rgt):
@@ -1394,6 +1381,10 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
             x_tfi, y_tfi, P_new, Q_new,
             n_iter=poisson_iter, omega=1.0, tol=poisson_tol,
             print_every=2000)
+
+    if x_out is None:
+        print("    [5/6] Poisson solve FAILED — returning None")
+        return None, None, conv
 
     if gamma > 1e-14:
         print(f"    [6/6] Applying physical-z stretching (gamma={gamma}, alpha={alpha}) ...")
@@ -2012,7 +2003,8 @@ def update_stretch_a_in_variables_h(path, new_stretch_a):
     return modified
 
 
-def auto_generate(variables_h_path, script_dir=None, poisson_method="adi"):
+def auto_generate(variables_h_path, script_dir=None, poisson_method="adi",
+                  force=False):
     """
     Fully automatic grid generation:
       1. Parse NY, NZ, LZ, LY, GAMMA, ALPHA from variables.h
@@ -2078,7 +2070,7 @@ def auto_generate(variables_h_path, script_dir=None, poisson_method="adi"):
     grid_key_early = ref_path.stem
     expected_name = f"adaptive_{grid_key_early}_I{NI}_J{NJ}_s{sa_expected:.6f}.dat"
     expected_path = script_dir / expected_name
-    if expected_path.exists():
+    if expected_path.exists() and not force:
         try:
             ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(
                 str(expected_path), NY, NZ)
@@ -2102,6 +2094,8 @@ def auto_generate(variables_h_path, script_dir=None, poisson_method="adi"):
                     return str(expected_path)
         except Exception:
             pass
+    elif force and expected_path.exists():
+        print(f"  [auto] --force: ignoring existing {expected_name}, regenerating")
 
     # Load reference grid
     x_ref, y_ref, ni_ref, nj_ref = parse_tecplot_dat(ref_path)
@@ -2163,7 +2157,11 @@ def auto_generate(variables_h_path, script_dir=None, poisson_method="adi"):
         poisson_iter=1000000, poisson_tol=1e-12,
         LZ=LZ, poisson_method=poisson_method)
 
-    # ── Validate base grid dimensions ──
+    # ── Validate Poisson solve succeeded ──
+    if x_base is None:
+        print("  !! Poisson solve failed (diverged or folded) — ABORTING !!")
+        return None
+
     nj_out, ni_out = x_base.shape
     if ni_out != NI or nj_out != NJ:
         print(f"  !! INTERNAL ERROR: generated grid {ni_out}x{nj_out} "
@@ -2298,6 +2296,9 @@ if __name__ == "__main__":
         print(f"ERROR: --method must be 'adi' or 'gs', got '{poisson_method}'")
         sys.exit(1)
 
+    # --force: skip idempotency check, always regenerate
+    force_regen = "--force" in sys.argv
+
     # --auto mode: parse variables.h and generate grid non-interactively
     if "--auto" in sys.argv:
         # Find variables.h: search project root (parent of script_dir),
@@ -2324,7 +2325,8 @@ if __name__ == "__main__":
         print("=" * 62)
 
         out = auto_generate(str(variables_h), script_dir,
-                            poisson_method=poisson_method)
+                            poisson_method=poisson_method,
+                            force=force_regen)
         print("=" * 62)
         if out is None:
             print("  FAILED: 網格生成未通過驗證，未寫入檔案")
@@ -2566,6 +2568,9 @@ if __name__ == "__main__":
             gamma=0.0, alpha=ALPHA,
             poisson_iter=POISSON_ITER, poisson_tol=1e-12,
             poisson_method=poisson_method)
+        if x_base is None:
+            print("  !! Poisson solve failed — aborting.")
+            sys.exit(1)
 
     print(f"  Base grid: I={NI}, J={NJ}")
 
@@ -2676,7 +2681,7 @@ if __name__ == "__main__":
         fig_cv, ax_cv = plt.subplots(figsize=(8, 5))
         ax_cv.semilogy(poisson_conv, 'k-', lw=0.6)
         ax_cv.set_xlabel("Iteration")
-        ylabel = "Max residual" if poisson_method == "adi" else "Max correction"
+        ylabel = "Max |Poisson residual|" if poisson_method == "adi" else "Max correction"
         ax_cv.set_ylabel(ylabel)
         ax_cv.set_title(f"Poisson convergence — {poisson_method.upper()} ({NI}x{NJ})")
         ax_cv.grid(True, ls='--', alpha=0.4)
