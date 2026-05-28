@@ -208,6 +208,37 @@ _derive_solver_grid_path() {
     _project_abs_path "${grid_dir}/${fname}"
 }
 
+_grid_filename_stretch_a() {
+    local base
+    base="$(basename "$1")"
+    if [[ "$base" =~ _s([0-9]+([.][0-9]+)?)\.dat$ ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+    fi
+}
+
+_check_grid_filename_stretch_a() {
+    local label="$1" path="$2" expected="$3" actual expected_fmt actual_fmt
+    if [ -z "$expected" ]; then
+        echo "[FATAL] 無法從 variables.h 讀取 STRETCH_A, 無法驗證 $label 檔名" >&2
+        exit 1
+    fi
+    actual="$(_grid_filename_stretch_a "$path")"
+    if [ -z "$actual" ]; then
+        echo "[FATAL] $label 檔名缺少 _s{STRETCH_A}.dat tag: $path" >&2
+        exit 1
+    fi
+    expected_fmt="$(awk -v a="$expected" 'BEGIN { printf "%.6f", a + 0.0 }')"
+    actual_fmt="$(awk -v a="$actual" 'BEGIN { printf "%.6f", a + 0.0 }')"
+    if [ "$actual_fmt" != "$expected_fmt" ]; then
+        echo "[FATAL] $label 檔名 STRETCH_A 不一致" >&2
+        echo "        filename: s=$actual_fmt" >&2
+        echo "        variables.h STRETCH_A=$expected_fmt" >&2
+        echo "        path: $path" >&2
+        exit 1
+    fi
+    echo "[case-2] Step 3 OK: $label 檔名 STRETCH_A s=$actual_fmt matches variables.h"
+}
+
 _compare_grid_dat_coords_exact() {
     local phase_grid="$1" solver_grid="$2" expected_i="$3" expected_j="$4"
     python3 - "$phase_grid" "$solver_grid" "$expected_i" "$expected_j" <<'PY'
@@ -1010,6 +1041,9 @@ if [ "$_PIPELINE_CASE" -eq 2 ]; then
     echo "[case-2] Step 3: 比對 phase1 newgrid 與 J_Frohlich solver grid (全座標)..."
     _SIM_GRID="$(_derive_solver_grid_path "$_VH_NY" "$_VH_NZ")"
     if [ -s "$_SIM_GRID" ]; then
+        _VH_STRETCH_A="$(_read_define_value STRETCH_A)"
+        _check_grid_filename_stretch_a "phase1 newgrid" "$REGRID_NEW_GRID" "$_VH_STRETCH_A"
+        _check_grid_filename_stretch_a "solver grid" "$_SIM_GRID" "$_VH_STRETCH_A"
         if _compare_grid_dat_coords_exact "$REGRID_NEW_GRID" "$_SIM_GRID" "$_VH_NY" "$_VH_NZ"; then
             echo "[case-2] Step 3 OK: newgrid 與 solver grid 全座標一致"
             echo "        phase1: $REGRID_NEW_GRID"
