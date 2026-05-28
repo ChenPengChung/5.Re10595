@@ -937,6 +937,281 @@ def _poisson_solve(x_init, y_init, P, Q,
     return x, y, convergence
 
 
+# ------------------------------------------------------------------
+#  ADI Poisson solver  (alternating-direction implicit)
+# ------------------------------------------------------------------
+
+def _thomas_solve_vec(a, b, c, d):
+    """
+    Vectorized Thomas algorithm for batched independent tridiagonal systems.
+
+    Solves  a[k]*x[k-1] + b[k]*x[k] + c[k]*x[k+1] = d[k],  k = 0..n-1
+    with a[0] and c[n-1] implicitly zero (values in those slots are ignored).
+
+    All inputs have shape (n,) for a single system or (n, M) for M
+    independent systems solved simultaneously via numpy broadcasting.
+    The matrices must be diagonally dominant for numerical stability.
+    """
+    n = b.shape[0]
+    if n == 0:
+        return np.empty_like(d)
+    if n == 1:
+        return d / b
+    cp = np.empty_like(b)
+    dp = np.empty_like(d)
+    cp[0] = c[0] / b[0]
+    dp[0] = d[0] / b[0]
+    for k in range(1, n):
+        w = b[k] - a[k] * cp[k - 1]
+        cp[k] = c[k] / w
+        dp[k] = (d[k] - a[k] * dp[k - 1]) / w
+    x = np.empty_like(d)
+    x[-1] = dp[-1]
+    for k in range(n - 2, -1, -1):
+        x[k] = dp[k] - cp[k] * x[k + 1]
+    return x
+
+
+def _adi_cycle_params(lam_min, lam_max, p):
+    """
+    Compute *p* geometrically-spaced ADI acceleration parameters.
+
+    For the correction form  (I - sigma*L)*delta = sigma*R,
+    effective damping requires  sigma * |eigenvalue| ~ O(1).
+    Since eigenvalues are in [lam_min, lam_max], the sigma range
+    is [1/lam_max, 1/lam_min] — the reciprocal of the eigenvalue range.
+
+    The ratio 1/lam_min can be astronomically large for fine grids.
+    A cap of 1e6 on sigma_max/sigma_min prevents overshooting while
+    still covering most of the spectrum per cycle.
+    """
+    lam_min = max(float(lam_min), 1e-30)
+    lam_max = max(float(lam_max), lam_min * 2.0)
+    sig_lo = 1.0 / lam_max
+    sig_hi = 1.0 / lam_min
+    max_ratio = 1e6
+    if sig_hi > sig_lo * max_ratio:
+        sig_hi = sig_lo * max_ratio
+    if p <= 1:
+        return [np.sqrt(sig_lo * sig_hi)]
+    log_r = np.log(sig_hi / sig_lo)
+    return [sig_lo * np.exp((2 * k + 1) * log_r / (2 * p))
+            for k in range(p)]
+
+
+def _adi_cycle_params_direct(sig_lo, sig_hi, p):
+    """Geometric spacing of p sigma values in [sig_lo, sig_hi]."""
+    sig_lo = max(float(sig_lo), 1e-30)
+    sig_hi = max(float(sig_hi), sig_lo * 2.0)
+    if p <= 1:
+        return [np.sqrt(sig_lo * sig_hi)]
+    log_r = np.log(sig_hi / sig_lo)
+    return [sig_lo * np.exp((2 * k + 1) * log_r / (2 * p))
+            for k in range(p)]
+
+
+def _poisson_solve_adi(x_init, y_init, P, Q,
+                       n_iter=50000, omega=0.9, tol=1e-10,
+                       print_every=2000, n_adi_params=8):
+    """
+    ADI Poisson solver for Steger-Sorenson elliptic grid generation.
+
+    Algorithm — correction-form ADI with Wachspress cycling:
+
+        (I - sigma * L_xi)(I - sigma * L_eta) * delta = sigma * R
+
+    where
+        L_xi  = alpha * d^2/dxi^2      (implicit — tridiagonal in i)
+        L_eta = gamma * d^2/deta^2      (implicit — tridiagonal in j)
+        R     = full Poisson residual   (cross + source terms explicit)
+
+    Each outer iteration:
+      1. Freeze metrics (alpha, beta, gamma, J) from current (x, y)
+      2. Compute true Poisson residual R
+      3. Xi-sweep: Thomas solve along i for every j-row  (batched)
+      4. Eta-sweep: Thomas solve along j for every i-col (batched)
+      5. r += omega * delta
+      6. Adaptive omega: auto-reduce on residual increase
+      7. Safety: NaN / Jacobian-fold / divergence → abort
+
+    Cross-derivative  -2*beta * r_xieta  and first-derivative source
+    terms  J^2*(P*r_xi + Q*r_eta)  stay in R (explicit).
+    Only principal diffusion enters the tridiagonal splits, so the
+    matrices are always strictly diagonally dominant and the Thomas
+    algorithm is unconditionally stable.
+
+    Parameters
+    ----------
+    x_init, y_init : (nj, ni) arrays — initial guess (boundaries fixed)
+    P, Q           : (nj, ni) arrays — control functions
+    n_iter         : max outer iterations
+    omega          : initial under-relaxation factor  (0 < omega <= 1)
+    tol            : convergence tolerance on max |residual|
+    print_every    : reporting interval (0 = silent)
+    n_adi_params   : number of Wachspress cycling sigmas (≥1)
+
+    Returns
+    -------
+    x, y        : (nj, ni) arrays — converged grid
+    convergence : list of float — max |residual| at each iteration
+    """
+    nj, ni = x_init.shape
+    x = x_init.copy()
+    y = y_init.copy()
+    convergence = []           # max |residual| per iteration
+    convergence_corr = []      # max |correction| per iteration
+
+    if ni < 3 or nj < 3:
+        print("    ADI: grid too small (need ni,nj >= 3), returning input")
+        return x, y, convergence_corr
+
+    sigma_cycle = [1.0]
+
+    si = slice(1, ni - 1)          # interior i = 1 .. ni-2
+    sj = slice(1, nj - 1)          # interior j = 1 .. nj-2
+
+    for it in range(n_iter):
+        # ── 1. Frozen metrics from current (x, y) ──────────────────
+        x_xi  = np.zeros_like(x);  x_xi[:, 1:-1]  = 0.5 * (x[:, 2:] - x[:, :-2])
+        y_xi  = np.zeros_like(y);  y_xi[:, 1:-1]  = 0.5 * (y[:, 2:] - y[:, :-2])
+        x_eta = np.zeros_like(x);  x_eta[1:-1, :] = 0.5 * (x[2:, :] - x[:-2, :])
+        y_eta = np.zeros_like(y);  y_eta[1:-1, :] = 0.5 * (y[2:, :] - y[:-2, :])
+
+        al_full = x_eta**2 + y_eta**2
+        be_full = x_xi * x_eta + y_xi * y_eta
+        ga_full = x_xi**2 + y_xi**2
+        J_full  = x_xi * y_eta - x_eta * y_xi
+        J2_full = J_full**2
+
+        al = al_full[sj, si]       # (nj-2, ni-2)
+        be = be_full[sj, si]
+        ga = ga_full[sj, si]
+        j2 = J2_full[sj, si]
+        Pi = P[sj, si]
+        Qi = Q[sj, si]
+
+        # ── 2. True Poisson residual at interior ───────────────────
+        #   R = alpha*r_xixi - 2*beta*r_xieta + gamma*r_etaeta
+        #       + J^2*(P*r_xi + Q*r_eta)
+        x_xixi   = x[sj, 2:] - 2.0 * x[sj, si] + x[sj, :-2]
+        y_xixi   = y[sj, 2:] - 2.0 * y[sj, si] + y[sj, :-2]
+        x_etaeta = x[2:, si] - 2.0 * x[sj, si] + x[:-2, si]
+        y_etaeta = y[2:, si] - 2.0 * y[sj, si] + y[:-2, si]
+        x_xieta  = 0.25 * (x[2:, 2:] - x[2:, :-2]
+                           - x[:-2, 2:] + x[:-2, :-2])
+        y_xieta  = 0.25 * (y[2:, 2:] - y[2:, :-2]
+                           - y[:-2, 2:] + y[:-2, :-2])
+        x_xi_i   = 0.5 * (x[sj, 2:] - x[sj, :-2])
+        y_xi_i   = 0.5 * (y[sj, 2:] - y[sj, :-2])
+        x_eta_i  = 0.5 * (x[2:, si] - x[:-2, si])
+        y_eta_i  = 0.5 * (y[2:, si] - y[:-2, si])
+
+        Rx = (al * x_xixi - 2.0 * be * x_xieta + ga * x_etaeta
+              + j2 * (Pi * x_xi_i + Qi * x_eta_i))
+        Ry = (al * y_xixi - 2.0 * be * y_xieta + ga * y_etaeta
+              + j2 * (Pi * y_xi_i + Qi * y_eta_i))
+
+        max_res = max(float(np.max(np.abs(Rx))),
+                      float(np.max(np.abs(Ry))))
+        convergence.append(max_res)
+
+        # ── Adaptive sigma cycle ───────────────────────────────────
+        # Eigenvalue bounds updated periodically; sigma cap adapts
+        # every iteration to current residual so corrections stay
+        # bounded at ≈ 0.5% of grid scale (no step-size limiter needed)
+        cycle_len = max(n_adi_params, 1)
+        if it % max(cycle_len * 10, 1) == 0 or it == 0:
+            al_mx = float(np.max(al))
+            ga_mx = float(np.max(ga))
+            l_max = 4.0 * max(al_mx, ga_mx)
+            sig_lo = 1.0 / l_max
+            scale_ref_now = max(float(np.max(np.abs(x[sj, si]))),
+                                float(np.max(np.abs(y[sj, si]))), 1e-10)
+
+        safe_sig = 0.005 * scale_ref_now / max(max_res, 1e-30)
+        sig_hi = max(safe_sig, sig_lo * 4.0)
+        sigma_cycle = _adi_cycle_params_direct(sig_lo, sig_hi, n_adi_params)
+        if it == 0:
+            print(f"    ADI sigma: [{sigma_cycle[0]:.4e}, {sigma_cycle[-1]:.4e}]  "
+                  f"({n_adi_params} params, adaptive cap)")
+
+        sig = sigma_cycle[it % len(sigma_cycle)]
+
+        # ── 3. Safety checks ──────────────────────────────────────
+        if np.isnan(max_res) or max_res > 1e15:
+            print(f"    ADI DIVERGED at iter {it}, residual = {max_res:.4e}")
+            break
+
+        if it % 500 == 0:
+            J_min_now = float(np.min(J_full[sj, si]))
+            if J_min_now <= 0:
+                n_neg = int(np.sum(J_full[sj, si] <= 0))
+                print(f"    ADI iter {it}: {n_neg} non-positive Jacobian "
+                      f"(J_min={J_min_now:.4e})")
+
+        # Cycle-averaged correction: smoother than per-iteration
+        p = max(n_adi_params, 1)
+        if len(convergence_corr) >= p:
+            corr_cycle = max(convergence_corr[-p:])
+        elif convergence_corr:
+            corr_cycle = convergence_corr[-1]
+        else:
+            corr_cycle = max_res
+
+        if print_every and (it % print_every == 0 or it == n_iter - 1):
+            print(f"    iter {it:6d}:  max_corr = {corr_cycle:.6e}  "
+                  f"res = {max_res:.6e}  sigma={sig:.3e}")
+
+        if it >= p and corr_cycle < tol:
+            print(f"    ADI converged at iter {it}, max_corr = {corr_cycle:.6e}  "
+                  f"(res = {max_res:.6e})")
+            break
+
+        # omega is fixed — the adaptive sigma cap handles stability
+
+        # ── 5. Xi-sweep: (I - sig*alpha*D²_xi) delta* = sig*R ────
+        # system dim = ni-2 (first axis), batch dim = nj-2 (second)
+        al_T = al.T                                 # (ni-2, nj-2)
+        a_xi =  -sig * al_T
+        b_xi = 1.0 + 2.0 * sig * al_T
+        c_xi =  -sig * al_T
+        dsx = _thomas_solve_vec(a_xi, b_xi, c_xi, sig * Rx.T)
+        dsy = _thomas_solve_vec(a_xi, b_xi, c_xi, sig * Ry.T)
+
+        # ── 6. Eta-sweep: (I - sig*gamma*D²_eta) delta = delta* ──
+        # system dim = nj-2 (first axis), batch dim = ni-2 (second)
+        a_eta =  -sig * ga                           # (nj-2, ni-2)
+        b_eta = 1.0 + 2.0 * sig * ga
+        c_eta =  -sig * ga
+        dx = _thomas_solve_vec(a_eta, b_eta, c_eta, dsx.T)
+        dy = _thomas_solve_vec(a_eta, b_eta, c_eta, dsy.T)
+
+        # ── 7. Update ─────────────────────────────────────────────
+        cx = omega * dx
+        cy = omega * dy
+        max_corr = max(float(np.max(np.abs(cx))),
+                       float(np.max(np.abs(cy))))
+        convergence_corr.append(max_corr)
+        x[sj, si] += cx
+        y[sj, si] += cy
+
+    # ── Final Jacobian positivity check ──
+    xxi_f  = np.zeros_like(x);  xxi_f[:, 1:-1]  = 0.5 * (x[:, 2:] - x[:, :-2])
+    yxi_f  = np.zeros_like(y);  yxi_f[:, 1:-1]  = 0.5 * (y[:, 2:] - y[:, :-2])
+    xet_f  = np.zeros_like(x);  xet_f[1:-1, :]  = 0.5 * (x[2:, :] - x[:-2, :])
+    yet_f  = np.zeros_like(y);  yet_f[1:-1, :]  = 0.5 * (y[2:, :] - y[:-2, :])
+    J_fin  = xxi_f * yet_f - xet_f * yxi_f
+    Jmf    = float(np.min(J_fin[sj, si]))
+    if Jmf <= 0:
+        n_neg = int(np.sum(J_fin[sj, si] <= 0))
+        print(f"    !! ADI FINAL: {n_neg} non-positive Jacobian "
+              f"(J_min={Jmf:.4e}) — grid may be folded !!")
+    else:
+        print(f"    ADI Jacobian OK: J_min = {Jmf:.4e} > 0")
+
+    return x, y, convergence_corr
+
+
 def _tfi(x_bot, y_bot, x_top, y_top, x_lft, y_lft, x_rgt, y_rgt):
     """Transfinite Interpolation (vectorised)."""
     ni = len(x_bot); nj = len(x_lft)
@@ -1037,7 +1312,7 @@ def _resample_boundary(xb, yb, n_new):
 def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
                            gamma=0.0, alpha=0.5,
                            poisson_iter=15000, poisson_tol=1e-10,
-                           LZ=None):
+                           LZ=None, poisson_method="adi"):
     """
     Full Steger-Sorenson adaptive grid generation.
 
@@ -1107,10 +1382,18 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     print("    [4/6] TFI initial guess ...")
     x_tfi, y_tfi = _tfi(xb, yb, xt, yt, xl, yl, xr, yr)
 
-    print(f"    [5/6] Poisson solve (max {poisson_iter} iter) ...")
-    x_out, y_out, conv = _poisson_solve(
-        x_tfi, y_tfi, P_new, Q_new,
-        n_iter=poisson_iter, omega=1.0, tol=poisson_tol, print_every=2000)
+    if poisson_method == "adi":
+        print(f"    [5/6] Poisson solve — ADI (max {poisson_iter} iter) ...")
+        x_out, y_out, conv = _poisson_solve_adi(
+            x_tfi, y_tfi, P_new, Q_new,
+            n_iter=poisson_iter, omega=0.9, tol=poisson_tol,
+            print_every=2000, n_adi_params=8)
+    else:
+        print(f"    [5/6] Poisson solve — Gauss-Seidel (max {poisson_iter} iter) ...")
+        x_out, y_out, conv = _poisson_solve(
+            x_tfi, y_tfi, P_new, Q_new,
+            n_iter=poisson_iter, omega=1.0, tol=poisson_tol,
+            print_every=2000)
 
     if gamma > 1e-14:
         print(f"    [6/6] Applying physical-z stretching (gamma={gamma}, alpha={alpha}) ...")
@@ -1729,7 +2012,7 @@ def update_stretch_a_in_variables_h(path, new_stretch_a):
     return modified
 
 
-def auto_generate(variables_h_path, script_dir=None):
+def auto_generate(variables_h_path, script_dir=None, poisson_method="adi"):
     """
     Fully automatic grid generation:
       1. Parse NY, NZ, LZ, LY, GAMMA, ALPHA from variables.h
@@ -1878,7 +2161,7 @@ def auto_generate(variables_h_path, script_dir=None):
         x_ref, y_ref, NI, NJ,
         gamma=0.0, alpha=alpha,
         poisson_iter=1000000, poisson_tol=1e-12,
-        LZ=LZ)
+        LZ=LZ, poisson_method=poisson_method)
 
     # ── Validate base grid dimensions ──
     nj_out, ni_out = x_base.shape
@@ -2006,6 +2289,15 @@ if __name__ == "__main__":
     script_dir = Path(__file__).resolve().parent
     base = Path.cwd().resolve()
 
+    # --method adi|gs  (default: adi)
+    poisson_method = "adi"
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--method" and idx + 1 < len(sys.argv):
+            poisson_method = sys.argv[idx + 1].lower()
+    if poisson_method not in ("adi", "gs"):
+        print(f"ERROR: --method must be 'adi' or 'gs', got '{poisson_method}'")
+        sys.exit(1)
+
     # --auto mode: parse variables.h and generate grid non-interactively
     if "--auto" in sys.argv:
         # Find variables.h: search project root (parent of script_dir),
@@ -2027,11 +2319,12 @@ if __name__ == "__main__":
             sys.exit(1)
 
         print("=" * 62)
-        print("  Periodic Hill Grid -- AUTO MODE")
+        print(f"  Periodic Hill Grid -- AUTO MODE  (Poisson: {poisson_method.upper()})")
         print(f"  Reading from: {variables_h}")
         print("=" * 62)
 
-        out = auto_generate(str(variables_h), script_dir)
+        out = auto_generate(str(variables_h), script_dir,
+                            poisson_method=poisson_method)
         print("=" * 62)
         if out is None:
             print("  FAILED: 網格生成未通過驗證，未寫入檔案")
@@ -2271,7 +2564,8 @@ if __name__ == "__main__":
         x_base, y_base, poisson_conv = generate_adaptive_grid(
             x_ref, y_ref, NI, NJ,
             gamma=0.0, alpha=ALPHA,
-            poisson_iter=POISSON_ITER, poisson_tol=1e-12)
+            poisson_iter=POISSON_ITER, poisson_tol=1e-12,
+            poisson_method=poisson_method)
 
     print(f"  Base grid: I={NI}, J={NJ}")
 
@@ -2381,8 +2675,10 @@ if __name__ == "__main__":
     if mode == 2 and _HAS_MPL:
         fig_cv, ax_cv = plt.subplots(figsize=(8, 5))
         ax_cv.semilogy(poisson_conv, 'k-', lw=0.6)
-        ax_cv.set_xlabel("Iteration"); ax_cv.set_ylabel("Max correction")
-        ax_cv.set_title(f"Poisson convergence ({NI}x{NJ})")
+        ax_cv.set_xlabel("Iteration")
+        ylabel = "Max residual" if poisson_method == "adi" else "Max correction"
+        ax_cv.set_ylabel(ylabel)
+        ax_cv.set_title(f"Poisson convergence — {poisson_method.upper()} ({NI}x{NJ})")
         ax_cv.grid(True, ls='--', alpha=0.4)
         plt.tight_layout()
         conv_path = base / f"convergence_{grid_key}_{tag_str}.png"
@@ -2412,7 +2708,8 @@ if __name__ == "__main__":
             else:
                 xn, yn, _ = generate_adaptive_grid(
                     x_ref, y_ref, NI, NJ,
-                    gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER)
+                    gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER,
+                    poisson_method=poisson_method)
             nj_n, ni_n = xn.shape
             for jj in range(nj_n):
                 ax.plot(xn[jj, :], yn[jj, :], "k-", lw=0.2)
