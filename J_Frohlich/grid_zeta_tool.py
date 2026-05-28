@@ -1357,9 +1357,6 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     boundaries are stretched while horizontal boundaries are not.
     """
     nj_ref, ni_ref = x_ref.shape
-    if LZ is None:
-        LZ = _DEFAULT_LZ
-        print(f"    [info] LZ not provided; enforcing default physical LZ={LZ}")
 
     print("    [1/6] Computing P,Q from reference ...")
     metrics = _compute_metrics(x_ref, y_ref)
@@ -1393,12 +1390,13 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     # Analytical overwrite: top boundary must be at exactly LZ (in physical
     # units).  The reference grid may have z_top != LZ*h_phys due to the
     # original Frohlich data being rounded (e.g. 0.085 m vs 3.036*0.028).
-    yt_exact = LZ / _scale   # LZ in code units -> physical
-    yt_old = yt.copy()
-    yt[:] = yt_exact
-    _top_correction = float(np.max(np.abs(yt - yt_old)))
-    print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
-          f"(max correction = {_top_correction:.3e})")
+    if LZ is not None:
+        yt_exact = LZ / _scale   # LZ in code units → physical
+        yt_old = yt.copy()
+        yt[:] = yt_exact
+        _top_correction = float(np.max(np.abs(yt - yt_old)))
+        print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
+              f"(max correction = {_top_correction:.3e})")
 
     xl[0] = xb[0];   yl[0] = yb[0]
     xl[-1] = xt[0];  yl[-1] = yt[0]
