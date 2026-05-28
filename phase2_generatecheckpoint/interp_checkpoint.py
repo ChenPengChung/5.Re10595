@@ -458,18 +458,41 @@ def infer_new_grid_alpha(path):
     return float(m.group(1))
 
 
+def infer_grid_stretch_a(path):
+    """Infer STRETCH_A from current *_s{stretch_a}.dat grid filenames."""
+    import re
+    m = re.search(r'_s([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
+    if not m:
+        return None
+    return float(m.group(1))
+
+
 def infer_grid_gamma_alpha(path):
     """Infer optional gamma/alpha from grid filenames used by phase1 assets."""
     gamma, alpha = infer_old_grid_params(path)
     if gamma is not None or alpha is not None:
         return gamma, alpha
-    import re
-    m = re.search(r'_s([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
-    if m:
-        sa = float(m.group(1))
-        if abs(sa) < 1.0:
-            return math.log((1.0 + sa) / (1.0 - sa)), 0.5
+    sa = infer_grid_stretch_a(path)
+    if sa is not None and abs(sa) < 1.0:
+        return math.log((1.0 + sa) / (1.0 - sa)), 0.5
     return None, infer_new_grid_alpha(path)
+
+
+def validate_grid_filename_stretch_a(path, expected_sa, label, tol=5e-7):
+    """FATAL if a current-grid filename does not match variables.h STRETCH_A."""
+    if expected_sa is None:
+        return
+    actual_sa = infer_grid_stretch_a(path)
+    if actual_sa is None:
+        sys.exit('FATAL: {} grid filename lacks _s{{STRETCH_A}}.dat tag required '
+                 'to match variables.h STRETCH_A={:.6f}: {}'.format(
+                     label, float(expected_sa), path))
+    if abs(float(actual_sa) - float(expected_sa)) > tol:
+        sys.exit('FATAL: {} grid filename STRETCH_A mismatch: filename s={:.6f}, '
+                 'variables.h STRETCH_A={:.6f}, path={}'.format(
+                     label, float(actual_sa), float(expected_sa), path))
+    print('  OK: {} filename STRETCH_A s={:.6f} matches variables.h'.format(
+        label, float(actual_sa)))
 
 
 def project_root():
@@ -1008,6 +1031,7 @@ def build_new_config(args):
     cfg = GridConfig(nx=nx, ny=ny, nz=nz, jp=jp,
                      gamma=gamma, alpha=alpha, grid_dat=grid_dat,
                      stretch_a=stretch_a)
+    validate_grid_filename_stretch_a(cfg.GRID_DAT, cfg.STRETCH_A, 'NEW grid')
     if not cross_validate_grid_dat(cfg, 'NEW'):
         sys.exit('FATAL: NEW grid .dat cross-validation failed')
     print()
@@ -3019,7 +3043,7 @@ def main():
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
         require_variables_defs(
-            vh, ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'),
+            vh, ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'STRETCH_A'),
             vh_path, '--auto')
         validate_jp_partition(int(vh['NY']), int(vh['jp']), 'NEW variables.h')
         print('[auto] NEW grid from variables.h: NX={} NY={} NZ={} jp={} GAMMA={} ALPHA={}'.format(
@@ -3046,6 +3070,7 @@ def main():
         NY_vh = int(vh['NY'])
         NZ_vh = int(vh['NZ'])
         ALPHA_vh = vh.get('ALPHA', 0.5)
+        STRETCH_A_vh = vh.get('STRETCH_A')
 
         restart_dir = os.path.join(vh_dir, 'restart')
         phase2_dir = os.path.join(vh_dir, 'phase2_generatecheckpoint')
@@ -3098,6 +3123,7 @@ def main():
             inferred_gamma, inferred_alpha = infer_grid_gamma_alpha(new_grid)
             new_gamma = args.new_gamma if args.new_gamma is not None else inferred_gamma
             new_alpha = ALPHA_vh
+            validate_grid_filename_stretch_a(new_grid, STRETCH_A_vh, 'NEW phase1')
             if inferred_alpha is not None and abs(float(inferred_alpha) - float(ALPHA_vh)) > 1e-12:
                 sys.exit('FATAL: --new-grid-dat alpha {} does not match variables.h ALPHA {}'.format(
                     inferred_alpha, ALPHA_vh))
@@ -3121,6 +3147,12 @@ def main():
                 elif f.startswith('newgrid_'):
                     if dim_tag not in f:
                         continue
+                    sa = infer_grid_stretch_a(f)
+                    if STRETCH_A_vh is not None:
+                        if sa is None:
+                            continue
+                        if abs(float(sa) - float(STRETCH_A_vh)) > 5e-7:
+                            continue
                     gamma, alpha = infer_grid_gamma_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
@@ -3144,6 +3176,7 @@ def main():
                     sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
                         len(new_candidates), ', '.join(c[1] for c in new_candidates)))
                 new_grid, new_fname, new_gamma, new_alpha = new_candidates[0]
+                validate_grid_filename_stretch_a(new_grid, STRETCH_A_vh, 'NEW phase1')
 
         print('[auto] OLD grid (uniform gamma={}, alpha={}): {}'.format(old_gamma, old_alpha, old_fname))
         print('[auto] NEW grid (variable gamma={}, alpha={}): {}'.format(new_gamma, new_alpha, new_fname))
@@ -3239,6 +3272,7 @@ def main():
         solver_grid_dat, args.variables_h, enabled=args.generate_solver_grid)
     args.solver_grid_dat = solver_grid_dat
     args.solver_grid_generated = solver_grid_generated
+    validate_grid_filename_stretch_a(solver_grid_dat, NEW.STRETCH_A, 'solver runtime')
 
     print('--- Validating NEW grid against solver runtime grid ---')
     args.solver_grid_match_info = validate_solver_grid_match(
