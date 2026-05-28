@@ -194,19 +194,17 @@ _read_string_define_value() {
 
 _derive_solver_grid_path() {
     local ny="$1" nz="$2"
-    local grid_dir grid_ref gamma alpha ref_stem gamma_tag alpha_tag fname
+    local grid_dir grid_ref stretch_a ref_stem fname
     grid_dir="$(_read_string_define_value GRID_DAT_DIR)"
     grid_ref="$(_read_string_define_value GRID_DAT_REF)"
-    gamma="$(_read_define_value GAMMA)"
-    alpha="$(_read_define_value ALPHA)"
-    if [ -z "$grid_dir" ] || [ -z "$grid_ref" ] || [ -z "$gamma" ] || [ -z "$alpha" ]; then
-        echo "[FATAL] 無法從 variables.h 推導 solver grid path (GRID_DAT_DIR/GRID_DAT_REF/GAMMA/ALPHA)" >&2
+    stretch_a="$(_read_define_value STRETCH_A)"
+    if [ -z "$grid_dir" ] || [ -z "$grid_ref" ] || [ -z "$stretch_a" ]; then
+        echo "[FATAL] 無法從 variables.h 推導 solver grid path (GRID_DAT_DIR/GRID_DAT_REF/STRETCH_A)" >&2
         exit 1
     fi
     ref_stem="${grid_ref%.*}"
-    gamma_tag="$(awk -v v="$gamma" 'BEGIN { printf "%.2f", v + 0.0 }')"
-    alpha_tag="$(awk -v v="$alpha" 'BEGIN { printf "%.1f", v + 0.0 }')"
-    fname="adaptive_${ref_stem}_I${ny}_J${nz}_g${gamma_tag}_a${alpha_tag}.dat"
+    stretch_a="$(awk -v a="$stretch_a" 'BEGIN { printf "%.6f", a + 0.0 }')"
+    fname="adaptive_${ref_stem}_I${ny}_J${nz}_s${stretch_a}.dat"
     _project_abs_path "${grid_dir}/${fname}"
 }
 

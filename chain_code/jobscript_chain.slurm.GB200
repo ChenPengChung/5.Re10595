@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit6_5600DNS 
+#SBATCH --job-name=Edit7_10595SNS 
 #SBATCH --account=MST115169
 #SBATCH --partition=gb200-dev
 #SBATCH --nodes=2
