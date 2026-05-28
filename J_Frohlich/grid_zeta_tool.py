@@ -209,11 +209,42 @@ def hill_function(Y, LY=9.0):
 
 
 _HILL_LY = 9.0
+_DEFAULT_LZ = 3.036
 
 
 def hill_function_array(Y_arr, LY=_HILL_LY):
     """Vectorized hill_function: evaluate the analytical hill profile at an array of positions."""
     return np.array([hill_function(float(y), LY=LY) for y in Y_arr])
+
+
+def _physical_unit_scale_from_grid(x_grid, LY=_HILL_LY):
+    """Return scale factor that maps Frohlich physical units to code units."""
+    x_max = float(x_grid[0, -1])
+    h_phys = x_max / LY if x_max < 0.5 * LY else 1.0
+    return 1.0 / h_phys if h_phys < 0.5 else 1.0
+
+
+def enforce_analytical_physical_boundaries(x, y, LZ=None, LY=_HILL_LY):
+    """
+    Force bottom/top physical walls to analytical values.
+
+    This deliberately ignores rounded/inexact reference-grid wall heights:
+      bottom = Mellen-Frohlich-Rodi hill polynomial
+      top    = LZ (defaults to 3.036 code units)
+    """
+    if LZ is None:
+        LZ = _DEFAULT_LZ
+    scale = _physical_unit_scale_from_grid(x, LY)
+    y_bottom_old = y[0, :].copy()
+    y_top_old = y[-1, :].copy()
+    y[0, :] = hill_function_array(x[0, :] * scale, LY=LY) / scale
+    y[-1, :] = float(LZ) / scale
+    return {
+        "LZ": float(LZ),
+        "scale": scale,
+        "bottom_correction": float(np.max(np.abs(y[0, :] - y_bottom_old))),
+        "top_correction": float(np.max(np.abs(y[-1, :] - y_top_old))),
+    }
 
 
 def tanh_wall(L, a, j, N):
@@ -1318,6 +1349,9 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     boundaries are stretched while horizontal boundaries are not.
     """
     nj_ref, ni_ref = x_ref.shape
+    if LZ is None:
+        LZ = _DEFAULT_LZ
+        print(f"    [info] LZ not provided; enforcing default physical LZ={LZ}")
 
     print("    [1/6] Computing P,Q from reference ...")
     metrics = _compute_metrics(x_ref, y_ref)
@@ -1341,9 +1375,7 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     # interpolation from the reference grid, which introduces O(1e-6) error
     # at different target resolutions.  Overwrite yb (wall-normal heights)
     # with analytically evaluated hill_function values.
-    fro_x_max = x_ref[0, -1]
-    _h_phys = fro_x_max / _HILL_LY
-    _scale = 1.0 / _h_phys if _h_phys < 0.5 else 1.0
+    _scale = _physical_unit_scale_from_grid(x_ref, _HILL_LY)
     yb_old = yb.copy()
     yb = hill_function_array(xb * _scale, LY=_HILL_LY) / _scale
     _max_correction = float(np.max(np.abs(yb - yb_old)))
@@ -1353,13 +1385,12 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     # Analytical overwrite: top boundary must be at exactly LZ (in physical
     # units).  The reference grid may have z_top != LZ*h_phys due to the
     # original Frohlich data being rounded (e.g. 0.085 m vs 3.036*0.028).
-    if LZ is not None:
-        yt_exact = LZ / _scale   # LZ in code units → physical
-        yt_old = yt.copy()
-        yt[:] = yt_exact
-        _top_correction = float(np.max(np.abs(yt - yt_old)))
-        print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
-              f"(max correction = {_top_correction:.3e})")
+    yt_exact = LZ / _scale   # LZ in code units -> physical
+    yt_old = yt.copy()
+    yt[:] = yt_exact
+    _top_correction = float(np.max(np.abs(yt - yt_old)))
+    print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
+          f"(max correction = {_top_correction:.3e})")
 
     xl[0] = xb[0];   yl[0] = yb[0]
     xl[-1] = xt[0];  yl[-1] = yt[0]
@@ -2344,11 +2375,13 @@ if __name__ == "__main__":
 
     stability_flow = {}
     stability_LY = 9.0
+    grid_LZ = _DEFAULT_LZ
     variables_h_for_flow = script_dir.parent / "variables.h"
     if variables_h_for_flow.exists():
         try:
             vh_params = parse_variables_h(variables_h_for_flow)
             stability_LY = vh_params.get("LY", stability_LY)
+            grid_LZ = vh_params.get("LZ", grid_LZ)
             if "Uref" in vh_params and "Re" in vh_params:
                 stability_flow = {
                     "Uref": vh_params["Uref"],
@@ -2359,8 +2392,12 @@ if __name__ == "__main__":
                 print(f"  Stability flow params from variables.h: "
                       f"Re={stability_flow['Re']:g}, Uref={stability_flow['Uref']:g}, "
                       f"H_HILL={stability_flow['H_HILL']:g}, CFL={stability_flow['CFL_lambda']:g}")
+            print(f"  Physical top boundary LZ = {grid_LZ:g} (from variables.h)")
         except Exception as exc:
             print(f"  [warn] Could not parse stability flow params from variables.h: {exc}")
+            print(f"  Physical top boundary LZ = {grid_LZ:g} (default)")
+    else:
+        print(f"  Physical top boundary LZ = {grid_LZ:g} (default)")
 
     # -----------------------------------------------------------
     #  Step 1 -- select reference grid
@@ -2515,7 +2552,7 @@ if __name__ == "__main__":
     # ── GILBM stability pre-check (階段 A: 1D 無網格預估) ──
     pre_interactive = None
     if GAMMA > 0 and stability_flow:
-        LZ_est = y_ref[-1, 0] - y_ref[0, 0]
+        LZ_est = grid_LZ
         NZ_est = NJ
         pre_interactive = estimate_omega_pregrid(
             GAMMA, LZ_est, NZ_est - 1,
@@ -2562,12 +2599,16 @@ if __name__ == "__main__":
     poisson_conv = None
     if mode == 1:
         x_base, y_base = x_ref.copy(), y_ref.copy()
+        info = enforce_analytical_physical_boundaries(x_base, y_base, LZ=grid_LZ)
+        print(f"  [boundary] Enforced analytical walls for zeta-only base: "
+              f"LZ={info['LZ']:.6f}, bottom correction={info['bottom_correction']:.3e}, "
+              f"top correction={info['top_correction']:.3e}")
     else:
         x_base, y_base, poisson_conv = generate_adaptive_grid(
             x_ref, y_ref, NI, NJ,
             gamma=0.0, alpha=ALPHA,
             poisson_iter=POISSON_ITER, poisson_tol=1e-12,
-            poisson_method=poisson_method)
+            LZ=grid_LZ, poisson_method=poisson_method)
         if x_base is None:
             print("  !! Poisson solve failed — aborting.")
             sys.exit(1)
@@ -2707,14 +2748,17 @@ if __name__ == "__main__":
         fig, axes = plt.subplots(len(gammas), 1,
                                  figsize=(18, 3.2 * len(gammas)),
                                  sharex=True)
+        x_ref_sweep = x_ref.copy()
+        y_ref_sweep = y_ref.copy()
+        enforce_analytical_physical_boundaries(x_ref_sweep, y_ref_sweep, LZ=grid_LZ)
         for ax, g in zip(axes, gammas):
             if mode == 1:
-                xn, yn = redistribute_vertical(x_ref, y_ref, gamma=g, alpha=ALPHA)
+                xn, yn = redistribute_vertical(x_ref_sweep, y_ref_sweep, gamma=g, alpha=ALPHA)
             else:
                 xn, yn, _ = generate_adaptive_grid(
                     x_ref, y_ref, NI, NJ,
                     gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER,
-                    poisson_method=poisson_method)
+                    LZ=grid_LZ, poisson_method=poisson_method)
             nj_n, ni_n = xn.shape
             for jj in range(nj_n):
                 ax.plot(xn[jj, :], yn[jj, :], "k-", lw=0.2)
