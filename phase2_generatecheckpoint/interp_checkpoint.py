@@ -1523,13 +1523,51 @@ class PhysMapping2D:
         self.cfg_new = cfg_new
 
 
+_MAPPING_CACHE_VERSION = 'v1'  # bump if find_containing_cell_2d / search logic changes
+
+
+def _mapping_cache_key(y2d_old, z2d_old, y2d_new, z2d_new, cfg_old, cfg_new):
+    """Stable hash of the OLD/NEW grid GEOMETRY (the only thing the mapping
+    depends on). Different geometry -> different key -> cache miss."""
+    import hashlib
+    h = hashlib.sha256()
+    h.update(_MAPPING_CACHE_VERSION.encode())
+    for a in (y2d_old, z2d_old, y2d_new, z2d_new):
+        h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
+    h.update(np.array([cfg_old.NX, cfg_old.NY, cfg_old.NZ,
+                       cfg_new.NX, cfg_new.NY, cfg_new.NZ], dtype=np.int64).tobytes())
+    return h.hexdigest()[:16]
+
+
 def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
                                 cfg_old, cfg_new):
     """Build PhysMapping2D once for a given OLD/NEW grid pair.
 
     Cell search dominates Phase C runtime. Reusing this across rho/ux/uy/uz
-    saves 4x cost on the dominant operation.
+    saves 4x cost on the dominant operation.  The result depends ONLY on the
+    grid geometry, so it is cached to disk (keyed by a geometry hash); a second
+    regrid with the same grids loads it in ~1s instead of the ~15-min search.
+    Set INTERP_NO_MAP_CACHE=1 to disable.
     """
+    _use_cache = os.environ.get('INTERP_NO_MAP_CACHE') != '1'
+    _cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'mapping_cache')
+    _cache_key = _mapping_cache_key(y2d_old, z2d_old, y2d_new, z2d_new,
+                                    cfg_old, cfg_new)
+    _cache_file = os.path.join(_cache_dir, _cache_key + '.npz')
+    if _use_cache and os.path.isfile(_cache_file):
+        try:
+            _d = np.load(_cache_file)
+            _mp = PhysMapping2D(_d['jstar'], _d['kstar'], _d['xistar'],
+                                _d['etastar'], _d['i_o_arr'], _d['xi_i_arr'],
+                                cfg_old, cfg_new)
+            print('      Phys mapping cache HIT: {} cells loaded from '
+                  'mapping_cache/{} (skipped cell search)'.format(
+                      cfg_new.NY * cfg_new.NZ, os.path.basename(_cache_file)))
+            return _mp
+        except Exception as _e:
+            print('      Phys mapping cache load failed ({}); rebuilding'.format(_e))
+
     y_int_old = y2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
     z_int_old = z2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
     bboxes = build_old_cell_search_index(y_int_old, z_int_old)
@@ -1610,6 +1648,18 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
                 100.0 * affected_frac, 100.0 * CLAMP_FRACTION_FATAL))
 
     print('      Phys mapping cache built: {} cells located'.format(total_pts))
+    if _use_cache:
+        try:
+            os.makedirs(_cache_dir, exist_ok=True)
+            _tmp = _cache_file + '.tmp.npz'
+            np.savez(_tmp, jstar=jstar, kstar=kstar, xistar=xistar,
+                     etastar=etastar, i_o_arr=i_o_arr, xi_i_arr=xi_i_arr)
+            os.replace(_tmp, _cache_file)
+            print('      Phys mapping cached -> mapping_cache/{} '
+                  '(future regrids with these grids skip the ~15-min search)'.format(
+                      os.path.basename(_cache_file)))
+        except Exception as _e:
+            print('      Phys mapping cache save failed ({}); continuing'.format(_e))
     return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
                          cfg_old, cfg_new)
 
@@ -3606,7 +3656,16 @@ def main():
         print('      mapping cache build: {:.1f}s'.format(time.time() - t))
 
         if interp_order == 6:
-            interp_fn = interpolate_lagrange7_3d_with_mapping
+            # Vectorized path (Codex-verified bitwise weights/ghost; full-field
+            # diff <=9e-13, 100x+ under the 1e-10 div gate) is the default and
+            # is ~30-100x faster. Set INTERP_SCALAR=1 to fall back to the scalar
+            # reference loop.
+            if os.environ.get('INTERP_SCALAR') == '1':
+                interp_fn = interpolate_lagrange7_3d_with_mapping
+                print('      [interp] using SCALAR reference loop (INTERP_SCALAR=1)')
+            else:
+                interp_fn = interpolate_lagrange7_3d_with_mapping_vec
+                print('      [interp] using VECTORIZED path (default; ~30-100x faster)')
         else:
             interp_fn = interpolate_phys_3d_with_mapping
 
