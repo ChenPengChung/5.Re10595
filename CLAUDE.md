@@ -194,6 +194,52 @@ before the sequence above:
    ```
 7. Then proceed with the standard sequence (steps 1–7 above).
 
+## 全場 GIF 動畫設定 (Full-field GIF animation spec)
+
+當需要產生**全場 (full-field) 動畫**時(有別於上面 `periodicHill-shortvedio`
+的 fast_slice X=mid 薄板短 MP4),一律套用以下四項設定。這是全場動畫的權威
+規格,不覆寫、不取代既有的短影片/MP4 流程。
+
+### 1. 每幀 0.05 秒 → GIF 20 fps
+
+- 播放速率固定為 **20 fps**(每一幀顯示 **0.05 秒**),刻意比現行 MP4 的
+  33 fps 放慢,讓全場演化看得清楚。
+- 對應參數:`--fps 20`(現行 `animation/pipeline.py` / `video_encode_mp4.py`
+  預設為 33,全場 GIF 必須顯式改成 20)。
+
+### 2. 全場、每一幀都要完整
+
+- 渲染**完整全場**,不走 fast_slice X=mid 薄板:`SLICE_ONLY = False`、
+  **不**傳 `--slice-only`(`render_frame.py:26`)。完整讀整顆
+  `velocity_merged_*.vtk`,跑完整渲染路徑(含需要完整 volume 的 Path D
+  Q-criterion,`render_frame.py:866`)。
+- **每一幀都要產生、都要完整**:不設幀數上限(無 `periodicHill-shortvedio`
+  的 100/200 幀 budget),每一個產出的 VTK 都渲染成一幀,不抽樣、不跳幀,
+  半寫入檔以 5s stat-stable 檢查跳過後**等下一輪補上**而非丟棄。
+
+### 3. 統一 max/min 色階(固定硬編 vmin/vmax)— 消除閃爍
+
+- **問題根源**:`render_frame.py:654-661` 目前用
+  `infoA.GetComponentRange()` 逐幀從該幀資料的 min/max 重算 `u_streamwise`
+  色階範圍 (`lo_A`,`hi_A`),每幀範圍不同 → 顏色逐幀漂移 → 影片「一閃一閃」。
+- **規格**:全場 GIF 的所有純量場色階一律用**固定數值範圍(全片硬編一組
+  vmin/vmax)**,不做逐幀自動重縮。做法比照現行已固定的
+  `W_RANGE = [-0.02, 0.02]`(`render_frame.py:121`):為 `u_streamwise`
+  (及其他著色場)挑一組涵蓋全程的固定 `[vmin, vmax]`,所有幀共用同一範圍與
+  同一 LUT,確保色彩對應的物理量值跨幀一致。
+
+### 4. 輸出 GIF
+
+- 最終輸出為 **GIF**(現行流程輸出 MP4)。以固定色階、完整全場、20 fps
+  的 PNG 序列組成 GIF。
+
+### 其餘皆不改
+
+- **不動**既有 `periodicHill-shortvedio` 短影片快捷、`animation/pipeline.py`
+  與 `video_encode_mp4.py` 的 MP4 預設(width/codec/pix-fmt/33fps)、watcher、
+  以及任何模擬程式碼或 `variables.h`。
+- 本節僅新增「全場 GIF」這一組設定,屬**追加**性質,不修改上述任何既有行為。
+
 ## Quick clean shortcut (triggered by user command)
 
 When the user types **`lbm-clean`**, delete the following simulation-generated
