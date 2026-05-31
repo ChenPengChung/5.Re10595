@@ -23,6 +23,8 @@ OUTDIR = "png_frames"
 STEP_NUM = None
 VIDEO_MODE = False      # True = 影片模式 (只吐 frame_cont + frame_RD)
                         # False = 人工模式 (8 張 PNG 全輸出)
+SLICE_ONLY = False      # True = lbm-render-1 快路徑: 只抽 X=mid 薄板, 跳過 Path D (Q 三維)
+                        #        用 fast_slice.py 把 17GB → 數十 MB, 載入秒級, 效果與 Path A/B/C 逐點一致
 
 args = sys.argv[1:]
 i = 0
@@ -33,6 +35,8 @@ while i < len(args):
         STEP_NUM = int(args[i+1].rstrip('.')); i += 2
     elif args[i] == "--video-mode":
         VIDEO_MODE = True; i += 1
+    elif args[i] in ("--slice-only", "--no-q", "--fast"):
+        SLICE_ONLY = True; i += 1
     elif not args[i].startswith("--"):
         VTK_FILE = os.path.abspath(args[i]); i += 1
     else:
@@ -539,6 +543,37 @@ with open(VTK_FILE, 'rb') as _fh:
         if _s == b"BINARY":
             break
 
+# ── SLICE_ONLY (lbm-render-1): 用 fast_slice.py 抽 X=mid 薄板取代整顆 17GB ──
+#    只抽 Path A/B/C 會用到的場 (velocity + 可能存在的 mean/TKE),
+#    omega_* 等只有 Path D 用的場不讀; 載入量 17GB → ~55MB, 抽取秒級。
+#    座標慣例 NX 為奇數時 xmid 落在節點 i=(NX-1)/2 → slice 逐點精確、零插值誤差。
+if SLICE_ONLY:
+    import subprocess as _subprocess
+    _script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    _fs_py = os.path.join(_script_dir, "fast_slice.py")
+    _slab_dir = os.path.join(os.path.dirname(_use_file), "_slice_cache")
+    _digits = "".join(c for c in os.path.splitext(os.path.basename(_use_file))[0]
+                      if c.isdigit())
+    _slab = os.path.join(_slab_dir, "slab_%s.vtk" % (_digits or "latest"))
+    _fs_fields = ("velocity,U_mean,V_mean,TKE,tke,k_turb,k_TKE,"
+                  "uu_mean,vv_mean,ww_mean,u_u_mean,v_v_mean,w_w_mean,"
+                  "uprime_uprime,vprime_vprime,wprime_wprime,uu_RS,vv_RS,ww_RS")
+    _cmd = ["python3", _fs_py, _use_file, _slab, "--fields", _fs_fields]
+    log("[slice-only] extracting X-mid slab: " + " ".join(_cmd))
+    _t_fs = _time.time()
+    try:
+        _rc = _subprocess.call(_cmd)
+    except Exception as _fse:
+        log("[slice-only] fast_slice exception: %s" % str(_fse)); _rc = 1
+    if _rc == 0 and os.path.isfile(_slab):
+        _use_file = _slab
+        log("[slice-only] slab ready in %.2fs → %s" % (_time.time() - _t_fs, _slab))
+    else:
+        log("[slice-only] fast_slice FAILED (rc=%s)。" % _rc)
+        log("[slice-only] 最新 VTK 可能正在寫入或檔案異常; 數秒後重試 lbm-render-1,"
+            " 或用 lbm-render 讀完整檔。不回退載入 17GB (快路徑刻意避免)。")
+        sys.exit(2)
+
 log("Loading: " + _use_file)
 t_load = _time.time()
 reader = LegacyVTKReader(FileNames=[_use_file])
@@ -826,8 +861,10 @@ else:
 #  ─ Threshold：Qmax * 5%，再依 20K-80K cells 自適應
 #  ─ 標註：上方置中 "Step=... | FTT=... | Ma_max=..." 文字
 #
-if VIDEO_MODE:
-    pass  # 略過 Path D (video-mode)
+if VIDEO_MODE or SLICE_ONLY:
+    if SLICE_ONLY:
+        log("Path D skipped (slice-only: Q-criterion 3D 需要完整 volume, 改用 lbm-render)")
+    pass  # 略過 Path D (video-mode 或 slice-only)
 elif has_velocity:
     log("=== Path D: Q-criterion isosurface (Rainbow Desaturated, ref-aligned) ===")
 
