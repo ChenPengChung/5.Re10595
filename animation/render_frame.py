@@ -25,6 +25,8 @@ VIDEO_MODE = False      # True = 影片模式 (只吐 frame_cont + frame_RD)
                         # False = 人工模式 (8 張 PNG 全輸出)
 SLICE_ONLY = False      # True = lbm-render-1 快路徑: 只抽 X=mid 薄板, 跳過 Path D (Q 三維)
                         #        用 fast_slice.py 把 17GB → 數十 MB, 載入秒級, 效果與 Path A/B/C 逐點一致
+U_RANGE = None          # (vmin, vmax) = 固定 u_streamwise 色階範圍 (--u-range vmin vmax)
+                        #        全場 GIF 用: 跨幀統一色階, 消除逐幀自動重縮造成的閃爍
 
 args = sys.argv[1:]
 i = 0
@@ -37,6 +39,8 @@ while i < len(args):
         VIDEO_MODE = True; i += 1
     elif args[i] in ("--slice-only", "--no-q", "--fast"):
         SLICE_ONLY = True; i += 1
+    elif args[i] == "--u-range" and i+2 < len(args):
+        U_RANGE = (float(args[i+1]), float(args[i+2])); i += 3
     elif not args[i].startswith("--"):
         VTK_FILE = os.path.abspath(args[i]); i += 1
     else:
@@ -658,7 +662,11 @@ if infoA:
     hi_A = infoA.GetComponentRange(0)[1]
 else:
     lo_A, hi_A = 0.0, 1.0
-log("u_streamwise range: [%.4f, %.4f]" % (lo_A, hi_A))
+if U_RANGE is not None:
+    lo_A, hi_A = U_RANGE
+    log("u_streamwise range: [%.4f, %.4f] (FIXED via --u-range, 跨幀統一色階)" % (lo_A, hi_A))
+else:
+    log("u_streamwise range: [%.4f, %.4f]" % (lo_A, hi_A))
 
 lutA.ColorSpace = "Step"
 lutA.RGBPoints = build_rgb_points(lo_A, hi_A, KEY_COLORS)
