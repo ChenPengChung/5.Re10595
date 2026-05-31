@@ -12,8 +12,8 @@ Output:
 
 Usage:
     python3 10.tau_wall_benchmark.py                    # interactive
-    python3 10.tau_wall_benchmark.py --Re 5600
-    python3 10.tau_wall_benchmark.py --Re 5600 --no-ask-density
+    python3 10.tau_wall_benchmark.py --Re 10595
+    python3 10.tau_wall_benchmark.py --Re 10595 --no-ask-density
 
 Convention:
     tau_wall = niu * du_t/dn        (signed, lattice stress, rho=1)

@@ -782,8 +782,8 @@ def _is_origin_dir_name(name):
     """Match origin checkpoint directory names.
 
     Accepted patterns:
-      step_*_origin*            (canonical: step_24913001_origin_Re5600)
-      oldcheckpoint_*           (manual copy: oldcheckpoint_Re5600_step_24913001)
+      step_*_origin*            (canonical: step_24913001_origin_Re10595)
+      oldcheckpoint_*           (manual copy: oldcheckpoint_Re10595_step_24913001)
     """
     if name.startswith('step_') and '_origin' in name:
         return True
@@ -1854,6 +1854,159 @@ def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
             row = np.einsum('jk,jkn->n', wjk, val_jk)  # (NX,)
 
             field_new[BFR + j_n, BFR + k_n, BFR:BFR + NX_new] = row
+
+    fill_ghost(field_new, cfg_new)
+    return field_new
+
+
+def _lagrange7_weights_batched_exact(t_arr):
+    """Batched 7-point Lagrange weights, BITWISE-identical to lagrange7_weights.
+
+    The scalar lagrange7_weights does w[m] = prod_{n!=m} (s-n)/(m-n) accumulated
+    left-to-right (n=0..6, skipping m, i.e. multiplying by 1.0 for n==m which is
+    a float no-op).  This reproduces that exact factor-product order for an
+    array of t values, so every w[i, m] equals the scalar result bit-for-bit.
+    (NOTE: this is deliberately NOT lagrange7_weights_vectorized, which uses a
+    different algebra prod_all/(diff*denom) and is only ~1e-16 close, not exact.)
+    """
+    s = np.asarray(t_arr, dtype=np.float64) + 3.0          # (N,)
+    n_pts = s.shape[0]
+    w = np.ones((n_pts, 7), dtype=np.float64)
+    for m in range(7):
+        acc = np.ones(n_pts, dtype=np.float64)
+        for n in range(7):
+            if n != m:
+                acc = acc * ((s - n) / (m - n))            # same op + order as scalar
+        w[:, m] = acc
+    return w
+
+
+def _apply_wall_ghost_axis_batched(arr, ko, cfg_old):
+    """In-place cubic wall-ghost rebuild on the k-stencil axis for a batch.
+
+    arr : (..., 7, NX) with axis -2 the k-stencil [stencil_start .. +6].
+    ko  : scalar k_o for this group (stencil_start == BFR + k_o - 3 == k_o).
+    Replays extrapolate_wall_ghost_stencil_cubic exactly (same c0..c3, same
+    left-to-right sum, same g-order) but broadcast over the leading batch dims.
+    Ghost positions g are always strictly outside [p0..p3]/[pN..pN3], so the
+    in-place writes never clobber the values being read -> identical to the
+    copy-based scalar version.
+    """
+    fluid_lo = BFR
+    fluid_hi = cfg_old.NZ6 - 1 - BFR
+    stencil_start = ko
+    n_ghost_bot = max(fluid_lo - stencil_start, 0)
+    n_ghost_top = max(stencil_start + 6 - fluid_hi, 0)
+
+    if n_ghost_bot > 0:
+        p0, p1, p2, p3 = n_ghost_bot, n_ghost_bot + 1, n_ghost_bot + 2, n_ghost_bot + 3
+        for g in range(n_ghost_bot - 1, -1, -1):
+            d = float(p0 - g)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            arr[..., g, :] = (c0 * arr[..., p0, :] + c1 * arr[..., p1, :]
+                              + c2 * arr[..., p2, :] + c3 * arr[..., p3, :])
+
+    if n_ghost_top > 0:
+        pN = 6 - n_ghost_top
+        pN1, pN2, pN3 = pN - 1, pN - 2, pN - 3
+        for g in range(pN + 1, 7):
+            d = float(g - pN)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            arr[..., g, :] = (c0 * arr[..., pN, :] + c1 * arr[..., pN1, :]
+                              + c2 * arr[..., pN2, :] + c3 * arr[..., pN3, :])
+
+
+def interpolate_lagrange7_3d_with_mapping_vec(field_old, mapping, chunk_rows=4):
+    """Vectorized, bitwise-identical drop-in for interpolate_lagrange7_3d_with_mapping.
+
+    Collapses the per-(j_n, k_n) Python loop (NY*NZ ~ 4e5 iterations/field) into
+    a handful of chunked batched NumPy calls.  Every float64 multiply-add is done
+    in the SAME order as the scalar reference:
+      - j/k Lagrange weights via _lagrange7_weights_batched_exact (matches the
+        scalar lagrange7_weights factor-product order; i-weights use the SAME
+        lagrange7_weights_vectorized call the scalar path already uses).
+      - i- and (j,k)-contractions via np.einsum with optimize=False (naive C
+        reduction order, identical batched or not).
+      - wall-ghost rebuild via _apply_wall_ghost_axis_batched (identical c0..c3).
+    Chunks over `chunk_rows` j_n rows to bound peak RAM (the full
+    (Npts,7,7,NX,7) gather would be multi-TB; per-chunk it is a few GB).
+
+    Returns the same (NY6, NZ6, NX6) field as the scalar version.
+    """
+    cfg_old, cfg_new = mapping.cfg_old, mapping.cfg_new
+    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
+
+    i_o_arr = mapping.i_o_arr
+    xi_i_arr = mapping.xi_i_arr
+    NX_new = cfg_new.NX
+    NY_new = cfg_new.NY
+    NZ_new = cfg_new.NZ
+    NY6_old = cfg_old.NY6
+    NZ6_old = cfg_old.NZ6
+    NX6_old = cfg_old.NX6
+
+    # i-direction weights and stencil — identical to the scalar version.
+    i_weights = lagrange7_weights_vectorized(xi_i_arr)          # (NX, 7)
+    i_stencil = np.empty((NX_new, 7), dtype=np.int64)
+    for s in range(7):
+        buf_idx = BFR + i_o_arr + (s - 3)
+        i_stencil[:, s] = np.clip(buf_idx, 0, NX6_old - 1)
+
+    # Precompute batched j/k weights for ALL target points (cheap: 42 vector ops).
+    wj_all = _lagrange7_weights_batched_exact(mapping.xistar.ravel())   # (Npts, 7)
+    wk_all = _lagrange7_weights_batched_exact(mapping.etastar.ravel())  # (Npts, 7)
+    jstar2d = mapping.jstar.astype(np.int64)                            # (NY, NZ)
+    kstar2d = mapping.kstar.astype(np.int64)
+
+    # Stencil index offsets (-3..+3) applied to anchor BFR + j_o / BFR + k_o.
+    off = np.arange(-3, 4, dtype=np.int64)                             # (7,)
+
+    for j0 in range(0, NY_new, chunk_rows):
+        j1 = min(j0 + chunk_rows, NY_new)
+        R = j1 - j0
+        P = R * NZ_new                                                  # points in chunk
+
+        # Per-point anchors for this chunk, flattened in (row, k_n) order.
+        j_o_blk = jstar2d[j0:j1, :].ravel()                            # (P,)
+        k_o_blk = kstar2d[j0:j1, :].ravel()                            # (P,)
+
+        # Clamped (P,7) j/k stencil buffer indices.
+        j_idx = np.clip((BFR + j_o_blk)[:, None] + off[None, :], 0, NY6_old - 1)  # (P,7)
+        k_idx = np.clip((BFR + k_o_blk)[:, None] + off[None, :], 0, NZ6_old - 1)  # (P,7)
+
+        # Gather (P,7,7,NX6_old): field_old[j_idx[p,mj], k_idx[p,mk], :]
+        gather = field_old[j_idx[:, :, None], k_idx[:, None, :], :]     # (P,7,7,NX6_old)
+        # i-stencil gather -> (P,7,7,NX,7), contract i -> (P,7,7,NX)
+        slab_i = gather[:, :, :, i_stencil]                            # (P,7,7,NX,7)
+        val_jk = np.einsum('pjkni,ni->pjkn', slab_i, i_weights,
+                           optimize=False)                            # (P,7,7,NX)
+
+        # Wall-ghost rebuild on the k-stencil axis, grouped by k_o (only the
+        # few near-wall k_o values trigger any rebuild; interior is a no-op).
+        ghost_ko = [int(ko) for ko in np.unique(k_o_blk)
+                    if (BFR - ko) > 0 or (ko + 6 - (NZ6_old - 1 - BFR)) > 0]
+        for ko in ghost_ko:
+            sel = (k_o_blk == ko)
+            sub = val_jk[sel]                                          # (Q,7_j,7_k,NX)
+            _apply_wall_ghost_axis_batched(sub, ko, cfg_old)          # axis -2 == k-stencil
+            val_jk[sel] = sub
+
+        # (j,k) contraction with wjk -> (P, NX)
+        wj_blk = wj_all.reshape(NY_new, NZ_new, 7)[j0:j1, :, :].reshape(P, 7)
+        wk_blk = wk_all.reshape(NY_new, NZ_new, 7)[j0:j1, :, :].reshape(P, 7)
+        wjk = wj_blk[:, :, None] * wk_blk[:, None, :]                  # (P,7,7)
+        rows = np.einsum('pjk,pjkn->pn', wjk, val_jk, optimize=False)  # (P, NX)
+
+        field_new[BFR + j0:BFR + j1, BFR:BFR + NZ_new, BFR:BFR + NX_new] = \
+            rows.reshape(R, NZ_new, NX_new)
 
     fill_ghost(field_new, cfg_new)
     return field_new

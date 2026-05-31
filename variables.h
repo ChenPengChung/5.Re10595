@@ -2,7 +2,7 @@
 #define VARIABLES_FILE
 
 // ╔════════════════════════════════════════════════════════════════════╗
-// ║     GILBM Periodic Hill — Edit3_Re5600newmesh Configuration        ║
+// ║     GILBM Periodic Hill — Edit7_10595SNS Configuration (Re=10595)  ║
 // ║     (Fröhlich curvilinear grid, D3Q19, Algorithm1 GTS-only)       ║
 // ║                                                                    ║
 // ║  架構 (Architecture):                                              ║
@@ -79,7 +79,7 @@
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
 #define     NX      449         // 展向格點
-#define     NY      897         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
+#define     NY      897         // 流向格點 (需 (NY-1)%jp==0; 896%128==0 → 896/128=7)
 #define     NZ      449         // 法向格點
 #define     jp      128         //  GPU 數量 (流向分割)
 
@@ -144,6 +144,8 @@
 #define     GRID_DAT_DIR        "J_Frohlich"
 #define     GRID_DAT_REF        "3.fine grid.dat"
 /*
+// ⚠ STALE (Edit6/Re5600 殘留): 以下為 Re5600 j257 u_tau 資料，勿為 Re10595 取消註解；
+//   若要為 Re10595 啟用 Mode 3，須先換成 Re10595 的 u_tau 資料檔並更新 UTAU_RE。
 // ── Variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere) ──
 //   定義 UTAU_BOT_DAT / UTAU_TOP_DAT 後, --auto 自動使用 Mode 3
 //   不定義則 fallback 到 Mode 2 (Poisson + 均勻 GAMMA)
@@ -328,7 +330,7 @@
 // ── 計時 ──
 // USE_TIMING=1 啟用, TIMING_DETAIL=1 輸出 per-kernel 分解
 //
-// 計時區間對應 (Edit3_Re5600newmesh 流程):
+// 計時區間對應 (Edit7_10595SNS 流程):
 //   ev_step1:  Step1+1.5 (interpolation + macro + feq)
 //   ev_step2:  Step2 (collision, 逐點 MRT/BGK)
 //   ev_mpi:    MPI(f_post) + periodicSW_fpost
@@ -343,7 +345,7 @@
 // ================================================================
 
 // ── WENO 診斷已一體化至 USE_WENO7 (§1b) ──
-// Edit3_Re5600newmesh: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
+// Edit7_10595SNS: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
 //         全部由 USE_WENO7 統一控制（診斷 log + VTK contour + 啟用統計）。
 //         USE_WENO7=1 時自動啟用所有 WENO 診斷功能。
 

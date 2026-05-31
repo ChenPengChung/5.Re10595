@@ -63,7 +63,7 @@ Auto-Parameters:
 
 Usage:
   python3 4.Ma_U_Time.py                # auto-detect Re from variables.h
-  python3 4.Ma_U_Time.py --Re 5600      # override Re
+  python3 4.Ma_U_Time.py --Re 10595     # override Re
 
 Output:
   monitor_convergence_Re{N}.pdf / .png

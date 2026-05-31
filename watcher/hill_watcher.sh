@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hill_watcher.sh — Periodic Hill Re5600 watcher loop
+# hill_watcher.sh — Periodic Hill watcher loop (Re read live from variables.h)
 set -u
 
 _SELF="${BASH_SOURCE[0]:-$0}"
@@ -17,7 +17,7 @@ TAUWALL_SCRIPT="$RESULT_DIR/10.tau_wall_benchmark.py"
 _read_re() {
     local re
     re=$(awk '$1=="#define" && $2=="Re" {print $3; exit}' "$PROJECT_DIR/variables.h" 2>/dev/null | tr -d '[:space:]')
-    printf '%s\n' "${re:-5600}"
+    printf '%s\n' "${re:-10595}"
 }
 RE=$(_read_re)
 POLL_SEC=30
