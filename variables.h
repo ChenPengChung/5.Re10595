@@ -187,8 +187,17 @@
 #define     loop        50000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
 #define     NDTFRC      50        // 每 N 步更新外力項
-#define     NDTBIN      1000   // 每 N 步輸出 binary checkpoint
-#define     NDTVTK      1000      // 每 N 步輸出 VTK
+// ── 生產統計跑 (FTT 10→70) I/O 節流: 原 1000/1000 每步攤提 50ms I/O (~93% wall) ──
+//    checkpoint 巢狀在 VTK 區塊內 (main.cu:2101 piggyback 同一次 D2H gather):
+//    → checkpoint 不可比 VTK 更頻繁, 且需 NDTVTK | NDTBIN。
+//    20000/20000: VTK+ckpt 同步每 2 萬步, 共用一次 gather, 每步攤提 I/O ~2.5ms。
+//    崩潰最多損失 2 萬步 (~70s 計算量); 60 FTT 估 ~14 天 (vs 原 1000/1000 的 ~130 天)。
+//    回到密集輸出 (除錯/觀察暫態) 改回 1000/1000 即可。
+#define     NDTBIN      20000   // 每 N 步輸出 binary checkpoint (需為 NDTVTK 的整數倍)
+#define     NDTVTK      20000      // 每 N 步輸出 VTK
+#if (NDTBIN % NDTVTK != 0)
+#error "FATAL: NDTBIN 必須為 NDTVTK 的整數倍 — checkpoint piggyback 在 VTK 區塊內 (main.cu:2101 巢狀於 step%NDTVTK==1)。否則 checkpoint 實際週期 = lcm(NDTVTK,NDTBIN), 不等於 NDTBIN。"
+#endif
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度
 #define     NDTWENO     1000      // 每 N 步輸出 WENO 診斷 (USE_WENO7=1 時啟用)
 
