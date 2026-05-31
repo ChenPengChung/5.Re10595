@@ -17,7 +17,7 @@ When the user types **`claude commit`**, execute the following:
 
 ## Project info
 
-- Branch: Edit6_5600DNS
+- Branch: Edit7_10595SNS
 - Remote: origin (GitHub)
 - Language: commit messages should be in Traditional Chinese (繁體中文)
 - This is a CFD (Computational Fluid Dynamics) LBM simulation project running on HPC clusters (H200/GB200).
@@ -296,7 +296,7 @@ kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
 
 | 項目 | 本專案 (D3Q19) | Duct 參考專案 (D3Q27) |
 |------|---------------|----------------------|
-| 路徑 | `Edit6_5600DNS` | `/home/s8313697/D3Q27_PeriodicHill/Edit2_PeriodicHillDuct` |
+| 路徑 | `Edit7_10595SNS` | `/home/s8313697/D3Q27_PeriodicHill/Edit2_PeriodicHillDuct` |
 | K 矩陣 | `GILBM_MRT_K[19][19]` | `GILBM_MRT_K[27][27]` |
 | Forcing 投影 | 4 表 (F0+Fu+Fv+Fw, 一階時後三為零) | 1 表 `GILBM_MRT_Fproj[27]` |
 | Forcing 基底 | `F0[q] = w_q·3·cy` (兩專案相同) | `F_unit[q] = D3Q27_W[q]*3.0*D3Q27_ey[q]` |

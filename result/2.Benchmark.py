@@ -6,7 +6,7 @@ GILBM vs multiple benchmark sources (DNS/LES/Experiment)
 用法:
   python3 2.Benchmark.py               # 互動詢問 Re
   python3 2.Benchmark.py --Re 700      # 指定 Re=700
-  python3 2.Benchmark.py --Re 5600     # 指定 Re=5600
+  python3 2.Benchmark.py --Re 10595    # 指定 Re=10595
 
 輸出:
   benchmark_Umean_Re{N}.png           — <U>/Ub offset profile
@@ -33,7 +33,7 @@ Benchmark 資料來源:
 
 層流 wall-normal 瞬時分量 w* = w / Uref（可選後處理）:
   啟動時自上一層目錄鏈尋找 variables.h 或 variable.h，解析 #define Uref（印出 U_REF）。
-  本檔位於 Edit6_5600DNS result/：LAMINAR_W_DIVIDE_BY_UREF=False（與 fileIO 已 ÷Uref 一致）。
+  本檔位於 Edit7_10595SNS result/：LAMINAR_W_DIVIDE_BY_UREF=False（與 fileIO 已 ÷Uref 一致）。
   若須於 Python 再 ÷Uref，改 True；或僅用 Desktop 根目錄 2.Benchmark.py（該檔預設 True）。
 """
 
