@@ -1,0 +1,84 @@
+=== Regrid interpolation started: Sun May 31 17:00:04 CST 2026 ===
+Node: 25a-hgpn098, Mem: 2.0Ti, CPUs: 48
+[vars.h] STRETCH_A=0.968506  NX=449 NY=897 NZ=449 jp=128
+[grid] NEW    = phase1_generategrid/newgrid_3.fine grid_I897_J449_s0.968506.dat  (s=0.968506)
+[grid] OLD    = phase1_generategrid/oldgrid_3.fine grid_I513_J257_s0.950000.dat  (s=0.950000 -> gamma=3.663562)
+[grid] ORIGIN = phase2_generatecheckpoint/oldcheckpoint_Re5600_step_16242001
+[grid] solver = J_Frohlich/adaptive_3.fine grid_I897_J449_s0.968506.dat ✓ (不重新生成)
+[auto] NEW grid from variables.h: NX=449 NY=897 NZ=449 jp=128 GAMMA=4.135233106887025 ALPHA=0.5
+[auto] Origin checkpoint: phase2_generatecheckpoint/oldcheckpoint_Re5600_step_16242001
+[auto] Grid directory: /home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid
+  OK: NEW phase1 filename STRETCH_A s=0.968506 matches variables.h
+[auto] OLD grid (uniform gamma=3.663562, alpha=0.5): oldgrid_3.fine grid_I513_J257_s0.950000.dat
+[auto] NEW grid (variable gamma=4.135233106887025, alpha=0.5): newgrid_3.fine grid_I897_J449_s0.968506.dat
+
+--- Configuring OLD grid ---
+  Auto-detected from metadata: NX=257 NY=513 NZ=257 jp=16
+  OK: OLD grid .dat validated: I=513=NY, J=257=NZ
+
+--- Configuring NEW grid ---
+  Project mode: reading from /home/s8313697/5.Re10595/Edit7_10595SNS/variables.h
+    NX = 449
+    NY = 897
+    NZ = 449
+    jp = 128
+    GAMMA = 4.135233106887025
+    ALPHA = 0.5
+  OK: NEW grid filename STRETCH_A s=0.968506 matches variables.h
+  OK: NEW grid .dat validated: I=897=NY, J=449=NZ
+
+  WARNING: OLD GAMMA=3.663562 vs NEW GAMMA=4.135233106887025 differ by 0.47
+           Physical-space interpolation handles this correctly,
+           but verify OLD grid .dat matches the source checkpoint.
+========================================================================
+LBM checkpoint interpolator: 257x513x257 (jp=16) -> 449x897x449 (jp=128)
+========================================================================
+OLD: NX=257 NY=513 NZ=257 jp=16 GAMMA=3.663562 grid=/home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid/oldgrid_3.fine grid_I513_J257_s0.950000.dat
+NEW: NX=449 NY=897 NZ=449 jp=128 GAMMA=4.135233106887025 grid=/home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid/newgrid_3.fine grid_I897_J449_s0.968506.dat
+Domain: LX=4.5 LY=9.0 LZ=3.036 H_HILL=1.0
+Density control-volume method: jacobian-gl (variables.h:CELL_VOLUME_METHOD=1)
+u* divergence output gate: max|div(u*)| < 1.000000e-10 before f_eq
+
+Rank repartition plan:
+  OLD jp=16  unique j/rank=32  local NYD6=39  input files: 19*f + rho per rank
+  NEW jp=128  unique j/rank=7  local NYD6=14  output files: 19*f + rho per rank
+  Repartition: stitch OLD ranks into one global field, apply conservation/projection globally, then split into NEW ranks.
+
+  OK: solver runtime filename STRETCH_A s=0.968506 matches variables.h
+--- Validating NEW grid against solver runtime grid ---
+  OK: NEW grid coordinates match solver runtime grid
+      NEW grid:    /home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid/newgrid_3.fine grid_I897_J449_s0.968506.dat
+      solver grid: /home/s8313697/5.Re10595/Edit7_10595SNS/J_Frohlich/adaptive_3.fine grid_I897_J449_s0.968506.dat
+      compared 402753 points, max_abs_diff=0.000e+00, tol=0.000e+00
+      grid parameter fingerprint: not present (legacy .dat headers)
+
+Output directory: restart/checkpoint/step_00000001 (from --output-root + --step)
+
+[1/8] Reading old metadata: phase2_generatecheckpoint/oldcheckpoint_Re5600_step_16242001/metadata.dat
+      grid_dims=263,39,263 mpi_rank_count=16 step=16242001 FTT=17.041732651398991 Force=7.430566e-06
+      source dt_global=6.295430957580000e-04 half_Fdt=2.338930835723155e-09
+[2/8] Building OLD grid coordinates
+      Y interior range [-0.0000, 9.0000] (expect [0, 9.0])
+      Z interior range [1.0000, 3.0360] (expect [hill, 3.036])
+      OLD grid coordinate SHA-256: 5c59fa81cf34ef7a...4fefda91
+      OLD grid provenance: source checkpoint has no coordinate hash (legacy)
+[3/8] Reading 304 f-files (16 ranks x 19 directions)
+      f00: stitched 16 ranks
+      f01: stitched 16 ranks
+      f02: stitched 16 ranks
+      f03: stitched 16 ranks
+      f04: stitched 16 ranks
+      f05: stitched 16 ranks
+      f06: stitched 16 ranks
+      f07: stitched 16 ranks
+      f08: stitched 16 ranks
+      f09: stitched 16 ranks
+      f10: stitched 16 ranks
+      f11: stitched 16 ranks
+      f12: stitched 16 ranks
+      f13: stitched 16 ranks
+      f14: stitched 16 ranks
+      f15: stitched 16 ranks
+      f16: stitched 16 ranks
+      f17: stitched 16 ranks
+      f18: stitched 16 ranks

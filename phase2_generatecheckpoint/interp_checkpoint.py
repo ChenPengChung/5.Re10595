@@ -1523,7 +1523,17 @@ class PhysMapping2D:
         self.cfg_new = cfg_new
 
 
-_MAPPING_CACHE_VERSION = 'v1'  # bump if find_containing_cell_2d / search logic changes
+# STALENESS WARNING — cache version must be bumped if ANY of the following
+# functions change their output: build_old_cell_search_index,
+# bilinear_inverse_newton, find_containing_cell_2d, or the i-mapping
+# (i_o_float_arr / LX / dx_old / dx_new computation inside
+# precompute_phys_mapping_2d).  An old cache will be silently reused and
+# will produce WRONG interpolation results if the version is not bumped.
+# Checklist for any edit to those functions:
+#   1. Increment the version string below (e.g. 'v1' -> 'v2').
+#   2. Delete the mapping_cache/ directory or remove stale .npz files.
+#   3. Re-run the validate_mapping_cache.py harness to confirm correctness.
+_MAPPING_CACHE_VERSION = 'v1'  # increment when cell-search/i-mapping logic changes
 
 
 def _mapping_cache_key(y2d_old, z2d_old, y2d_new, z2d_new, cfg_old, cfg_new):
