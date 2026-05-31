@@ -314,7 +314,7 @@
 //   2 = [REMOVED in Phase 9] 原 merged VTK 續跑; 改用 --restart 指 atomic checkpoint
 //   3 = 從 binary checkpoint 續跑 (精確: f + 統計量); Phase 8 後由 argv --restart=<dir> 覆寫
 #define     INIT                (0)
-#define     RESTART_BIN_DIR     "restart/checkpoint/step_4001"
+#define     RESTART_BIN_DIR     "restart/checkpoint/step_00000001"
 #define     TBINIT              (0)     // INIT=1 時: 1=讀統計量, 0=不讀
 
 // ── 初始擾動 (觸發 3D 湍流轉捩, 湍流建立後設為 0) ──
