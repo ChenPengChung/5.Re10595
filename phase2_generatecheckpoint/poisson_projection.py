@@ -44,6 +44,7 @@ Grid layout follows interp_checkpoint.py conventions:
 import os
 import sys
 import time
+import multiprocessing as mp
 import numpy as np
 from scipy.sparse import coo_matrix, diags, eye as speye
 from scipy.sparse.linalg import splu
@@ -503,6 +504,51 @@ def _build_divergence_yz_operators(dj_dy, dj_dz, dk_dy, dk_dz, nj, nk):
     return W, By, Bz
 
 
+# ---------------------------------------------------------------
+# Parallel per-FFT-mode factor+solve for the div-exact projector.
+# Each FFT mode is fully independent (its own A = A_yz + |alpha|^2 W, its own
+# splu factorization and back-substitution), so distributing the 225 modes over
+# CPU cores is embarrassingly parallel and BITWISE-identical to the serial loop
+# (no cross-mode reduction; results are assembled by mode index).  Operators are
+# shared into fork()ed workers via copy-on-write (module global), so only the
+# tiny (ki, alpha) task and the (qx,qy,qz) result blocks cross the IPC boundary.
+# Set POISSON_SERIAL=1 to force the serial reference path.
+# ---------------------------------------------------------------
+_DIVEX_WORKER_CTX = None
+
+
+def _divex_num_workers(n_modes):
+    if os.environ.get('POISSON_SERIAL') == '1':
+        return 1
+    try:
+        ncpu = len(os.sched_getaffinity(0))
+    except (AttributeError, OSError):
+        ncpu = os.cpu_count() or 1
+    return max(1, min(ncpu, n_modes))
+
+
+def _divex_factor_solve_worker(task):
+    """Factor + solve ONE FFT mode. Returns (ki_idx, qx, qy, qz) blocks (nj,nk).
+
+    Reads the shared operators from the fork-inherited module global
+    _DIVEX_WORKER_CTX; performs the identical arithmetic the serial loop does
+    for this mode, so the per-mode result is bitwise-identical.
+    """
+    ki_idx, alpha = task
+    ctx = _DIVEX_WORKER_CTX
+    A_yz = ctx['A_yz']; W = ctx['W']; By = ctx['By']; Bz = ctx['Bz']
+    reg = ctx['reg']; I_2d = ctx['I_2d']; nj = ctx['nj']; nk = ctx['nk']
+    rhs_re = ctx['rhs_re'][ki_idx]
+    rhs_im = ctx['rhs_im'][ki_idx]
+    A = (A_yz + (abs(alpha) ** 2) * W).tocsc()
+    lu = splu((A + reg * I_2d).tocsc())
+    lam = lu.solve(rhs_re) + 1j * lu.solve(rhs_im)
+    qx = (np.conjugate(alpha) * (W @ lam)).reshape(nj, nk)
+    qy = (By.T @ lam).reshape(nj, nk)
+    qz = (Bz.T @ lam).reshape(nj, nk)
+    return ki_idx, qx, qy, qz
+
+
 class _DivExactFftProjector:
     """FFT(x) exact discrete mass projection via minimum-norm velocity correction."""
 
@@ -528,39 +574,70 @@ class _DivExactFftProjector:
         self.reg = 1.0e-13 * scale
 
         n = nj * nk
-        I_2d = speye(n, format='csc', dtype=np.float64)
-        self.lu = []
-        self.A_ops = []
-        for alpha in self.alpha_x:
-            A = (A_yz + (abs(alpha) ** 2) * self.W).tocsc()
-            self.A_ops.append(A)
-            self.lu.append(splu((A + self.reg * I_2d).tocsc()))
+        # Operators only; the 225 per-mode factorizations are deferred to
+        # correction() where they are run in parallel (one splu per FFT mode).
+        self.I_2d = speye(n, format='csc', dtype=np.float64)
+        self.A_yz = A_yz.tocsc()
 
         if verbose:
-            print('      exact D velocity projector: {} x {} ({} nnz), {} modes factored in {:.2f}s'.format(
-                n, n, A_yz.nnz, n_modes, time.time() - t0))
+            print('      exact D velocity projector: {} x {} ({} nnz), {} modes '
+                  '(factor deferred to parallel solve) built in {:.2f}s'.format(
+                      n, n, A_yz.nnz, n_modes, time.time() - t0))
 
     def correction(self, rhs_3d):
-        """Return minimum-norm q satisfying D q ~= rhs, arrays shaped (nj,nk,ni)."""
+        """Return minimum-norm q satisfying D q ~= rhs, arrays shaped (nj,nk,ni).
+
+        Each FFT mode is factored+solved independently.  With >1 worker the modes
+        are distributed over CPU cores via a fork()ed Pool (bitwise-identical to
+        the serial loop, since modes do not interact); set POISSON_SERIAL=1 to
+        force the serial reference path.
+        """
+        global _DIVEX_WORKER_CTX
         rhs_hat = np.fft.rfft(rhs_3d, axis=2)
+        n_modes = rhs_hat.shape[2]
         qx_hat = np.zeros_like(rhs_hat)
         qy_hat = np.zeros_like(rhs_hat)
         qz_hat = np.zeros_like(rhs_hat)
 
-        for ki_idx, lu in enumerate(self.lu):
-            rhs_re = rhs_hat[:, :, ki_idx].real.ravel().copy()
-            rhs_im = rhs_hat[:, :, ki_idx].imag.ravel().copy()
+        # Per-mode real/imag RHS (contiguous copies; shared into workers via COW).
+        rhs_re = [rhs_hat[:, :, k].real.ravel().copy() for k in range(n_modes)]
+        rhs_im = [rhs_hat[:, :, k].imag.ravel().copy() for k in range(n_modes)]
 
-            lam_re = lu.solve(rhs_re)
-            lam_im = lu.solve(rhs_im)
-            lam = lam_re + 1j * lam_im
+        n_workers = _divex_num_workers(n_modes)
+        t0 = time.time()
 
-            alpha = self.alpha_x[ki_idx]
-            qx_hat[:, :, ki_idx] = (
-                np.conjugate(alpha) * (self.W @ lam)
-            ).reshape(self.nj, self.nk)
-            qy_hat[:, :, ki_idx] = (self.By.T @ lam).reshape(self.nj, self.nk)
-            qz_hat[:, :, ki_idx] = (self.Bz.T @ lam).reshape(self.nj, self.nk)
+        if n_workers <= 1:
+            # ---- serial reference path ----
+            for ki_idx in range(n_modes):
+                alpha = self.alpha_x[ki_idx]
+                A = (self.A_yz + (abs(alpha) ** 2) * self.W).tocsc()
+                lu = splu((A + self.reg * self.I_2d).tocsc())
+                lam = lu.solve(rhs_re[ki_idx]) + 1j * lu.solve(rhs_im[ki_idx])
+                qx_hat[:, :, ki_idx] = (
+                    np.conjugate(alpha) * (self.W @ lam)).reshape(self.nj, self.nk)
+                qy_hat[:, :, ki_idx] = (self.By.T @ lam).reshape(self.nj, self.nk)
+                qz_hat[:, :, ki_idx] = (self.Bz.T @ lam).reshape(self.nj, self.nk)
+        else:
+            # ---- parallel path (fork; operators shared copy-on-write) ----
+            _DIVEX_WORKER_CTX = dict(
+                A_yz=self.A_yz, W=self.W, By=self.By, Bz=self.Bz,
+                reg=self.reg, I_2d=self.I_2d, nj=self.nj, nk=self.nk,
+                rhs_re=rhs_re, rhs_im=rhs_im)
+            try:
+                ctx_mp = mp.get_context('fork')
+                tasks = [(k, self.alpha_x[k]) for k in range(n_modes)]
+                with ctx_mp.Pool(n_workers) as pool:
+                    for ki_idx, qx_b, qy_b, qz_b in pool.imap_unordered(
+                            _divex_factor_solve_worker, tasks, chunksize=1):
+                        qx_hat[:, :, ki_idx] = qx_b
+                        qy_hat[:, :, ki_idx] = qy_b
+                        qz_hat[:, :, ki_idx] = qz_b
+            finally:
+                _DIVEX_WORKER_CTX = None
+
+        if self.verbose:
+            print('      div-exact factor+solve: {} modes, {} worker(s), {:.2f}s'.format(
+                n_modes, n_workers, time.time() - t0))
 
         qx = np.fft.irfft(qx_hat, n=self.ni, axis=2).real
         qy = np.fft.irfft(qy_hat, n=self.ni, axis=2).real
