@@ -1661,7 +1661,7 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
     if _use_cache:
         try:
             os.makedirs(_cache_dir, exist_ok=True)
-            _tmp = _cache_file + '.tmp.npz'
+            _tmp = _cache_file + '.{}.tmp.npz'.format(os.getpid())  # PID-unique: NFS concurrency-safe
             np.savez(_tmp, jstar=jstar, kstar=kstar, xistar=xistar,
                      etastar=etastar, i_o_arr=i_o_arr, xi_i_arr=xi_i_arr)
             os.replace(_tmp, _cache_file)
