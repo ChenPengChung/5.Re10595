@@ -125,7 +125,7 @@ Q_OPACITY = 0.8                   # 與參考範本 OPACITY 一致
 W_RANGE = [-0.02, 0.02]           # 與參考範本 W_RANGE 一致（固定範圍，不做對稱重縮）
 
 # ── FTT / Ma 文字標註用常數（對齊參考範本）──
-Q_U_REF       = 0.0583
+Q_U_REF       = 0.01
 Q_LY          = 9.0
 Q_CS          = 1.0 / 1.732050807568877
 Q_DT_GLOBAL   = 2.397914e-03
@@ -970,7 +970,7 @@ elif has_velocity:
         lutD = GetColorTransferFunction("v_over_Uref")
         # v_over_Uref ≡ v_inst = w_code/Uref (ERCOFTAC v/Ub), 已是無因次.
         # W_RANGE = [-0.02, 0.02] 是 lattice w_code 的範圍 (典型 LBM 數量級),
-        # ÷ Q_U_REF 得到 v/Ub 範圍 ≈ [-0.343, 0.343], 用作 LUT 顯示界線.
+        # ÷ Q_U_REF (=Uref=0.01) 得到 v/Ub 範圍 ≈ [-2, 2], 用作 LUT 顯示界線.
         try: lutD.RescaleTransferFunction(W_RANGE[0] / Q_U_REF, W_RANGE[1] / Q_U_REF)
         except: pass
         try: lutD.ApplyPreset('Rainbow Desaturated', True)

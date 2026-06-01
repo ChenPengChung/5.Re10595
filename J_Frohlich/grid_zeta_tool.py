@@ -2197,7 +2197,7 @@ if __name__ == "__main__":
     print("    max(Δy,Δz)/min(Δy,Δz) must be in [RATIO_LO, RATIO_HI]")
     print("    GAMMA will be auto-adjusted to satisfy this constraint")
     print()
-    RATIO_LO_VAL = ask_float("RATIO_LO", default=ratio_lo_default, lo=1.0, hi=100.0)
+    RATIO_LO_VAL = ask_float("RATIO_LO", default=ratio_lo_default, lo=0.0, hi=100.0)
     RATIO_HI_VAL = ask_float("RATIO_HI", default=ratio_hi_default, lo=RATIO_LO_VAL, hi=200.0)
 
     if mode == 2:
