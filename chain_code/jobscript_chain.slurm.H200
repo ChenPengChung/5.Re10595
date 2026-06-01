@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --job-name=Edit6_5600DNS 
-#SBATCH --account=MST114348
-#SBATCH --partition=dev
+#SBATCH --account=MST115169
+#SBATCH --partition=h200
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 預設 walltime = 1 小時 (NCHC dev partition 預設);
+# [POLICY-B1] 預設 walltime = 4 天 (NCHC h200 partition 上限);
 #             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=1:00:00
+#SBATCH --time=4-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -22,7 +22,7 @@
 # jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
-#   (1) partition/nodes/gres — dev / 2 nodes / 8 GPU×2=16  (GB200: gb200-dev / 2 / 4)
+#   (1) partition/nodes/gres — h200 / 2 nodes / 8 GPU×2=16  (GB200: gb200 / 4 nodes / 4)
 #       對應 variables.h jp=16 (16 streamwise MPI ranks)
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0

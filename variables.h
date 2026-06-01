@@ -182,11 +182,11 @@
 // ================================================================
 //  §5. 模擬控制
 // ================================================================
-#define     loop        50000000  // 最大時間步數
+#define     loop        500000000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
 #define     NDTFRC      50        // 每 N 步更新外力項
-#define     NDTBIN      1000   // 每 N 步輸出 binary checkpoint
-#define     NDTVTK      1000      // 每 N 步輸出 VTK
+#define     NDTBIN      20000   // 每 N 步輸出 binary checkpoint
+#define     NDTVTK      50000     // 每 N 步輸出 VTK
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度
 #define     NDTWENO     1000      // 每 N 步輸出 WENO 診斷 (USE_WENO7=1 時啟用)
 
