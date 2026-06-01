@@ -1,0 +1,13 @@
+[phase2] job_id=68624
+[phase2] host=25a-hgpn017
+[phase2] start=2026-06-01 16:36:54
+[phase2] cwd=/home/s8313697/5.Re10595/Edit6_5600DNS
+[phase2] python=/usr/bin/python3
+[phase2] numpy=2.0.2 scipy=1.13.1
+================================================================
+[auto] NEW grid from variables.h: NX=321 NY=641 NZ=321 jp=64 GAMMA=2.1972245773362196 ALPHA=0.5
+[auto] Origin checkpoint: /home/s8313697/5.Re10595/Edit6_5600DNS/phase2_generatecheckpoint/oldcheckpoint_Re5600_step_16242001
+[auto] Grid directory: /home/s8313697/5.Re10595/Edit6_5600DNS/phase1_generategrid
+FATAL: --auto: no OLD grid named oldgrid_*_g{G}_a{A}.dat (ALPHA=0.5) in /home/s8313697/5.Re10595/Edit6_5600DNS/phase1_generategrid
+================================================================
+[phase2] exit rc=1  end=2026-06-01 16:36:55
