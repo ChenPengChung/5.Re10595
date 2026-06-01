@@ -99,3 +99,107 @@ Output directory: restart/checkpoint/step_00000001 (from --output-root + --step)
       mapping cache build: 128.1s
       rho:  37.4s
       ux:   37.1s
+      uy:   37.4s
+      uz:   37.7s
+      Applying wall velocity constraint: u=v=w=0 (preserve rho)
+      max |u_wall| before clamp = 4.352e-03
+      max |rho_wall - 1| preserved = 2.894e-04
+      rho mass correction target: volume-weighted mean rho = 1.0
+      rho control-volume method: jacobian-gl (variables.h:CELL_VOLUME_METHOD=1)
+      Jacobian-GL volume: shoelace = 1.143589778317044e+02, jacobian = 1.143590164964786e+02
+      Jacobian-GL diagnostics: rel volume diff = 3.381000e-07, max cell rel diff = 9.448989e-03, mean cell rel diff = 2.749103e-05, fallback cells = 0
+      rho mass correction (volume-weighted): rho_modify = -2.640257e-10
+      global control volume = 1.143590164964786e+02
+      rho volume-weighted mean: 1.000000000264026 -> 1.000000000000000 (target 1.000000000000000)
+      rho absolute mass: 1.143590165266723e+02 -> 1.143590164964786e+02 (target 1.143590164964786e+02)
+      Enforcing periodic duplicate nodes and filling ghost cells
+      NEW interior rho = [0.999081, 1.000247], mean = 0.999996
+      NEW interior max|u| = 1.850654e-02, max|v| = 2.477277e-02, max|w| = 1.498500e-02
+      Ub correction: OLD Ub = 1.433881609708712e-02
+      Ub correction: NEW Ub (before) = 1.433863532712225e-02
+      Ub correction: scale = 1.000012607194530e+00
+      Ub correction: NEW Ub (after)  = 1.433881609708712e-02
+      Ub correction: residual = 0.000e+00
+      Periodic duplicate enforcement and ghost-cell fill before projection
+      --- Velocity projection ---
+      Div-exact velocity projection: 65740800 DOFs (640 x 321 x 320)
+      div(u) BEFORE: RMS = 1.136458e-03, max = 9.058741e-02, mean = 2.659584e-07
+      direct D correction target: RMS <= 1.000e-06
+      exact D velocity projector: 205440 x 205440 (1841280 nnz), 161 modes factored in 588.69s
+      Div-exact direct solve in 621.7s
+      div(u) AFTER:
+        all points: RMS = 5.685775e-13, max = 1.238672e-12, mean = -5.267416e-13
+        interior (excl walls): RMS = 5.699388e-13, max = 1.238672e-12
+      reduction: 5.00e-10x (all), 5.02e-10x (interior)
+      max |du| correction = 8.544603e-04
+      wall velocity constrained inside projection
+      Final periodic duplicate enforcement and ghost-cell fill
+      Final Ub before f_eq = 1.433806629898432e-02 (target 1.433881609708712e-02, residual 7.498e-07)
+[6/8] Computing NEW-grid dt_global
+      dt_global_new = 1.323972e-03  (CFL=0.5, metric_order=6, dx=1.406250e-02)
+      dt limited by zeta (alpha=15) component
+      u* divergence check (CD2, unique physical DOFs): rms = 5.685775e-13, max|div(u*)| = 1.238672e-12
+      u* divergence gate PASSED: max|div(u*)| = 1.238672e-12 < 1e-10
+[7/8] Reconstructing f_eq and writing per-rank files
+      wrote rho_0..rho_63.bin
+      mode = chapman-enskog: niu = 1.785714e-06
+      omega_new = 3*niu/dt_global_new + 0.5 = 5.040462652113e-01
+      ce_coeff = -(omega)*dt = -6.673433e-04  (= -3niu - 0.5dt = -6.673433e-04)
+      metric order = 6 (Fornberg j-central + k-adaptive)
+      velocity gradient tensor: 16.4s
+      max |div(u)|  = 9.941e-01   (incompressibility residual)
+      max |grad u|  = 2.303e+00
+      wrote f00_0..f00_63 (CE)
+      wrote f01_0..f01_63 (CE)
+      wrote f02_0..f02_63 (CE)
+      wrote f03_0..f03_63 (CE)
+      wrote f04_0..f04_63 (CE)
+      wrote f05_0..f05_63 (CE)
+      wrote f06_0..f06_63 (CE)
+      wrote f07_0..f07_63 (CE)
+      wrote f08_0..f08_63 (CE)
+      wrote f09_0..f09_63 (CE)
+      wrote f10_0..f10_63 (CE)
+      wrote f11_0..f11_63 (CE)
+      wrote f12_0..f12_63 (CE)
+      wrote f13_0..f13_63 (CE)
+      wrote f14_0..f14_63 (CE)
+      wrote f15_0..f15_63 (CE)
+      wrote f16_0..f16_63 (CE)
+      wrote f17_0..f17_63 (CE)
+      wrote f18_0..f18_63 (CE)
+      max |f_neq / f_eq|  = 5.975e-03   (Knudsen-like; should be << 1)
+      f range after reconstruction = [2.510440722510413e-02, 3.335931804721361e-01]
+      max |sum(f_new)-rho_new| = 7.772e-16
+[8/8] Writing new metadata.dat
+      Controller state preserved from origin: Force_integral=0.000000000000000 error_prev=0.000000000000000 ctrl_initialized=0 gehrke_activated=0
+      accu_count=0, FTT=0 (regrid pipeline does NOT write stats binaries; preserving accu_count>0 would break checkpoint load)
+      origin FTT=17.041732651398991 accu_count=6711280 kept as provenance only
+      Force=7.430566e-06  step=1  jp=64  grid_dims=327,17,327
+      dt_global written as 1.323972250321308e-03
+      (naive minSize for reference: 3.162788e-03; runtime Imamura dt typically ~0.4-0.5x of this)
+      Atomic rename: restart/checkpoint/step_00000001.WRITING -> restart/checkpoint/step_00000001
+      grid_provenance written: /home/s8313697/5.Re10595/Edit6_5600DNS/restart/grid_provenance
+
+Done in 1168.2s. New checkpoint at: restart/checkpoint/step_00000001
+Total files: 19f x 64 ranks + 64 rho + 1 metadata = 1281
+================================================================
+[phase2] exit rc=0  end=2026-06-01 16:59:36
+[phase2] output checkpoint:
+total 18181124
+drwxr-xr-x 1 s8313697 MST114348        0 Jun  1 16:59 .
+drwxr-xr-x 1 s8313697 MST114348        0 Jun  1 16:59 ..
+-rw-r--r-- 1 s8313697 MST114348 14542344 Jun  1 16:57 f00_0.bin
+-rw-r--r-- 1 s8313697 MST114348 14542344 Jun  1 16:57 f00_1.bin
+-rw-r--r-- 1 s8313697 MST114348 14542344 Jun  1 16:57 f00_10.bin
+-rw-r--r-- 1 s8313697 MST114348 14542344 Jun  1 16:57 f00_11.bin
+-rw-r--r-- 1 s8313697 MST114348 14542344 Jun  1 16:57 f00_12.bin
+[phase2] metadata:
+mpi_rank_count=64
+grid_dims=327,17,327
+step=1
+FTT=0.000000000000000
+accu_count=0
+dt_global=1.323972250321308e-03
+interp_origin_accu_count=6711280
+interp_source=/home/s8313697/5.Re10595/Edit6_5600DNS/phase2_generatecheckpoint/oldcheckpoint_Re5600_step_16242001
