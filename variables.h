@@ -285,7 +285,7 @@
 #endif
 
 #ifndef FORCE_HERMITE_ORDER
-#define     FORCE_HERMITE_ORDER 1   // 1 = 一階 Hermite: w_q·3·cy·F
+#define     FORCE_HERMITE_ORDER 2   // 1 = 一階 Hermite: w_q·3·cy·F
 #endif                              // 2 = 二階 Hermite: + 9·(c·u)·c_y·F
 #if FORCE_HERMITE_ORDER != 1 && FORCE_HERMITE_ORDER != 2
 #error "FORCE_HERMITE_ORDER must be 1 or 2"
@@ -309,7 +309,7 @@
 //   2 = 二次外推 (quadratic, 3-point), O(h³), Σ|c|_max=16 (d=3)
 //   3 = 三次外推 (cubic, 4-point),     O(h⁴), Σ|c|_max=34 (d=3)
 //   k=3 壁面點有 4 個 stencil 內部點 → cubic 為不擴展 stencil 的全域上限
-#define     GHOST_EXTRAP_ORDER  3
+#define     GHOST_EXTRAP_ORDER  2
 #if GHOST_EXTRAP_ORDER < 2 || GHOST_EXTRAP_ORDER > 3
 #error "GHOST_EXTRAP_ORDER must be 2 (quadratic) or 3 (cubic)"
 #endif
