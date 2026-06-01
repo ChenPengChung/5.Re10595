@@ -78,7 +78,7 @@ def main():
     ap.add_argument("--frames-dir", required=True)
     ap.add_argument("--suffix", required=True, help="cont | RD_cont")
     ap.add_argument("--out", required=True)
-    ap.add_argument("--fps", type=int, default=20)
+    ap.add_argument("--fps", type=float, default=20)
     ap.add_argument("--width", type=int, default=1600, help="GIF 寬 (px), 高依比例 (default 1600)")
     ap.add_argument("--ffmpeg", default=None)
     ap.add_argument("--no-uniform", action="store_true",
@@ -145,7 +145,7 @@ def main():
         shutil.rmtree(tmp, ignore_errors=True)
 
     sz = os.path.getsize(out_abs) / 1048576.0
-    print("[gif] DONE %s  (%d frames @ %d fps, %.1f MB)" % (out_abs, len(items), args.fps, sz), flush=True)
+    print("[gif] DONE %s  (%d frames @ %g fps = %.3gs/frame, %.1f MB)" % (out_abs, len(items), args.fps, 1.0/args.fps, sz), flush=True)
 
 
 if __name__ == "__main__":

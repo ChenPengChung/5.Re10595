@@ -43,7 +43,7 @@ TARGET = int(os.environ.get("GIF_TARGET", "100"))
 UMIN = float(os.environ.get("GIF_UMIN", "-2.0"))
 UMAX = float(os.environ.get("GIF_UMAX", "2.0"))
 WIDTH = int(os.environ.get("GIF_WIDTH", "1600"))
-FPS = int(os.environ.get("GIF_FPS", "20"))
+FPS = float(os.environ.get("GIF_FPS", "20"))
 FULL_MIN = int(os.environ.get("GIF_FULL_MIN", "5100000000"))   # 完整 5.15GB; 半截檔 (<5.1GB) 視為未寫完
 POLL = 15                        # s, 等新 VTK 的輪詢間隔
 PER_FRAME_TIMEOUT = 360          # s, 單幀渲染上限
@@ -127,7 +127,7 @@ def main():
         m = re.match(r"frame_(\d+)_cont\.png$", f)
         if m and is_rendered(int(m.group(1))):
             rendered.add(int(m.group(1)))
-    log("START target=%d  already-rendered=%d  width=%d fps=%d range=[%.1f,%.1f] "
+    log("START target=%d  already-rendered=%d  width=%d fps=%g range=[%.1f,%.1f] "
         "max_wall=%ds full_min=%d" %
         (TARGET, len(rendered), WIDTH, FPS, UMIN, UMAX, MAX_WALL, FULL_MIN))
 
