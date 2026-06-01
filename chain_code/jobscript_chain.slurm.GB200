@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=Edit7_10595SNS 
 #SBATCH --account=MST115169
-#SBATCH --partition=gb200-full
+#SBATCH --partition=gb200
 #SBATCH --nodes=32
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
