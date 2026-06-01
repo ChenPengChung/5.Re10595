@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=Edit7_10595SNS 
-#SBATCH --account=MST114348
+#SBATCH --account=MST115169
 #SBATCH --partition=h200
 #SBATCH --nodes=16
 #SBATCH --ntasks-per-node=8

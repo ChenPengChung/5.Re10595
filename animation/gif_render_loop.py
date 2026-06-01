@@ -32,8 +32,8 @@ FPS = int(os.environ.get("GIF_FPS", "20"))
 FULL_MIN = 17_000_000_000        # 完整 17.36GB; 半截檔 (<17GB) 視為未寫完
 POLL = 15                        # s, 等新 VTK 的輪詢間隔
 PER_FRAME_TIMEOUT = 360          # s, 單幀渲染上限
-MAX_WALL = 3 * 3600 + 1800       # s, 全程上限 (3.5h) 防 solver 停擺時無限等
-ENCODE_EVERY = 10                # 每渲滿幾幀重編一次 GIF 預覽
+MAX_WALL = int(os.environ.get("GIF_MAX_WALL", str(3 * 3600 + 1800)))   # s, 全程上限; 1000 幀需 ~15h → 用 GIF_MAX_WALL 覆寫
+ENCODE_EVERY = int(os.environ.get("GIF_ENCODE_EVERY", "10"))           # 每渲滿幾幀重編一次 GIF 預覽
 
 OUT_CONT = os.path.join(ROOT, "animation", "flow_cont.gif")
 OUT_RD = os.path.join(ROOT, "animation", "flow_RD.gif")
