@@ -17,7 +17,7 @@
 #   - 登入節點 x86_64 + H200 計算節點 x86_64 → 原地編譯, 不需 salloc
 #   - nvcc -arch=sm_90 (Hopper H200), 非 sm_100 (Blackwell GB200)
 #   - HPC-SDK 路徑: Linux_x86_64/...x86_64-linux, 非 Linux_aarch64/...sbsa-linux
-#   - 投遞目標: jobscript_chain.slurm.H200 (2 nodes × 8 GPU = 16 GPU, partition=dev)
+#   - 投遞目標: jobscript_chain.slurm.H200 (8 nodes × 8 GPU = 64 GPU, partition=h200)
 #
 # 路徑規範 (升級後):
 #   所有 chain state 集中於 restart/ (chain_jobid / chain_count / bad_nodes /

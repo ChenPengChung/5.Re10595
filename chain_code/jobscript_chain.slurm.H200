@@ -516,9 +516,9 @@ rm -f "$WATCHDOG_SENTINEL"
 WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
-# [H200] 2 節點 16 GPU: -np 16 --map-by ppr:8:node (對應 variables.h jp=16)
+# [H200] 8 節點 64 GPU: -np 64 --map-by ppr:8:node (對應 variables.h jp=64)
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 16 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np 64 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 
