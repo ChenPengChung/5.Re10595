@@ -112,7 +112,7 @@
 //   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 壁面最小格距 ≈ uniform_dz × Ratio (Ratio=0.5 時 a≈0.60)
-#define     STRETCH_A           0.968506
+#define     STRETCH_A           0.80
 #define     ALPHA               0.5     // 歷史遺留，固定 0.5，檔名不再包含 ALPHA
 #define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
 // ALPHA 必須為 0.5 — 若修改此值需同步驗證 minSize 與 grid 生成邏輯
@@ -134,7 +134,7 @@
 //   Δz = 法向 (wall-normal) 相鄰格點 z 座標差的局部平均
 //   全場全域搜索，超出範圍則自動調整 GAMMA 後才生成網格
 //   --auto 模式讀取此值; 互動模式可另行輸入
-#define     RATIO_LO    12.0    // 網格間距比率下限
+#define     RATIO_LO    0.0    // 網格間距比率下限
 #define     RATIO_HI    25.0    // 網格間距比率上限
 
 // ── 展向映射參數 ──
@@ -193,8 +193,8 @@
 //    20000/20000: VTK+ckpt 同步每 2 萬步, 共用一次 gather, 每步攤提 I/O ~2.5ms。
 //    崩潰最多損失 2 萬步 (~70s 計算量); 60 FTT 估 ~14 天 (vs 原 1000/1000 的 ~130 天)。
 //    回到密集輸出 (除錯/觀察暫態) 改回 1000/1000 即可。
-#define     NDTBIN      20000   // 每 N 步輸出 binary checkpoint (需為 NDTVTK 的整數倍)
-#define     NDTVTK      20000      // 每 N 步輸出 VTK
+#define     NDTBIN      100000   // 每 N 步輸出 binary checkpoint (注意: checkpoint 巢狀於 VTK 區塊 main.cu:2101, 真實間隔=lcm(NDTVTK,NDTBIN); 設為 NDTVTK 倍數使名實相符 → 100000=2×NDTVTK)
+#define     NDTVTK      50000     // 每 N 步輸出 VTK
 #if (NDTBIN % NDTVTK != 0)
 #error "FATAL: NDTBIN 必須為 NDTVTK 的整數倍 — checkpoint piggyback 在 VTK 區塊內 (main.cu:2101 巢狀於 step%NDTVTK==1)。否則 checkpoint 實際週期 = lcm(NDTVTK,NDTBIN), 不等於 NDTBIN。"
 #endif
@@ -204,7 +204,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     10.0    // 統計量開始累積
+#define     FTT_STATS_START      5.0    // 統計量開始累積
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
