@@ -78,10 +78,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      257         // 展向格點
-#define     NY      513         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      257         // 法向格點
-#define     jp      16         //  GPU 數量 (流向分割)
+#define     NX      321        // 展向格點
+#define     NY      641         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
+#define     NZ      321         // 法向格點
+#define     jp      64         //  GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -112,7 +112,7 @@
 //   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 壁面最小格距 ≈ uniform_dz × Ratio (Ratio=0.5 時 a≈0.60)
-#define     STRETCH_A           0.95
+#define     STRETCH_A           0.80
 #define     ALPHA               0.5     // 歷史遺留，固定 0.5，檔名不再包含 ALPHA
 #define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
 // ALPHA 必須為 0.5 — 若修改此值需同步驗證 minSize 與 grid 生成邏輯
@@ -134,7 +134,7 @@
 //   Δz = 法向 (wall-normal) 相鄰格點 z 座標差的局部平均
 //   全場全域搜索，超出範圍則自動調整 GAMMA 後才生成網格
 //   --auto 模式讀取此值; 互動模式可另行輸入
-#define     RATIO_LO    12.0    // 網格間距比率下限
+#define     RATIO_LO     0.0    // 網格間距比率下限
 #define     RATIO_HI    20.0    // 網格間距比率上限
 
 // ── 展向映射參數 ──
@@ -157,10 +157,7 @@
 //  §4. 物理參數
 // ================================================================
 #define     Re      5600       // Reynolds number (基於 H_HILL 和 Uref)
-#define     Uref    0.015       // 參考速度 (bulk velocity)
-                                // Re700:0.0583, Re1400/2800:0.0776
-                                // Re5600:0.0464, Re10595:0.0878
-                                // 限制: Uref <= cs = 0.1732 (Ma < 1)
+#define     Uref    0.01       
 #define     niu     (Uref/Re)   // 運動黏度
 
 // 數學常數
@@ -193,7 +190,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     10.0    // 統計量開始累積
+#define     FTT_STATS_START     5.0    // 統計量開始累積
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
@@ -274,7 +271,7 @@
 #endif
 
 #ifndef FORCE_HERMITE_ORDER
-#define     FORCE_HERMITE_ORDER 1   // 1 = 一階 Hermite: w_q·3·cy·F
+#define     FORCE_HERMITE_ORDER 2   // 1 = 一階 Hermite: w_q·3·cy·F
 #endif                              // 2 = 二階 Hermite: + 9·(c·u)·c_y·F
 #if FORCE_HERMITE_ORDER != 1 && FORCE_HERMITE_ORDER != 2
 #error "FORCE_HERMITE_ORDER must be 1 or 2"
