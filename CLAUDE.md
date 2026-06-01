@@ -15,6 +15,38 @@ When the user types **`claude commit`**, execute the following:
 
 **Do NOT auto-commit on session start.** Only commit when the user explicitly says `claude commit`.
 
+## Resume-status check shortcut (triggered by user command)
+
+When the user types **`claude_check`** (= 「幫我檢驗目前續跑狀態」), run a **read-only**
+verification of the current chain / resume status and report a compact table.
+Do NOT submit, cancel, rebuild, or mutate any job / chain / checkpoint state.
+
+### Steps
+
+1. **Chain head + job state** — `JID=$(cat restart/chain_jobid)`; get state with
+   **`sacct -j $JID -o JobID,State,ExitCode,Start,Elapsed,NodeList`** (authoritative).
+   ⚠️ `squeue -u $USER` may NOT list h200/gb200 jobs (NCHC cross-cluster
+   federation display quirk) — **trust `sacct` for job state**, not squeue.
+   Also: `scontrol show job $JID | grep -oE 'Partition=[^ ]+|Account=[^ ]+|TimeLimit=[^ ]+|WorkDir=[^ ]+'`
+   (verify WorkDir == this project; expect partition h200/gb200, walltime 4-00:00:00,
+   account mst115169).
+2. **Solver progress** — `slurm_$JID.log`: tail the latest
+   `[Step N | FTT=.. Re=.. Ma_max=.. Error=..]` line + latest `[CONV] ...` line
+   + the per-2000-step MLUPS block if present. Confirm Step / FTT are advancing.
+3. **Clean-restart sanity** — confirm `--restart=` (not `--cold`), `[G6] Schema OK`,
+   `Statistics loaded ... accu_count=`. Alert on any
+   `FATAL|MPI_Abort|mismatch|cannot load|NaN|DIVERG|--cold`.
+4. **Stats accumulation** — confirm `accu_count` is advancing vs the checkpoint
+   metadata → statistics preserved and still growing (not reset).
+5. **Daemons** — dispatcher (`restart/dispatcher.pid` + `kill -0`) and watcher
+   (`live/watcher.pid`) alive; tail `restart/dispatcher.log` + `live/watcher.log`.
+6. **Health + checkpoint** — `checkrho.dat` tail (density ~1.0, last col flag 0),
+   `readlink restart/checkpoint/latest` + its `accu_count`.
+7. **GB200 switch readiness** — `ls a.out.GB200` (cross-cluster free switching is
+   active only when this binary exists; see [GB200 Switch Pending] memory).
+
+Report concisely. This shortcut is **read-only** — it never changes job/chain state.
+
 ## Project info
 
 - Branch: Edit6_5600DNS
