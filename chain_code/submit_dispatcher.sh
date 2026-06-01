@@ -78,9 +78,11 @@ NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 
 # Partition 候選清單: <ARCH>:<partition>
 # - GB200 partitions 共用 a.out.GB200 / jobscript_chain.slurm.GB200
-# - H200 dev 共用 a.out.H200 / jobscript_chain.slurm.H200
+# - H200 h200 共用 a.out.H200 / jobscript_chain.slurm.H200
+#   (注意: H200 必須用 h200 partition[MaxTime=4天], 不可用 dev[MaxTime=1h] —
+#    jobscript 要求 --time=4-00:00:00, 投到 dev 會被 "exceeds time limit" 拒絕)
 # - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:h200}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
