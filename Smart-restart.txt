@@ -216,4 +216,6 @@ lbm-run         # 投首輪 + 啟 dispatcher + 顯示狀態
      - chain_code/tools/partition_lib.sh、chain_code/partition_ctl.sh、chain_code/run.sh、chain_code/build_and_submit.sh.H200
      - chain_code/tools/project_job_guard.sh、tools/head_lock_lib.sh(重用)
      - ~/.claude/CLAUDE.md(更新 claude_changejp 路徑 + 新增 claude_changepartition)、本專案 CLAUDE.md 
-     
+
+
+     幫我檢驗目前一格˙重大問題，如果現在有進入就累積階段，你如何保證在統計累積階段，能夠在切換gpus數量間能夠保持點對點接合，解禁止內插在jp轉換過程中，能夠保持統計量的完整性 | ❯ 幫我檢驗目前一格˙重大問題，如果現在有進入就累積階段，你如何保證在統計累積階段，能夠在切換gpus數量間能夠保持點對點接合，解禁止內插在jp轉換過程中，能夠保持統計量的完整性 交給codex驗整一次寄完整性 
