@@ -1,16 +1,17 @@
 #!/bin/bash
 #SBATCH --job-name=Edit7_10595SNS 
 #SBATCH --account=MST115169
-#SBATCH --partition=h200
+#SBATCH --partition=normal
 #SBATCH --nodes=16
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] walltime = 4 天 (NCHC h200 partition MaxTime 上限);
-#             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
-#             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
-#                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=4-00:00:00
+# [POLICY-B1] 叢集改版後 h200 partition 已移除; 預設改用 normal (MaxTime 2 天)。
+#             walltime 上限隨 partition 而異: normal=2 天 / 4nodes=1 天 / dev=1 時。
+#             dispatcher / ./run partition 會於投遞時用對應 partition 的 --time= 覆寫;
+#             本 header 為非 dispatcher (直投/自我續投) 路徑的 fallback。
+#             TIMEOUT 於 runtime 由 scontrol 自動偵測, 任何 partition 都能啟動 walltime 救援。
+#SBATCH --time=2-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -313,6 +314,7 @@ validate_checkpoint() {
 # ===== 4.1 AUTO-HEAL =====
 if [ "$CHAIN_COUNT" -eq 1 ]; then
     CAND_HEAL=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+                | grep -E '/step_[0-9]+$' \
                 | grep -v '\.WRITING$' \
                 | awk -F'_' '{print $0"\t"$NF}' \
                 | sort -k2 -n -r \
@@ -333,6 +335,7 @@ fi
 ARGS=""
 if [ "$CHAIN_COUNT" -eq 1 ]; then
     HAS_CKPT=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+               | grep -E '/step_[0-9]+$' \
                | grep -v '\.WRITING$' \
                | while read -r d; do
                      [ -s "$d/metadata.dat" ] && echo "$d" && break
@@ -350,6 +353,7 @@ if [ "$CHAIN_COUNT" -eq 1 ]; then
 else
     log "Checkpoint validation: NP=$NP ranks"
     CAND_LIST=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+                | grep -E '/step_[0-9]+$' \
                 | grep -v '\.WRITING$' \
                 | awk -F'_' '{print $0"\t"$NF}' \
                 | sort -k2 -n -r \
