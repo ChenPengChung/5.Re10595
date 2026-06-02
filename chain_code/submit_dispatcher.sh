@@ -662,6 +662,12 @@ jp_partition_eta() {
   local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts
   cap="$(partition_gpu_cap_per_account "$part" 2>/dev/null || echo 100000)"
   [ "$jp" -gt "$cap" ] && { echo -1; return; }
+  # [JPC-1] 網格整除 + slab 下限前驗: 非法 jp 不可能跑 (changejp 也會擋), 直接判不可行避免回報假 ETA。
+  local _ny; _ny="$(awk '/^#define[[:space:]]+NY[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"
+  if [ -n "$_ny" ] && [ "$jp" -gt 0 ]; then
+    local _nm1=$((_ny - 1))
+    { [ $((_nm1 % jp)) -ne 0 ] || [ $((_nm1 / jp)) -lt 7 ]; } && { echo -1; return; }
+  fi
   case "$c" in H200) nodes=$((jp/8)) ;; GB200) nodes=$((jp/4)) ;; *) nodes=$((jp/8)) ;; esac
   [ "$nodes" -lt 1 ] && { echo -1; return; }
   js="$(cluster_jobscript "$c")" || { echo -1; return; }; [ -f "$js" ] || { echo -1; return; }
@@ -705,6 +711,13 @@ pick_jp_and_partition() {
     { [ "${acc:-0}" != "0" ] || awk "BEGIN{exit !((${ftt:-0})>=(${FTT_PRELOCK}))}"; } && locked=1
   fi
   now="$(date +%s)"
+  # [freeze-on-stats 短路, Codex-C #3] 統計鎖定時不探測其他 jp (省去整輪 sbatch --test-only),
+  # 直接只選 current jp 的 partition 並 KEEP → 保護累積中的統計、永不改 jp。
+  if [ "$locked" -eq 1 ]; then
+    local ctgt; ctgt="$(_pick_partition_for_jp "$cur" | awk '{print $1}')"
+    log "[JP-CTL] LOCK (accu=$acc ftt=$ftt, prelock=$FTT_PRELOCK) → KEEP jp=$cur part=${ctgt:-?} (不探測其他 jp)" >&2
+    echo "KEEP $cur ${ctgt:-}"; return 0
+  fi
   local -a J=() T=() E=() W=()
   local jp r
   for jp in "${JP_CANDIDATES[@]}"; do
@@ -725,11 +738,7 @@ pick_jp_and_partition() {
   done
   [ "$best" -lt 0 ] && { echo ""; return 1; }
   local want_jp="${J[$best]}" want_tgt="${T[$best]}"
-  if [ "$locked" -eq 1 ]; then
-    local ctgt; ctgt="$(_pick_partition_for_jp "$cur" | awk '{print $1}')"
-    log "[JP-CTL] LOCK (accu=$acc ftt=$ftt, prelock=$FTT_PRELOCK) → KEEP jp=$cur part=${ctgt:-?}" >&2
-    echo "KEEP $cur ${ctgt:-$want_tgt}"; return 0
-  fi
+  # (freeze-on-stats 已在迴圈前短路處理 — Codex-C #3)
   if [ "$want_jp" = "$cur" ]; then _jp_state_set jp_change_target 0 jp_change_count 0; echo "KEEP $cur $want_tgt"; return 0; fi
   # 防抖 1 [L2]: 新 jp 分數須勝現 jp 至少 +JP_SWITCH_GAIN_PCT% 才值得換
   #   (現 jp 不在可行清單時 cur_score=-1 → 現 jp 根本跑不動, 直接允許換)
