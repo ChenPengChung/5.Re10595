@@ -51,7 +51,17 @@ _sc_to_hours() {  # D-HH:MM:SS | HH:MM:SS -> hours
         printf "%.4f", d*24 + h + mi/60 + s/3600 }'
 }
 
-sc_cap() { case "$1" in normal|4nodes) echo 32 ;; *) echo 100000 ;; esac; }
+sc_cap() {  # $1=partition -> per-account GPU cap (QOS MaxTRESPerAccount; live read, hardcoded fallback)
+    # [Codex A3 fix] caps are PER-QOS and NOT uniform: verified p_normal=16, p_4nodes=32, dev=uncapped.
+    # The old hardcoded "normal|4nodes)=32" was wrong for normal (16) → jp=32 was wrongly deemed
+    # admissible on normal and every submit there PENDs (MaxGRESPerAccount). Read live from sacctmgr
+    # (NCHC QOS = p_<partition>); fall back to the verified values if sacctmgr is unavailable.
+    local part="$1" cap
+    cap=$(sacctmgr -n -P show qos "p_${part}" format=MaxTRESPerAccount 2>/dev/null \
+            | grep -oE 'gres/gpu=[0-9]+' | cut -d= -f2 | head -1)
+    [ -n "$cap" ] && { echo "$cap"; return; }
+    case "$part" in normal) echo 16 ;; 4nodes) echo 32 ;; *) echo 100000 ;; esac
+}
 
 sc_acct_allowed() {  # $1=partition -> 0 allowed
     local aa; aa=$(scontrol show partition "$1" 2>/dev/null | tr ' ' '\n' | grep '^AllowAccounts=' | cut -d= -f2)
