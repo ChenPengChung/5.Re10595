@@ -12,6 +12,7 @@
                            // 會與 <bits/sigcontext.h> 的 cs 欄位衝突。先 include signal.h
                            // 讓 sigcontext struct 先被解析, 之後 macro 才生效不影響。
 #include "variables.h"
+#include "itblbm/isoparametric_coeff.h"
 using namespace std;
 /************************** Host Variables **************************/
 double  *fh_p[19]; //主機端一般態分佈函數
@@ -70,6 +71,11 @@ double *zeta_z_h, *zeta_z_d;     // [NYD6*NZ6]
 
 // Precomputed stencil base k [NZ6] (int, wall-clamped)
 int *bk_precomp_h, *bk_precomp_d;
+
+#if USE_ITBLBM_STREAMING
+ITB_YZCoeff *itb_yz_coeff_h = NULL;
+ITB_YZCoeff *itb_yz_coeff_d = NULL;
+#endif
 
 // Phase 3: Curvilinear global time step (runtime, from CFL on contravariant velocities)
 // NOTE: dt (= minSize) is derived from GAMMA in variables.h (tanh analytic formula).
@@ -217,6 +223,7 @@ int itag_f6[23] = {400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,4
 #include "initialization.h"
 #include "gilbm/metric_terms.h"
 #include "gilbm/precompute.h"
+#include "itblbm/isoparametric_precompute.h"
 #include "gilbm/diagnostic_gilbm.h"
 #include "communication.h"
 #include "convergence.h"
@@ -803,14 +810,31 @@ int main(int argc, char *argv[])
 
         CHECK_CUDA( cudaMemcpyToSymbol(GILBM_inv_dx, &inv_dx_val, sizeof(double)) );
         CHECK_CUDA( cudaMemcpyToSymbol(GILBM_L_eta_shared, L_eta_shared_h, sizeof(L_eta_shared_h)) );
-        if (myid == 0) {
-            printf("GILBM-GTS: inv_dx = %.8e and shared eta weights -> __constant__ memory.\n",
-                   inv_dx_val);
-        }
-    }
+	        if (myid == 0) {
+	            printf("GILBM-GTS: inv_dx = %.8e and shared eta weights -> __constant__ memory.\n",
+	                   inv_dx_val);
+	        }
+	    }
 
-    // Precomputed stencil base k → GPU
-    CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
+#if USE_ITBLBM_STREAMING
+	    {
+	        ITB_PrecomputeCoefficientsHost(itb_yz_coeff_h, y_2d_h, z_h, dt_global, myid);
+	        double itb_wx_h[2][ITB_X_ORDER];
+	        ITB_PrecomputeXWeightsHost(itb_wx_h, dt_global);
+	        const size_t itb_coeff_count =
+	            (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6;
+	        CHECK_CUDA( cudaMemcpy(itb_yz_coeff_d, itb_yz_coeff_h,
+	                               itb_coeff_count * sizeof(ITB_YZCoeff),
+	                               cudaMemcpyHostToDevice) );
+	        CHECK_CUDA( cudaMemcpyToSymbol(ITB_WX, itb_wx_h, sizeof(itb_wx_h)) );
+	        if (myid == 0) {
+	            printf("[ITB] coefficients and x7 weights copied to GPU.\n");
+	        }
+	    }
+#endif
+
+	    // Precomputed stencil base k → GPU
+	    CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
 
 #if USE_MRT
     // Phase 3.5: MRT nonequilibrium projection tables -> __constant__ memory

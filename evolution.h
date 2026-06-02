@@ -790,20 +790,26 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
         xi_y_d, xi_z_d, bk_precomp_d,
-        z_zeta_d,
-        u, v, w, rho_d,
-        rho_modify_d, Force_d,
-        4);
+	        z_zeta_d,
+	        u, v, w, rho_d,
+	        rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+	        itb_yz_coeff_d,
+#endif
+	        4);
 
     // Right boundary: j = NYD6-7..NYD6-5 (3 rows, MPI iToRight 精確範圍)
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
         xi_y_d, xi_z_d, bk_precomp_d,
-        z_zeta_d,
-        u, v, w, rho_d,
-        rho_modify_d, Force_d,
-        NYD6 - 7);
+	        z_zeta_d,
+	        u, v, w, rho_d,
+	        rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+	        itb_yz_coeff_d,
+#endif
+	        NYD6 - 7);
 
     // ── 等 Buffer 獨佔完成（GPU 空閒 → 快速 sync）──
     CHECK_CUDA( cudaStreamSynchronize(stream1) );
@@ -837,10 +843,13 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
         xi_y_d, xi_z_d, bk_precomp_d,
-        z_zeta_d,
-        u, v, w, rho_d,
-        rho_modify_d, Force_d,
-        3);
+	        z_zeta_d,
+	        u, v, w, rho_d,
+	        rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+	        itb_yz_coeff_d,
+#endif
+	        3);
 
     // [P0 v3] Launch 2: j=7..NYD6-8 (主 Interior)
 #if USE_SMEM_INTERIOR
@@ -852,10 +861,13 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
         xi_y_d, xi_z_d, bk_precomp_d,
-        z_zeta_d,
-        u, v, w, rho_d,
-        rho_modify_d, Force_d,
-        7);
+	        z_zeta_d,
+	        u, v, w, rho_d,
+	        rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+	        itb_yz_coeff_d,
+#endif
+	        7);
 #else
     //   V100 高速路徑 (預設): non-smem, 無 __syncthreads 開銷
     //     V100 128KB L1 已在硬體層級處理 η-row overlap
@@ -864,10 +876,13 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
         xi_y_d, xi_z_d, bk_precomp_d,
-        z_zeta_d,
-        u, v, w, rho_d,
-        rho_modify_d, Force_d,
-        7);
+	        z_zeta_d,
+	        u, v, w, rho_d,
+	        rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+	        itb_yz_coeff_d,
+#endif
+	        7);
 #endif
 
     // [P0 v3] Launch 3: j=NYD6-4 (從 Buffer 移出的右邊界行)
@@ -875,10 +890,13 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
         xi_y_d, xi_z_d, bk_precomp_d,
-        z_zeta_d,
-        u, v, w, rho_d,
-        rho_modify_d, Force_d,
-        NYD6 - 4);
+	        z_zeta_d,
+	        u, v, w, rho_d,
+	        rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+	        itb_yz_coeff_d,
+#endif
+	        NYD6 - 4);
 
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_step1_stop, stream0);

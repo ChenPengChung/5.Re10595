@@ -57,6 +57,20 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b-ITB. ITB-ISLBM streaming path (experimental) ──
+//   0 = current GILBM RK2 / contravariant interpolation path
+//   1 = precomputed physical-space isoparametric interpolation path
+// First pass keeps collision, wall BC, MPI, statistics, and dt_global unchanged.
+#ifndef USE_ITBLBM_STREAMING
+#define     USE_ITBLBM_STREAMING 0
+#endif
+#if USE_ITBLBM_STREAMING && USE_SMEM_INTERIOR
+#error "USE_ITBLBM_STREAMING first pass requires USE_SMEM_INTERIOR=0"
+#endif
+#ifndef ITBLBM_STRICT_PRECOMPUTE
+#define     ITBLBM_STRICT_PRECOMPUTE 1
+#endif
+
 // ── §1c. 自動推導開關 (勿手動修改) ──
 #define     USE_MRT      (COLLISION_MODE >= 1)
 
@@ -312,6 +326,9 @@
 #define     GHOST_EXTRAP_ORDER  2
 #if GHOST_EXTRAP_ORDER < 2 || GHOST_EXTRAP_ORDER > 3
 #error "GHOST_EXTRAP_ORDER must be 2 (quadratic) or 3 (cubic)"
+#endif
+#if USE_ITBLBM_STREAMING && GHOST_EXTRAP_ORDER != 2
+#error "USE_ITBLBM_STREAMING first pass supports only GHOST_EXTRAP_ORDER=2"
 #endif
 
 

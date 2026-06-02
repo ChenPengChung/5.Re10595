@@ -130,6 +130,21 @@ void AllocateMemory() {
     CHECK_CUDA( cudaMallocHost((void**)&bk_precomp_h, NZ6 * sizeof(int)) );
     CHECK_CUDA( cudaMalloc(&bk_precomp_d, NZ6 * sizeof(int)) );
 
+#if USE_ITBLBM_STREAMING
+    {
+        const size_t itb_coeff_count =
+            (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6;
+        const size_t itb_coeff_bytes = itb_coeff_count * sizeof(ITB_YZCoeff);
+        CHECK_CUDA( cudaMallocHost((void**)&itb_yz_coeff_h, itb_coeff_bytes) );
+        CHECK_CUDA( cudaMalloc((void**)&itb_yz_coeff_d, itb_coeff_bytes) );
+        CHECK_CUDA( cudaMemset(itb_yz_coeff_d, 0, itb_coeff_bytes) );
+        if (myid == 0) {
+            printf("[Memory] ITB coeff: %.2f MB/rank (%d yz classes x NYD6 x NZ6)\n",
+                   itb_coeff_bytes / 1048576.0, ITB_YZ_CLASS_COUNT);
+        }
+    }
+#endif
+
     // GILBM architecture arrays: f_post 雙緩衝 (一點一值)
     // [方案A] feq_d 已移除 — collision 自行計算 feq
     // [方案B] f_post_d + f_post_d2 雙緩衝: FusedKernel 讀 f_post_read、寫 f_post_write
@@ -290,6 +305,10 @@ void FreeSource() {
     // Precomputed stencil base k
     CHECK_CUDA( cudaFreeHost(bk_precomp_h) );
     CHECK_CUDA( cudaFree(bk_precomp_d) );
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaFreeHost(itb_yz_coeff_h) );
+    CHECK_CUDA( cudaFree(itb_yz_coeff_d) );
+#endif
     // GILBM architecture arrays (GTS, 雙緩衝)
     CHECK_CUDA( cudaFree(f_post_d) );
     CHECK_CUDA( cudaFree(f_post_d2) );

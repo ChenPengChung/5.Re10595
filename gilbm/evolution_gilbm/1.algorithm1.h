@@ -174,6 +174,9 @@ __device__ void algorithm1_step1_GTS(
     double *u_out, double *v_out, double *w_out, double *rho_out_arr,
     double *rho_modify,
     const double *Force      // body force (streamwise, device pointer)
+#if USE_ITBLBM_STREAMING
+    , const ITB_YZCoeff *itb_yz_coeff_d
+#endif
 ) {
     const int nface = NX6 * NZ6;
     const int index = j * nface + k * NX6 + i;
@@ -185,11 +188,25 @@ __device__ void algorithm1_step1_GTS(
 
     const int bi = i - 3;
     const int bj = j - 3;
+#if USE_ITBLBM_STREAMING
+    (void)bi;
+    (void)bj;
+    const int bk = 0;
+    (void)bk;
+#else
     const int bk = bk_precomp_d[k];
+#endif
 
     // ★ 優化1: 讀 4 個 Jacobian 值 (2 次 DRAM read，register 重用於 18 個 q)
+#if USE_ITBLBM_STREAMING
+    const double xi_y_val = 0.0;
+    const double xi_z_val = 0.0;
+    (void)xi_y_val;
+    (void)xi_z_val;
+#else
     const double xi_y_val  = xi_y_d[idx_jk];
     const double xi_z_val  = xi_z_d[idx_jk];
+#endif
 
     // ── Wall BC pre-computation (6th-order one-sided FD) ──
     bool is_bottom = (k == 3);
@@ -263,13 +280,16 @@ __device__ void algorithm1_step1_GTS(
             if (is_bottom) need_bc = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, true);
             else if (is_top) need_bc = NeedsBoundaryCondition(q, zeta_y_val, zeta_z_val, false);
             if (need_bc) {
-                f_streamed = ChapmanEnskogBC(q, rho_wall,
-                    du_dk, dv_dk, dw_dk,
-                    zeta_y_val, zeta_z_val,
-                    omega_global, dt_global);
-            } else {
-                // ── §3 優化: Per-Direction Specialized Loop ──
-                // ★ D3Q19 方向分組，按實際需要的插值維度特化迴圈:
+	                f_streamed = ChapmanEnskogBC(q, rho_wall,
+	                    du_dk, dv_dk, dw_dk,
+	                    zeta_y_val, zeta_z_val,
+	                    omega_global, dt_global);
+	            } else {
+#if USE_ITBLBM_STREAMING
+	                f_streamed = itb_stream_q(q, i, j, k, f_post_read, itb_yz_coeff_d);
+#else
+	                // ── §3 優化: Per-Direction Specialized Loop ──
+	                // ★ D3Q19 方向分組，按實際需要的插值維度特化迴圈:
                 //   1D (q=1,2):         ey=ez=0 → δξ=δζ=0 → 僅 η 方向 7-point (7 reads)
                 //   2D (q=3-6,15-18):   ex=0   → δη=0    → ξ×ζ 7×7 (49 reads)
                 //   3D (q=7-14):        ex≠0, ey/ez≠0    → 完整 7×7×7 (343 reads)
@@ -370,11 +390,12 @@ __device__ void algorithm1_step1_GTS(
 
                     gilbm_ghost_zone_extrapolate(interp2, bk);
 
-                    f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
-                        t_zeta, bk, i, j, k, z_zeta_d, q);
-                }  // end 2D/3D branch
-            }
-        }
+	                    f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
+	                        t_zeta, bk, i, j, k, z_zeta_d, q);
+	                }  // end 2D/3D branch
+#endif
+	            }
+	        }
 
         f_arr[q] = f_streamed;     // ★ 方案B: 存入 register, 不寫 DRAM
         rho_stream += f_streamed;
@@ -774,6 +795,9 @@ __global__ void Algorithm1_FusedKernel_GTS_Buffer(
     const double *z_zeta_d,
     double *u_out, double *v_out, double *w_out, double *rho_out,
     double *rho_modify, const double *Force,
+#if USE_ITBLBM_STREAMING
+    const ITB_YZCoeff *itb_yz_coeff_d,
+#endif
     int start_j)
 {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -783,7 +807,11 @@ __global__ void Algorithm1_FusedKernel_GTS_Buffer(
     algorithm1_step1_GTS(i, j, k,
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
-        u_out, v_out, w_out, rho_out, rho_modify, Force);
+        u_out, v_out, w_out, rho_out, rho_modify, Force
+#if USE_ITBLBM_STREAMING
+        , itb_yz_coeff_d
+#endif
+        );
 }
 
 // Interior SMEM kernel: 用於 P0v3 Phase 2 主 Interior launch

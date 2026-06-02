@@ -88,6 +88,7 @@ __constant__ double GILBM_omega_global;    // omega_global   (壁面 BC 用)
 #include "../interpolation_gilbm.h"
 #include "../boundary_conditions.h"
 #include "0.collision.h"
+#include "../../itblbm/isoparametric_streaming.h"
 
 
 // ────────────────────────────────────────────────────────────────────────────
