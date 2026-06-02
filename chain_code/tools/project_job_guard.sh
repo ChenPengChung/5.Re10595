@@ -110,7 +110,14 @@ case "$cmd" in
         ;;
 
     scancel)
-        jobid="${1:-}"
+        # 接受 <jobid> [--allow-running]; 僅 --allow-running 才可取消 RUNNING job (changejp --apply 用)。
+        jobid=""; _allow_running=0
+        for _a in "$@"; do
+            case "$_a" in
+                --allow-running) _allow_running=1 ;;
+                *) _is_numeric_id "$_a" && jobid="$_a" ;;
+            esac
+        done
         if ! _is_numeric_id "$jobid"; then
             echo "[job-guard] FATAL: scancel requires numeric jobid" >&2
             exit 2
@@ -141,6 +148,13 @@ case "$cmd" in
                     exit 11
                 fi
                 echo "[job-guard] Slurm WorkDir/UserId 驗證通過 (WorkDir=$_wd_real)"
+                # [6-a] 預設拒絕取消 RUNNING job — 防 watchdog 在 PENDING→RUNNING race 窗口誤殺自家
+                # 剛起跑的 running job (丟失計算進度)。僅 --allow-running (changejp --apply 明確切換) 放行。
+                _state="$(printf '%s\n' "$_info" | grep -oE 'JobState=[^[:space:]]+' | head -1 | cut -d= -f2-)"
+                if [ "$_state" = "RUNNING" ] && [ "$_allow_running" -ne 1 ]; then
+                    echo "[job-guard] REFUSE: jobid=$jobid JobState=RUNNING → 需 --allow-running 才取消 (防 PENDING→RUNNING race 誤殺自家 running job)" >&2
+                    exit 12
+                fi
             else
                 echo "[job-guard] note: jobid=$jobid 不在 Slurm 佇列中 (已結束?) → 無需取消, no-op"
                 exit 0

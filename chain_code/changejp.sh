@@ -275,7 +275,8 @@ if [ "$PREPARE_ONLY" -ne 1 ]; then
   case "${HEAD_STATE:-}" in
     ""|COMPLETED|CANCELLED|FAILED|NODE_FAIL|TIMEOUT|OUT_OF_MEMORY|BOOT_FAIL|DEADLINE)
       say "[b] 無 active job 需取消 (state=${HEAD_STATE:-none})" ;;
-    *) say "[b] scancel $HEAD_JID (job-guard)"; ./run job-guard scancel "$HEAD_JID" ;;
+    *) say "[b] scancel $HEAD_JID (job-guard$([ "$ALLOW_RUNNING" -eq 1 ] && echo ' --allow-running'))"
+       ./run job-guard scancel "$HEAD_JID" $([ "$ALLOW_RUNNING" -eq 1 ] && echo --allow-running) ;;
   esac
   _RS="$(readlink -f "$LATEST" 2>/dev/null)"
   _ACC2="$(grep -E '^accu_count=' "$_RS/metadata.dat" 2>/dev/null | cut -d= -f2 || echo 0)"
