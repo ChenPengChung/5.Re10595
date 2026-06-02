@@ -349,11 +349,15 @@ if [ -z "$CLUSTER" ] \
     # 候選清單: ARCH:partition (順序 = 平手時的優先級, 與 dispatcher 一致)
     _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev}"
     _RUNSH_TIE_TOL=30   # ETA 差距 <= 30s 視為平手, 用候選順序先到先選
+    # [PS-4] 讀 jp 供 GPU-cap 前過濾 (與 dispatcher pick_cluster 一致, 避免 jp>cap 候選永久 PENDING)
+    _RUNSH_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _RUNSH_JP="${_RUNSH_JP:-0}"
 
     _eta_epoch() {
         local js="$1" part="$2" out eta_str wt="" time_arg=""
-        if [ -n "$part" ] && type gb200_partition_walltime >/dev/null 2>&1; then
-            wt="$(gb200_partition_walltime "$part")"
+        # [PS-3] 統一查 GB200+H200 walltime (原只查 gb200_*, H200 候選得空 --time →
+        #        繼承 header 2d > dev 1h MaxTime → --test-only 被拒 → H200:dev 永遠被 skip)
+        if [ -n "$part" ] && type partition_walltime >/dev/null 2>&1; then
+            wt="$(partition_walltime "$part")"
         fi
         [ -n "$wt" ] && time_arg="--time=$wt"
         if [ -n "$part" ]; then
@@ -396,6 +400,15 @@ if [ -z "$CLUSTER" ] \
         _js="$CHAIN_DIR/jobscript_chain.slurm.${_c}"
         [ -f "$_js" ] || continue
 
+        # [PS-4] GPU-cap 前過濾: jp > 該 partition 每帳號上限 → 必永久 PENDING, 跳過
+        if type partition_gpu_cap_per_account >/dev/null 2>&1; then
+            _cap="$(partition_gpu_cap_per_account "$_part")"
+            if [ "${_RUNSH_JP:-0}" -gt "${_cap:-100000}" ]; then
+                _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: jp=${_RUNSH_JP} > cap=${_cap} (skip: MaxGRESPerAccount)\n"
+                continue
+            fi
+        fi
+
         _eta=$(_eta_epoch "$_js" "$_part")
         if [ "$_eta" -lt 0 ]; then
             _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: ETA unknown (skip)\n"
@@ -426,13 +439,18 @@ if [ -z "$CLUSTER" ] \
         CLUSTER_SRC="partition-smart-ETA(best=${_BEST_TARGET})"
 
         # 自動寫入 partition override (供 jobscript chain 續投使用)
+        # [PS-2] 依 arch 選對 pin 檔: H200 投遞讀 restart/h200_partition, GB200 讀 restart/gb200_partition.
+        #        原本一律寫 gb200_partition → H200 override 寫錯檔、H200 投遞讀不到 → 落回 header.
         _js_default_part="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.${CLUSTER}")"
+        _PINFILE="restart/gb200_partition"; _OTHERPIN="restart/h200_partition"
+        [ "$CLUSTER" = "H200" ] && { _PINFILE="restart/h200_partition"; _OTHERPIN="restart/gb200_partition"; }
+        mkdir -p restart/
         if [ "$_BEST_P" != "$_js_default_part" ]; then
-            mkdir -p restart/
-            echo "$_BEST_P" > restart/gb200_partition
+            echo "$_BEST_P" > "$_PINFILE"
         else
-            rm -f restart/gb200_partition 2>/dev/null
+            rm -f "$_PINFILE" 2>/dev/null
         fi
+        rm -f "$_OTHERPIN" 2>/dev/null   # 清掉另一 arch 的舊 pin, 避免跨 arch 切換時殘留誤導
     fi
 fi
 
@@ -759,9 +777,11 @@ if [ "$MODE_COLD" -eq 1 ]; then
     # 恢復 [2] ETA 選出的 partition override (剛被 rm -rf restart/ 刪掉)
     if [ -n "${_BEST_P:-}" ] && [ -n "${_BEST_C:-}" ]; then
         _fc_default="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.${_BEST_C}" 2>/dev/null)"
+        # [PS-2] 依 arch 選對 pin 檔 (H200→h200_partition, 否則 gb200_partition)
+        _fc_pin="restart/gb200_partition"; [ "$_BEST_C" = "H200" ] && _fc_pin="restart/h200_partition"
         if [ "$_BEST_P" != "$_fc_default" ]; then
-            echo "$_BEST_P" > restart/gb200_partition
-            echo "    [partition] 恢復 ETA 選出的 partition=$_BEST_P"
+            echo "$_BEST_P" > "$_fc_pin"
+            echo "    [partition] 恢復 ETA 選出的 partition=$_BEST_P ($_fc_pin)"
         fi
     fi
     HAS_CKPT=0

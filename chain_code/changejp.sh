@@ -173,6 +173,7 @@ MODE_NAME="$([ "$PREPARE_ONLY" -eq 1 ] && echo prepare-only || echo apply)"
 say "=== changejp 2. 執行 ($MODE_NAME) ==="
 JOURNAL="restart/jp_switch.inprogress"
 TMP=""           # repartition 暫存 (供 _rollback 清理; 先佔位)
+BAK=""           # 舊 checkpoint 備份路徑 (供 _rollback 還原; 先佔位)
 COMMITTED=0      # 過了 checkpoint 原子提交點才 =1
 # 交易快照: 原子提交前的所有可變產物, 供 build 失敗 / crash / kill (含 dispatcher 的 timeout 600
 # SIGTERM) 時完整回滾 → 舊 jp 一定完整可跑 (修 HIGH-4 / MED-6)。
@@ -181,15 +182,34 @@ cp "$VH" "$SNAP/variables.h"
 [ -f "$JS_H200" ]  && cp "$JS_H200"  "$SNAP/js_h200"   || true
 [ -f "$JS_GB200" ] && cp "$JS_GB200" "$SNAP/js_gb200"  || true
 [ -f "$PROV" ]     && cp "$PROV"     "$SNAP/prov"      || true
-[ -f a.out.H200 ]  && cp a.out.H200  "$SNAP/a.out.H200" || true
+[ -f a.out.H200 ]  && cp a.out.H200  "$SNAP/a.out.H200"  || true
+[ -f a.out.GB200 ] && cp a.out.GB200 "$SNAP/a.out.GB200" || true   # [CJP-2] 供 rollback 還原舊 jp GB200 binary
 _rollback() {
   [ "${COMMITTED:-0}" = "1" ] && return 0
+  # [CKPT-ATOM-2 roll-forward] 若 checkpoint 已原子換成新 jp (mv -T 完成但 COMMITTED 旗標
+  # 尚未及設定: 261↔263 窗口被 SIGTERM/SIGKILL 命中), 此時 config 也已是新 jp → 一致,
+  # 回滾反而造成 config(舊)/checkpoint(新) 不一致。偵測到即「保留新 jp 狀態」不回滾。
+  local _rc=""
+  [ -d "$SRC_DIR" ] && _rc="$(grep -E '^mpi_rank_count=' "$SRC_DIR/metadata.dat" 2>/dev/null | cut -d= -f2 || true)"
+  if [ "${_rc:-}" = "$NEW_JP" ]; then
+    say "[rollback] checkpoint 已是新 jp=$NEW_JP (原子提交實際已完成) → roll-forward, 不回滾"
+    rm -f "$JOURNAL" 2>/dev/null || true
+    return 0
+  fi
   say "[rollback] 切換未提交 → 還原 variables.h / jobscripts / grid_provenance / a.out.H200 (舊 jp 完整可跑)"
   cp "$SNAP/variables.h" "$VH" 2>/dev/null || true
   [ -f "$SNAP/js_h200" ]    && cp "$SNAP/js_h200"    "$JS_H200"  2>/dev/null || true
   [ -f "$SNAP/js_gb200" ]   && cp "$SNAP/js_gb200"   "$JS_GB200" 2>/dev/null || true
   [ -f "$SNAP/prov" ]       && cp "$SNAP/prov"       "$PROV"     2>/dev/null || true
-  [ -f "$SNAP/a.out.H200" ] && cp "$SNAP/a.out.H200" a.out.H200  2>/dev/null || true
+  [ -f "$SNAP/a.out.H200" ]  && cp "$SNAP/a.out.H200"  a.out.H200  2>/dev/null || true
+  [ -f "$SNAP/a.out.GB200" ] && cp "$SNAP/a.out.GB200" a.out.GB200 2>/dev/null || true   # [CJP-2] 還原舊 jp GB200 binary
+  # [CKPT-ATOM-2 roll-back] checkpoint 提交窗口中斷 (舊 SRC_DIR 已 mv 到 BAK, 新的尚未換入)
+  # → 從備份移回 + 修 latest symlink, 確保舊 jp checkpoint 完整可續跑。
+  if [ -n "${BAK:-}" ] && [ ! -d "$SRC_DIR" ] && [ -d "$BAK" ]; then
+    say "[rollback] checkpoint 提交中斷 → 從備份還原 $SRC_DIR (latest 重指)"
+    mv "$BAK" "$SRC_DIR" 2>/dev/null || true
+    ln -sfn "$(basename "$SRC_DIR")" "$LATEST" 2>/dev/null || true
+  fi
   [ -n "${TMP:-}" ] && rm -rf "$TMP" 2>/dev/null || true
   rm -f "$JOURNAL" 2>/dev/null || true
 }
@@ -228,8 +248,15 @@ if [ ! -s a.out ] || { command -v file >/dev/null 2>&1 && ! file a.out 2>/dev/nu
 fi
 # (3) cp 成 arch binary (dispatcher 從 a.out.H200 投; build-only 只產 a.out)
 cp -f a.out a.out.H200
-rm -f a.out.GB200   # 移除可能殘留的舊 jp aarch64 binary, 下次 GB200 輪自會重編
-say "    ✓ a.out.H200 已更新 (jp=$NEW_JP); 移除舊 a.out.GB200(若有)"
+# [CJP-1] 移除舊 jp 的 aarch64 binary: 留著會讓 dispatcher 用「錯 jp」的 GB200 binary 投遞 (比缺檔更危險)。
+# 但 x86 login node 無法 cross-build aarch64 → 不會自動重編 (原註解「下次自會重編」不實, 已更正)。
+# 後果: GB200 候選暫時消失, 直到於 GB200 節點 ./run build 重編。rollback 時 _rollback 會從 SNAP 還原舊 jp 的 GB200 binary。
+if [ -f a.out.GB200 ]; then
+  rm -f a.out.GB200
+  say "    ✓ a.out.H200 已更新 (jp=$NEW_JP); 移除舊 jp 的 a.out.GB200 → ⚠ GB200 候選暫停用, 需於 GB200 節點重編才恢復"
+else
+  say "    ✓ a.out.H200 已更新 (jp=$NEW_JP); 無 a.out.GB200 (本專案目前只有 H200 binary)"
+fi
 echo "phase=BUILT" >> "$JOURNAL"
 
 # (4) build 成功 → 提交 jobscript / provenance
@@ -259,8 +286,8 @@ mkdir -p restart/ckpt_bak
 BAK="restart/ckpt_bak/$(basename "$SRC_DIR")_jp${CUR_JP}.$$"
 mv "$SRC_DIR" "$BAK"
 mv -T "$TMP" "$SRC_DIR"
+COMMITTED=1   # 不可逆點: 新 jp checkpoint 已原子換入 SRC_DIR (rename, 同 fs 原子); 此後 trap 不回滾。latest 緊接重指。
 ln -sfn "$(basename "$SRC_DIR")" "$LATEST"
-COMMITTED=1   # 不可逆點已過: checkpoint 換入 + latest 重指完成 (此後 trap 不再回滾, 以免與已換的新 jp checkpoint 不一致)
 say "    原檔備份 → $BAK ; latest → $(readlink "$LATEST")"
 # 把殘留「舊 jp」的其他 step_* 移出 (避免 jobscript fallback resume 撈到錯 rank_count)
 for d in restart/checkpoint/step_*/; do

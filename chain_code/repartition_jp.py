@@ -220,6 +220,15 @@ def main():
         print("  Statistics: migrated {} sum_* (point-to-point) + copied {} cv_*; accu_count={} preserved".format(
             len(stat_bases), len(cv_files), meta.get('accu_count', '0')))
 
+    # [CV-count reconcile] The jobscript's validate_checkpoint marks a checkpoint BAD if metadata
+    # cv_count>0 but the cv_*_history.bin files are absent. We copy cv verbatim when present; if NONE
+    # were migrated (src had none, or --drop-stats), force cv_count=0 so dst metadata stays
+    # self-consistent and validate_checkpoint won't reject it.
+    if not cv_files and 'cv_count' in meta and (meta.get('cv_count', '0') or '0') != '0':
+        print("  cv_count {}->0 (no cv_*_history.bin migrated → keep metadata self-consistent)".format(meta['cv_count']))
+    if not cv_files:
+        meta['cv_count'] = '0'
+
     # New metadata: only mpi_rank_count + grid_dims change; everything else (step/FTT/dt/Force/accu) verbatim
     meta['mpi_rank_count'] = str(args.new_jp)
     meta['grid_dims'] = "{},{},{}".format(NX6, NYD6_new, NZ6)
