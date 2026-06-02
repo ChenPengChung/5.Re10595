@@ -681,7 +681,9 @@ for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
     SBATCH_RC=$?
     if [ $SBATCH_RC -eq 0 ] && [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "GB200"
-        log "Submitted next round: job=$NEXT_ID (attempt $ATTEMPT/$MAX_SBATCH_RETRY)  HEAD.lockdir jobid->$NEXT_ID state=PENDING"
+        # [sync 修補] 自我續投同步 chain_jobid (與 HEAD.lockdir 一致), 防 dispatcher busy-retry
+        printf '%s\n' "$NEXT_ID" > restart/chain_jobid.tmp && mv -f restart/chain_jobid.tmp restart/chain_jobid
+        log "Submitted next round: job=$NEXT_ID (attempt $ATTEMPT/$MAX_SBATCH_RETRY)  HEAD.lockdir+chain_jobid->$NEXT_ID state=PENDING"
         exit 0
     fi
     log "sbatch attempt $ATTEMPT/$MAX_SBATCH_RETRY failed: $NEXT_ID"

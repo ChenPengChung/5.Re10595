@@ -98,9 +98,16 @@ sc_eta_hours() {  # $1=jp $2=partition -> hours to start (0=now, -1=cannot)
     esac
 }
 
-sc_record_r_ftt() {  # $1=jp $2=value(FTT/hr)
-    local jp="$1" v="$2"; touch "$SC_TPDB"
-    { grep -v -E "^jp${jp}=" "$SC_TPDB" 2>/dev/null; echo "jp${jp}=${v}"; } \
+sc_record_r_ftt() {  # $1=jp $2=measured(FTT/hr) -> EWMA 平滑寫入 (防單樣本雜訊翻面 → thrash)
+    # blended = α·measured + (1-α)·old  (α=SC_EWMA_ALPHA, 預設 0.4: 偏重歷史, 抗單輪 init/contention 雜訊)
+    local jp="$1" v="$2" a="${SC_EWMA_ALPHA:-0.4}" old blended; touch "$SC_TPDB"
+    old=$(grep -E "^jp${jp}=" "$SC_TPDB" | cut -d= -f2 | tr -d '[:space:]')
+    if [ -n "$old" ] && awk -v o="$old" 'BEGIN{exit !(o>0)}'; then
+        blended=$(awk -v m="$v" -v o="$old" -v a="$a" 'BEGIN{printf "%.5f", a*m+(1-a)*o}')
+    else
+        blended="$v"
+    fi
+    { grep -v -E "^jp${jp}=" "$SC_TPDB" 2>/dev/null; echo "jp${jp}=${blended}"; } \
         > "${SC_TPDB}.tmp" && mv -f "${SC_TPDB}.tmp" "$SC_TPDB"
 }
 
@@ -166,9 +173,25 @@ sc_enumerate() {  # $1=H -> lines "jp part startdelay_h net"
     done
 }
 
-sc_pick_combo() {  # [--pending] -> "jp part"
+sc_pick_combo() {  # [--pending] -> "jp part"  (含 anti-thrash 遲滯)
     local H="$SC_HORIZON_H"; [ "${1:-}" = "--pending" ] && H="$SC_HORIZON_PEND_H"
-    sc_enumerate "$H" | sort -k4 -g -r | head -1 | awk '{print $1, $2}'
+    local enum best best_jp cur best_cur nb nc
+    enum=$(sc_enumerate "$H" | sort -k4 -g -r)
+    best=$(printf '%s\n' "$enum" | head -1); [ -z "$best" ] && return
+    best_jp=$(printf '%s\n' "$best" | awk '{print $1}')
+    cur=$(jpswitch_current_jp); cur="${cur:-0}"
+    # 最佳就是當前 jp → 直接用 (partition 內切換免遲滯)
+    if [ "$best_jp" = "$cur" ]; then printf '%s\n' "$best" | awk '{print $1, $2}'; return; fi
+    # [弱點#1 修補] 最佳是「不同 jp」→ 須淨贏過「當前 jp 最佳組合」× margin(預設1.15)才切, 否則留在當前 jp。
+    # 防 r_ftt 雜訊造成 jp32↔jp64 來回 thrash(每切一次=一個 repartition+restart)。
+    best_cur=$(printf '%s\n' "$enum" | awk -v c="$cur" '$1==c' | head -1)
+    [ -z "$best_cur" ] && { printf '%s\n' "$best" | awk '{print $1, $2}'; return; }  # 當前 jp 不可投→必須切
+    nb=$(printf '%s\n' "$best" | awk '{print $4}'); nc=$(printf '%s\n' "$best_cur" | awk '{print $4}')
+    if awk -v nb="$nb" -v nc="$nc" -v m="${SC_THRASH_MARGIN:-1.15}" 'BEGIN{exit !(nb > nc*m)}'; then
+        printf '%s\n' "$best"     | awk '{print $1, $2}'   # 切 jp 划算 (淨贏 > margin)
+    else
+        printf '%s\n' "$best_cur" | awk '{print $1, $2}'   # anti-thrash: 留在當前 jp
+    fi
 }
 
 sc_simulate() {  # [--pending] -> table + pick (no action)
