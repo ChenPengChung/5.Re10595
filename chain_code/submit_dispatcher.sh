@@ -676,6 +676,19 @@ _jp_state_get() { local k="$1" d="${2:-}" v; v="$(grep -E "^$k=" "$JP_STATE_FILE
 _jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; shift 2
     if [ -f "$JP_STATE_FILE" ] && grep -qE "^$k=" "$JP_STATE_FILE"; then sed -E -i "s|^$k=.*|$k=$v|" "$JP_STATE_FILE"; else echo "$k=$v" >> "$JP_STATE_FILE"; fi; done; }
 
+# [4] 帳號此刻在某 partition 的 GPU 用量 (RUNNING+PENDING), 排除「本 chain 的 head」(它在下輪前會釋放)。
+# 用於即時 headroom 過濾: 靜態 cap 容得下、但此刻已被同帳號其他 job 占滿的 partition, 即投仍會 PENDING。
+partition_account_gpu_inuse() {
+    local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
+    squeue -A "${ACCOUNT:-MST115169}" -h -t RUNNING,PENDING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+        { jid=$1; pj=$2; n=$3; g=$4
+          if (pj != p) next
+          if (me != "" && jid == me) next
+          sub(/.*gpu:/,"",g); sub(/[^0-9].*/,"",g); if (g=="") g=0
+          tot += n*g }
+        END { print tot+0 }'
+}
+
 # 假設 jp 在 (ARCH,part) 的開始 epoch; -1 = 不可行。先用 MaxTRESPerAccount 過濾, 再 --test-only(--nodes/--ntasks override 已實測有效)。
 jp_partition_eta() {
   local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts eta _ny _nm1 _probed
