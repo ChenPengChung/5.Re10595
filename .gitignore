@@ -54,3 +54,6 @@ checkrho.dat
 !timing_log.dat.gz
 !checkrho.dat.gz
 DISPATCHER_ACTIVE
+meshX.DAT
+DISPATCHER_INTENT
+restart/dispatcher.heartbeat
