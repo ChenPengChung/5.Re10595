@@ -44,17 +44,14 @@ echo "$$" > "$PID_FILE"
 trap 'rm -f "$PID_FILE"; log "watcher exiting (pid=$$)"' EXIT
 
 pick_latest_vtk() {
-    local f best_step=-1 best_path="" step
-    for f in "$RESULT_DIR"/velocity_merged_*.vtk; do
-        [[ -f "$f" ]] || continue
-        step=$(basename "$f" | sed -nE 's/^velocity_merged_0*([0-9]+)\.vtk$/\1/p')
-        [[ -n "$step" ]] || continue
-        if (( step > best_step )); then
-            best_step=$step
-            best_path=$f
-        fi
-    done
-    [[ -n "$best_path" ]] && printf '%s\n' "$best_path"
+    # Pick by modification time, NOT by the step number in the filename.
+    # After a chain restart from an earlier checkpoint the global step counter
+    # regresses, leaving a stale higher-step VTK in rolling retention. Selecting
+    # by step number would freeze on that stale file and never process the
+    # currently-written (lower-step) frames; mtime always tracks the live sim.
+    local f
+    f=$(ls -t "$RESULT_DIR"/velocity_merged_*.vtk 2>/dev/null | head -1 || true)
+    [[ -n "$f" && -f "$f" ]] && printf '%s\n' "$f"
 }
 
 extract_step() {
@@ -222,6 +219,7 @@ log "  tauwall  = $TAUWALL_SCRIPT"
 log "=========================================="
 
 last_processed=""
+last_mtime=""
 last_bench_step=""
 
 while :; do
@@ -232,8 +230,12 @@ while :; do
     fi
 
     vtk=$(pick_latest_vtk || true)
-    if [[ -n "$vtk" && "$vtk" != "$last_processed" ]]; then
-        if is_size_stable "$vtk"; then
+    if [[ -n "$vtk" ]]; then
+        cur_mtime=$(stat -c %Y "$vtk" 2>/dev/null || echo 0)
+        # Reprocess when a different file is newest OR the same path was
+        # rewritten (mtime changed). Covers chain-restart step regression and
+        # same-step VTK overwrites that path string-equality alone would miss.
+        if [[ "$vtk" != "$last_processed" || "$cur_mtime" != "$last_mtime" ]] && is_size_stable "$vtk"; then
             step=$(extract_step "$vtk")
             ftt=$(get_latest_ftt)
             accu=$(get_accu_count)
@@ -261,6 +263,7 @@ while :; do
             fi
 
             last_processed="$vtk"
+            last_mtime="$cur_mtime"
         fi
     fi
     sleep "$POLL_SEC"
