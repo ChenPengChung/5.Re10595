@@ -81,7 +81,7 @@
 #define     NX      449         // 展向格點
 #define     NY      897         // 流向格點 (需 (NY-1)%jp==0; 896%128==0 → 896/128=7)
 #define     NZ      449         // 法向格點
-#define     jp      32         //  GPU 數量 (流向分割)
+#define     jp      128         //  GPU 數量 (流向分割)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
