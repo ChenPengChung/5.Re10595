@@ -129,19 +129,21 @@ case "$cmd" in
                 _wd="$(printf '%s\n' "$_info" | grep -oE 'WorkDir=[^[:space:]]+' | head -1 | cut -d= -f2-)"
                 _uid="$(printf '%s\n' "$_info" | grep -oE 'UserId=[^[:space:]]+' | head -1 | cut -d= -f2-)"
                 _wd_real="$(readlink -f "$_wd" 2>/dev/null || echo "$_wd")"
-                if [ -n "$_wd_real" ] && [ "$_wd_real" != "$PROJECT_ROOT" ]; then
-                    echo "[job-guard] REFUSE: jobid=$jobid WorkDir=$_wd_real != project $PROJECT_ROOT" >&2
+                # fail-closed: 無法確認 WorkDir==本專案 (含解析失敗/空值) 一律拒絕, 絕不誤殺別專案
+                if [ -z "$_wd_real" ] || [ "$_wd_real" != "$PROJECT_ROOT" ]; then
+                    echo "[job-guard] REFUSE: jobid=$jobid WorkDir='${_wd_real:-?}' 無法確認屬本專案 $PROJECT_ROOT" >&2
                     echo "[job-guard]   (本地 chain_jobid 可能過期且該 id 已被 Slurm 回收給別專案 → 拒絕取消)" >&2
                     exit 11
                 fi
                 _uid_name="${_uid%%(*}"
-                if [ -n "$_uid_name" ] && [ "$_uid_name" != "$USER" ]; then
-                    echo "[job-guard] REFUSE: jobid=$jobid UserId=$_uid != $USER" >&2
+                if [ -z "$_uid_name" ] || [ "$_uid_name" != "$USER" ]; then
+                    echo "[job-guard] REFUSE: jobid=$jobid UserId='${_uid:-?}' 無法確認為 $USER" >&2
                     exit 11
                 fi
                 echo "[job-guard] Slurm WorkDir/UserId 驗證通過 (WorkDir=$_wd_real)"
             else
-                echo "[job-guard] note: jobid=$jobid 不在 Slurm 佇列中 (已結束?) → scancel 為 no-op"
+                echo "[job-guard] note: jobid=$jobid 不在 Slurm 佇列中 (已結束?) → 無需取消, no-op"
+                exit 0
             fi
         fi
         echo "[job-guard] scancel allowed for project jobid=$jobid"
