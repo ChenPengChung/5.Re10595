@@ -659,24 +659,38 @@ _jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; 
 
 # 假設 jp 在 (ARCH,part) 的開始 epoch; -1 = 不可行。先用 MaxTRESPerAccount 過濾, 再 --test-only(--nodes/--ntasks override 已實測有效)。
 jp_partition_eta() {
-  local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts
-  cap="$(partition_gpu_cap_per_account "$part" 2>/dev/null || echo 100000)"
-  [ "$jp" -gt "$cap" ] && { echo -1; return; }
-  # [JPC-1] 網格整除 + slab 下限前驗: 非法 jp 不可能跑 (changejp 也會擋), 直接判不可行避免回報假 ETA。
-  local _ny; _ny="$(awk '/^#define[[:space:]]+NY[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"
+  local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts eta _ny _nm1 _probed
+  # [JPC-1] 網格整除 + slab 下限前驗: 非法 jp 物理上不可跑(changejp 也會擋), 連 SLURM 都不必試。
+  _ny="$(awk '/^#define[[:space:]]+NY[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"
   if [ -n "$_ny" ] && [ "$jp" -gt 0 ]; then
-    local _nm1=$((_ny - 1))
-    { [ $((_nm1 % jp)) -ne 0 ] || [ $((_nm1 / jp)) -lt 7 ]; } && { echo -1; return; }
+    _nm1=$((_ny - 1))
+    if [ $((_nm1 % jp)) -ne 0 ] || [ $((_nm1 / jp)) -lt 7 ]; then
+      log "[JP-CTL]   考慮 jp=$jp@$part → 網格不整除或 slab<7 (物理不可跑) → 跳過" >&2; echo -1; return
+    fi
   fi
   case "$c" in H200) nodes=$((jp/8)) ;; GB200) nodes=$((jp/4)) ;; *) nodes=$((jp/8)) ;; esac
   [ "$nodes" -lt 1 ] && { echo -1; return; }
   js="$(cluster_jobscript "$c")" || { echo -1; return; }; [ -f "$js" ] || { echo -1; return; }
   wt="$(partition_walltime "$part")"; ta=""; [ -n "$wt" ] && ta="--time=$wt"
+  # 先「實際試一次」: 無論是否超 cap, 都先用 sbatch --test-only 問 SLURM 此組合的 ETA
+  # (做過選擇才跳過 — 不是連試都沒試)。
   out="$(sbatch --test-only --partition="$part" --nodes="$nodes" --ntasks="$jp" $ta "$js" 2>&1 || true)"
   if echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
-    ts="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -1)"; date -d "$ts" +%s 2>/dev/null || echo -1
-  elif echo "$out" | grep -qE "allocation .*can be allocated|to start immediately|to start now"; then date +%s
-  else echo -1; fi
+    ts="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -1)"; eta="$(date -d "$ts" +%s 2>/dev/null || echo -1)"
+  elif echo "$out" | grep -qE "allocation .*can be allocated|to start immediately|to start now"; then eta="$(date +%s)"
+  else eta=-1; fi
+  _probed="無可解析ETA"; { [ -n "$eta" ] && [ "$eta" -ge 0 ]; } 2>/dev/null && _probed="SLURM回報可起"
+  # 試完才依「帳號 GPU 上限」決定是否跳過: 實測 sbatch --test-only 看不到 MaxTRESPerAccount
+  # (對超 cap 組合會誤報「立即可起」), 故超 cap 必須在試過後額外擋掉, 否則選了會永久 PENDING。
+  cap="$(partition_gpu_cap_per_account "$part" 2>/dev/null || echo 100000)"
+  if [ "$jp" -gt "$cap" ]; then
+    log "[JP-CTL]   考慮 jp=$jp@$part → 已試 --test-only($_probed) 但帳號GPU上限 $cap<$jp → 跳過(--test-only 盲於此上限, 投了永久PENDING)" >&2
+    echo -1; return
+  fi
+  if [ -z "$eta" ] || [ "$eta" -lt 0 ]; then
+    log "[JP-CTL]   考慮 jp=$jp@$part → 已試 --test-only 但 SLURM 無可解析 ETA → 跳過" >&2; echo -1; return
+  fi
+  echo "$eta"
 }
 
 # 對給定 jp 選最佳 partition (2-tier). echo "ARCH@part eta wsec startable" 或空。
