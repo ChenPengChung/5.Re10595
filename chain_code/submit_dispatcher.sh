@@ -586,6 +586,11 @@ _nocapacity_count=0
 #   (pending>=PENDING_RESELECT_SEC 且新者早 RESELECT_MARGIN_SEC 以上才動)。
 #   PENDING_RESELECT=0 可完全停用此 watchdog。
 # ──────────────────────────────────────────────────────────────────────────
+# [6-a fix] scancel 前再驗一次是否「仍 PENDING」(squeue 即時): watchdog 入口讀 state 後, 還要經
+# pick_cluster + 2 次 ETA 探測(數秒), 窗口內 backfill 可能把 job 轉 RUNNING → 取消前重驗,
+# 避免誤殺自家剛起跑的 RUNNING job (丟失計算進度)。
+_still_pending() { [ "$(squeue -h -j "$1" -o '%T' 2>/dev/null | tr -d ' ')" = "PENDING" ]; }
+
 _pending_reselect_watchdog() {
     [ "${PENDING_RESELECT:-1}" = "1" ] || return 0
     local jid; jid="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
@@ -612,6 +617,7 @@ _pending_reselect_watchdog() {
             _newjp="$(printf '%s\n' "$_jpd" | awk '/^CHANGE_JP/{print $2}')"
             _curjp="$(grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' variables.h 2>/dev/null | grep -oE '[0-9]+' | head -1)"
             if [ -n "$_newjp" ] && [ "${_curjp:-0}" -gt 0 ] && [ "$_newjp" -lt "$_curjp" ]; then
+                if ! _still_pending "$jid"; then log "[PENDING-RESELECT][JP] job $jid 已非 PENDING (backfill 轉 RUNNING?) → 放棄取消, 不誤殺"; return 0; fi
                 log "[PENDING-RESELECT][JP] job $jid pending ${pend}s, partition 已最佳; 縮小 jp $_curjp→$_newjp → 經 job-guard 取消, 主迴圈將切 jp 改投"
                 bash "$CHAIN_DIR/tools/project_job_guard.sh" scancel "$jid" >/dev/null 2>&1 \
                   && log "[PENDING-RESELECT][JP] 已取消 $jid (主迴圈會 changejp + 重投)" \
@@ -631,6 +637,7 @@ _pending_reselect_watchdog() {
         log "[PENDING-RESELECT] job $jid pending ${pend}s; $newpart 未明顯更快 → 維持排隊"
         return 0
     fi
+    if ! _still_pending "$jid"; then log "[PENDING-RESELECT] job $jid 已非 PENDING (backfill 轉 RUNNING?) → 放棄取消改投, 不誤殺"; return 0; fi
     log "[PENDING-RESELECT] job $jid 在 ${curpart:-?} 已 pending ${pend}s; $newpart ETA 早 ~$(( cur_eta - new_eta ))s → 經 job-guard 取消改投"
     local _gout
     _gout="$(bash "$CHAIN_DIR/tools/project_job_guard.sh" scancel "$jid" 2>&1)"
@@ -699,6 +706,14 @@ jp_partition_eta() {
     log "[JP-CTL]   考慮 jp=$jp@$part → 已試 --test-only($_probed) 但帳號GPU上限 $cap<$jp → 跳過(--test-only 盲於此上限, 投了永久PENDING)" >&2
     echo -1; return
   fi
+  # [4] 即時 headroom: 靜態 cap 容得下, 但帳號此刻在此 partition 已被(同帳號其他 job)占用 → 仍會 PENDING。
+  # 排除「本 chain 自己的 head」(下輪前會釋放); dev(cap 極大)實質不受影響。修「4nodes 此刻 32/32 滿
+  # 卻仍被選中→PENDING、要等 watchdog 1800s 才補救」。
+  local _inuse; _inuse="$(partition_account_gpu_inuse "$part")"
+  if [ "$jp" -gt $(( cap - _inuse )) ]; then
+    log "[JP-CTL]   考慮 jp=$jp@$part → cap=$cap 容得下但帳號此刻已用 ${_inuse}GPU, 剩 $(( cap - _inuse ))<$jp → 跳過(即投會 PENDING; 即時占用非靜態 cap)" >&2
+    echo -1; return
+  fi
   if [ -z "$eta" ] || [ "$eta" -lt 0 ]; then
     log "[JP-CTL]   考慮 jp=$jp@$part → 已試 --test-only 但 SLURM 無可解析 ETA → 跳過" >&2; echo -1; return
   fi
@@ -733,6 +748,9 @@ pick_jp_and_partition() {
   local cur acc ftt locked now n i; cur="$(_jp_read_current)"; cur="${cur:-0}"
   read -r acc ftt < <(_jp_read_meta)
   locked=0
+  # [6-b] STOP_JPSWITCH 專屬開關: 凍結「自動 jp 切換」(jp 不變), 但 chain / dispatcher / partition 自動切換照常。
+  # 與 STOP_CHAIN(停整條鏈) 與 JP_FREEZE_ON_STATS(統計階段才凍) 不同 → 提供「只凍 jp、不停鏈」的中間檔。
+  [ -f restart/STOP_JPSWITCH ] && { locked=1; log "[JP-CTL] 偵測 restart/STOP_JPSWITCH → 凍結 jp 自動切換(仍自由切 partition)" >&2; }
   if [ "${JP_FREEZE_ON_STATS:-1}" = "1" ]; then
     { [ "${acc:-0}" != "0" ] || awk "BEGIN{exit !((${ftt:-0})>=(${FTT_PRELOCK}))}"; } && locked=1
   fi
