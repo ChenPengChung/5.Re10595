@@ -136,8 +136,8 @@ case "$cmd" in
                     exit 11
                 fi
                 _uid_name="${_uid%%(*}"
-                if [ -z "$_uid_name" ] || [ "$_uid_name" != "$USER" ]; then
-                    echo "[job-guard] REFUSE: jobid=$jobid UserId='${_uid:-?}' 無法確認為 $USER" >&2
+                if [ -z "$_uid_name" ] || [ "$_uid_name" != "${USER:-}" ]; then
+                    echo "[job-guard] REFUSE: jobid=$jobid UserId='${_uid:-?}' 無法確認為 '${USER:-<unset>}'" >&2
                     exit 11
                 fi
                 echo "[job-guard] Slurm WorkDir/UserId 驗證通過 (WorkDir=$_wd_real)"
