@@ -64,3 +64,156 @@ lbm-run         # 投首輪 + 啟 dispatcher + 顯示狀態
 
 
 
+
+計畫守門員 : partition 自由選擇以及 gpu數量自由選擇 
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ jp + partition 自動切換控制器(Re10595 GILBM chain)— 計畫 v2(已過 Codex + code-agent-team 驗證)
+
+ 背景與動機
+
+ - H200 叢集改版:舊 h200 partition 已移除;本帳號(mst*)可用 normal(2天)/4nodes(1天)
+ /dev(1時),皆無 GPU 上限;large/slinky/taide 限 gov*。舊 jobscript 指向不存在的 h200
+   - 4 天 walltime → 投不出去(「卡住」真因)。
+ - 需求:chain 自動以「當下淨速度最高、絕不閒置」選 partition 與 jp,每輪及卡 PENDING 時重選。
+
+ 核心難點
+
+ - partition:投遞參數,成本 ~0 → 每輪免費切。
+ - jp:編譯期常數,改一次 ≈ 4.5 分(重編 ~70s + repartition ~170s,佔 63%),須遲滯。
+ - 統計凍結(最致命):FTT≥50(main.cu:1662)起 accu_count 累積;repartition_jp.py 只搬
+ f00–f18+rho,不搬 36 個湍流累積器(且其檔數驗證對「漏搬」是盲的)→ 之後改 jp 摧毀統計(~14 天)。
+ 目前 FTT=2.146、accu_count=0 → 現可自由改 jp,進統計階段後永久鎖死。
+
+ 目標函數:最高淨速度 + 絕不閒置
+
+ score(c) = jp(c) × max(0, walltime − wait − switch_cost) / walltime,取 argmax。
+ - wait=max(0,ETA−now)(sbatch --test-only);switch_cost=270s(jp 改才算)→ 現 jp 天生佔優(天然防抖)。
+ - 叢集空→最大 jp 勝(快又零等);大 jp 要排隊→wait 罰分→較快(較小)組合勝→保持在跑。
+ - 絕不閒置:每輪一定投出最快可起的可行組合,有可投的就不空著。
+
+ 檔案整併(把 orchestration 工具收進 chain_code/)
+
+ - 搬移:changejp.sh、repartition_jp.py(root → chain_code/)。兩者皆 orchestration 工具,
+ 且 repartition_jp.py 只被 changejp.sh 呼叫(全 repo 無其他 caller)。
+ - 留 root:variables.h/main.cu/fileIO.h/evolution.h(solver 源碼);留 restart/:checkpoint/state。
+ - 搬移時必修(否則路徑全壞):
+   - changejp.sh:ROOT="$(cd "$(dirname "$0")" && pwd)"; PROJECT_ROOT="$(cd "$ROOT/.." && pwd)"; cd "$PROJECT_ROOT";
+ REPART="chain_code/repartition_jp.py";其餘 variables.h/chain_code/*/restart/*/./run 因 cwd=PROJECT_ROOT 仍正確。
+   - 外部引用同步更新:~/.claude/CLAUDE.md 的 claude_changejp 規則(./changejp.sh→chain_code/changejp.sh、
+ repartition 路徑)、本專案 CLAUDE.md、本計畫檔、未來 submit_dispatcher.sh 以 $CHAIN_DIR/changejp.sh 呼叫。
+   - 〔M1〕可選保留 root 薄 shim 轉呼 chain_code/ 版,避免遺漏引用。
+
+ 階段 A — 立即解除卡死(只動 partition,~零風險)
+
+ 用 jp=128 跑 normal(不改 jp→不重編、不 repartition;checkpoint 已是 128;147 idle 立刻排到)。
+ 1. 已完成(bash -n + 功能測試):partition_lib.sh h200 函式;jobscript header h200→normal、4天→2天;
+ submit_dispatcher.sh 候選 H200:normal H200:4nodes H200:dev、統一 walltime、2-tier pick_cluster。
+ 2. 〔驗證新發現,必補〕_pending_reselect_watchdog 是死碼(submit_dispatcher.sh:566-603 定義,主迴圈
+ :605-732 從未呼叫)→ 把它接進「有 active job」分支(:623-626,sleep 前呼叫)。否則 PENDING-reselect 根本不跑。
+ 3. 補完手動 CLI:partition_ctl.sh 依架構自動(x86_64→H200);build_and_submit.sh.H200 接 partition override;
+ 全域 claude_changepartition。
+ 4. 啟用:重啟 dispatcher → 投既有 a.out.H200(jp=128)到 normal → 從 FTT 2.146 續跑。
+
+ 階段 B — 動態 jp 控制器(opt-in JP_CONTROLLER=1,含全部不變式)
+
+ B1. changejp.sh 加 --prepare-only(重編+repartition,不投遞)。順序必須重排為「build-before-commit」:
+ 1. 守門:驗證 jp 合法 + accu_count 硬擋(changejp 本身也擋,不只 dispatcher)+ 〔H3〕FTT ≥ FTT_STATS_START−margin
+ 亦硬拒 + 〔#5〕拒切若存在 restart/checkpoint/step_*.WRITING(目前未實作,必補)。
+ 2. 解析「最新且完整」的 step_*(實體路徑,非 latest symlink),scancel 確認 writer 已死後再 re-stat accu_count(〔H3〕閉race)。
+ 3. 先 build:bash chain_code/build_and_submit.sh.H200 --build-only(直呼,不走 ./run:run.sh 無 build 子命令、
+ 會 acquire HEAD.lockdir/卡 DISPATCHER_ACTIVE/投遞)→ 驗證(exit0/ELF/size)→ cp -f a.out a.out.H200(+GB200 若為候選)
+ (〔H1/Item2〕--build-only 只產 a.out,dispatcher 從 a.out.H200 投,不 cp 會投到舊 jp 二進位)。
+ 4. build 成功後才提交來源編輯:sed variables.h(jp)、兩個 jobscript(--nodes/-np/NTASKS)、grid_provenance
+ (new_jp/new_chunk_j/variables_h_mtime);〔M3〕build 失敗則回滾這些 sed,留舊 jp 完整可跑。
+ 5. 原子提交 checkpoint:repartition 寫全新非 step_* 的 dst→驗檔數(忽略 dotfile,〔M4〕)→mv -T→ln -sfn latest;
+ 備份命名在 step_* glob 之外(如 restart/ckpt_bak/…,〔H2〕),並處理殘留舊 jp 的 step_*(repartition 全部保留者或刪非 latest 舊 jp 目錄)。
+ 6. 〔M2/1b〕--prepare-only 不得有任何 --apply 副作用:不 ./run job-guard stop-chain、不動 STOP_CHAIN、
+ 不 ./run dispatcher stop(否則自殺)、不 dispatcher start、不重啟 watcher。daemon 永不傳 --force-stats-loss/--allow-running。
+
+ B2. dispatcher 控制器(submit_dispatcher.sh)
+ - 設定:JP_CANDIDATES="128 64 32"、JP_CHANGE_COOLDOWN=1800、K_UP=2、T_DOWN=1800、JP_DOWN_MARGIN=1200、
+ FTT_PRELOCK=48、JP_CONTROLLER=0(kill switch)、state restart/jp_controller.state。
+ - jp_partition_eta(jp,ARCH,part):sbatch --test-only 加 --nodes/--ntasks 探假設 jp 的 ETA(不重編)。
+ 〔L1/Item3〕此 override 載重且未驗證:先實測 Slurm 是否真用 CLI 形狀回 ETA(jobscript 寫死 --nodes=16);
+ 不可靠則 fallback「維持現 jp」。非現 jp 的評分本質是「預測」,不可用 cluster_binary_ready 當門。
+ - 重構 pick_cluster 內容成 _pick_partition_for_jp(jp),pick_cluster=該函式(current_jp),其餘不變。
+ - pick_jp_and_partition():讀 accu_count/FTT(缺欄位預設 0;呼叫 changejp 前立即重讀避免快取 race);
+ accu_count>0 → 降級為「只對 current_jp 算 partition argmax」(非 idle no-op);否則所有組合算 score 取 argmax;
+ FTT≥48 預鎖生產 jp;遲滯閘(K_UP/cooldown/T_DOWN/margin;〔L2〕加絕對 margin + flip-count 凍結防 128↔64 抖動)。
+ - 主迴圈插入:JP_CONTROLLER=1 時先 pick_jp_and_partition;CHANGE_JP N → timeout 600 changejp.sh N --prepare-only(〔C2〕防掛死)→ continue;
+ 已接好的 watchdog 內加 jp scale-down(僅 state=PENDING、經 project_job_guard.sh 取消)。
+ - 〔1c/L3〕NOCAPACITY 早停(:685-710):只在「所有候選都拿不到可解析 ETA」才觸發(非一般 PENDING)。放寬為高上限 +
+ heartbeat 警示(不要完全移除,否則兩 arch 都真的排不到時 operator 失明;注意目前只有 a.out.H200、無 a.out.GB200)。
+
+ B3. 分階段啟用:先 JP_CONTROLLER=0 跑穩 partition 自動(含已接好的 watchdog);再 opt-in =1,觀察一次 scale 事件再信任。
+
+ 安全不變式(更新後)
+
+ 1. 統計硬擋:accu_count>0(或 FTT≥50−margin)→ 永不改 jp;changejp 與 dispatcher 雙重硬擋;daemon 不可能傳 --force-stats-loss。
+ 2. 取消只走 project_job_guard.sh(驗 WorkDir/owner;只取消 state=PENDING)→ 杜絕跨專案誤殺。
+ 3. build-before-commit(擴及來源):先 build+驗證+cp→a.out.H200/GB200,再提交 variables.h/jobscript/checkpoint;
+ build 失敗回滾所有 sed,舊 jp 完整可跑。
+ 4. checkpoint 原子提交、舊檔不毀:repartition 寫非 step_* 的全新 dst→驗檔數(忽略 dotfile)→mv -T→ln -sfn;
+ 備份目錄不得被 step_* glob 命中;殘留舊 jp 的 step_* 一併處理。
+ 5. 不與寫入競態:確實實作「存在 step_*.WRITING 即拒切」;操作解析後實體路徑而非 live symlink。
+ 6. 防抖:cooldown 30 分 + K_UP + (T_DOWN,margin) + 絕對 margin + flip-count 凍結;縮小裕度大於放大。
+ 7. 有界 reselect:沿用 PENDING_RESELECT_SEC=1800 / RESELECT_MARGIN_SEC=900 + post-cancel cooldown + max-cancel;reselect 只換 partition、不 repartition。
+ 8. 交易日誌涵蓋來源編輯 + checkpoint:restart/jp_switch.inprogress 記 {from,to,phase,snapshot(variables.h/jobscripts/provenance/latest)};crash 後冪等回滾/前滾。
+ 9. 只用合法 jp:(NY-1)%jp==0 且 (NY-1)/jp≥7 且架構整除 → {32,64,128}。
+ 10. 單一控制器互斥:切換前取 HEAD.lockdir;JP_CONTROLLER=0 為全域 kill switch。
+
+ 驗證隊發現 → 對應修正(摘要)
+
+ ┌──────┬───────────────────────────────────────────────────────────────────────┬────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │ 等級 │                                 發現                                  │                                          修正(已併入)                                          │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ H    │ _pending_reselect_watchdog 死碼,從未呼叫                              │ 階段 A 接進主迴圈 active-job 分支                                                              │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ H    │ --build-only 只產 a.out,dispatcher 投 a.out.H200                      │ --prepare-only 驗證後 cp a.out a.out.H200(+GB200)                                              │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ H    │ build 前已 sed,build 失敗→config/binary 不一致                        │ 重排 build-before-commit;失敗回滾 sed;journal 涵蓋來源                                         │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ H    │ 備份 step_X_jp128_bak 被 jobscript step_* glob 命中;舊 jp step_* 殘留 │ 備份移出 step_*(restart/ckpt_bak/);處理殘留舊 jp step_*                                        │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ H    │ accu_count freeze race + never-idle vs freeze                         │ changejp 也擋 FTT≥50−margin;scancel 後 re-stat 實體 step_*;freeze 時降級 partition-only argmax │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ M    │ --prepare-only 殘留 --apply 副作用                                    │ 只做 {驗證,repartition,sed,build,cp};不碰 STOP_CHAIN/daemon                                    │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ M    │ repartition 檔數驗證算到 dotfile                                      │ 內部清空 dst + 忽略 dotfile                                                                    │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ M    │ 搬檔破壞路徑與全域規則                                                │ PROJECT_ROOT 修法 + 同步更新兩個 CLAUDE.md                                                     │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ L    │ --test-only node override ETA 未驗證                                  │ 先實測;不可靠 fallback 維持現 jp                                                               │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ L    │ score 仍可每 cooldown 抖一次                                          │ 絕對 margin + flip-count 凍結                                                                  │
+ ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ L    │ 全移除 NOCAPACITY 使 operator 失明                                    │ 保高上限 + heartbeat,不全移除                                                                  │
+ └──────┴───────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ 驗證步驟
+
+     │ L    │ score 仍可每 cooldown 抖一次                                          │ 絕對 margin + flip-count 凍結                                                                  │
+     ├──────┼───────────────────────────────────────────────────────────────────────┼────────────────────────────────────────────────────────────────────────────────────────────────┤
+     │ L    │ 全移除 NOCAPACITY 使 operator 失明                                    │ 保高上限 + heartbeat,不全移除                                                                  │
+     └──────┴───────────────────────────────────────────────────────────────────────┴────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+     驗證步驟
+
+     1. 階段 A:bash -n;./run partition 列 H200 partition+walltime;確認 watchdog 已被呼叫(grep 主迴圈);
+     重啟 dispatcher → sacct 見 job normal PENDING→RUNNING;checkrho/slurm 從 FTT 2.146 前進。
+     2. 控制器(先 =0):mock ETA 單測 pick_jp_and_partition(Tier1 最大可起、Tier2 最快、遲滯擋連切、accu_count>0 強制 partition-only);
+     實測 sbatch --test-only --nodes override 是否回正確 ETA;changejp.sh 64 --prepare-only 確認:重編→a.out.H200 已更新→未投→
+     latest 已 repartition→variables.h/jobscript/provenance 一致→無殘留舊 jp step_*。
+     3. 上線(=1):觸發一次 scale,確認 build-before-commit + cp arch + job-guard,新 job 起跑;強制 accu_count>0/FTT≥50 被硬擋;
+     build 失敗測試→確認回滾、舊 jp 仍可跑。
+     4. 安全:grep 控制器無任何非 guard 的 scancel;daemon 切換中途 kill → journal 回復後仍可跑;備份目錄不被 step_* glob 命中。
+
+     關鍵檔案
+
+     - chain_code/submit_dispatcher.sh(接 watchdog、控制器、探測、主迴圈插入)
+     - chain_code/changejp.sh(搬移自 root;--prepare-only;build-before-commit;cp arch;.WRITING 擋)
+     - chain_code/repartition_jp.py(搬移自 root;dotfile-safe 檔數驗證)
+     - chain_code/tools/partition_lib.sh、chain_code/partition_ctl.sh、chain_code/run.sh、chain_code/build_and_submit.sh.H200
+     - chain_code/tools/project_job_guard.sh、tools/head_lock_lib.sh(重用)
+     - ~/.claude/CLAUDE.md(更新 claude_changejp 路徑 + 新增 claude_changepartition)、本專案 CLAUDE.md 
+     
