@@ -102,6 +102,19 @@ fi
 # 只有 dispatcher_stop 才移除 INTENT; daemon 重啟/crash 都保留。heartbeat 先給初值, daemon 每輪 touch。
 touch restart/DISPATCHER_INTENT restart/dispatcher.heartbeat
 
+# [一鍵全有] 開 dispatcher 即自動確保「本專案」watchdog crontab 存在 (layer 3 自動綁上)。
+# 冪等: 已存在 → 不動; 缺 → 補上。只加本專案的行, 用 (crontab -l; echo) | crontab - 保留其他行(含別專案)。
+if command -v crontab >/dev/null 2>&1; then
+    _WD="$PROJECT_ROOT/chain_code/tools/daemon_keepalive.sh"
+    if crontab -l 2>/dev/null | grep -qF "$_WD"; then
+        echo "[dispatcher_start] watchdog crontab 已存在 (略過)"
+    elif { crontab -l 2>/dev/null; echo "*/5 * * * * $_WD >/dev/null 2>&1"; } | crontab - 2>/dev/null; then
+        echo "[dispatcher_start] ✓ 已自動裝 watchdog crontab (*/5min keep-alive) → $_WD"
+    else
+        echo "[dispatcher_start] ⚠ 無法寫 crontab; 請手動加: */5 * * * * $_WD >/dev/null 2>&1"
+    fi
+fi
+
 if [ "$FOREGROUND" -eq 1 ]; then
     echo "[dispatcher_start] 前景模式啟動 (Ctrl+C 可停)"
     exec bash "$DAEMON"
