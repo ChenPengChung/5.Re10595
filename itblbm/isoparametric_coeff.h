@@ -11,11 +11,8 @@
 #define ITB_COEFF_OUTSIDE_WARN    0x08u
 
 struct ITB_YZCoeff {
-    int j0;
-    int k_idx[ITB_YZ_ORDER];
-    double wr[ITB_YZ_ORDER];
-    double ws[ITB_YZ_ORDER];
-    unsigned char flags;
+    double r;
+    double s;
 };
 
 struct ITB_PrecomputeStats {

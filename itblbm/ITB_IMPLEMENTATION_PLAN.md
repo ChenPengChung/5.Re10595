@@ -52,7 +52,7 @@ Planned responsibilities:
 - `isoparametric_streaming.h`
   - Device-side coefficient lookup.
   - Device-side ITB streaming helper.
-  - Runtime interpolation using folded coefficients.
+  - Runtime reconstruction of shape weights and folded k weights from `r,s`.
 
 ## 3. Direction Compression
 
@@ -121,19 +121,19 @@ total:        about 3151 reads
 
 This matches the current 7-point GILBM tensor footprint before cache effects.
 
-## 5. Coefficient Structs
+## 5. Compact Coordinate Structs
 
-Use separated 1D weights rather than storing full tensor-product weights.
+Store only the Newton inverse-map coordinates. Runtime reconstructs the
+7-point shape weights and wall-normal ghost folding from these coordinates.
+This intentionally trades a small fixed amount of arithmetic for much lower
+precomputed-table memory traffic.
 
-Current y-z coefficient:
+Current y-z coordinate record:
 
 ```cpp
 struct ITB_YZCoeff {
-    int j0;              // first j row in the 7-row stencil
-    int k_idx[7];        // actual physical k rows after ghost folding
-    double wr[7];        // shape weights in j/local-r direction
-    double ws[7];        // folded shape weights in k/local-s direction
-    unsigned char flags; // diagnostic/classification bits
+    double r; // local coordinate in j/local-r direction
+    double s; // local coordinate in k/local-s direction
 };
 ```
 
@@ -146,8 +146,16 @@ ITB_YZCoeff itb_yz_coeff[9 * NYD6 * NZ6]
 The runtime y-z interpolation is:
 
 ```text
+wr[7]       = shape7(r)
+raw_ws[7]   = shape7(s)
+k_idx, ws   = fold_k_ghost_weights(k, raw_ws)
+j0          = j - 3
 sum_sj sum_sk wr[sj] * ws[sk] * f[j0+sj][k_idx[sk]]
 ```
+
+The previous separated table stored `j0 + k_idx[7] + wr[7] + ws[7] + flags`.
+The compact table stores two doubles per y-z class point. The diagnostic path
+still reconstructs full raw and folded weights on the host before upload.
 
 x-direction weights:
 
@@ -211,6 +219,17 @@ top k=NZ6-3:
 
 Use `geom_eff(y_2d_h, gj, gk)` and `geom_eff(z_h, gj, gk)` for every
 isoparametric element node in the Newton solve.
+
+Important implementation detail:
+
+- ITB precompute must use a seam-continuous coordinate snapshot taken
+  immediately after `ReadExternalGrid_YZ()`.
+- The later metric/coordinate MPI ghost exchange overwrites the streamwise
+  seam ghosts on rank 0 and rank `jp-1` with unshifted neighbor coordinates.
+  That exchange is acceptable for the existing GILBM path, but it corrupts
+  ITB Newton elements whose 7-point j stencil touches the periodic seam.
+  The saved snapshot preserves the `-LY/+LY` streamwise offsets required by
+  the physical-space inverse map.
 
 ## 7. Ghost Folding For Runtime
 
@@ -358,9 +377,9 @@ Optional improvement:
 
 Failure handling:
 
-- Mark coefficient `flags |= ITB_COEFF_NEWTON_FAILED`.
-- Fall back to direct current-node Kronecker y-z weight for that coefficient
-  in the first debug build, or abort if strict mode is enabled.
+- Store `r=s=0` for that coefficient so the runtime falls back to the centered
+  y-z Kronecker stencil.
+- Abort if `ITBLBM_STRICT_PRECOMPUTE=1` and any Newton failures exist.
 - Always print diagnostics. Do not silently continue in production mode if
   failures exist.
 
@@ -487,11 +506,12 @@ min_abs_detJ < 1e-12:
 Main setup order:
 
 1. `ReadExternalGrid_YZ(y_2d_h, z_h, myid)`
-2. current metric computation and coordinate MPI ghost exchange
-3. `ComputeGlobalTimeStep(...)`
-4. ITB coefficient precompute using final `dt_global`
-5. upload ITB coefficients and x weights
-6. initialize distributions as before
+2. save ITB seam-continuous y-z coordinate snapshot
+3. current metric computation and coordinate MPI ghost exchange
+4. `ComputeGlobalTimeStep(...)`
+5. ITB coefficient precompute using final `dt_global` and the saved snapshot
+6. upload ITB coefficients and x weights
+7. initialize distributions as before
 
 Fused kernel changes:
 

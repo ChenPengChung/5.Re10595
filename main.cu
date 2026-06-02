@@ -675,6 +675,28 @@ int main(int argc, char *argv[])
     // 1.3 讀取外部二維 (y, z) 座標 (取代 GenerateMesh_Y + GenerateMesh_Z)
     ReadExternalGrid_YZ(y_2d_h, z_h, myid);
 
+#if USE_ITBLBM_STREAMING
+    double *itb_y_2d_geom_h = NULL;
+    double *itb_z_geom_h = NULL;
+    {
+        const size_t yz_bytes = (size_t)NYD6 * (size_t)NZ6 * sizeof(double);
+        itb_y_2d_geom_h = (double*)malloc(yz_bytes);
+        itb_z_geom_h    = (double*)malloc(yz_bytes);
+        if (!itb_y_2d_geom_h || !itb_z_geom_h) {
+            if (myid == 0) {
+                fprintf(stderr,
+                    "[ITB] FATAL: cannot allocate seam-continuous coordinate snapshot\n");
+            }
+            MPI_Abort(MPI_COMM_WORLD, 73);
+        }
+        memcpy(itb_y_2d_geom_h, y_2d_h, yz_bytes);
+        memcpy(itb_z_geom_h,    z_h,    yz_bytes);
+        if (myid == 0) {
+            printf("[ITB] Saved seam-continuous y-z coordinate snapshot before MPI ghost exchange.\n");
+        }
+    }
+#endif
+
     // Mass correction uses physical control-volume weights from the curvilinear
     // y-z grid. Build before the later coordinate MPI exchange because
     // ReadExternalGrid_YZ still has the correct +/-LY periodic ghost offsets.
@@ -818,7 +840,10 @@ int main(int argc, char *argv[])
 
 #if USE_ITBLBM_STREAMING
 	    {
-	        ITB_PrecomputeCoefficientsHost(itb_yz_coeff_h, y_2d_h, z_h, dt_global, myid);
+	        ITB_PrecomputeCoefficientsHost(itb_yz_coeff_h,
+	                                       itb_y_2d_geom_h,
+	                                       itb_z_geom_h,
+	                                       dt_global, myid);
 	        double itb_wx_h[2][ITB_X_ORDER];
 	        ITB_PrecomputeXWeightsHost(itb_wx_h, dt_global);
 	        const size_t itb_coeff_count =
@@ -830,6 +855,10 @@ int main(int argc, char *argv[])
 	        if (myid == 0) {
 	            printf("[ITB] coefficients and x7 weights copied to GPU.\n");
 	        }
+	        free(itb_y_2d_geom_h);
+	        free(itb_z_geom_h);
+	        itb_y_2d_geom_h = NULL;
+	        itb_z_geom_h = NULL;
 	    }
 #endif
 

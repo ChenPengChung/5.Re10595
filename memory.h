@@ -139,7 +139,7 @@ void AllocateMemory() {
         CHECK_CUDA( cudaMalloc((void**)&itb_yz_coeff_d, itb_coeff_bytes) );
         CHECK_CUDA( cudaMemset(itb_yz_coeff_d, 0, itb_coeff_bytes) );
         if (myid == 0) {
-            printf("[Memory] ITB coeff: %.2f MB/rank (%d yz classes x NYD6 x NZ6)\n",
+            printf("[Memory] ITB compact coord: %.2f MB/rank (%d yz classes x NYD6 x NZ6)\n",
                    itb_coeff_bytes / 1048576.0, ITB_YZ_CLASS_COUNT);
         }
     }
