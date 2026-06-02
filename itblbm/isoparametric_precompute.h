@@ -10,38 +10,75 @@ static inline size_t ITB_CoeffIndex(int yz_id, int j, int k)
 
 static inline size_t ITB_RawWeightIndex(int yz_id, int j, int k, int a, int b)
 {
-    return (((size_t)ITB_CoeffIndex(yz_id, j, k) * 9u) + (size_t)(a * 3 + b));
+    return (((size_t)ITB_CoeffIndex(yz_id, j, k)
+             * (size_t)(ITB_YZ_ORDER * ITB_YZ_ORDER))
+            + (size_t)(a * ITB_YZ_ORDER + b));
 }
 
-static inline void ITB_QuadShapeHost(double x, double L[3], double dL[3])
+static inline double ITB_YZNodeHost(int n)
 {
-    L[0]  = 0.5 * x * (x - 1.0);
-    L[1]  = 1.0 - x * x;
-    L[2]  = 0.5 * x * (x + 1.0);
-    dL[0] = x - 0.5;
-    dL[1] = -2.0 * x;
-    dL[2] = x + 0.5;
+    return (double)(n - ITB_YZ_ORDER / 2);
+}
+
+static inline void ITB_YZShapeHost(double x,
+                                   double L[ITB_YZ_ORDER],
+                                   double dL[ITB_YZ_ORDER])
+{
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
+        const double xa = ITB_YZNodeHost(a);
+        double La = 1.0;
+        for (int b = 0; b < ITB_YZ_ORDER; b++) {
+            if (b == a) continue;
+            const double xb = ITB_YZNodeHost(b);
+            La *= (x - xb) / (xa - xb);
+        }
+        L[a] = La;
+
+        double dLa = 0.0;
+        for (int m = 0; m < ITB_YZ_ORDER; m++) {
+            if (m == a) continue;
+            const double xm = ITB_YZNodeHost(m);
+            double term = 1.0 / (xa - xm);
+            for (int b = 0; b < ITB_YZ_ORDER; b++) {
+                if (b == a || b == m) continue;
+                const double xb = ITB_YZNodeHost(b);
+                term *= (x - xb) / (xa - xb);
+            }
+            dLa += term;
+        }
+        dL[a] = dLa;
+    }
 }
 
 static inline double ITB_GeomEffHost(const double *arr, int j, int k)
 {
     const int base = j * NZ6;
-    if (k == 2) {
+    if (k < 3) {
+        const double d = (double)(3 - k);
 #if GHOST_EXTRAP_ORDER >= 3
-        return 4.0 * arr[base + 3] - 6.0 * arr[base + 4]
-             + 4.0 * arr[base + 5] -       arr[base + 6];
+        const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+        return ( d1 * d2 * d3 / 6.0) * arr[base + 3]
+             + (-d  * d2 * d3 / 2.0) * arr[base + 4]
+             + ( d  * d1 * d3 / 2.0) * arr[base + 5]
+             + (-d  * d1 * d2 / 6.0) * arr[base + 6];
 #else
-        return 3.0 * arr[base + 3] - 3.0 * arr[base + 4]
-             +       arr[base + 5];
+        return ((d + 1.0) * (d + 2.0) * 0.5) * arr[base + 3]
+             + (-d * (d + 2.0))               * arr[base + 4]
+             + (d * (d + 1.0) * 0.5)          * arr[base + 5];
 #endif
     }
-    if (k == NZ6 - 3) {
+    if (k > NZ6 - 4) {
+        const double d = (double)(k - (NZ6 - 4));
 #if GHOST_EXTRAP_ORDER >= 3
-        return 4.0 * arr[base + NZ6 - 4] - 6.0 * arr[base + NZ6 - 5]
-             + 4.0 * arr[base + NZ6 - 6] -       arr[base + NZ6 - 7];
+        const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+        return ( d1 * d2 * d3 / 6.0) * arr[base + NZ6 - 4]
+             + (-d  * d2 * d3 / 2.0) * arr[base + NZ6 - 5]
+             + ( d  * d1 * d3 / 2.0) * arr[base + NZ6 - 6]
+             + (-d  * d1 * d2 / 6.0) * arr[base + NZ6 - 7];
 #else
-        return 3.0 * arr[base + NZ6 - 4] - 3.0 * arr[base + NZ6 - 5]
-             +       arr[base + NZ6 - 6];
+        return ((d + 1.0) * (d + 2.0) * 0.5) * arr[base + NZ6 - 4]
+             + (-d * (d + 2.0))               * arr[base + NZ6 - 5]
+             + (d * (d + 1.0) * 0.5)          * arr[base + NZ6 - 6];
 #endif
     }
     return arr[base + k];
@@ -53,15 +90,16 @@ static inline void ITB_EvaluateMapHost(
     double *Y, double *Z,
     double *Yr, double *Ys, double *Zr, double *Zs)
 {
-    double Lr[3], dLr[3], Ls[3], dLs[3];
-    ITB_QuadShapeHost(r, Lr, dLr);
-    ITB_QuadShapeHost(s, Ls, dLs);
+    double Lr[ITB_YZ_ORDER], dLr[ITB_YZ_ORDER];
+    double Ls[ITB_YZ_ORDER], dLs[ITB_YZ_ORDER];
+    ITB_YZShapeHost(r, Lr, dLr);
+    ITB_YZShapeHost(s, Ls, dLs);
 
     *Y = 0.0; *Z = 0.0;
     *Yr = 0.0; *Ys = 0.0; *Zr = 0.0; *Zs = 0.0;
-    for (int a = 0; a < 3; a++) {
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
         const int gj = j0 + a;
-        for (int b = 0; b < 3; b++) {
+        for (int b = 0; b < ITB_YZ_ORDER; b++) {
             const int gk = k0 + b;
             const double yv = ITB_GeomEffHost(y_h, gj, gk);
             const double zv = ITB_GeomEffHost(z_h, gj, gk);
@@ -143,61 +181,98 @@ static inline int ITB_NewtonSolveHost(
 
 static inline void ITB_FillCenterCoeff(ITB_YZCoeff *c, int j, int k)
 {
-    c->j0 = j - 1;
-    c->k_idx[0] = k - 1;
-    c->k_idx[1] = k;
-    c->k_idx[2] = k + 1;
-    c->wr[0] = 0.0; c->wr[1] = 1.0; c->wr[2] = 0.0;
-    c->ws[0] = 0.0; c->ws[1] = 1.0; c->ws[2] = 0.0;
+    const int half = ITB_YZ_ORDER / 2;
+    int k0 = k - half;
+    if (k0 < 3) k0 = 3;
+    if (k0 > NZ6 - 3 - ITB_YZ_ORDER) k0 = NZ6 - 3 - ITB_YZ_ORDER;
+    c->j0 = j - half;
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
+        c->k_idx[a] = k0 + a;
+        c->wr[a] = (a == half) ? 1.0 : 0.0;
+        c->ws[a] = (a == half) ? 1.0 : 0.0;
+    }
     c->flags = 0;
 }
 
 static inline void ITB_FoldKWeightsHost(
-    int k, const double raw_ws[3],
-    int k_idx[3], double folded_ws[3], unsigned char *flags)
+    int k, const double raw_ws[ITB_YZ_ORDER],
+    int k_idx[ITB_YZ_ORDER],
+    double folded_ws[ITB_YZ_ORDER],
+    unsigned char *flags)
 {
+    const int half = ITB_YZ_ORDER / 2;
+    const int raw_k0 = k - half;
+    int phys_k0 = raw_k0;
+    if (phys_k0 < 3) phys_k0 = 3;
+    if (phys_k0 > NZ6 - 3 - ITB_YZ_ORDER)
+        phys_k0 = NZ6 - 3 - ITB_YZ_ORDER;
+
     *flags = 0;
-    if (k == 3) {
-        k_idx[0] = 3; k_idx[1] = 4; k_idx[2] = 5;
+    for (int b = 0; b < ITB_YZ_ORDER; b++) {
+        k_idx[b] = phys_k0 + b;
+        folded_ws[b] = 0.0;
+    }
+
+    for (int b = 0; b < ITB_YZ_ORDER; b++) {
+        const int kg = raw_k0 + b;
+        const double w = raw_ws[b];
+        if (kg < 3) {
+            const double d = (double)(3 - kg);
 #if GHOST_EXTRAP_ORDER >= 3
-        // First pass currently rejects cubic folding at compile-time for ITB.
-        folded_ws[0] = raw_ws[1] + 4.0 * raw_ws[0];
-        folded_ws[1] = raw_ws[2] - 6.0 * raw_ws[0];
-        folded_ws[2] = 4.0 * raw_ws[0];
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            folded_ws[3 - phys_k0] += w * c0;
+            folded_ws[4 - phys_k0] += w * c1;
+            folded_ws[5 - phys_k0] += w * c2;
+            folded_ws[6 - phys_k0] += w * c3;
 #else
-        folded_ws[0] = 3.0 * raw_ws[0] + raw_ws[1];
-        folded_ws[1] = -3.0 * raw_ws[0] + raw_ws[2];
-        folded_ws[2] = raw_ws[0];
+            const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
+            const double c1 = -d * (d + 2.0);
+            const double c2 = d * (d + 1.0) * 0.5;
+            folded_ws[3 - phys_k0] += w * c0;
+            folded_ws[4 - phys_k0] += w * c1;
+            folded_ws[5 - phys_k0] += w * c2;
 #endif
-        *flags |= ITB_COEFF_BOTTOM_FOLDED;
-    } else if (k == NZ6 - 4) {
-        k_idx[0] = NZ6 - 6; k_idx[1] = NZ6 - 5; k_idx[2] = NZ6 - 4;
+            *flags |= ITB_COEFF_BOTTOM_FOLDED;
+        } else if (kg > NZ6 - 4) {
+            const double d = (double)(kg - (NZ6 - 4));
 #if GHOST_EXTRAP_ORDER >= 3
-        folded_ws[0] = 4.0 * raw_ws[2];
-        folded_ws[1] = raw_ws[0] - 6.0 * raw_ws[2];
-        folded_ws[2] = raw_ws[1] + 4.0 * raw_ws[2];
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            folded_ws[(NZ6 - 4) - phys_k0] += w * c0;
+            folded_ws[(NZ6 - 5) - phys_k0] += w * c1;
+            folded_ws[(NZ6 - 6) - phys_k0] += w * c2;
+            folded_ws[(NZ6 - 7) - phys_k0] += w * c3;
 #else
-        folded_ws[0] = raw_ws[2];
-        folded_ws[1] = raw_ws[0] - 3.0 * raw_ws[2];
-        folded_ws[2] = raw_ws[1] + 3.0 * raw_ws[2];
+            const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
+            const double c1 = -d * (d + 2.0);
+            const double c2 = d * (d + 1.0) * 0.5;
+            folded_ws[(NZ6 - 4) - phys_k0] += w * c0;
+            folded_ws[(NZ6 - 5) - phys_k0] += w * c1;
+            folded_ws[(NZ6 - 6) - phys_k0] += w * c2;
 #endif
-        *flags |= ITB_COEFF_TOP_FOLDED;
-    } else {
-        k_idx[0] = k - 1; k_idx[1] = k; k_idx[2] = k + 1;
-        folded_ws[0] = raw_ws[0];
-        folded_ws[1] = raw_ws[1];
-        folded_ws[2] = raw_ws[2];
+            *flags |= ITB_COEFF_TOP_FOLDED;
+        } else {
+            folded_ws[kg - phys_k0] += w;
+        }
     }
 }
 
 static inline void ITB_AccumulateWeightStats(
     ITB_PrecomputeStats *stats,
-    const double wr[3], const double raw_ws[3],
-    const double folded_ws[3])
+    const double wr[ITB_YZ_ORDER],
+    const double raw_ws[ITB_YZ_ORDER],
+    const double folded_ws[ITB_YZ_ORDER])
 {
     double sum_raw = 0.0, sum_folded = 0.0;
-    for (int a = 0; a < 3; a++) {
-        for (int b = 0; b < 3; b++) {
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
+        for (int b = 0; b < ITB_YZ_ORDER; b++) {
             const double raw = wr[a] * raw_ws[b];
             const double folded = wr[a] * folded_ws[b];
             sum_raw += raw;
@@ -233,9 +308,10 @@ static inline void ITB_ComputeMirrorDiagnostics(
             for (int k = 3; k < NZ6 - 3; k++) {
                 const ITB_YZCoeff *csrc = &coeff[ITB_CoeffIndex(src, j, k)];
                 const ITB_YZCoeff *cdst = &coeff[ITB_CoeffIndex(dst, j, k)];
-                for (int a = 0; a < 3; a++) {
-                    for (int b = 0; b < 3; b++) {
-                        const double ws = raw_w[ITB_RawWeightIndex(src, j, k, 2 - a, 2 - b)];
+                for (int a = 0; a < ITB_YZ_ORDER; a++) {
+                    for (int b = 0; b < ITB_YZ_ORDER; b++) {
+                        const double ws = raw_w[ITB_RawWeightIndex(
+                            src, j, k, ITB_YZ_ORDER - 1 - a, ITB_YZ_ORDER - 1 - b)];
                         const double wd = raw_w[ITB_RawWeightIndex(dst, j, k, a, b)];
                         const double err = fabs(wd - ws);
                         if (err > stats->mirror_max_abs_raw)
@@ -245,7 +321,8 @@ static inline void ITB_ComputeMirrorDiagnostics(
                         if (err > 1.0e-10) stats->mirror_count_raw_gt_1e10++;
                         if (err > 1.0e-8)  stats->mirror_count_raw_gt_1e8++;
 
-                        const double fs = csrc->wr[2 - a] * csrc->ws[2 - b];
+                        const double fs = csrc->wr[ITB_YZ_ORDER - 1 - a]
+                                        * csrc->ws[ITB_YZ_ORDER - 1 - b];
                         const double fd = cdst->wr[a] * cdst->ws[b];
                         const double ferr = fabs(fd - fs);
                         if (ferr > stats->mirror_max_abs_folded)
@@ -311,7 +388,7 @@ static inline void ITB_PrintPrecomputeStats(
         printf("  yz classes                 = %d\n", ITB_YZ_CLASS_COUNT);
         printf("  active moving classes       = 8\n");
         printf("  coeff count per rank        = %d*NYD6*NZ6\n", ITB_YZ_CLASS_COUNT);
-        printf("  interpolation order         = x7_yz3x3\n");
+        printf("  interpolation order         = x7_yz7x7\n");
         printf("  ghost extrapolation order   = %d\n", GHOST_EXTRAP_ORDER);
         printf("[ITB] Newton diagnostics:\n");
         printf("  total/converged/failed      = %lld / %lld / %lld\n",
@@ -361,7 +438,8 @@ static inline void ITB_PrecomputeCoefficientsHost(
     ITB_ResetStats(&stats);
 
     const size_t raw_count =
-        (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6 * 9u;
+        (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6
+        * (size_t)(ITB_YZ_ORDER * ITB_YZ_ORDER);
     double *raw_w = (double*)malloc(raw_count * sizeof(double));
     if (!raw_w) {
         fprintf(stderr, "[ITB] FATAL: cannot allocate raw weight diagnostics buffer\n");
@@ -376,7 +454,9 @@ static inline void ITB_PrecomputeCoefficientsHost(
             for (int k = 0; k < NZ6; k++) {
                 ITB_YZCoeff *c = &coeff[ITB_CoeffIndex(yz_id, j, k)];
                 ITB_FillCenterCoeff(c, j, k);
-                raw_w[ITB_RawWeightIndex(yz_id, j, k, 1, 1)] = 1.0;
+                raw_w[ITB_RawWeightIndex(yz_id, j, k,
+                                          ITB_YZ_ORDER / 2,
+                                          ITB_YZ_ORDER / 2)] = 1.0;
             }
         }
 
@@ -384,8 +464,8 @@ static inline void ITB_PrecomputeCoefficientsHost(
 
         for (int j = 3; j < NYD6 - 3; j++) {
             for (int k = 3; k < NZ6 - 3; k++) {
-                const int j0 = j - 1;
-                const int k0 = k - 1;
+                const int j0 = j - ITB_YZ_ORDER / 2;
+                const int k0 = k - ITB_YZ_ORDER / 2;
                 const double yd = y_h[j * NZ6 + k] - ey * dt_val;
                 const double zd = z_h[j * NZ6 + k] - ez * dt_val;
                 double r = 0.0, s = 0.0, residual = 0.0, update = 0.0, min_det = 0.0;
@@ -418,17 +498,19 @@ static inline void ITB_PrecomputeCoefficientsHost(
                     s = 0.0;
                 }
 
-                double wr[3], dwr[3], ws_raw[3], dws[3], ws_folded[3];
-                ITB_QuadShapeHost(r, wr, dwr);
-                ITB_QuadShapeHost(s, ws_raw, dws);
-                for (int a = 0; a < 3; a++) c->wr[a] = wr[a];
+                double wr[ITB_YZ_ORDER], dwr[ITB_YZ_ORDER];
+                double ws_raw[ITB_YZ_ORDER], dws[ITB_YZ_ORDER];
+                double ws_folded[ITB_YZ_ORDER];
+                ITB_YZShapeHost(r, wr, dwr);
+                ITB_YZShapeHost(s, ws_raw, dws);
+                for (int a = 0; a < ITB_YZ_ORDER; a++) c->wr[a] = wr[a];
                 unsigned char fold_flags = 0;
                 ITB_FoldKWeightsHost(k, ws_raw, c->k_idx, ws_folded, &fold_flags);
                 c->flags |= fold_flags;
-                for (int b = 0; b < 3; b++) c->ws[b] = ws_folded[b];
+                for (int b = 0; b < ITB_YZ_ORDER; b++) c->ws[b] = ws_folded[b];
 
-                for (int a = 0; a < 3; a++) {
-                    for (int b = 0; b < 3; b++) {
+                for (int a = 0; a < ITB_YZ_ORDER; a++) {
+                    for (int b = 0; b < ITB_YZ_ORDER; b++) {
                         raw_w[ITB_RawWeightIndex(yz_id, j, k, a, b)] = wr[a] * ws_raw[b];
                     }
                 }

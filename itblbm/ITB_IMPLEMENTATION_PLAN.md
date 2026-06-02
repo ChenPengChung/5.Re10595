@@ -91,13 +91,13 @@ This compression is exact.
 The `id=0` class is the center y-z position. It can be treated as a direct
 Kronecker delta and does not need Newton.
 
-## 4. Recommended First-Pass Interpolation Order
+## 4. Current Interpolation Order
 
-Use a hybrid path:
+Use a 7-point shape-function path:
 
 ```text
 x direction:   7-point Lagrange on uniform x grid
-y-z direction: 3x3 quadratic isoparametric element
+y-z direction: 7x7 centered Lagrange shape-function isoparametric map
 ```
 
 Rationale:
@@ -105,34 +105,34 @@ Rationale:
 - x is uniform, so 7-point Lagrange weights are cheap and globally shared.
 - y-z is curved, so ITB handles physical-space departure with local inverse
   mapping.
-- Runtime read count is much lower than 7x7x7 while keeping x-direction
-  accuracy conservative.
+- y-z now uses the same 7-point interpolation footprint as the high-order
+  GILBM path, but the displacement is resolved through physical-space
+  Newton inverse mapping.
 
 Approximate reads per grid point for D3Q19:
 
 ```text
 q=0:          1
-q=1,2:        2 * 7      = 14
-ex=0 y-z:     8 * 9      = 72
-ex!=0 y-z:    8 * 7 * 9  = 504
-total:        about 591 reads
+q=1,2:        2 * 7        = 14
+ex=0 y-z:     8 * 49       = 392
+ex!=0 y-z:    8 * 7 * 49   = 2744
+total:        about 3151 reads
 ```
 
-Current 7-point GILBM interpolation is about 3151 reads per grid point before
-cache effects.
+This matches the current 7-point GILBM tensor footprint before cache effects.
 
 ## 5. Coefficient Structs
 
 Use separated 1D weights rather than storing full tensor-product weights.
 
-First-pass y-z coefficient:
+Current y-z coefficient:
 
 ```cpp
 struct ITB_YZCoeff {
-    int j0;              // first j row in the 3-row stencil
-    int k_idx[3];        // actual k rows after ghost folding
-    double wr[3];        // shape weights in j/local-r direction
-    double ws[3];        // folded shape weights in k/local-s direction
+    int j0;              // first j row in the 7-row stencil
+    int k_idx[7];        // actual physical k rows after ghost folding
+    double wr[7];        // shape weights in j/local-r direction
+    double ws[7];        // folded shape weights in k/local-s direction
     unsigned char flags; // diagnostic/classification bits
 };
 ```
@@ -280,29 +280,28 @@ yd = y[j,k] - ey * dt_global
 zd = z[j,k] - ez * dt_global
 ```
 
-Use a centered 3x3 element:
+Use a centered 7x7 element:
 
 ```text
-j nodes: j-1, j, j+1
-k nodes: k-1, k, k+1
+j nodes: j-3, ..., j, ..., j+3
+k nodes: k-3, ..., k, ..., k+3
 ```
 
 k ghost nodes must be provided through `geom_eff()`.
 
-Quadratic 1D shape functions on `[-1,0,+1]`:
+Centered 7-point Lagrange 1D shape functions on `[-3,-2,-1,0,+1,+2,+3]`:
 
 ```text
-L0(r) = 0.5*r*(r-1)
-L1(r) = 1-r*r
-L2(r) = 0.5*r*(r+1)
+La(r) = product_{b!=a} (r - xb) / (xa - xb)
+xa    = a - 3,  a=0..6
 ```
 
-Derivatives:
+Derivatives are evaluated analytically from the same Lagrange basis:
 
 ```text
-dL0/dr = r - 0.5
-dL1/dr = -2*r
-dL2/dr = r + 0.5
+dLa/dr = sum_{m!=a} [
+    1/(xa - xm) * product_{b!=a,m} (r - xb)/(xa - xb)
+]
 ```
 
 Mapping:
@@ -381,14 +380,14 @@ For each opposite pair:
 Compute both directions directly by Newton. Then compare direct opposite
 weights with mirrored source weights.
 
-For a 3x3 tensor-product stencil:
+For a 7x7 tensor-product stencil:
 
 ```text
-mirror(w_src)[a,b] = w_src[2-a, 2-b]
+mirror(w_src)[a,b] = w_src[6-a, 6-b]
 ```
 
 Because ITB stores separated folded weights, compute the diagnostic on the
-unfolded raw 3x3 weights before k-ghost folding, then separately report folded
+unfolded raw 7x7 weights before k-ghost folding, then separately report folded
 weight mismatch at wall-adjacent rows.
 
 Metrics:
@@ -431,7 +430,7 @@ After precompute, print a rank-local and MPI-global summary:
   yz classes                 = 9
   active moving classes       = 8
   coeff count per rank        = 9*NYD6*NZ6
-  interpolation order         = x7_yz3x3
+  interpolation order         = x7_yz7x7
   ghost extrapolation order   = GHOST_EXTRAP_ORDER
 ```
 
