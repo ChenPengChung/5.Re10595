@@ -88,6 +88,26 @@ sc_record_r_ftt() {  # $1=jp $2=value(FTT/hr)
         > "${SC_TPDB}.tmp" && mv -f "${SC_TPDB}.tmp" "$SC_TPDB"
 }
 
+# [Codex C2 fix] learn the realized FTT/hr for jp from the last round in timing_log.dat and persist
+# it (so net-scoring uses measured rates, not just the bootstrap). Columns: Step FTT GPU_min Wall_min ...
+# Wall_min resets each round → use the trailing monotonic-Wall block (the last round):
+#   r_ftt = (FTT_last - FTT_first) / (Wall_min_last - Wall_min_first) * 60.
+sc_update_r_ftt() {  # $1=jp
+    local jp="$1" tl="${SC_TIMING_LOG:-timing_log.dat}" r
+    [[ "$jp" =~ ^[0-9]+$ ]] && [ "$jp" -gt 0 ] || return 1
+    [ -f "$tl" ] || return 1
+    r=$(awk '!/^#/ && NF>=4 {
+            ftt=$2+0; wall=$4+0
+            if (pw!="" && wall < pw) f0=""        # Wall reset => new round => restart window
+            if (f0=="") { f0=ftt; w0=wall }
+            f1=ftt; w1=wall; pw=wall
+        } END { dw=w1-w0; if (dw>0.001) printf "%.5f", (f1-f0)/dw*60 }' "$tl")
+    if [ -n "$r" ] && awk -v x="$r" 'BEGIN{exit !(x>0)}'; then
+        sc_record_r_ftt "$jp" "$r"
+        echo "[select] measured r_ftt(jp=$jp)=$r FTT/hr (from $tl) -> persisted" >&2
+    fi
+}
+
 sc_r_ftt() {  # $1=jp -> FTT/hr (measured if in db, else bootstrap r32·(jp/32)^exp)
     local jp="$1" r32="" v
     if [ -f "$SC_TPDB" ]; then

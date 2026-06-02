@@ -49,15 +49,16 @@ jpswitch_valid() {  # $1=N : divisible, slab>=7, whole H200 node (8 GPU)
     return 0
 }
 
-jpswitch_binary_ready() {  # $1=N : a.out.jp<N> exists and (if recorded) matches manifest md5
+jpswitch_binary_ready() {  # $1=N : a.out.jp<N> exists AND manifest-matched (md5)
     local N="$1"; local bin="a.out.jp${N}"
     [ -s "$bin" ] || return 1
+    # [Codex B1 fix] if a manifest exists, REQUIRE an entry for jp<N> and that md5 matches
+    # (not just "matched if an entry happens to exist") — an unverified binary is rejected.
     if [ -f "$JPSWITCH_MANIFEST" ]; then
         local want; want=$(grep -E "^jp${N}=" "$JPSWITCH_MANIFEST" | cut -d= -f2 | tr -d '[:space:]')
-        if [ -n "$want" ]; then
-            local got; got=$(md5sum "$bin" | cut -d' ' -f1)
-            [ "$want" = "$got" ] || { _jps_log "manifest md5 mismatch for $bin ($got != $want)"; return 2; }
-        fi
+        [ -n "$want" ] || { _jps_log "no manifest entry for jp${N} (binary unverified) -> reject"; return 2; }
+        local got; got=$(md5sum "$bin" | cut -d' ' -f1)
+        [ "$want" = "$got" ] || { _jps_log "manifest md5 mismatch for $bin ($got != $want)"; return 2; }
     fi
     return 0
 }
@@ -78,6 +79,9 @@ jpswitch_apply() {  # $1=N
     [ -n "$cur" ] || cur=$(grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' "$JPSWITCH_VH" | grep -oE '[0-9]+' | head -1)
     jpswitch_valid "$N"        || { _jps_log "jp=$N invalid for this grid"; return 1; }
     [ "$N" = "$cur" ]          && { _jps_log "jp already $N — no switch"; return 0; }
+    # [Codex B3 fix] freeze sentinel: if jp-switching was frozen (e.g. byte-exact gate failed),
+    # refuse so the caller falls back to the current jp (partition-only switching).
+    [ -f restart/STOP_JPSWITCH ] && { _jps_log "restart/STOP_JPSWITCH present -> jp-switch FROZEN; falling back to current jp"; return 9; }
     jpswitch_binary_ready "$N" || { _jps_log "a.out.jp${N} missing/mismatch — abort (caller falls back)"; return 2; }
 
     local latest_target; latest_target="$(readlink -f "$JPSWITCH_LATEST")"

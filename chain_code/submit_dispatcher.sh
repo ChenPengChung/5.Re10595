@@ -584,6 +584,7 @@ _cancel_head_for_reselect() {
 
 # [P0 TRAP #2 FIX] 連續找不到 capacity 的輪數
 _nocapacity_count=0
+_pending_reselect=   # [Codex A2 fix] set to 1 after a PENDING-timeout cancel → next select uses 1h horizon
 
 while true; do
     # Stop 條件 1: STOP_DISPATCHER
@@ -605,7 +606,7 @@ while true; do
     # 如果 chain 目前還有 active job, 等它結束 — 但 PENDING 太久則 cancel + re-select (never idle)
     if chain_has_active_job; then
         if _pending_too_long && _cancel_head_for_reselect; then
-            : # 已取消卡住的 PENDING job; 不 continue, 直接往下 re-select 更快的組合
+            _pending_reselect=1   # [Codex A2 fix] re-select using the 1h pending horizon
         else
             sleep "$POLL_INTERVAL"
             continue
@@ -649,9 +650,13 @@ while true; do
         break
     fi
 
+    # [Codex C2 fix] learn realized r_ftt for the just-finished jp from timing_log before selecting
+    sc_update_r_ftt "$(jpswitch_current_jp)" 2>/dev/null || true
     # 選 (jp × partition) — net-throughput optimal, never-idle (select_combo_lib)
-    log "----- 準備投下一輪: net-throughput 選 (jp × partition) -----"
-    NEXT_COMBO="$(sc_pick_combo)"
+    # [Codex A2 fix] after a PENDING re-select, use the 1h pending horizon (favours start-now)
+    log "----- 準備投下一輪: net-throughput 選 (jp × partition)${_pending_reselect:+ [pending re-select, 1h horizon]} -----"
+    NEXT_COMBO="$(sc_pick_combo ${_pending_reselect:+--pending})"
+    _pending_reselect=
     NEXT_JP="${NEXT_COMBO%% *}"
     NEXT_PART="${NEXT_COMBO##* }"
     if [ -z "$NEXT_COMBO" ] || ! [[ "$NEXT_JP" =~ ^[0-9]+$ ]] || [ -z "$NEXT_PART" ]; then
