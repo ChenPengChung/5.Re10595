@@ -2,7 +2,7 @@
 #define ITBLBM_ISOPARAMETRIC_COEFF_H
 
 #define ITB_YZ_CLASS_COUNT 9
-#define ITB_YZ_ORDER       3
+#define ITB_YZ_ORDER       7
 #define ITB_X_ORDER        7
 
 #define ITB_COEFF_BOTTOM_FOLDED   0x01u
