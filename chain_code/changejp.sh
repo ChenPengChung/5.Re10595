@@ -172,6 +172,40 @@ fi
 MODE_NAME="$([ "$PREPARE_ONLY" -eq 1 ] && echo prepare-only || echo apply)"
 say "=== changejp 2. 執行 ($MODE_NAME) ==="
 JOURNAL="restart/jp_switch.inprogress"
+
+# [CKPT-ATOM-1/3] 開始新切換前, 先處理上一次中斷殘留: 清不完整暫存 + 依交易日誌做確定性復原,
+# 避免在不一致狀態上疊加新切換 (原本 journal 只寫不讀 → crash 後無人復原)。
+_recover_stale_switch() {
+  rm -rf restart/checkpoint/.changejp_tmp_jp*.* 2>/dev/null || true   # 不完整 repartition 暫存(永不被 latest 引用) → 安全清除 [CKPT-ATOM-3]
+  [ -f "$JOURNAL" ] || return 0
+  local jfrom jto jphase jsrc vh_jp now_rc bak bak_rc
+  jfrom="$(grep -E '^from_jp=' "$JOURNAL" 2>/dev/null | cut -d= -f2)"
+  jto="$(  grep -E '^to_jp='   "$JOURNAL" 2>/dev/null | cut -d= -f2)"
+  jphase="$(grep -E '^phase='  "$JOURNAL" 2>/dev/null | tail -1 | cut -d= -f2)"
+  jsrc="$( grep -E '^src_dir=' "$JOURNAL" 2>/dev/null | cut -d= -f2)"
+  vh_jp="$(grep -E '^#define[[:space:]]+jp[[:space:]]' "$VH" | awk '{print $3; exit}')"
+  now_rc="$(grep -E '^mpi_rank_count=' "$(readlink -f "$LATEST" 2>/dev/null)/metadata.dat" 2>/dev/null | cut -d= -f2 || true)"
+  say "[recover] 偵測殘留切換日誌 (from=$jfrom to=$jto phase=$jphase); latest rank_count=${now_rc:-none}, variables.h jp=$vh_jp"
+  if [ -n "$now_rc" ] && [ "$now_rc" = "$vh_jp" ]; then
+    say "[recover] checkpoint 與 variables.h jp 一致 → 狀態完好, 清除殘留日誌後繼續 (roll-forward)"
+    rm -f "$JOURNAL"; return 0
+  fi
+  bak="$(ls -1dt restart/ckpt_bak/"$(basename "${jsrc:-X}")"_jp*.* 2>/dev/null | head -1 || true)"
+  if [ -n "$bak" ] && [ -d "$bak" ] && [ -n "$jsrc" ]; then
+    bak_rc="$(grep -E '^mpi_rank_count=' "$bak/metadata.dat" 2>/dev/null | cut -d= -f2 || echo "${jfrom:-0}")"
+    say "[recover] 不一致 → roll-back: 還原 $bak (rank_count=$bak_rc) → $jsrc, 並對齊 variables.h jp=$bak_rc"
+    rm -rf "$jsrc" 2>/dev/null || true
+    mv "$bak" "$jsrc"
+    ln -sfn "$(basename "$jsrc")" "$LATEST"
+    sed -E -i "s/^(#define[[:space:]]+jp[[:space:]]+)[0-9]+/\1${bak_rc}/" "$VH"
+    rm -f "$JOURNAL"
+    say "[recover] 已還原到一致狀態 (jp=$bak_rc)。請先 ./run --rebuild 使 a.out 對齊 jp, 再重新執行 changejp。"
+    exit 0
+  fi
+  die "[recover] 殘留切換日誌但無法自動還原 (latest rank_count=${now_rc:-none} != jp=$vh_jp, 無 ${jsrc:-?} 的 ckpt_bak 備份)。請人工檢查 restart/checkpoint 與 restart/ckpt_bak 後手動刪除 $JOURNAL。"
+}
+_recover_stale_switch
+
 TMP=""           # repartition 暫存 (供 _rollback 清理; 先佔位)
 BAK=""           # 舊 checkpoint 備份路徑 (供 _rollback 還原; 先佔位)
 COMMITTED=0      # 過了 checkpoint 原子提交點才 =1
@@ -298,6 +332,15 @@ for d in restart/checkpoint/step_*/; do
     say "    移走殘留舊 jp checkpoint: $(basename "${d%/}") (rank_count=$_rc)"
   fi
 done
+# [REPART-STATS-1] 提交後做一次獨立軸序交叉驗證 (BAK=舊 jp vs SRC_DIR=新 jp, f00+rho unique-node bit 比對).
+# 已過不可逆點 → 只能 fail-loud 告警(不回滾); f00+rho 即足以抓出軸序退化(Edit6 震盪真因), 統計走同一路徑.
+if [ -f "$CHAIN_DIR/tools/repartition_xcheck.py" ] && [ -d "$BAK" ]; then
+  if python3 "$CHAIN_DIR/tools/repartition_xcheck.py" "$BAK" "$SRC_DIR" f00 rho >/dev/null 2>&1; then
+    say "    ✓ xcheck: 舊↔新 jp 流場 unique-node bit 一致 (軸序正確)"
+  else
+    say "    ⚠⚠ xcheck 失敗: repartition 後流場與舊 jp 不一致 (已提交不可回滾) — 立即人工檢查, 切勿續跑!"
+  fi
+fi
 echo "phase=COMMITTED" >> "$JOURNAL"
 rm -f "$JOURNAL"   # SNAP 由 EXIT trap (_cleanup) 清理
 
@@ -317,7 +360,15 @@ rm -f restart/STOP_CHAIN
 say "[7] dispatcher start + watcher"
 ./run dispatcher start || true
 if [ -f watcher/hill_watcher.sh ]; then
-  pkill -F live/watcher.pid 2>/dev/null || true; rm -f live/watcher.pid 2>/dev/null || true
+  # [pkill-safety] 只殺「確認是本專案 watcher」的 PID, 避免 stale/回收 PID 誤殺同帳號別程序 (原 pkill -F 無此防護).
+  if [ -f live/watcher.pid ]; then
+    _wpid="$(tr -dc 0-9 < live/watcher.pid 2>/dev/null)"
+    if [ -n "$_wpid" ] && kill -0 "$_wpid" 2>/dev/null \
+       && tr '\0' ' ' < "/proc/$_wpid/cmdline" 2>/dev/null | grep -q 'hill_watcher'; then
+      kill "$_wpid" 2>/dev/null || true
+    fi
+    rm -f live/watcher.pid 2>/dev/null || true
+  fi
   nohup bash watcher/hill_watcher.sh > /dev/null 2>&1 &
   say "      watcher 重啟"
 fi
