@@ -200,15 +200,17 @@ sc_audit() {  # [H]
             fi
             cap=$(sc_cap "$part")
             if [ "$jp" -gt "$cap" ]; then
-                echo "jp${jp} ${part}  SKIP over-cap (jp>${cap})"; continue
+                # QOS 硬上限: jp 超過該 partition 的 per-account GPU cap → 警告 + 跳過不投
+                echo "jp${jp} ${part}  ⚠ QOS-SKIP over-cap (jp>${cap}, QOS p_${part} MaxTRESPerAccount gres/gpu=${cap}) — 跳過不處理"; continue
             fi
             run=$(sc_acct_running_gpu "$part"); hr=$((cap - run))
             if [ "$jp" -le "$hr" ]; then
                 sd=$(sc_eta_hours "$jp" "$part"); net=$(sc_net "$jp" "$part" "$sd" "$cur" "$H")
                 echo "jp${jp} ${part}  EVAL startΔ=${sd}h net=${net} (sbatch --test-only probed)"
             else
+                # QOS headroom 用罄(帳號其他 job 已佔滿該 QOS cap)→ 警告 + 給大罰分(實質不投)
                 sd="$SC_CAPBLOCK_SD_H"; net=$(sc_net "$jp" "$part" "$sd" "$cur" "$H")
-                echo "jp${jp} ${part}  EVAL cap-block headroom=${hr} startΔ=${sd}h net=${net}"
+                echo "jp${jp} ${part}  ⚠ QOS-BLOCK headroom=${hr} (帳號已佔滿 QOS p_${part} cap=${cap}) → 罰分 startΔ=${sd}h net=${net}, 不投"
             fi
         done
     done
