@@ -72,17 +72,21 @@ STOP_SENTINEL="STOP_DISPATCHER"
 ACCOUNT="${ACCOUNT:-MST115169}"
 
 # [P0 TRAP #2 FIX] 兩邊都忙時連續沒空位多少次後, 觸發明確停機 (避免隱形無限 sleep)
-# 預設 60 次 × POLL_INTERVAL(30s) = 30 分鐘. 可用 env 覆寫 (e.g. NOCAPACITY_LIMIT=120 = 1hr)
-NOCAPACITY_LIMIT="${NOCAPACITY_LIMIT:-60}"
+# [never-idle] 放寬: 預設 480 次 × POLL_INTERVAL(30s) = 4 小時才放棄 (原 60=30 分太短)。
+# 只在「所有候選連 sbatch --test-only 都拿不到可解析 ETA」(controller down / QoS reject / binary 缺)
+# 才會累加; 正常 PENDING 不會走到這裡。每輪都會 log 一行當 heartbeat, operator 不會失明。
+NOCAPACITY_LIMIT="${NOCAPACITY_LIMIT:-480}"
 NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 
 # Partition 候選清單: <ARCH>:<partition>
 # - GB200 partitions 共用 a.out.GB200 / jobscript_chain.slurm.GB200
-# - H200 h200 共用 a.out.H200 / jobscript_chain.slurm.H200
-#   (注意: H200 必須用 h200 partition[MaxTime=4天], 不可用 dev[MaxTime=1h] —
-#    jobscript 要求 --time=4-00:00:00, 投到 dev 會被 "exceeds time limit" 拒絕)
+# - H200 partitions 共用 a.out.H200 / jobscript_chain.slurm.H200
+#   叢集改版後舊 `h200` partition 已移除; 本帳號 (mst*) 可用 normal/4nodes/dev
+#   (large/slinky/taide 限 gov* 帳號)。候選依 walltime 長→短列。pick_cluster 的
+#   2-tier 政策會自動「有容量→選最長walltime / 全pending→選最短ETA」, 各 partition
+#   的 --time= cap 由 partition_walltime() 決定 (見 tools/partition_lib.sh)。
 # - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:h200}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:normal H200:4nodes H200:dev}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
@@ -253,9 +257,13 @@ chain_last_exit_code() {
 # ─────────────────────────────────────────────────────────────────────────
 pick_cluster() {
     local entry c part target
-    local best_target="" best_epoch=0 best_set=0
+    # 收集所有「可投」候選: 平行陣列 (target / ETA epoch / walltime 秒)
+    local -a _T=() _E=() _W=()
+    # 目前 jp(= 要投的 GPU 數), 供 MaxTRESPerAccount 過濾
+    local cur_jp; cur_jp="$(grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' variables.h 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+    cur_jp="${cur_jp:-0}"
 
-    log "  pick_cluster: partition ETA-compare (tolerance=${TIE_TOLERANCE_SEC}s)" >&2
+    log "  pick_cluster: 2-tier 政策 (有容量→最長walltime; 全pending→最短ETA, tol=${TIE_TOLERANCE_SEC}s; jp=$cur_jp)" >&2
     for entry in "${PARTITION_CANDIDATES[@]}"; do
         c="${entry%%:*}"
         part="${entry#*:}"
@@ -268,6 +276,12 @@ pick_cluster() {
             log "    [$target] 略過: a.out.$c 不存在" >&2
             continue
         fi
+        # MaxTRESPerAccount 過濾: 此 partition 每帳號 GPU 上限容不下目前 jp → 永遠 PENDING, 跳過
+        local _gcap; _gcap="$(partition_gpu_cap_per_account "$part" 2>/dev/null || echo 100000)"
+        if [ "$cur_jp" -gt "$_gcap" ]; then
+            log "    [$target] 略過: jp=$cur_jp > 該 partition 每帳號 GPU 上限 $_gcap (MaxGRESPerAccount)" >&2
+            continue
+        fi
         local js; js="$(cluster_jobscript "$c")" || continue
         if [ ! -f "$js" ]; then
             log "    [$target] 略過: jobscript $js 不存在" >&2
@@ -275,35 +289,51 @@ pick_cluster() {
         fi
         local eta; eta="$(_pick_cluster_eta_epoch "$js" "$part")"
         if [ "$eta" -lt 0 ]; then
-            log "    [$target] ETA 查詢失敗 (sbatch --test-only 無解析結果)" >&2
+            log "    [$target] ETA 查詢失敗/不可投 (sbatch --test-only 無解析結果)" >&2
             continue
         fi
+        local wt wsec; wt="$(partition_walltime "$part")"; wsec="$(walltime_to_sec "${wt:-}")"
         local now; now="$(date +%s)"
-        local wait_s=$((eta - now))
-        [ "$wait_s" -lt 0 ] && wait_s=0
-        log "    [$target] ETA wait ~= $(_pick_cluster_fmt_wait "$wait_s")" >&2
-
-        if [ "$best_set" -eq 0 ]; then
-            best_target="$target"; best_epoch="$eta"; best_set=1
-        else
-            # 只有「比目前最佳早 TIE_TOLERANCE_SEC 以上」才覆蓋
-            # → 平手範圍內維持 PARTITION_CANDIDATES 先到先選, 避免抖動
-            local delta=$((best_epoch - eta))
-            if [ "$delta" -gt "$TIE_TOLERANCE_SEC" ]; then
-                best_target="$target"; best_epoch="$eta"
-            fi
-        fi
+        local wait_s=$((eta - now)); [ "$wait_s" -lt 0 ] && wait_s=0
+        log "    [$target] ETA wait ~= $(_pick_cluster_fmt_wait "$wait_s")  walltime=${wt:-?}(${wsec}s)" >&2
+        _T+=("$target"); _E+=("$eta"); _W+=("$wsec")
     done
 
-    if [ "$best_set" -eq 1 ] && [ -n "$best_target" ]; then
-        log "  pick_cluster: 選中 $best_target (ETA-compare 結果)" >&2
-        echo "$best_target"
+    local n=${#_T[@]}
+    if [ "$n" -eq 0 ]; then
+        log "  pick_cluster: 全部候選都不可投 (binary 缺 / sbatch --test-only 全部失敗) -> no-capacity" >&2
+        echo ""
+        return 1
+    fi
+
+    local now soon i bi
+    now="$(date +%s)"
+    soon=$(( now + ${PARTITION_START_SOON_SEC:-120} ))
+
+    # ── 規則1: 在「可即起 (ETA<=now+SOON)」候選中, 選 walltime 最長 ──
+    #           walltime 平手 → ETA 早者 → PARTITION_CANDIDATES 先到先選
+    bi=-1
+    for (( i=0; i<n; i++ )); do
+        [ "${_E[$i]}" -le "$soon" ] || continue
+        if   [ "$bi" -lt 0 ]; then bi=$i
+        elif [ "${_W[$i]}" -gt "${_W[$bi]}" ]; then bi=$i
+        elif [ "${_W[$i]}" -eq "${_W[$bi]}" ] && [ "${_E[$i]}" -lt "${_E[$bi]}" ]; then bi=$i
+        fi
+    done
+    if [ "$bi" -ge 0 ]; then
+        log "  pick_cluster: [規則1] 有容量可即起 → 選最長 walltime: ${_T[$bi]}" >&2
+        echo "${_T[$bi]}"
         return 0
     fi
 
-    log "  pick_cluster: 全部候選都不可投 (binary 缺 / sbatch --test-only 全部失敗) -> no-capacity" >&2
-    echo ""
-    return 1
+    # ── 規則2: 全部都得排隊 → 選 ETA 最短 (早 TIE_TOLERANCE_SEC 以上才覆蓋) ──
+    bi=0
+    for (( i=1; i<n; i++ )); do
+        if [ $(( ${_E[$bi]} - ${_E[$i]} )) -gt "$TIE_TOLERANCE_SEC" ]; then bi=$i; fi
+    done
+    log "  pick_cluster: [規則2] 全部 pending → 選最短 ETA: ${_T[$bi]}" >&2
+    echo "${_T[$bi]}"
+    return 0
 }
 
 # 用 sbatch --test-only 查單一 jobscript 的預期開始 epoch.
@@ -313,8 +343,8 @@ _pick_cluster_eta_epoch() {
     command -v sbatch >/dev/null 2>&1 || { echo -1; return; }
     # [WALLTIME-FIX] --test-only 也帶 --time= 讓 SLURM backfill 用正確 walltime 排程
     local wt="" time_arg=""
-    if [ -n "$part" ] && type gb200_partition_walltime >/dev/null 2>&1; then
-        wt="$(gb200_partition_walltime "$part")"
+    if [ -n "$part" ] && type partition_walltime >/dev/null 2>&1; then
+        wt="$(partition_walltime "$part")"
     fi
     [ -n "$wt" ] && time_arg="--time=$wt"
     if [ -n "$part" ]; then
@@ -433,8 +463,8 @@ submit_round() {
 
     # [WALLTIME-FIX] partition-specific walltime (partition_lib for GB200; jobscript fallback)
     local wt="" time_arg=""
-    if type gb200_partition_walltime >/dev/null 2>&1; then
-        wt="$(gb200_partition_walltime "$part")"
+    if type partition_walltime >/dev/null 2>&1; then
+        wt="$(partition_walltime "$part")"
     fi
     if [ -z "$wt" ]; then
         wt="$(awk -F= '/^#SBATCH[[:space:]]+--time=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$jobscript" 2>/dev/null)"
@@ -536,6 +566,207 @@ fi
 # [P0 TRAP #2 FIX] 連續找不到 capacity 的輪數
 _nocapacity_count=0
 
+# ──────────────────────────────────────────────────────────────────────────
+# [PENDING-RESELECT] timing② : job 卡 PENDING 過久 → 比較其他 partition,
+#   若有「明顯更快 (ETA 早 RESELECT_MARGIN_SEC 以上) 且不同 partition」者,
+#   經 project_job_guard.sh (驗 WorkDir) 取消當前 job, 讓主迴圈以 2-tier 政策改投。
+#   安全: 取消一律走 job-guard (只可能取消本專案 job, 杜絕跨專案誤殺); 保守門檻
+#   (pending>=PENDING_RESELECT_SEC 且新者早 RESELECT_MARGIN_SEC 以上才動)。
+#   PENDING_RESELECT=0 可完全停用此 watchdog。
+# ──────────────────────────────────────────────────────────────────────────
+_pending_reselect_watchdog() {
+    [ "${PENDING_RESELECT:-1}" = "1" ] || return 0
+    local jid; jid="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
+    [ -n "$jid" ] || return 0
+    local st; st="$(sacct -n -X -j "$jid" -o State 2>/dev/null | head -1 | tr -d ' ')"
+    [ "$st" = "PENDING" ] || return 0
+    local subt nowt subepoch pend
+    subt="$(sacct -n -X -j "$jid" -o Submit 2>/dev/null | head -1 | tr -d ' ')"
+    nowt="$(date +%s)"
+    subepoch="$(date -d "$subt" +%s 2>/dev/null || echo "$nowt")"
+    pend=$(( nowt - subepoch )); [ "$pend" -lt 0 ] && pend=0
+    [ "$pend" -ge "${PENDING_RESELECT_SEC:-1800}" ] || return 0
+
+    local curpart; curpart="$(scontrol show job "$jid" 2>/dev/null | grep -oE 'Partition=[^ ]+' | head -1 | cut -d= -f2)"
+    local pick; pick="$(pick_cluster)"; [ -n "$pick" ] || return 0
+    local newpart; newpart="$(target_partition "$pick" 2>/dev/null)"
+    if [ -z "$newpart" ] || [ "$newpart" = "$curpart" ]; then
+        # partition 已最佳但仍卡 PENDING → 若開了 jp 控制器, 試 jp scale-down (小 footprint 較快排到)
+        # [HIGH-2] 只在「真的縮小 jp」時才取消 PENDING job (放大不該由 watchdog 取消 RUNNING/排隊中的);
+        # 且 job 至少已 PENDING T_DOWN 秒 (watchdog 進到這裡已 >= PENDING_RESELECT_SEC)。
+        if [ "${JP_CONTROLLER:-0}" = "1" ] && [ "$pend" -ge "${T_DOWN:-1800}" ]; then
+            local _jpd _newjp _curjp
+            _jpd="$(pick_jp_and_partition 2>/dev/null)"
+            _newjp="$(printf '%s\n' "$_jpd" | awk '/^CHANGE_JP/{print $2}')"
+            _curjp="$(grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' variables.h 2>/dev/null | grep -oE '[0-9]+' | head -1)"
+            if [ -n "$_newjp" ] && [ "${_curjp:-0}" -gt 0 ] && [ "$_newjp" -lt "$_curjp" ]; then
+                log "[PENDING-RESELECT][JP] job $jid pending ${pend}s, partition 已最佳; 縮小 jp $_curjp→$_newjp → 經 job-guard 取消, 主迴圈將切 jp 改投"
+                bash "$CHAIN_DIR/tools/project_job_guard.sh" scancel "$jid" >/dev/null 2>&1 \
+                  && log "[PENDING-RESELECT][JP] 已取消 $jid (主迴圈會 changejp + 重投)" \
+                  || log "[PENDING-RESELECT][JP] WARN: 取消失敗, 維持排隊"
+                return 0
+            fi
+        fi
+        log "[PENDING-RESELECT] job $jid pending ${pend}s, 最佳仍是 ${curpart:-?} → 維持排隊, 不取消"
+        return 0
+    fi
+    local c_js new_eta cur_eta
+    c_js="$(cluster_jobscript "$(target_cluster "$pick")" 2>/dev/null)"
+    new_eta="$(_pick_cluster_eta_epoch "$c_js" "$newpart")"
+    cur_eta="$(_pick_cluster_eta_epoch "$c_js" "$curpart")"
+    if [ "${new_eta:- -1}" -lt 0 ] || [ "${cur_eta:- -1}" -lt 0 ] || \
+       [ $(( cur_eta - new_eta )) -le "${RESELECT_MARGIN_SEC:-900}" ]; then
+        log "[PENDING-RESELECT] job $jid pending ${pend}s; $newpart 未明顯更快 → 維持排隊"
+        return 0
+    fi
+    log "[PENDING-RESELECT] job $jid 在 ${curpart:-?} 已 pending ${pend}s; $newpart ETA 早 ~$(( cur_eta - new_eta ))s → 經 job-guard 取消改投"
+    local _gout
+    _gout="$(bash "$CHAIN_DIR/tools/project_job_guard.sh" scancel "$jid" 2>&1)"
+    if [ $? -eq 0 ]; then
+        log "[PENDING-RESELECT] 已取消 $jid, 下一圈主迴圈將以 2-tier 政策改投"
+    else
+        log "[PENDING-RESELECT] WARN: job-guard 取消 $jid 失敗 (WorkDir 不符/已結束?), 不強制: $_gout"
+    fi
+}
+
+# ═════════════════════════════════════════════════════════════════════════
+# [JP-CONTROLLER] 動態 jp 選擇 (Phase B). 預設 JP_CONTROLLER=0 → 完全不啟用,
+# 行為與今日相同 (只自動切 partition)。=1 才在輪界依「淨速度 + 絕不閒置」選 jp。
+# 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
+# ═════════════════════════════════════════════════════════════════════════
+JP_CONTROLLER="${JP_CONTROLLER:-0}"
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
+K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
+K_DOWN="${K_DOWN:-2}"                              # scale-down 也需連續確認 (對稱防抖, 修 HIGH-1)
+T_DOWN="${T_DOWN:-1800}"                           # watchdog: jp 縮小前 job 至少已 PENDING 這麼久
+JP_SWITCH_GAIN_PCT="${JP_SWITCH_GAIN_PCT:-15}"     # 新 jp 分數須勝現 jp 至少 +N% 才換 (防 thrash, 修 L2)
+FTT_PRELOCK="${FTT_PRELOCK:-48}"
+JP_FREEZE_ON_STATS="${JP_FREEZE_ON_STATS:-1}"     # 1=統計階段(accu>0/FTT>=prelock)凍結 jp(穩定優先, 預設);
+                                                  # 0=允許統計階段自動切 jp(repartition 會點對點保留統計, 完整性不變)
+PARTITION_START_SOON_SEC="${PARTITION_START_SOON_SEC:-120}"
+JP_STATE_FILE="restart/jp_controller.state"
+
+_jp_read_current() { grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' variables.h 2>/dev/null | grep -oE '[0-9]+' | head -1; }
+_jp_read_meta() {  # echo "accu ftt"
+  local m a f; m="$(readlink -f restart/checkpoint/latest 2>/dev/null)/metadata.dat"
+  a="$(grep -E '^accu_count=' "$m" 2>/dev/null | cut -d= -f2)"; f="$(grep -E '^FTT=' "$m" 2>/dev/null | cut -d= -f2)"
+  echo "${a:-0} ${f:-0}"
+}
+_jp_state_get() { local k="$1" d="${2:-}" v; v="$(grep -E "^$k=" "$JP_STATE_FILE" 2>/dev/null | tail -1 | cut -d= -f2)"; echo "${v:-$d}"; }
+_jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; shift 2
+    if [ -f "$JP_STATE_FILE" ] && grep -qE "^$k=" "$JP_STATE_FILE"; then sed -E -i "s|^$k=.*|$k=$v|" "$JP_STATE_FILE"; else echo "$k=$v" >> "$JP_STATE_FILE"; fi; done; }
+
+# 假設 jp 在 (ARCH,part) 的開始 epoch; -1 = 不可行。先用 MaxTRESPerAccount 過濾, 再 --test-only(--nodes/--ntasks override 已實測有效)。
+jp_partition_eta() {
+  local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts
+  cap="$(partition_gpu_cap_per_account "$part" 2>/dev/null || echo 100000)"
+  [ "$jp" -gt "$cap" ] && { echo -1; return; }
+  case "$c" in H200) nodes=$((jp/8)) ;; GB200) nodes=$((jp/4)) ;; *) nodes=$((jp/8)) ;; esac
+  [ "$nodes" -lt 1 ] && { echo -1; return; }
+  js="$(cluster_jobscript "$c")" || { echo -1; return; }; [ -f "$js" ] || { echo -1; return; }
+  wt="$(partition_walltime "$part")"; ta=""; [ -n "$wt" ] && ta="--time=$wt"
+  out="$(sbatch --test-only --partition="$part" --nodes="$nodes" --ntasks="$jp" $ta "$js" 2>&1 || true)"
+  if echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
+    ts="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -1)"; date -d "$ts" +%s 2>/dev/null || echo -1
+  elif echo "$out" | grep -qE "allocation .*can be allocated|to start immediately|to start now"; then date +%s
+  else echo -1; fi
+}
+
+# 對給定 jp 選最佳 partition (2-tier). echo "ARCH@part eta wsec startable" 或空。
+_pick_partition_for_jp() {
+  local jp="$1" entry c part eta w now soon i bi
+  now="$(date +%s)"; soon=$((now + PARTITION_START_SOON_SEC))
+  local -a sT=() sE=() sW=()
+  for entry in "${PARTITION_CANDIDATES[@]}"; do
+    c="${entry%%:*}"; part="${entry#*:}"
+    { [ -z "$c" ] || [ -z "$part" ] || [ "$c" = "$part" ]; } && continue
+    cluster_binary_ready "$c" || continue
+    eta="$(jp_partition_eta "$jp" "$c" "$part")"; [ "$eta" -lt 0 ] && continue
+    w="$(walltime_to_sec "$(partition_walltime "$part")")"
+    sT+=("$c@$part"); sE+=("$eta"); sW+=("$w")
+  done
+  local n=${#sT[@]}; [ "$n" -eq 0 ] && { echo ""; return 1; }
+  bi=-1
+  for ((i=0;i<n;i++)); do [ "${sE[$i]}" -le "$soon" ] || continue
+    if [ "$bi" -lt 0 ] || [ "${sW[$i]}" -gt "${sW[$bi]}" ] || { [ "${sW[$i]}" -eq "${sW[$bi]}" ] && [ "${sE[$i]}" -lt "${sE[$bi]}" ]; }; then bi=$i; fi
+  done
+  if [ "$bi" -ge 0 ]; then echo "${sT[$bi]} ${sE[$bi]} ${sW[$bi]} 1"; return 0; fi
+  bi=0; for ((i=1;i<n;i++)); do [ "${sE[$i]}" -lt "${sE[$bi]}" ] && bi=$i; done
+  echo "${sT[$bi]} ${sE[$bi]} ${sW[$bi]} 0"; return 0
+}
+
+# 主決策: echo "KEEP <jp> <ARCH@part>" 或 "CHANGE_JP <jp> <ARCH@part>"。
+pick_jp_and_partition() {
+  local cur acc ftt locked now n i; cur="$(_jp_read_current)"; cur="${cur:-0}"
+  read -r acc ftt < <(_jp_read_meta)
+  locked=0
+  if [ "${JP_FREEZE_ON_STATS:-1}" = "1" ]; then
+    { [ "${acc:-0}" != "0" ] || awk "BEGIN{exit !((${ftt:-0})>=(${FTT_PRELOCK}))}"; } && locked=1
+  fi
+  now="$(date +%s)"
+  local -a J=() T=() E=() W=()
+  local jp r
+  for jp in "${JP_CANDIDATES[@]}"; do
+    r="$(_pick_partition_for_jp "$jp")" || continue; [ -z "$r" ] && continue
+    J+=("$jp"); T+=("$(echo "$r"|awk '{print $1}')"); E+=("$(echo "$r"|awk '{print $2}')"); W+=("$(echo "$r"|awk '{print $3}')")
+  done
+  n=${#J[@]}; [ "$n" -eq 0 ] && { log "[JP-CTL] 無可行組合" >&2; echo ""; return 1; }
+  local best=-1 best_score=-1 cur_score=-1
+  for ((i=0;i<n;i++)); do
+    local wait=$(( ${E[$i]} - now )); [ "$wait" -lt 0 ] && wait=0
+    local sw=0; [ "${J[$i]}" != "$cur" ] && sw=270
+    local wsec=${W[$i]}; [ "$wsec" -le 0 ] && wsec=1
+    local eff=$(( wsec - wait - sw )); [ "$eff" -lt 0 ] && eff=0
+    local score=$(( ${J[$i]} * eff * 1000 / wsec ))
+    [ "${J[$i]}" = "$cur" ] && cur_score=$score
+    log "[JP-CTL]   jp=${J[$i]} ${T[$i]} wait=${wait}s wt=${wsec}s sw=$sw score=$score" >&2
+    if [ "$score" -gt "$best_score" ] || { [ "$score" -eq "$best_score" ] && [ "$best" -ge 0 ] && [ "${J[$i]}" -gt "${J[$best]}" ]; }; then best=$i; best_score=$score; fi
+  done
+  [ "$best" -lt 0 ] && { echo ""; return 1; }
+  local want_jp="${J[$best]}" want_tgt="${T[$best]}"
+  if [ "$locked" -eq 1 ]; then
+    local ctgt; ctgt="$(_pick_partition_for_jp "$cur" | awk '{print $1}')"
+    log "[JP-CTL] LOCK (accu=$acc ftt=$ftt, prelock=$FTT_PRELOCK) → KEEP jp=$cur part=${ctgt:-?}" >&2
+    echo "KEEP $cur ${ctgt:-$want_tgt}"; return 0
+  fi
+  if [ "$want_jp" = "$cur" ]; then _jp_state_set jp_change_target 0 jp_change_count 0; echo "KEEP $cur $want_tgt"; return 0; fi
+  # 防抖 1 [L2]: 新 jp 分數須勝現 jp 至少 +JP_SWITCH_GAIN_PCT% 才值得換
+  #   (現 jp 不在可行清單時 cur_score=-1 → 現 jp 根本跑不動, 直接允許換)
+  if [ "$cur_score" -ge 0 ] && [ $(( best_score * 100 )) -lt $(( cur_score * (100 + JP_SWITCH_GAIN_PCT) )) ]; then
+    log "[JP-CTL] $want_jp 分數 $best_score 未勝現 jp $cur ($cur_score) 的 +${JP_SWITCH_GAIN_PCT}% → KEEP" >&2
+    _jp_state_set jp_change_target 0 jp_change_count 0
+    echo "KEEP $cur $(_pick_partition_for_jp "$cur" | awk '{print $1}')"; return 0
+  fi
+  # 防抖 2: cooldown (上次切 jp 後至少間隔 JP_CHANGE_COOLDOWN)
+  local last_change; last_change="$(_jp_state_get last_jp_change_epoch 0)"
+  if [ $(( now - last_change )) -lt "$JP_CHANGE_COOLDOWN" ]; then
+    log "[JP-CTL] 想換 jp $cur→$want_jp 但 cooldown 未過 → KEEP" >&2
+    echo "KEEP $cur $(_pick_partition_for_jp "$cur" | awk '{print $1}')"; return 0
+  fi
+  # 防抖 3 [HIGH-1]: 連續確認 — 放大需 K_UP 次, 縮小需 K_DOWN 次, 同一目標才累加 (對稱遲滯)
+  local need; if [ "$want_jp" -gt "$cur" ]; then need="$K_UP"; else need="$K_DOWN"; fi
+  local tgt cnt; tgt="$(_jp_state_get jp_change_target 0)"; cnt="$(_jp_state_get jp_change_count 0)"
+  if [ "$tgt" = "$want_jp" ]; then cnt=$((cnt+1)); else tgt="$want_jp"; cnt=1; fi
+  _jp_state_set jp_change_target "$tgt" jp_change_count "$cnt"
+  if [ "$cnt" -ge "$need" ]; then echo "CHANGE_JP $want_jp $want_tgt"; return 0; fi
+  log "[JP-CTL] 換 jp $cur→$want_jp 確認 $cnt/$need (gain+cooldown 已過) → 暫 KEEP" >&2
+  echo "KEEP $cur $(_pick_partition_for_jp "$cur" | awk '{print $1}')"; return 0
+}
+
+# [SELFTEST] 乾跑一次 jp 決策後退出 (不啟 daemon、不投遞、不改檔; 只讀 variables.h + sbatch --test-only):
+#   DISPATCHER_SELFTEST=1 bash chain_code/submit_dispatcher.sh
+if [ "${DISPATCHER_SELFTEST:-0}" = "1" ]; then
+    echo "=== [SELFTEST] pick_jp_and_partition 乾跑 (視 JP_CONTROLLER=1; 不投遞) ==="
+    JP_CONTROLLER=1
+    JP_STATE_FILE="$(mktemp 2>/dev/null || echo /tmp/jp_selftest_state.$$)"   # [MED-1] 用拋棄式 state, 不碰真正的 jp_controller.state
+    DECISION="$(pick_jp_and_partition)"
+    rm -f "$JP_STATE_FILE"
+    echo ">>> 決策結果: ${DECISION:-<none>}"
+    echo "=== [SELFTEST] 完成; 未投遞、未改任何檔 ==="
+    exit 0
+fi
+
 while true; do
     # Stop 條件 1: STOP_DISPATCHER
     if [ -f "$STOP_SENTINEL" ]; then
@@ -555,6 +786,9 @@ while true; do
 
     # 如果 chain 目前還有 active job, 等它結束
     if chain_has_active_job; then
+        # [PENDING-RESELECT] timing② : job 卡 PENDING 過久且有更快 partition → 改投
+        # (預設啟用; PENDING_RESELECT=0 可停用。只取消 state=PENDING, 經 job-guard)
+        _pending_reselect_watchdog || true
         sleep "$POLL_INTERVAL"
         continue
     fi
@@ -598,6 +832,27 @@ while true; do
 
     # 選 cluster
     log "----- 準備投下一輪, 查詢 partition 狀態 -----"
+    # [JP-CONTROLLER] 投 partition 前先決定 jp (僅 JP_CONTROLLER=1; =0 完全跳過, 行為同今日)
+    if [ "$JP_CONTROLLER" = "1" ]; then
+        JP_DECISION="$(pick_jp_and_partition)"
+        log "[JP-CTL] 決策: ${JP_DECISION:-<none>}"
+        case "${JP_DECISION:-}" in
+            "CHANGE_JP "*)
+                _NEW_JP="$(printf '%s\n' "$JP_DECISION" | awk '{print $2}')"
+                if [ -n "$_NEW_JP" ]; then
+                    log "[JP-CTL] 切換 jp -> $_NEW_JP : timeout 600 changejp.sh --prepare-only (重編+repartition, 不投遞)"
+                    if timeout 600 bash "$CHAIN_DIR/changejp.sh" "$_NEW_JP" --prepare-only >> "$LOG_FILE" 2>&1; then
+                        _jp_state_set last_jp_change_epoch "$(date +%s)"
+                        log "[JP-CTL] jp 已切到 $_NEW_JP; 下一圈 pick_cluster 用新 jp 投遞"
+                    else
+                        log "[JP-CTL] changejp --prepare-only 失敗/逾時, 維持現 jp 繼續"
+                    fi
+                    sleep "$PROBE_RESUBMIT_DELAY"
+                    continue
+                fi
+                ;;
+        esac
+    fi
     NEXT_CLUSTER="$(pick_cluster)"
     # [DEFENSIVE 2026-04-22] 除了 empty, 還驗證回傳值只能是安全的 target 名.
     # 用 case 避開 [[ =~ regex ]] 避免某些 linter 在 regex 的 $ 錨點觸發截斷.

@@ -319,6 +319,7 @@ validate_checkpoint() {
 # ===== 4.1 AUTO-HEAL =====
 if [ "$CHAIN_COUNT" -eq 1 ]; then
     CAND_HEAL=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+                | grep -E '/step_[0-9]+$' \
                 | grep -v '\.WRITING$' \
                 | awk -F'_' '{print $0"\t"$NF}' \
                 | sort -k2 -n -r \
@@ -339,6 +340,7 @@ fi
 ARGS=""
 if [ "$CHAIN_COUNT" -eq 1 ]; then
     HAS_CKPT=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+               | grep -E '/step_[0-9]+$' \
                | grep -v '\.WRITING$' \
                | while read -r d; do
                      [ -s "$d/metadata.dat" ] && echo "$d" && break
@@ -356,6 +358,7 @@ if [ "$CHAIN_COUNT" -eq 1 ]; then
 else
     log "Checkpoint validation: NP=$NP ranks"
     CAND_LIST=$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | sed 's|/$||' \
+                | grep -E '/step_[0-9]+$' \
                 | grep -v '\.WRITING$' \
                 | awk -F'_' '{print $0"\t"$NF}' \
                 | sort -k2 -n -r \
