@@ -637,9 +637,15 @@ log "RC=$RC -> queuing chain round $NEXT_COUNT"
 
 # ═════ DISPATCHER 模式 sentinel check ═════
 if [ -f DISPATCHER_ACTIVE ]; then
-    log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
-    log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
-    exit 0
+    # [穩健性修補] 驗證 dispatcher 真的存活才交棒; crash/被殺留下殘留 sentinel 時 -> 清掉 + 自我續投, 絕不斷鏈。
+    _disp_pid=$(cat restart/dispatcher.pid 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$_disp_pid" ] && kill -0 "$_disp_pid" 2>/dev/null; then
+        log "DISPATCHER_ACTIVE + dispatcher 存活 (PID=$_disp_pid) -> 交給 dispatcher 續投, 本 jobscript 不自投."
+        log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
+        exit 0
+    fi
+    log "WARN: DISPATCHER_ACTIVE 存在但 dispatcher 已死 (PID='${_disp_pid:-none}') -> 清殘留 sentinel, 改由 jobscript 自我續投 (防斷鏈)."
+    rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null
 fi
 # ═════════════════════════════════════════════════
 

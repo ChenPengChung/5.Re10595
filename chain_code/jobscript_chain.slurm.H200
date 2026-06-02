@@ -639,9 +639,18 @@ log "RC=$RC -> queuing chain round $NEXT_COUNT"
 # 下一輪要投哪個 partition (gb200-dev 或 dev)。
 # 若 DISPATCHER_ACTIVE 不存在，行為與原本完全一致 (自我續投)。
 if [ -f DISPATCHER_ACTIVE ]; then
-    log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
-    log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
-    exit 0
+    # [穩健性修補] 不能只看 sentinel 檔: dispatcher 若 crash/被殺/node-reboot 會留下殘留
+    # DISPATCHER_ACTIVE, 那時本 jobscript 不自投、dispatcher 又死 -> 鏈靜默停擺(靠運氣)。
+    # 改為「驗證 dispatcher 真的存活」才交棒; 死了(或殘留)-> 清 sentinel + fall through 自我續投, 絕不斷鏈。
+    _disp_pid=$(cat restart/dispatcher.pid 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$_disp_pid" ] && kill -0 "$_disp_pid" 2>/dev/null; then
+        log "DISPATCHER_ACTIVE + dispatcher 存活 (PID=$_disp_pid) -> 交給 dispatcher 續投, 本 jobscript 不自投."
+        log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
+        exit 0
+    fi
+    log "WARN: DISPATCHER_ACTIVE 存在但 dispatcher 已死 (PID='${_disp_pid:-none}') -> 清殘留 sentinel, 改由 jobscript 自我續投 (防斷鏈, 不靠運氣)."
+    rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null
+    # fall through 到下方自我 sbatch 續投
 fi
 # ═════════════════════════════════════════════════
 
