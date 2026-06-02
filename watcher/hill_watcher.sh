@@ -107,7 +107,9 @@ check_nan_divergence() {
     local slurm_log
     slurm_log=$(ls -t "$PROJECT_DIR"/slurm_*.log 2>/dev/null | head -1)
     [[ -n "$slurm_log" ]] || return 0
-    if tail -200 "$slurm_log" | grep -qiE 'nan|inf|diverge|ABORT|FATAL'; then
+    # [fix] whole-word 比對, 不要 substring: 原 'nan|inf' 會誤中 "Info"(solver 的 [ Info ] 行 128×)/"sinfo"
+    # → 假發散 → 每輪 skip CONV → live/monitor_latest.png 不再更新。\binf\b 不會中 "Info"(f 後接 o 無邊界)。
+    if tail -200 "$slurm_log" | grep -qiE '\b(nan|inf|infinity)\b|diverg|mpi_abort|fatal'; then
         log "WARNING: NaN/divergence detected in $slurm_log"
         return 1
     fi
