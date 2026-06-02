@@ -116,14 +116,21 @@ def main():
     # --- STATS-PRESERVING: 36 sum_* accumulators share the SAME [j,k,i] layout. ---
     accu = int((meta.get('accu_count', '0') or '0'))
     cv_count = int((meta.get('cv_count', '0') or '0'))
-    EXPECTED_STATS = 36   # 33 RS + 3 vorticity (fileIO.h SaveBinaryCheckpoint)
+    # Canonical statistics field set (fileIO.h SaveBinaryCheckpoint: 33 RS + 3 vorticity = 36)
+    CANONICAL_STATS = {
+        'sum_u','sum_v','sum_w', 'sum_uu','sum_uv','sum_uw','sum_vv','sum_vw','sum_ww',
+        'sum_uuu','sum_uuv','sum_uuw','sum_uvv','sum_uvw','sum_uww','sum_vvv','sum_vvw','sum_vww','sum_www',
+        'sum_P','sum_PP','sum_Pu','sum_Pv','sum_Pw',
+        'sum_dudx2','sum_dudy2','sum_dudz2','sum_dvdx2','sum_dvdy2','sum_dvdz2','sum_dwdx2','sum_dwdy2','sum_dwdz2',
+        'sum_ox','sum_oy','sum_oz'}
     stat_bases = sorted({f[:-6] for f in os.listdir(args.src)
                          if f.startswith('sum_') and f.endswith('_0.bin')})
-    # [Codex P2 fix] if accu>0 the source MUST have exactly 36 stat fields — refuse an
-    # incomplete checkpoint instead of silently carrying fewer (which would corrupt stats).
-    if accu > 0 and len(stat_bases) != EXPECTED_STATS:
-        print(f"  ✗ ERROR: accu_count={accu} but found {len(stat_bases)} sum_* fields "
-              f"(expected exactly {EXPECTED_STATS}) — incomplete checkpoint, refusing (stats would be lost)")
+    # [Codex P2 fix, hardened] if accu>0 the source MUST have EXACTLY the 36 canonical stat fields
+    # (exact NAME match, not just count) — refuse stray/missing names so stats can't be silently corrupted.
+    if accu > 0 and set(stat_bases) != CANONICAL_STATS:
+        miss = sorted(CANONICAL_STATS - set(stat_bases)); extra = sorted(set(stat_bases) - CANONICAL_STATS)
+        print(f"  ✗ ERROR: accu_count={accu} stat-field set mismatch — missing={miss} extra={extra}; "
+              f"refusing (incomplete/wrong checkpoint, stats would be corrupted)")
         sys.exit(1)
     if stat_bases and accu == 0:
         print(f"  WARN: {len(stat_bases)} sum_* present but accu_count=0 (moving anyway)")
@@ -135,13 +142,18 @@ def main():
         print("done")
 
     # --- global CV ring-buffer history (rank-independent; copy verbatim) ---
+    CANONICAL_CV = {'cv_uu_history.bin', 'cv_k_history.bin', 'cv_ftt_history.bin'}
     cv_files = sorted(f for f in os.listdir(args.src)
                       if f.startswith('cv_') and f.endswith('_history.bin'))
-    # [Codex P2 fix] if cv_count>0 the source MUST have exactly 3 cv history files.
-    if cv_count > 0 and len(cv_files) != 3:
-        print(f"  ✗ ERROR: cv_count={cv_count} but found {len(cv_files)} cv_*_history files "
-              f"(expected exactly 3) — incomplete checkpoint, refusing")
-        sys.exit(1)
+    # [Codex P2 fix, hardened] if cv_count>0 the source MUST have EXACTLY the 3 canonical cv files
+    # (exact NAME match) + each non-empty (a truncated/empty cv file would be dropped on load).
+    if cv_count > 0:
+        if set(cv_files) != CANONICAL_CV:
+            print(f"  ✗ ERROR: cv_count={cv_count} cv-file set mismatch — have={cv_files} "
+                  f"expected={sorted(CANONICAL_CV)}; refusing"); sys.exit(1)
+        for cv in cv_files:
+            if os.path.getsize(os.path.join(args.src, cv)) == 0:
+                print(f"  ✗ ERROR: cv file {cv} is empty/truncated; refusing"); sys.exit(1)
     for cv in cv_files:
         shutil.copy2(os.path.join(args.src, cv), os.path.join(args.dst, cv))
     if cv_files:

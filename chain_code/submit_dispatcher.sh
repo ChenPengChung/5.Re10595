@@ -354,7 +354,12 @@ _pick_cluster_fmt_wait() {
 # ─────────────────────────────────────────────────────────────────────────
 submit_round() {
     local jp="$1" part="$2"
-    local cur; cur="$(jpswitch_current_jp)"; cur="${cur:-0}"
+    local cur; cur="$(jpswitch_current_jp)"
+    # [Codex P5 fix] never let cur be blank/0 → fall back to variables.h jp (else jp=0 -> bad sbatch)
+    if ! { [ -n "$cur" ] && [ "$cur" -gt 0 ] 2>/dev/null; }; then
+        cur="$(grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' variables.h | grep -oE '[0-9]+' | head -1)"
+    fi
+    cur="${cur:-32}"
     local jobscript="chain_code/jobscript_chain.slurm.H200"
 
     if [ ! -f "$jobscript" ]; then
@@ -432,8 +437,13 @@ submit_round() {
         else
             log "WARN jp-switch to $jp FAILED -> fall back to current jp=$cur (never idle)"
             jp="$cur"
-            cp -f "a.out.jp${cur}" a.out 2>/dev/null || true
-            cp -f "a.out.jp${cur}" a.out.H200 2>/dev/null || true   # [Codex P5 fix] restore both binaries
+            # [Codex P5 fix, hardened] verified restore: both binaries, or abort (don't submit a bad binary)
+            if [ -s "a.out.jp${cur}" ] && cp -f "a.out.jp${cur}" a.out && cp -f "a.out.jp${cur}" a.out.H200; then
+                log "▷ fallback binaries restored to jp=${cur}"
+            else
+                log "FATAL: fallback binary a.out.jp${cur} missing/uncopyable — cannot submit safely; release lock"
+                release_head_lock; return 2
+            fi
         fi
     else
         cp -f "a.out.jp${cur}" a.out 2>/dev/null && cp -f "a.out.jp${cur}" a.out.H200 2>/dev/null
