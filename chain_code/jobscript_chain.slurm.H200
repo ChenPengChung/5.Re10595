@@ -656,10 +656,21 @@ log "RC=$RC -> queuing chain round $NEXT_COUNT"
 # 本輪結束後 *不* 自動 sbatch，交給 dispatcher 根據 sinfo 判斷
 # 下一輪要投哪個 partition (gb200-dev 或 dev)。
 # 若 DISPATCHER_ACTIVE 不存在，行為與原本完全一致 (自我續投)。
-if [ -f DISPATCHER_ACTIVE ]; then
-    log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
-    log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
-    exit 0
+# [restart-gap race fix] 用「持久 INTENT 標記 + heartbeat 新鮮度」決定是否交棒, 取代瞬時 DISPATCHER_ACTIVE。
+# 舊版問題: daemon 重啟/crash 時 DISPATCHER_ACTIVE 短暫消失, 若 job 剛好撞 walltime → 誤判沒 dispatcher
+# → 自投「舊 jp」→ 與 daemon 正在做的 jp 切換衝突 (stray job)。compute node 無法 kill -0 login-node PID,
+# 故用共享 FS 的 restart/dispatcher.heartbeat mtime 當跨節點存活訊號;INTENT 只有 dispatcher_stop 才移除。
+_DISP_STALE_SEC="${DISP_STALE_SEC:-180}"
+if [ -f restart/DISPATCHER_INTENT ]; then
+    _hb_age=999999
+    [ -f restart/dispatcher.heartbeat ] && _hb_age=$(( $(date +%s) - $(stat -c %Y restart/dispatcher.heartbeat 2>/dev/null || echo 0) ))
+    if [ "$_hb_age" -le "$_DISP_STALE_SEC" ]; then
+        log "DISPATCHER_INTENT + heartbeat 新鮮(${_hb_age}s) -> 交給 dispatcher 續投, 本 jobscript 不自投."
+        log "           (daemon 即使正重啟也會回來投下一 round; 不自投以免與 jp 切換衝突)"
+        exit 0
+    fi
+    log "DISPATCHER_INTENT 在但 heartbeat stale ${_hb_age}s (>$_DISP_STALE_SEC) -> daemon 視為已死,"
+    log "           fallback 自投本 jp 避免 chain 停滯 (daemon 復活後經 single-head lock 協調)."
 fi
 # ═════════════════════════════════════════════════
 

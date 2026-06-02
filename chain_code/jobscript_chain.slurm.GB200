@@ -643,10 +643,17 @@ echo "$NEXT_COUNT" > restart/chain_count
 log "RC=$RC -> queuing chain round $NEXT_COUNT"
 
 # ═════ DISPATCHER 模式 sentinel check ═════
-if [ -f DISPATCHER_ACTIVE ]; then
-    log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
-    log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
-    exit 0
+# [restart-gap race fix] 同 H200: 用持久 INTENT + heartbeat 新鮮度交棒, 取代瞬時 DISPATCHER_ACTIVE
+# (daemon 重啟/crash 時該檔短暫消失會害 jobscript 誤判自投舊 jp, 與 jp 切換衝突)。
+_DISP_STALE_SEC="${DISP_STALE_SEC:-180}"
+if [ -f restart/DISPATCHER_INTENT ]; then
+    _hb_age=999999
+    [ -f restart/dispatcher.heartbeat ] && _hb_age=$(( $(date +%s) - $(stat -c %Y restart/dispatcher.heartbeat 2>/dev/null || echo 0) ))
+    if [ "$_hb_age" -le "$_DISP_STALE_SEC" ]; then
+        log "DISPATCHER_INTENT + heartbeat 新鮮(${_hb_age}s) -> 交給 dispatcher 續投, 本 jobscript 不自投."
+        exit 0
+    fi
+    log "DISPATCHER_INTENT 在但 heartbeat stale ${_hb_age}s (>$_DISP_STALE_SEC) -> daemon 視為已死, fallback 自投本 jp 避免停滯."
 fi
 # ═════════════════════════════════════════════════
 

@@ -32,6 +32,12 @@ for arg in "$@"; do
     esac
 done
 
+# [restart-gap race fix] 明確停止 dispatcher → 移除持久 INTENT 標記, 讓 jobscript 回到 legacy
+# 自我續投 (chain 仍續跑, 只是不再由 dispatcher 管理 partition/jp)。在所有停止路徑之前先移除,
+# 確保即使 DISPATCHER_ACTIVE 已空 (daemon churn) 也能正確解除 dispatcher 模式。
+rm -f restart/DISPATCHER_INTENT restart/dispatcher.heartbeat
+echo "[dispatcher_stop] 已移除 DISPATCHER_INTENT (jobscript 回到自我續投模式)"
+
 if [ ! -f "$SENTINEL" ]; then
     echo "[dispatcher_stop] 無 dispatcher 執行中 (沒有 $SENTINEL)"
     # 保險: 若有殘留 STOP_DISPATCHER 清掉
