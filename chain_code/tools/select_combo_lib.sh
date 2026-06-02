@@ -26,11 +26,13 @@
 # =============================================================================
 
 SC_ACCT="${SC_ACCT:-MST115169}"
-# [專案定調 2026-06-02] 自由切換候選 = jp{32,64} × partition{normal,dev,4nodes}。
-#   - 16 雖對 NY=641 有效(slab=40)但 GPU 最少/每FTT最慢, 且未預編 a.out.jp16 → 不納入。
-#   - 128 對 NY=641 無效(640/128=5 < 7 slab, kernel 內部列=-2, 物理壞) → 永久排除。
-#   要用 >64 GPU 須換更細網格(NY-1 ≥ 896 才能讓 128 的 slab≥7), 屬不同解析度的 DNS。
-SC_VALID_JP="${SC_VALID_JP:-32 64}"
+# [自由切換候選 — 完全開啟] jp{128,64,32} × partition{normal,dev,4nodes}。
+#   完全開啟原則: 每一組都「實際評估後才跳過(帶理由)」, 不盲目預排除 (見 sc_audit / sc_enumerate)。
+#   - 128: 會被 jpswitch_valid 評估後判無效(640/128=5<7 slab, kernel 內部列=-2)→ 帶理由跳過。
+#   - 64 : 只能 dev(>normal cap16 / >4nodes cap32)。  32: dev/4nodes(>normal cap16)。
+#   - 16 : 三者皆可但未預編 a.out.jp16 → 評估 binary 後帶理由跳過。
+#   要真正用 >64 GPU 須換更細網格(NY-1≥896 才能讓 128 的 slab≥7), 屬不同解析度的 DNS。
+SC_VALID_JP="${SC_VALID_JP:-128 64 32}"
 SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
@@ -178,4 +180,36 @@ sc_simulate() {  # [--pending] -> table + pick (no action)
         printf "  %-4s %-7s %-9s %-8s %-9s\n" "$jp" "$part" "$sd" "$(sc_r_ftt "$jp")" "$net"
     done
     echo "  -> PICK: $(sc_pick_combo "${1:-}" | sed 's/^$/<none — all idle, will retry>/')"
+}
+
+# [完全開啟 audit] 對 SC_VALID_JP × SC_PARTITIONS 的「每一組」都實際評估, 各印一行 verdict
+# (SKIP:理由 / EVAL:net) — 證明「做過選擇(評估)後才跳過」, 非盲目預排除。daemon 每次決策前 log 它。
+sc_audit() {  # [H]
+    local H="${1:-$SC_HORIZON_H}" cur jp part cap run hr sd net slab
+    cur=$(jpswitch_current_jp); cur="${cur:-0}"
+    for jp in $SC_VALID_JP; do
+        for part in $SC_PARTITIONS; do
+            if ! jpswitch_valid "$jp"; then
+                slab=$(( $(_jps_NYm1) / jp )); echo "jp${jp} ${part}  SKIP invalid-grid (slab=${slab}<7)"; continue
+            fi
+            if ! jpswitch_binary_ready "$jp" >/dev/null 2>&1; then
+                echo "jp${jp} ${part}  SKIP no-binary/manifest (a.out.jp${jp})"; continue
+            fi
+            if ! sc_acct_allowed "$part"; then
+                echo "jp${jp} ${part}  SKIP partition-not-authorized"; continue
+            fi
+            cap=$(sc_cap "$part")
+            if [ "$jp" -gt "$cap" ]; then
+                echo "jp${jp} ${part}  SKIP over-cap (jp>${cap})"; continue
+            fi
+            run=$(sc_acct_running_gpu "$part"); hr=$((cap - run))
+            if [ "$jp" -le "$hr" ]; then
+                sd=$(sc_eta_hours "$jp" "$part"); net=$(sc_net "$jp" "$part" "$sd" "$cur" "$H")
+                echo "jp${jp} ${part}  EVAL startΔ=${sd}h net=${net} (sbatch --test-only probed)"
+            else
+                sd="$SC_CAPBLOCK_SD_H"; net=$(sc_net "$jp" "$part" "$sd" "$cur" "$H")
+                echo "jp${jp} ${part}  EVAL cap-block headroom=${hr} startΔ=${sd}h net=${net}"
+            fi
+        done
+    done
 }

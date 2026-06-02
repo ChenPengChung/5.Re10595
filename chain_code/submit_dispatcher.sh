@@ -655,6 +655,9 @@ while true; do
     # 選 (jp × partition) — net-throughput optimal, never-idle (select_combo_lib)
     # [Codex A2 fix] after a PENDING re-select, use the 1h pending horizon (favours start-now)
     log "----- 準備投下一輪: net-throughput 選 (jp × partition)${_pending_reselect:+ [pending re-select, 1h horizon]} -----"
+    # [完全開啟 audit] 每一組候選 (SC_VALID_JP × SC_PARTITIONS) 都「實際評估後才跳過(帶理由)」, 寫入 log 供稽核
+    sc_audit "$([ -n "$_pending_reselect" ] && echo "$SC_HORIZON_PEND_H" || echo "$SC_HORIZON_H")" 2>/dev/null \
+        | while IFS= read -r _l; do log "    候選 $_l"; done
     NEXT_COMBO="$(sc_pick_combo ${_pending_reselect:+--pending})"
     _pending_reselect=
     NEXT_JP="${NEXT_COMBO%% *}"
