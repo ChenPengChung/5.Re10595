@@ -595,6 +595,17 @@ _nocapacity_count=0
 _pending_reselect=   # [Codex A2 fix] set to 1 after a PENDING-timeout cancel → next select uses 1h horizon
 
 while true; do
+    # [自癒 watchdog cron] dispatcher 活著就維護 watchdog crontab(被別專案/手動清掉時自動重裝)。
+    # 每 ~10 輪查一次。與 cron-watchdog 互相保命: cron 救死掉的 dispatcher、dispatcher 救被清的 cron。
+    _cron_chk=$(( ${_cron_chk:-0} + 1 ))
+    if [ "$_cron_chk" -ge 10 ]; then
+        _cron_chk=0
+        _WD_ABS="/home/s8313697/5.Re10595/Edit6_5600DNS/chain_code/dispatcher_watchdog.sh"
+        if [ -x "$_WD_ABS" ] && ! crontab -l 2>/dev/null | grep -qF "dispatcher_watchdog.sh"; then
+            ( crontab -l 2>/dev/null; echo "*/5 * * * * $_WD_ABS" ) | crontab - 2>/dev/null \
+                && log "watchdog crontab 遺失(疑被覆寫)-> dispatcher 自動重裝 (*/5)"
+        fi
+    fi
     # Stop 條件 1: STOP_DISPATCHER
     if [ -f "$STOP_SENTINEL" ]; then
         log "偵測到 $STOP_SENTINEL -> dispatcher 停止"
