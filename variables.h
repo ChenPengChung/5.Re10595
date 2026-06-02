@@ -62,7 +62,7 @@
 //   1 = precomputed physical-space isoparametric interpolation path
 // First pass keeps collision, wall BC, MPI, statistics, and dt_global unchanged.
 #ifndef USE_ITBLBM_STREAMING
-#define     USE_ITBLBM_STREAMING 0
+#define     USE_ITBLBM_STREAMING 1
 #endif
 #if USE_ITBLBM_STREAMING && USE_SMEM_INTERIOR
 #error "USE_ITBLBM_STREAMING first pass requires USE_SMEM_INTERIOR=0"
