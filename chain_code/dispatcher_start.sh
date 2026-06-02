@@ -59,6 +59,16 @@ if [ -f "$SENTINEL" ]; then
     fi
 fi
 
+# [robust dup-guard] sentinel 可能被誤刪/競態 → 再用 ps 掃「本專案」是否已有 submit_dispatcher daemon,
+# 避免重啟流程(sentinel 被清掉)留下孤兒又啟新的 → 雙 daemon。只比對本專案完整路徑 (跨專案安全)。
+_RUNNING_DAEMON=$(ps -eo pid,args 2>/dev/null \
+    | grep -F "$DAEMON" | grep -v 'bash -c' | awk '{print $1}' | head -1)
+if [ -n "$_RUNNING_DAEMON" ] && kill -0 "$_RUNNING_DAEMON" 2>/dev/null; then
+    echo "[dispatcher_start] ✗ 已有本專案 submit_dispatcher daemon 執行中 (PID=$_RUNNING_DAEMON, ps 偵測), 不重複啟動"
+    echo "$_RUNNING_DAEMON" > "$PID_FILE"   # 修正 pid 檔指向實際 daemon
+    exit 1
+fi
+
 # ── Binary 檢查 (早退省事) ──
 if [ ! -s "a.out.GB200" ] && [ ! -s "a.out.H200" ]; then
     echo "[dispatcher_start] ✗ 兩個 arch 的 binary 都不存在:"

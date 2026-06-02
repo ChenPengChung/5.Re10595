@@ -221,18 +221,26 @@ check_partition_idle() {
 #   - squeue 確認該 jobid 狀態
 # ─────────────────────────────────────────────────────────────────────────
 chain_has_active_job() {
-    local cur_id
+    # [robustness 修補] 同時檢查 chain_jobid 與 HEAD.lockdir owner(single-head 權威記錄)。
+    # 任何路徑續投(含 jobscript Layer 2 自投)都會更新 lock; chain_jobid 可能落後 →
+    # 只信 chain_jobid 會誤判「無 active job」而每 30s busy-retry 試投(被 lock 擋)。
+    # 任一指向 RUNNING/PENDING 的 job 即視為 active, 並把 chain_jobid 同步到該 live job。
+    local cur_id lock_id id state
     cur_id="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
-    [ -z "$cur_id" ] && return 1
-
-    local state
-    state="$(squeue -h -j "$cur_id" -o '%T' 2>/dev/null | head -1)"
-    case "$state" in
-        RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
-            return 0 ;;
-        *)
-            return 1 ;;
-    esac
+    lock_id="$(grep '^jobid=' restart/HEAD.lockdir/owner 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+    for id in "$cur_id" "$lock_id"; do
+        [ -z "$id" ] && continue
+        [[ "$id" =~ ^[0-9]+$ ]] || continue
+        state="$(squeue -h -j "$id" -o '%T' 2>/dev/null | head -1)"
+        case "$state" in
+            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
+                if [ "$id" != "$cur_id" ]; then
+                    printf '%s\n' "$id" > restart/chain_jobid.tmp 2>/dev/null && mv -f restart/chain_jobid.tmp restart/chain_jobid 2>/dev/null
+                fi
+                return 0 ;;
+        esac
+    done
+    return 1
 }
 
 # 取得本 chain 最後一輪 job 的 exit code (若已結束)
