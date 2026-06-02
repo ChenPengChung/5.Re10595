@@ -198,6 +198,15 @@ _recover_stale_switch() {
     mv "$bak" "$jsrc"
     ln -sfn "$(basename "$jsrc")" "$LATEST"
     sed -E -i "s/^(#define[[:space:]]+jp[[:space:]]+)[0-9]+/\1${bak_rc}/" "$VH"
+    # [CKPT-ATOM-1 fix] 同步 provenance: sed 改 variables.h → mtime 變; 不更新 variables_h_mtime
+    # 會讓 Preflight C stale FATAL。並把 new_jp/new_chunk_j 對齊回滾後的 jp。
+    if [ -f "$PROV" ]; then
+      _RVHMT="$(stat -c %Y "$VH" 2>/dev/null)"
+      [ -n "$_RVHMT" ] && sed -E -i "s/^variables_h_mtime=.*/variables_h_mtime=$_RVHMT/" "$PROV" 2>/dev/null || true
+      sed -E -i "s/^new_jp=.*/new_jp=${bak_rc}/" "$PROV" 2>/dev/null || true
+      _RNY="$(awk '/^#define[[:space:]]+NY[[:space:]]/{print $3; exit}' "$VH" 2>/dev/null)"
+      [ -n "$_RNY" ] && [ "${bak_rc:-0}" -gt 0 ] && sed -E -i "s/^new_chunk_j=.*/new_chunk_j=$(( (_RNY-1)/bak_rc ))/" "$PROV" 2>/dev/null || true
+    fi
     rm -f "$JOURNAL"
     say "[recover] 已還原到一致狀態 (jp=$bak_rc)。請先 ./run --rebuild 使 a.out 對齊 jp, 再重新執行 changejp。"
     exit 0
@@ -235,6 +244,12 @@ _rollback() {
   [ -f "$SNAP/js_h200" ]    && cp "$SNAP/js_h200"    "$JS_H200"  2>/dev/null || true
   [ -f "$SNAP/js_gb200" ]   && cp "$SNAP/js_gb200"   "$JS_GB200" 2>/dev/null || true
   [ -f "$SNAP/prov" ]       && cp "$SNAP/prov"       "$PROV"     2>/dev/null || true
+  # [CKPT-ATOM-2 fix] cp 還原 variables.h 會把其 mtime 設成現在 → 必須同步 provenance 的
+  # variables_h_mtime, 否則回滾後 run.sh Preflight C 會因 mtime stale 而 FATAL (擋住舊 jp 續跑)。
+  if [ -f "$PROV" ] && [ -f "$VH" ]; then
+    _RBMT="$(stat -c %Y "$VH" 2>/dev/null)"
+    [ -n "$_RBMT" ] && sed -E -i "s/^variables_h_mtime=.*/variables_h_mtime=$_RBMT/" "$PROV" 2>/dev/null || true
+  fi
   [ -f "$SNAP/a.out.H200" ]  && cp "$SNAP/a.out.H200"  a.out.H200  2>/dev/null || true
   [ -f "$SNAP/a.out.GB200" ] && cp "$SNAP/a.out.GB200" a.out.GB200 2>/dev/null || true   # [CJP-2] 還原舊 jp GB200 binary
   # [CKPT-ATOM-2 roll-back] checkpoint 提交窗口中斷 (舊 SRC_DIR 已 mv 到 BAK, 新的尚未換入)
