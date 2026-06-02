@@ -68,15 +68,23 @@ h200_partition_walltime() {
 h200_known_partitions() { echo "normal 4nodes dev"; }
 
 # 每帳號 GPU 上限 (MaxTRESPerAccount) — 來自 sacctmgr show qos:
-#   p_normal / p_4nodes : gres/gpu=32  → 整個 account 在該 partition 最多 32 GPU
+#   p_normal=16 / p_4nodes=32 (2026-06 實測, 動態查 sacctmgr) → account 在該 partition 的 GPU 上限
 #   p_dev               : 無上限
 # 超過此上限的 jp(GPU 數)在該 partition 會永遠 PENDING (Reason=MaxGRESPerAccount),
 # 故 pick 時必須先過濾掉「jp > 上限」的 partition。
 partition_gpu_cap_per_account() {
-    case "$1" in
-        normal|4nodes) echo 32 ;;
-        dev)           echo 100000 ;;   # 無 per-account 上限
-        *)             echo 100000 ;;    # GB200 等未知 → 視為無上限 (由 --test-only 決定)
+    # [動態] 直接查 sacctmgr QOS MaxTRESPerAccount, 避免 hardcode 過期。
+    #   2026-06 實測: NCHC 把 p_normal 從 gres/gpu=32 降成 16 → 舊 hardcode 會誤判 jp=32@normal 可行 → 永久 PENDING。
+    #   partition X → QOS p_X; 查無 gres/gpu 上限 = 無上限。timeout 防 sacctmgr 卡住拖垮 daemon。
+    local part="$1" cap
+    cap="$(timeout 5 sacctmgr -nP show qos "p_${part}" format=MaxTRESPA 2>/dev/null | grep -oE 'gres/gpu=[0-9]+' | head -1 | cut -d= -f2)"
+    if [ -n "$cap" ]; then echo "$cap"; return; fi
+    # fallback(sacctmgr 不可用時; 已對齊 2026-06 實測值)
+    case "$part" in
+        normal) echo 16 ;;
+        4nodes) echo 32 ;;
+        dev)    echo 100000 ;;
+        *)      echo 100000 ;;
     esac
 }
 
