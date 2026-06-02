@@ -26,7 +26,11 @@
 # =============================================================================
 
 SC_ACCT="${SC_ACCT:-MST115169}"
-SC_VALID_JP="${SC_VALID_JP:-16 32 64}"
+# [專案定調 2026-06-02] 自由切換候選 = jp{32,64} × partition{normal,dev,4nodes}。
+#   - 16 雖對 NY=641 有效(slab=40)但 GPU 最少/每FTT最慢, 且未預編 a.out.jp16 → 不納入。
+#   - 128 對 NY=641 無效(640/128=5 < 7 slab, kernel 內部列=-2, 物理壞) → 永久排除。
+#   要用 >64 GPU 須換更細網格(NY-1 ≥ 896 才能讓 128 的 slab≥7), 屬不同解析度的 DNS。
+SC_VALID_JP="${SC_VALID_JP:-32 64}"
 SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
