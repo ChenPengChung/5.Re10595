@@ -127,6 +127,21 @@ else
     log "FATAL: $CHAIN_DIR/tools/blacklist_lib.sh 不存在, 無法做 blacklist TTL/sync/cap"
     exit 1
 fi
+
+# [PARTITION-LIB / PS-1] partition 切換 + GPU-cap 過濾.
+# 審計 PS-1: H200 自我續投/直投原本只用 header --partition=normal, 而 normal/4nodes 每帳號
+# GPU 上限=32; jp=128 落 normal → 永久 PENDING(MaxGRESPerAccount)、無自癒. 故依 jp 選可行
+# partition (jp>32 自動落 dev), 與 dispatcher pick_cluster 的 cap 過濾一致.
+_RESUB_PART_ARGS=""; _RESUB_PARTITION=""
+if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CHAIN_DIR/tools/partition_lib.sh"
+    _H200_JP="${SLURM_NTASKS:-$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)}"
+    _H200_JP="${_H200_JP:-128}"
+    _RESUB_PART_ARGS="$(h200_sbatch_partition_args_for_jp "$_H200_JP" 2>/dev/null || true)"
+    _RESUB_PARTITION="$(h200_pick_partition_for_jp "$_H200_JP" 2>/dev/null || true)"
+    [ -n "$_RESUB_PARTITION" ] && log "[partition] H200 resubmit for jp=$_H200_JP -> $_RESUB_PARTITION (walltime=$(h200_partition_walltime "$_RESUB_PARTITION" 2>/dev/null)) [cap-aware, PS-1]"
+fi
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
 
@@ -239,7 +254,7 @@ if [ -n "$MATCHED_BAD" ]; then
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
     log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}"
-    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    NEXT_ID=$(sbatch --parsable ${_RESUB_PART_ARGS:-} $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     if [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "H200"
         log "Pre-flight requeued: job=$NEXT_ID (HEAD.lockdir jobid->$NEXT_ID state=PENDING)"
@@ -672,7 +687,7 @@ else
 fi
 
 for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
-    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    NEXT_ID=$(sbatch --parsable ${_RESUB_PART_ARGS:-} $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     SBATCH_RC=$?
     if [ $SBATCH_RC -eq 0 ] && [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "H200"

@@ -99,6 +99,30 @@ h200_sbatch_partition_args() {
     echo "--partition=$part --time=$wt"
 }
 
+# 依 jp(GPU 數) 選一個「帳號 GPU 上限容得下」的 H200 partition (審計 PS-1/PS-4).
+# 順序: pin(若已設且容得下) → header 預設(預設 normal, 呼叫端可傳第2參數覆寫) → dev(無上限保底).
+# 避免 jp>cap(normal/4nodes=32) 落到該 partition 造成永久 PENDING (Reason=MaxGRESPerAccount).
+h200_pick_partition_for_jp() {
+    local jp="${1:-0}" hdr="${2:-normal}" p cap pin
+    pin="$(h200_active_partition)"
+    for p in "$pin" "$hdr" dev; do
+        [ -n "$p" ] || continue
+        cap="$(partition_gpu_cap_per_account "$p")"
+        if [ "$jp" -le "$cap" ]; then echo "$p"; return 0; fi
+    done
+    echo dev
+}
+
+# 同 h200_sbatch_partition_args, 但「依 jp 做 GPU-cap 過濾」並「無條件」回傳可行 partition 的
+# --partition/--time (即使無 pin 也保證避開超 cap 的 normal). 供 jobscript 自我續投 + 直投共用.
+h200_sbatch_partition_args_for_jp() {
+    local jp="${1:-0}" hdr="${2:-normal}" p wt
+    p="$(h200_pick_partition_for_jp "$jp" "$hdr")"
+    wt="$(h200_partition_walltime "$p")"
+    [ -z "$wt" ] && wt="01:00:00"
+    echo "--partition=$p --time=$wt"
+}
+
 # ---- 跨叢集統一查詢 (GB200 + H200), 供 dispatcher / build 共用 ----
 partition_walltime() {
     local wt; wt="$(gb200_partition_walltime "$1")"

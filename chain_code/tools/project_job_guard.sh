@@ -120,6 +120,30 @@ case "$cmd" in
             show_project_jobs >&2
             exit 10
         fi
+        # [defense-in-depth] 即使 jobid 已登記於本專案 restart 狀態, 仍用 Slurm 的 WorkDir/UserId
+        # 雙重驗證: 防止 restart/chain_jobid 過期且該 jobid 已被 Slurm 回收給「別專案」時誤殺
+        # (全域規則要求按 WorkDir 判斷 job 歸屬, 而非僅靠本地紀錄)。
+        if command -v scontrol >/dev/null 2>&1; then
+            _info="$(scontrol show job "$jobid" -o 2>/dev/null || true)"
+            if [ -n "$_info" ]; then
+                _wd="$(printf '%s\n' "$_info" | grep -oE 'WorkDir=[^[:space:]]+' | head -1 | cut -d= -f2-)"
+                _uid="$(printf '%s\n' "$_info" | grep -oE 'UserId=[^[:space:]]+' | head -1 | cut -d= -f2-)"
+                _wd_real="$(readlink -f "$_wd" 2>/dev/null || echo "$_wd")"
+                if [ -n "$_wd_real" ] && [ "$_wd_real" != "$PROJECT_ROOT" ]; then
+                    echo "[job-guard] REFUSE: jobid=$jobid WorkDir=$_wd_real != project $PROJECT_ROOT" >&2
+                    echo "[job-guard]   (本地 chain_jobid 可能過期且該 id 已被 Slurm 回收給別專案 → 拒絕取消)" >&2
+                    exit 11
+                fi
+                _uid_name="${_uid%%(*}"
+                if [ -n "$_uid_name" ] && [ "$_uid_name" != "$USER" ]; then
+                    echo "[job-guard] REFUSE: jobid=$jobid UserId=$_uid != $USER" >&2
+                    exit 11
+                fi
+                echo "[job-guard] Slurm WorkDir/UserId 驗證通過 (WorkDir=$_wd_real)"
+            else
+                echo "[job-guard] note: jobid=$jobid 不在 Slurm 佇列中 (已結束?) → scancel 為 no-op"
+            fi
+        fi
         echo "[job-guard] scancel allowed for project jobid=$jobid"
         scancel "$jobid"
         ;;
