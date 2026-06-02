@@ -16,7 +16,9 @@
 #   * 取消 job 一律走 ./run job-guard scancel (驗 WorkDir, 受 hook 保護, 絕不誤殺別專案)
 #   * checkpoint 用 repartition_jp.py 純資料重排 (無插值) → 流場一位元不差
 #   * 原 checkpoint 會備份為 *_jp<OLD>_bak, 可回退
-#   * accu_count>0 (已累積統計) 預設拒絕 (repartition 不搬統計), 需 --force-stats-loss
+#   * accu_count>0 (已累積統計) 預設「點對點搬移全部 36 個累加器 + accu_count + cv」, 統計一位元不差;
+#     repartition 會硬性要求 36 個累加器全齊且每個 rank 檔齊全, 否則 abort (絕不靜默漏搬);
+#     僅 --force-stats-loss 才會刻意丟棄統計並 reset accu_count=0
 #   * 改 variables.h 後同步更新 grid_provenance mtime, 讓 run.sh Preflight C 放行
 # ==============================================================================
 set -euo pipefail

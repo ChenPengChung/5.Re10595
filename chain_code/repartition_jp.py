@@ -15,17 +15,40 @@ field whenever jp actually changed (the real cause of the Edit6 post-switch osci
 Correctness is cross-checked bit-for-bit against interp_checkpoint.py by
 chain_code/tools/repartition_xcheck.py.
 
-Migrates f00..f18 + rho AND, when present, the 36 turbulence accumulators (sum_u..sum_oz)
-the SAME point-to-point way (they share rho's per-rank (NYD6,NZ6,NX6) layout). Global CV
-ring-buffers (cv_*_history.bin) are copied verbatim; accu_count is carried in metadata.
-⇒ statistics integrity is preserved bit-for-bit across a jp change (the time-average
-sum/accu_count at every physical point is unchanged) — no interpolation, ever.
-Use --drop-stats to intentionally discard statistics (resets accu_count=0).
+Migrates f00..f18 + rho AND, when accu_count>0, the 36 turbulence accumulators (see
+EXPECTED_STAT_BASES) the SAME point-to-point way (they share rho's per-rank (NYD6,NZ6,NX6)
+layout). Global CV ring-buffers (cv_*_history.bin) are copied verbatim; accu_count is carried
+in metadata. ⇒ statistics integrity is preserved bit-for-bit across a jp change (the
+time-average sum/accu_count at every physical point is unchanged) — no interpolation, ever.
+
+When accu_count>0 the FULL 36-accumulator set is REQUIRED: if any accumulator (or any of its
+per-rank files) is missing, the run is REFUSED rather than migrating a partial set that would
+silently corrupt the running averages. Use --drop-stats to intentionally discard ALL statistics
+(resets accu_count=0).
 """
 import argparse, os, sys, shutil
 import numpy as np
 
 BFR = 3  # j/i ghost-buffer rows each side (matches interp_checkpoint.py:127)
+
+# The solver writes EXACTLY these 36 turbulence accumulators when (accu_count>0 && TBSWITCH)
+# — fileIO.h:299-317. They share rho's per-rank (NYD6,NZ6,NX6) layout, so they migrate
+# point-to-point identically. The list is hard-coded (not merely auto-detected) so that an
+# incomplete checkpoint missing even ONE accumulator is REFUSED rather than silently migrated
+# as a partial set (which would corrupt the running averages — Codex audit finding B).
+# NOTE the pressure terms use a capital P in the filename (sum_P/sum_PP/sum_Pu/sum_Pv/sum_Pw).
+EXPECTED_STAT_BASES = [
+    "sum_u", "sum_v", "sum_w",                                              # 3 first moments
+    "sum_uu", "sum_uv", "sum_uw", "sum_vv", "sum_vw", "sum_ww",             # 6 second moments
+    "sum_uuu", "sum_uuv", "sum_uuw", "sum_uvv", "sum_uvw", "sum_uww",       # 10 third moments
+    "sum_vvv", "sum_vvw", "sum_vww", "sum_www",
+    "sum_P", "sum_PP", "sum_Pu", "sum_Pv", "sum_Pw",                        # 5 pressure
+    "sum_dudx2", "sum_dudy2", "sum_dudz2",                                  # 9 gradient^2
+    "sum_dvdx2", "sum_dvdy2", "sum_dvdz2",
+    "sum_dwdx2", "sum_dwdy2", "sum_dwdz2",
+    "sum_ox", "sum_oy", "sum_oz",                                           # 3 vorticity
+]
+assert len(EXPECTED_STAT_BASES) == 36, "EXPECTED_STAT_BASES must list exactly 36 accumulators"
 
 
 def parse_metadata(path):
@@ -124,18 +147,42 @@ def main():
     # at every physical point is bit-for-bit preserved across the jp change (statistics integrity).
     # CV history (cv_*_history.bin) is global/rank-independent → copied verbatim.
     accu = int((meta.get('accu_count', '0') or '0'))
-    stat_bases = sorted({f[:-len("_0.bin")] for f in os.listdir(args.src)
-                         if f.startswith('sum_') and f.endswith('_0.bin')})
-    cv_files = sorted(f for f in os.listdir(args.src)
-                      if f.startswith('cv_') and f.endswith('.bin'))
-    if accu > 0 and not stat_bases:
-        sys.exit("ERROR: metadata accu_count={} > 0 but NO sum_*_0.bin in src — inconsistent checkpoint "
-                 "(statistics would be lost). Refuse.".format(accu))
+    present = set(os.listdir(args.src))
+    detected = sorted({f[:-len("_0.bin")] for f in present
+                       if f.startswith('sum_') and f.endswith('_0.bin')})
+    cv_files = sorted(f for f in present if f.startswith('cv_') and f.endswith('.bin'))
+
     if args.drop_stats:
-        if stat_bases or cv_files or accu > 0:
+        if detected or cv_files or accu > 0:
             print("  [--drop-stats] NOT migrating {} sum_* / {} cv_*; resetting accu_count {}->0".format(
-                len(stat_bases), len(cv_files), accu))
+                len(detected), len(cv_files), accu))
         stat_bases = []; cv_files = []; meta['accu_count'] = '0'
+    elif accu > 0:
+        # Statistics MUST survive intact. Assert the FULL 36-accumulator set is present and that
+        # every accumulator has all old_jp per-rank files — refuse a partial set (would corrupt the
+        # running averages by silently migrating a subset). [Codex audit finding B]
+        missing = [b for b in EXPECTED_STAT_BASES if b not in detected]
+        if missing:
+            sys.exit("ERROR: accu_count={} > 0 but {}/36 expected sum_* accumulator(s) MISSING from src:\n"
+                     "  {}\n  Migrating a partial statistics set would silently corrupt the running "
+                     "averages. Refuse. (use --drop-stats to intentionally discard ALL statistics.)".format(
+                         accu, len(missing), ', '.join(missing)))
+        extra = [b for b in detected if b not in EXPECTED_STAT_BASES]
+        if extra:
+            sys.exit("ERROR: unexpected sum_* file(s) not in the known 36-accumulator set: {}\n"
+                     "  Refusing rather than guessing their layout.".format(', '.join(extra)))
+        for b in EXPECTED_STAT_BASES:
+            miss_r = [r for r in range(old_jp) if "{}_{}.bin".format(b, r) not in present]
+            if miss_r:
+                sys.exit("ERROR: accumulator {} is missing rank file(s) {} (expected ranks 0..{}). "
+                         "Incomplete checkpoint — refuse.".format(b, miss_r, old_jp - 1))
+        if not cv_files:
+            print("  WARNING: accu_count>0 but no cv_*_history.bin in src — CV ring buffer will be empty "
+                  "(convergence monitor re-fills over a fresh window; mean-field statistics unaffected).")
+        stat_bases = EXPECTED_STAT_BASES
+    else:
+        # accu_count==0 (spin-up): solver wrote no accumulators. Migrate any strays for completeness.
+        stat_bases = detected
 
     print("=== Same-grid repartition (point-to-point): jp {} -> {} ===".format(old_jp, args.new_jp))
     print("  Grid: NX={} NY={} NZ={}  (NX6={} NZ6={} NY6={})".format(NX, NY, NZ, NX6, NZ6, NY6))

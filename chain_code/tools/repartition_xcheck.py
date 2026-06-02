@@ -7,12 +7,27 @@ take interior rows jl in [BFR, BFR+CHUNK) and physical k/i in [BFR, BFR+NZ)/[BFR
 If src (old jp) and dst (new jp) yield the SAME physical field bit-for-bit, the repartition
 preserved the flow field across the jp change (a wrong axis order would FAIL this).
 
-Usage: repartition_xcheck.py <src_ckpt_dir> <dst_ckpt_dir> [field ...]
+Usage: repartition_xcheck.py [--stats] <src_ckpt_dir> <dst_ckpt_dir> [field ...]
+  --stats : additionally cross-check ALL 36 turbulence accumulators (sum_*); FAIL if any of
+            the 36 is absent in either checkpoint (catches a partial/incomplete stats migration).
 """
 import sys, os
 import numpy as np
 
 BFR = 3
+
+# Mirror of repartition_jp.py / fileIO.h:299-317 — the 36 accumulators the solver writes.
+EXPECTED_STAT_BASES = [
+    "sum_u", "sum_v", "sum_w",
+    "sum_uu", "sum_uv", "sum_uw", "sum_vv", "sum_vw", "sum_ww",
+    "sum_uuu", "sum_uuv", "sum_uuw", "sum_uvv", "sum_uvw", "sum_uww",
+    "sum_vvv", "sum_vvw", "sum_vww", "sum_www",
+    "sum_P", "sum_PP", "sum_Pu", "sum_Pv", "sum_Pw",
+    "sum_dudx2", "sum_dudy2", "sum_dudz2",
+    "sum_dvdx2", "sum_dvdy2", "sum_dvdz2",
+    "sum_dwdx2", "sum_dwdy2", "sum_dwdz2",
+    "sum_ox", "sum_oy", "sum_oz",
+]
 
 def meta(d):
     m = {}
@@ -36,9 +51,22 @@ def gphys(d, fname):
     return G
 
 def main():
-    src, dst = sys.argv[1], sys.argv[2]
-    fields = sys.argv[3:] or ['f00', 'rho']
+    argv = sys.argv[1:]
+    stats = '--stats' in argv
+    argv = [a for a in argv if a != '--stats']
+    src, dst = argv[0], argv[1]
+    fields = argv[2:] or ['f00', 'rho']
     ok = True
+    if stats:
+        miss = [b for b in EXPECTED_STAT_BASES
+                if not (os.path.exists(os.path.join(src, b + '_0.bin'))
+                        and os.path.exists(os.path.join(dst, b + '_0.bin')))]
+        if miss:
+            print("  STATS INCOMPLETE: %d/36 accumulator(s) absent in src and/or dst: %s"
+                  % (len(miss), ', '.join(miss)))
+            ok = False
+        fields += [b for b in EXPECTED_STAT_BASES if b not in miss and b not in fields]
+        print("  --stats: cross-checking %d/36 accumulators present in both" % (36 - len(miss)))
     print("src=%s (jp=%s)  dst=%s (jp=%s)" % (src, meta(src)['mpi_rank_count'], dst, meta(dst)['mpi_rank_count']))
     for f in fields:
         a = gphys(src, f); b = gphys(dst, f)
