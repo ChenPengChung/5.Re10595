@@ -2,7 +2,7 @@
 #SBATCH --job-name=Edit7_10595SNS 
 #SBATCH --account=MST115169
 #SBATCH --partition=gb200
-#SBATCH --nodes=32
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=1
@@ -256,7 +256,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-128}
+NP=${SLURM_NTASKS:-32}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -528,7 +528,7 @@ WATCHDOG_HANG_NODE=""
 
 # [GB200] 32 節點 128 GPU: -np 128 --map-by ppr:4:node (對應 variables.h jp=128)
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 128 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np 32 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 
