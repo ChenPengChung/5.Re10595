@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=Edit6_5600DNS 
 #SBATCH --account=MST115169
-#SBATCH --partition=h200
-#SBATCH --nodes=8
+#SBATCH --partition=dev
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
@@ -10,7 +10,7 @@
 #             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=4-00:00:00
+#SBATCH --time=1:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -250,7 +250,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-64}
+NP=${SLURM_NTASKS:-32}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -516,9 +516,10 @@ rm -f "$WATCHDOG_SENTINEL"
 WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
-# [H200] 8 節點 64 GPU: -np 64 --map-by ppr:8:node (對應 variables.h jp=64)
+# [H200] size from sbatch (--nodes/--ntasks-per-node=8) → NP=$SLURM_NTASKS; a.out := a.out.jp$NP.
+#   --map-by ppr:8:node is jp-independent (always 8 GPU/node on H200). NP=${SLURM_NTASKS:-32} (ln 253).
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 64 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np "$NP" --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 

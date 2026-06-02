@@ -61,6 +61,14 @@ if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
     . "$CHAIN_DIR/tools/partition_lib.sh"
 fi
 
+# [NET-THROUGHPUT SELECTOR + JP-SWITCH] (2026-06-02) — replaces the defunct cluster:partition
+# ETA model with a jp×partition net-throughput selector (select_combo_lib) + bit-exact
+# jp-switch primitive (jpswitch_lib). select_combo_lib re-sources partition_lib + jpswitch_lib.
+for _lib in jpswitch_lib.sh select_combo_lib.sh; do
+    if [ -f "$CHAIN_DIR/tools/$_lib" ]; then . "$CHAIN_DIR/tools/$_lib"
+    else echo "[dispatcher] FATAL: $CHAIN_DIR/tools/$_lib 不存在" >&2; exit 1; fi
+done
+
 # ─────────────────────────────────────────────────────────────────────────
 # 可調參數
 # ─────────────────────────────────────────────────────────────────────────
@@ -345,12 +353,9 @@ _pick_cluster_fmt_wait() {
 # Helper: 對選定的 cluster 做一次 sbatch
 # ─────────────────────────────────────────────────────────────────────────
 submit_round() {
-    local target="$1"
-    local cluster part
-    cluster="$(target_cluster "$target")"
-    part="$(target_partition "$target")" || return 1
-    local jobscript
-    jobscript="$(cluster_jobscript "$cluster")" || return 1
+    local jp="$1" part="$2"
+    local cur; cur="$(jpswitch_current_jp)"; cur="${cur:-0}"
+    local jobscript="chain_code/jobscript_chain.slurm.H200"
 
     if [ ! -f "$jobscript" ]; then
         log "ERROR: 找不到 $jobscript"
@@ -412,17 +417,29 @@ submit_round() {
     # ═════ [SINGLE-HEAD] 先取 HEAD.lockdir, 再呼叫 sbatch ═════
     # 若取不到代表 (a) 別的 submitter 正在搶 / (b) 有活 job 正在 queue.
     # 兩種情況都回 rc=4 讓 main loop 下輪再試 — 符合使用者決定 A+(a).
-    if ! acquire_head_lock "dispatcher-$cluster"; then
+    if ! acquire_head_lock "dispatcher-jp${jp}-${part}"; then
         log "[SINGLE-HEAD] acquire_head_lock 失敗 (HEAD.lockdir 已被佔), 放棄本次投遞"
         return 4
     fi
     log "[SINGLE-HEAD] ✓ 取得 HEAD.lockdir, state=SUBMITTING, 準備 sbatch"
 
-    log "▷ 切換到 $target: cp a.out.$cluster -> a.out"
-    if ! cp -f "a.out.$cluster" "a.out"; then
-        log "ERROR: cp a.out.$cluster 失敗, 釋放 HEAD.lockdir"
-        release_head_lock
-        return 2
+    # ── jp-switch (bit-exact, stats-preserving) if selected jp ≠ current ──
+    if [ "$jp" != "$cur" ]; then
+        log "▷ jp-switch ${cur} -> ${jp}: mark REPARTITIONING (lock held ~min) + jpswitch_apply"
+        mark_head_repartitioning "dispatcher-jp${jp}"
+        if jpswitch_apply "$jp"; then
+            log "▷ jp-switch OK: jp=$jp (a.out=a.out.jp${jp}, checkpoint repartitioned bit-exact)"
+        else
+            log "WARN jp-switch to $jp FAILED -> fall back to current jp=$cur (never idle)"
+            jp="$cur"
+            cp -f "a.out.jp${cur}" a.out 2>/dev/null || true
+            cp -f "a.out.jp${cur}" a.out.H200 2>/dev/null || true   # [Codex P5 fix] restore both binaries
+        fi
+    else
+        cp -f "a.out.jp${cur}" a.out 2>/dev/null && cp -f "a.out.jp${cur}" a.out.H200 2>/dev/null
+        if [ ! -s a.out ]; then
+            log "ERROR: a.out.jp${cur} 缺失, 釋放 HEAD.lockdir"; release_head_lock; return 2
+        fi
     fi
 
     # [BLACKLIST-LIB] 黑名單統一走 bl_effective_exclude (TTL + NCHC sync + 50% cap)
@@ -431,23 +448,24 @@ submit_round() {
     [ -n "$ex_list" ] && exclude_arg="--exclude=$ex_list"
     log "▷ effective exclude (partition=$part): ${ex_list:-(empty)}"
 
-    # [WALLTIME-FIX] partition-specific walltime (partition_lib for GB200; jobscript fallback)
-    local wt="" time_arg=""
-    if type gb200_partition_walltime >/dev/null 2>&1; then
-        wt="$(gb200_partition_walltime "$part")"
-    fi
+    # [WALLTIME] H200 partition → max walltime (partition_lib h200 map; jobscript fallback)
+    local wt=""
+    wt="$(h200_partition_walltime "$part")"
     if [ -z "$wt" ]; then
         wt="$(awk -F= '/^#SBATCH[[:space:]]+--time=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$jobscript" 2>/dev/null)"
     fi
-    [ -n "$wt" ] && time_arg="--time=$wt"
 
-    log "▷ sbatch --parsable --partition=$part $time_arg $exclude_arg $jobscript"
+    # [SIZE] jp=N → N/8 H200 nodes × 8 GPU; size via sbatch CLI (jobscript mpirun reads $SLURM_NTASKS)
+    local nodes=$((jp / 8))
+    log "▷ sbatch --partition=$part --account=$ACCOUNT --nodes=$nodes --ntasks-per-node=8 --gres=gpu:8 --time=$wt $exclude_arg $jobscript"
     local next_id
-    next_id="$(sbatch --parsable --partition="$part" $time_arg $exclude_arg "$jobscript" 2>&1)"
+    next_id="$(sbatch --parsable --partition="$part" --account="$ACCOUNT" \
+        --nodes="$nodes" --ntasks-per-node=8 --gres=gpu:8 --time="$wt" \
+        $exclude_arg "$jobscript" 2>&1)"
     local rc=$?
 
     if [ $rc -eq 0 ] && [[ "$next_id" =~ ^[0-9]+$ ]]; then
-        log "SUBMIT-OK 已投 $target round: jobid=$next_id"
+        log "SUBMIT-OK 已投 jp=$jp part=$part round: jobid=$next_id"
         echo "$next_id" > restart/chain_jobid
         # [COLD-START-INIT] 冷啟動情境下 chain_count 還不存在, 一併初始化以免 jobscript
         # 誤觸 "[REVIEW-FIX #7] chain state 半損毀" FATAL tripwire 形成無限迴圈.
@@ -457,7 +475,7 @@ submit_round() {
             log "[COLD-START-INIT] 初始化 restart/chain_count=1"
         fi
         # [SINGLE-HEAD] 把 jobid 寫進 HEAD.lockdir (state: SUBMITTING -> PENDING)
-        if write_head_jobid "$next_id" "$cluster"; then
+        if write_head_jobid "$next_id" "jp${jp}"; then
             log "[SINGLE-HEAD] HEAD.lockdir 升級 state=PENDING jobid=$next_id"
         else
             log "[SINGLE-HEAD] WARN write_head_jobid 失敗 (HEAD.lockdir 被外力移除?) -- jobscript verify_am_head 將以 RC=42 停鏈"
@@ -476,20 +494,13 @@ submit_round() {
 
 # 初次啟動檢查: 至少一個 binary 必須存在
 _init_ok=0
-_seen_arch=""
-for entry in "${PARTITION_CANDIDATES[@]}"; do
-    c="${entry%%:*}"
-    case " $_seen_arch " in *" $c "*) continue ;; esac
-    _seen_arch="$_seen_arch $c"
-    if cluster_binary_ready "$c"; then
-        log "OK 偵測到 a.out.$c (${c} ready)"
-        _init_ok=1
-    else
-        log "WARN a.out.$c 不存在, 將不投 $c 相關 partition"
+for _jp in $SC_VALID_JP; do
+    if jpswitch_binary_ready "$_jp" >/dev/null 2>&1; then
+        log "OK 偵測到 a.out.jp${_jp} (jp=$_jp ready)"; _init_ok=1
     fi
 done
 if [ "$_init_ok" -eq 0 ]; then
-    log "FATAL: a.out.GB200 和 a.out.H200 都不存在. 請先 ./run build <H200|GB200> --build-only"
+    log "FATAL: 沒有任何 a.out.jp<N> binary (需至少一個, 例如 a.out.jp32). 請先 pre-build."
     exit 10
 fi
 
@@ -533,6 +544,34 @@ if [ $_grace_elapsed -ge $GRACE_MAX ]; then
     log "[LAYER 1]   (Layer 2/3 會繼續守護,但請人工確認 chain_jobid 狀態)"
 fi
 
+# [PENDING RE-SELECT] (2026-06-02) 若 head job PENDING 太久, 用 job-guard 取消 (含 PENDING→RUNNING
+# race-guard) 後 re-select 能更快開跑的組合. 滿足使用者切換時機 (b): pending 時重選.
+SC_PENDING_TIMEOUT_MIN="${SC_PENDING_TIMEOUT_MIN:-10}"
+_pending_too_long() {
+    local jid st pe now age
+    jid="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
+    [[ "$jid" =~ ^[0-9]+$ ]] || return 1
+    st="$(squeue -h -j "$jid" -o '%T' 2>/dev/null | tr -d '[:space:]')"
+    [ "$st" = "PENDING" ] || return 1
+    pe="$(grep '^pending_at_epoch=' "$HEAD_LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+    [ -n "$pe" ] || return 1
+    now=$(date +%s); age=$((now - pe))
+    [ "$age" -ge "$((SC_PENDING_TIMEOUT_MIN * 60))" ]
+}
+_cancel_head_for_reselect() {
+    local jid st
+    jid="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
+    st="$(squeue -h -j "$jid" -o '%T' 2>/dev/null | tr -d '[:space:]')"
+    if [ "$st" != "PENDING" ]; then
+        log "[PENDING] race-guard: $jid 已非 PENDING (now=$st) -> 放棄 re-select, 保留它"; return 1
+    fi
+    log "[PENDING] $jid pending > ${SC_PENDING_TIMEOUT_MIN}min -> job-guard scancel + re-select"
+    ./run job-guard scancel "$jid" >>"$LOG_FILE" 2>&1
+    sleep 3
+    release_head_lock 2>/dev/null || rm -rf "$HEAD_LOCK_DIR" 2>/dev/null
+    return 0
+}
+
 # [P0 TRAP #2 FIX] 連續找不到 capacity 的輪數
 _nocapacity_count=0
 
@@ -553,10 +592,14 @@ while true; do
         break
     fi
 
-    # 如果 chain 目前還有 active job, 等它結束
+    # 如果 chain 目前還有 active job, 等它結束 — 但 PENDING 太久則 cancel + re-select (never idle)
     if chain_has_active_job; then
-        sleep "$POLL_INTERVAL"
-        continue
+        if _pending_too_long && _cancel_head_for_reselect; then
+            : # 已取消卡住的 PENDING job; 不 continue, 直接往下 re-select 更快的組合
+        else
+            sleep "$POLL_INTERVAL"
+            continue
+        fi
     fi
 
     # ── 進到「該投下一輪」的分支 ──
@@ -596,62 +639,41 @@ while true; do
         break
     fi
 
-    # 選 cluster
-    log "----- 準備投下一輪, 查詢 partition 狀態 -----"
-    NEXT_CLUSTER="$(pick_cluster)"
-    # [DEFENSIVE 2026-04-22] 除了 empty, 還驗證回傳值只能是安全的 target 名.
-    # 用 case 避開 [[ =~ regex ]] 避免某些 linter 在 regex 的 $ 錨點觸發截斷.
-    # 即使 pick_cluster 未來因 log() 漏出而被污染, 也不會把 log 文字誤當 cluster
-    # 進到 submit_round, 避免 "選中: [timestamp] ..." 這類畸形輸出 + 無效 sbatch.
-    _CLUSTER_BAD=0
-    if [ -z "$NEXT_CLUSTER" ]; then
-        _CLUSTER_BAD=1
-    else
-        case "$NEXT_CLUSTER" in
-            *[!A-Za-z0-9@._-]*) _CLUSTER_BAD=1 ;;
-            [A-Z]*) : ;;                      # 首字必為大寫
-            *) _CLUSTER_BAD=1 ;;
-        esac
-    fi
-    if [ "$_CLUSTER_BAD" -eq 1 ]; then
-        # [P0 TRAP #2 FIX] 只有「兩邊都忙 (NEXT_CLUSTER 空)」才計入 no-capacity.
-        # pick_cluster 回傳畸形值 (BUG-GUARD 情境) 不算, 避免雜訊把我們推向誤停.
-        if [ -z "$NEXT_CLUSTER" ]; then
-            _nocapacity_count=$((_nocapacity_count + 1))
-            log "pick_cluster ETA-compare 失敗 (全部候選 binary 缺 或 sbatch --test-only 都無解析), ${POLL_INTERVAL}s 後重試 (no-capacity ${_nocapacity_count}/${NOCAPACITY_LIMIT})"
-            if [ "$_nocapacity_count" -ge "$NOCAPACITY_LIMIT" ]; then
-                _total_wait_min=$(( _nocapacity_count * POLL_INTERVAL / 60 ))
-                log "============================================================================="
-                log "[P0 TRAP #2] 連續 ${_nocapacity_count} 輪全部候選都拿不到 ETA (累積 ${_total_wait_min} 分鐘)"
-                log "             可能原因: (a) Slurm controller 暫停 (b) QoS 超額被 reject (c) a.out.<ARCH> binary 不存在 (d) partition 名稱無效"
-                log "             注意: 正常情況下 Stage 2 ETA 挑選會讓 chain 即使兩邊忙也能進 PENDING, 不會走到這裡."
-                log "             觸發明確停機: 寫入 $NOCAPACITY_SENTINEL 後退出."
-                log "             -- 恢復方法 (擇一) --"
-                log "             1. 確認叢集有空後: rm $NOCAPACITY_SENTINEL && ./run dispatcher start"
-                log "             2. 調整容忍度:     NOCAPACITY_LIMIT=120 ./run dispatcher start (1hr)"
-                log "             3. 只用單 cluster: ./run --h200 或 ./run --gb200 (手動投, 不啟 dispatcher)"
-                log "============================================================================="
-                {
-                    printf 'reason=no_capacity\n'
-                    printf 'consecutive_rounds=%d\n' "$_nocapacity_count"
-                    printf 'poll_interval_sec=%d\n' "$POLL_INTERVAL"
-                    printf 'total_wait_minutes=%d\n' "$_total_wait_min"
-                    printf 'limit=%d\n' "$NOCAPACITY_LIMIT"
-                    printf 'triggered_at=%s\n' "$(date -Iseconds 2>/dev/null || date)"
-                    printf 'triggered_at_epoch=%s\n' "$(date +%s)"
-                    printf 'hostname=%s\n' "$(hostname 2>/dev/null || echo unknown)"
-                } > "$NOCAPACITY_SENTINEL"
-                break
-            fi
-        else
-            log "[BUG-GUARD] pick_cluster 回傳非合法 cluster 名 (值=$(printf %q "$NEXT_CLUSTER")), ${POLL_INTERVAL}s 後重試"
+    # 選 (jp × partition) — net-throughput optimal, never-idle (select_combo_lib)
+    log "----- 準備投下一輪: net-throughput 選 (jp × partition) -----"
+    NEXT_COMBO="$(sc_pick_combo)"
+    NEXT_JP="${NEXT_COMBO%% *}"
+    NEXT_PART="${NEXT_COMBO##* }"
+    if [ -z "$NEXT_COMBO" ] || ! [[ "$NEXT_JP" =~ ^[0-9]+$ ]] || [ -z "$NEXT_PART" ]; then
+        # 無可投組合 (極罕見: dev 不限額, 通常恆有 fallback). 計入 no-capacity.
+        _nocapacity_count=$((_nocapacity_count + 1))
+        log "sc_pick_combo 無可投組合 (binary 缺 / 全部 cap-blocked / sbatch --test-only 無解析), ${POLL_INTERVAL}s 後重試 (no-capacity ${_nocapacity_count}/${NOCAPACITY_LIMIT})"
+        if [ "$_nocapacity_count" -ge "$NOCAPACITY_LIMIT" ]; then
+            _total_wait_min=$(( _nocapacity_count * POLL_INTERVAL / 60 ))
+            log "============================================================================="
+            log "[P0 TRAP #2] 連續 ${_nocapacity_count} 輪 sc_pick_combo 無可投組合 (累積 ${_total_wait_min} 分鐘)"
+            log "             可能原因: (a) 無 a.out.jp<N> binary (b) 帳號 cap 全滿且 dev 也排不到 (c) Slurm controller 暫停"
+            log "             觸發明確停機: 寫入 $NOCAPACITY_SENTINEL 後退出."
+            log "             -- 恢復: 確認有空後 rm $NOCAPACITY_SENTINEL && ./run dispatcher start"
+            log "============================================================================="
+            {
+                printf 'reason=no_capacity\n'
+                printf 'consecutive_rounds=%d\n' "$_nocapacity_count"
+                printf 'poll_interval_sec=%d\n' "$POLL_INTERVAL"
+                printf 'total_wait_minutes=%d\n' "$_total_wait_min"
+                printf 'limit=%d\n' "$NOCAPACITY_LIMIT"
+                printf 'triggered_at=%s\n' "$(date -Iseconds 2>/dev/null || date)"
+                printf 'triggered_at_epoch=%s\n' "$(date +%s)"
+                printf 'hostname=%s\n' "$(hostname 2>/dev/null || echo unknown)"
+            } > "$NOCAPACITY_SENTINEL"
+            break
         fi
         sleep "$POLL_INTERVAL"
         continue
     fi
 
-    log "選中: $NEXT_CLUSTER (partition=$(target_partition "$NEXT_CLUSTER"))"
-    submit_round "$NEXT_CLUSTER"
+    log "選中: jp=$NEXT_JP partition=$NEXT_PART (net-throughput)"
+    submit_round "$NEXT_JP" "$NEXT_PART"
     SUBMIT_RC=$?
     case $SUBMIT_RC in
         0)  # [P0 TRAP #2 FIX] 投遞成功 → 重置 no-capacity 計數

@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --job-name=Edit6_5600DNS 
 #SBATCH --account=MST115169
-#SBATCH --partition=gb200
-#SBATCH --nodes=8
-#SBATCH --ntasks-per-node=4
-#SBATCH --gres=gpu:4
+#SBATCH --partition=normal
+#SBATCH --nodes=4
+#SBATCH --ntasks-per-node=8
+#SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 預設 walltime = 4 天 (NCHC gb200 partition 上限);
+# [POLICY-B1] 預設 walltime = 4 天 (NCHC h200 partition 上限);
 #             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=4-00:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -19,9 +19,19 @@
 #SBATCH --signal=USR1@120
 #
 # ==============================================================================
-# jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
-# 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes(16) / ntasks(4/node) / mpirun ppr(4:node)
-# 對應 variables.h jp=64 (64 streamwise MPI ranks): 16 nodes × 4 GPU/node = 64 ranks
+# jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
+#
+# 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
+#   (1) partition/nodes/gres — h200 / 8 nodes / 8 GPU×8=64  (GB200: gb200 / 16 nodes / 4)
+#       對應 variables.h jp=64 (64 streamwise MPI ranks)
+#   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
+#   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
+#                              (GB200: /usr/local/cuda-13.0 on compute node)
+#   (4) mpirun 對映          — -np 64 --map-by ppr:8:node (8 nodes 64 GPU)
+#                              (GB200: -np 64 --map-by ppr:4:node on 16 nodes)
+#   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
+#
+# 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.
 #
 # Round 1      -> ./a.out --cold
 # Round >= 2   -> ./a.out --restart=restart/checkpoint/step_<latest>
@@ -52,22 +62,28 @@
 #   checkpoint       : restart/checkpoint/step_XXXXX/
 # ==============================================================================
 
+# ── [方案 A path discipline] ──
+# Slurm 預設 job cwd = sbatch 呼叫時的 cwd (即 PROJECT_ROOT, 因 run / dispatcher / build
+# 都以 PROJECT_ROOT 為 cwd). SLURM_SUBMIT_DIR 也可作為備援.
+# CHAIN_DIR 用於 source tools/*.sh 及自我 resubmit 時絕對路徑指向 jobscript.
+PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
+CHAIN_DIR="$PROJECT_ROOT/chain_code"
+cd "$PROJECT_ROOT" || { echo "[jobscript.H200] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
+
+# [H200] 自我續投的絕對路徑 (方案 A: 不再依賴 root symlink)
+JOBSCRIPT_SELF="$CHAIN_DIR/jobscript_chain.slurm.H200"
+
 export PATH=$HOME/bin:$PATH
 module purge
 module load cuda/13.0
 
-export CUDA_HOME=/usr/local/cuda-13.0
-export MATH_LIBS=/opt/nvidia/hpc_sdk/Linux_aarch64/25.9/math_libs/13.0/targets/sbsa-linux
-export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_aarch64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
+# [H200] x86_64 HPC-SDK 路徑 (不同於 GB200 的 aarch64)
+export CUDA_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
+export MATH_LIBS=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/math_libs/13.0/targets/x86_64-linux
+export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
 source $HPCX_HOME/hpcx-init.sh
 hpcx_load
 export OMPI_MCA_coll_hcoll_enable=0
-
-# ── [方案 A path discipline] ──
-PROJECT_ROOT="${SLURM_SUBMIT_DIR:-$(pwd)}"
-CHAIN_DIR="$PROJECT_ROOT/chain_code"
-cd "$PROJECT_ROOT" || { echo "[jobscript.GB200] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
-JOBSCRIPT_SELF="$CHAIN_DIR/jobscript_chain.slurm.GB200"
 
 # ===== 0. Legacy migration: 舊 layout (root-level) -> restart/ (冪等) =====
 mkdir -p restart/
@@ -87,17 +103,7 @@ log() { echo "[$(date '+%F %T')] [job=$SLURM_JOB_ID] $*" | tee -a "$CHAIN_LOG"; 
 # ═════════════════════════════════════════════════════════════════════════
 # [SINGLE-HEAD PRINCIPLE] restart/HEAD.lockdir — Single-Head per Folder
 # ─────────────────────────────────────────────────────────────────────────
-# 中心準則: 「每一格資料夾在任何時刻, queue 內最多只能有 1 個屬於本 chain
-#           的 job (不論 PENDING/RUNNING)」.
-#
-# 由 tools/head_lock_lib.sh 提供共用函式:
-#   - submit 端 (submit_dispatcher / run.sh / jobscript EOJ) 先 acquire_head
-#     再 sbatch, sbatch 成功後 write_head_jobid 寫入真正 jobid.
-#   - jobscript 進 RUNNING 時呼叫 verify_am_head(SLURM_JOB_ID):
-#       符合 → state 升級為 RUNNING, 正常跑.
-#       不符 → 表示本 job 不是 legitimate head (重複投遞 / race), exit 42.
-#   - trap EXIT: release_head_lock_if_mine(SLURM_JOB_ID)
-#       若 HEAD.lockdir/owner.jobid 已被自己的續投覆寫, 不清 (交棒).
+# 中心準則同 GB200 jobscript; 詳細設計見 GB200 同一區塊與 tools/head_lock_lib.sh.
 # ═════════════════════════════════════════════════════════════════════════
 LOCK_DIR="restart/HEAD.lockdir"   # 保留變數名以相容既有 epoch guard
 HEAD_LOCK_DIR="$LOCK_DIR"
@@ -123,21 +129,13 @@ fi
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
 
-# [PARTITION-LIB] partition 切換函式庫 (支援 restart/gb200_partition override)
-if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
-    # shellcheck source=/dev/null
-    . "$CHAIN_DIR/tools/partition_lib.sh"
-fi
-
-if ! verify_am_head "$SLURM_JOB_ID" "GB200"; then
+if ! verify_am_head "$SLURM_JOB_ID" "H200"; then
     _rc=$?
     HEAD_OWNER="$(grep '^jobid=' "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo none)"
     HEAD_STATE="$(grep '^state='  "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo none)"
     log "[SINGLE-HEAD] FATAL: 我 (jobid=$SLURM_JOB_ID) 不是 legitimate head"
     log "[SINGLE-HEAD]   verify_am_head rc=$_rc  HEAD.lockdir owner=$HEAD_OWNER state=$HEAD_STATE"
-    log "[SINGLE-HEAD]   可能原因: 本 job 不是由 dispatcher/run.sh 合法投遞,"
-    log "[SINGLE-HEAD]             或 HEAD.lockdir 被其他 job 搶先持有."
-    log "[SINGLE-HEAD]   RC=42 停鏈 以維持『每格資料夾單一 head』準則."
+    log "[SINGLE-HEAD]   RC=42 停鏈, 維持『每格資料夾單一 head』準則."
     exit 42
 fi
 trap 'release_head_lock_if_mine "$SLURM_JOB_ID"; log "[SINGLE-HEAD] EXIT trap: HEAD lock clean-up for jobid=$SLURM_JOB_ID"' EXIT
@@ -168,12 +166,12 @@ if ! [[ "$CHAIN_COUNT" =~ ^[1-9][0-9]*$ ]]; then
     exit 1
 fi
 
-log "=== Chain $CHAIN_JOB_ID round $CHAIN_COUNT on $SLURM_NODELIST ==="
+log "=== Chain $CHAIN_JOB_ID round $CHAIN_COUNT on $SLURM_NODELIST (H200 x86_64) ==="
 nvidia-smi --query-gpu=name,memory.total --format=csv | tee -a "$CHAIN_LOG"
 
 # Auto-summary at job start (creates/updates restart/SUMMARY.md + summary/)
 if [ -f "$CHAIN_DIR/chain_status.sh" ]; then
-    bash "$CHAIN_DIR/chain_status.sh" --job-start --cluster=GB200 --quiet 2>/dev/null || true
+    bash "$CHAIN_DIR/chain_status.sh" --job-start --cluster=H200 --quiet 2>/dev/null || true
     log "chain_status.sh --job-start snapshot written to restart/summary/"
 fi
 
@@ -209,6 +207,8 @@ if [ ! -x ./a.out ]; then
 fi
 
 # ===== 3.5 節點健康預檢 (走 blacklist_lib: TTL + NCHC sync) =====
+# 合併三來源 (local TTL-valid + global + NCHC live) 後, 檢查本 job 被分到的
+# SLURM_NODELIST 是否踩到其中任一節點. 踩到就立刻 requeue, 不執行 mpirun.
 PRE_BAD_ALL=$(
     {
         printf '%s\n' "$(bl_local_list)"  | tr ',' '\n'
@@ -231,18 +231,16 @@ if [ -n "$MATCHED_BAD" ]; then
         bl_add "$node" "pre-flight matched" "jobscript-preflight" \
             2> >(tee -a "$_BL_LOG" >&2) || true
     done
-    _RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
-    _RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
-    EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+    EX_LIST_BL=$(bl_effective_exclude "$SLURM_JOB_PARTITION" 2> >(tee -a "$_BL_LOG" >&2))
     PRE_BAD_CSV=$(printf '%s\n' "$PRE_BAD_ALL" | grep -v '^[[:space:]]*$' | paste -sd,)
     EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
                | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}  partition: ${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}"
-    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}"
+    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     if [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
-        write_head_jobid "$NEXT_ID" "GB200"
+        write_head_jobid "$NEXT_ID" "H200"
         log "Pre-flight requeued: job=$NEXT_ID (HEAD.lockdir jobid->$NEXT_ID state=PENDING)"
         exit 0
     else
@@ -344,7 +342,7 @@ if [ "$CHAIN_COUNT" -eq 1 ]; then
         log "       拒絕冷啟動以防 checkrho.dat / Ustar_Force_record.dat 被覆寫"
         log "       -> 續跑: ./run.sh  (會自動偵測並接 Round 2)"
         log "       -> 確定從頭跑: ./run.sh --force-cold"
-        log "       -> 或強制: export LBM_ALLOW_COLD_START=1; ./run --gb200"
+        log "       -> 或強制: export LBM_ALLOW_COLD_START=1; ./run --h200"
         exit 1
     fi
     ARGS="--cold"
@@ -400,7 +398,7 @@ fi
 # [POLICY-B1] Partition-agnostic walltime 自動偵測 + 及時續跑 機制
 # ------------------------------------------------------------------------------
 # 設計目標:
-#   無論 NCHC 給我們多長 walltime (gb200-dev 1h / dev-gpu 2h / 其他 partition 更長),
+#   無論 NCHC 給我們多長 walltime (dev 1h / dev-gpu 2h / 其他 partition 更長),
 #   程式被時間切斷前必須能完成 checkpoint,且 exit 124 讓 jobscript 續投下一輪.
 #
 # 時序 (walltime = W 秒, 由 runtime 偵測):
@@ -499,7 +497,6 @@ log "  KILL_AFT : ${KILL_AFTER}s (SIGKILL margin)"
 log "  SLURM USR1@120: 於 $((WALLTIME_SEC - 120))s 觸發"
 # ═════ [MUTEX LAYER 3 — epoch guard] ═════
 # mpirun 啟動前最後一道防線:驗證 lock 身分仍是我.
-# 若 lock 被奪 (不該發生,但 orthogonal 驗證),立即 abort 以免 solver 寫 checkpoint.
 _EPOCH_OWNER="$(grep '^jobid=' "$LOCK_DIR/owner" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
 if [ "$_EPOCH_OWNER" != "$SLURM_JOB_ID" ]; then
     log "[MUTEX-EPOCH] FATAL: lock 被奪 (owner=$_EPOCH_OWNER, me=$SLURM_JOB_ID), 拒絕啟動 mpirun"
@@ -519,9 +516,9 @@ rm -f "$WATCHDOG_SENTINEL"
 WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
-# [GB200] 16 節點 64 GPU: -np 64 --map-by ppr:4:node (對應 variables.h jp=64)
+# [H200] 8 節點 64 GPU: -np 64 --map-by ppr:8:node (對應 variables.h jp=64)
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 32 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np 32 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 
@@ -559,9 +556,8 @@ if [ -f "$WATCHDOG_SENTINEL" ]; then
 fi
 
 # Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
-# Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
 if [ -f "$CHAIN_DIR/chain_status.sh" ]; then
-    bash "$CHAIN_DIR/chain_status.sh" --job-end --rc="$RC" --cluster=GB200 --quiet 2>/dev/null || true
+    bash "$CHAIN_DIR/chain_status.sh" --job-end --rc="$RC" --cluster=H200 --quiet 2>/dev/null || true
     log "chain_status.sh --job-end snapshot written (RC=$RC)"
 fi
 
@@ -590,6 +586,7 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
     SKIPPED_HEALTHY=0
     while IFS= read -r h; do
         [ -z "$h" ] && continue
+        # bl_add 回 0=加入, 2=NCHC 說節點健康所以拒絕加入
         if bl_add "$h" "rc=$RC round=$CHAIN_COUNT elapsed=${ELAPSED}s" "jobscript-fastfail" \
                  2> >(tee -a "$_BL_LOG" "$CHAIN_LOG" >&2); then
             ADDED=$((ADDED + 1))
@@ -636,6 +633,10 @@ echo "$NEXT_COUNT" > restart/chain_count
 log "RC=$RC -> queuing chain round $NEXT_COUNT"
 
 # ═════ DISPATCHER 模式 sentinel check ═════
+# 若 DISPATCHER_ACTIVE 存在，代表使用者啟動了跨 partition 自動派工模式。
+# 本輪結束後 *不* 自動 sbatch，交給 dispatcher 根據 sinfo 判斷
+# 下一輪要投哪個 partition (gb200-dev 或 dev)。
+# 若 DISPATCHER_ACTIVE 不存在，行為與原本完全一致 (自我續投)。
 if [ -f DISPATCHER_ACTIVE ]; then
     log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
     log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
@@ -646,10 +647,7 @@ fi
 MAX_SBATCH_RETRY=5
 SBATCH_RETRY_DELAY=30
 
-_RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
-_RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
-
-EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+EX_LIST_BL=$(bl_effective_exclude "$SLURM_JOB_PARTITION" 2> >(tee -a "$_BL_LOG" >&2))
 PRE_BAD_CSV=$(printf '%s\n' "${PRE_BAD_ALL:-}" | grep -v '^[[:space:]]*$' | paste -sd,)
 EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
            | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
@@ -668,13 +666,12 @@ if [ -n "$EX_LIST" ]; then
 else
     log "Resubmit exclude: (empty — cluster healthy)"
 fi
-[ -n "$_RESUB_PARTITION" ] && log "Resubmit partition override: $_RESUB_PARTITION (walltime=$(gb200_partition_walltime "$_RESUB_PARTITION" 2>/dev/null))"
 
 for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
-    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     SBATCH_RC=$?
     if [ $SBATCH_RC -eq 0 ] && [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
-        write_head_jobid "$NEXT_ID" "GB200"
+        write_head_jobid "$NEXT_ID" "H200"
         log "Submitted next round: job=$NEXT_ID (attempt $ATTEMPT/$MAX_SBATCH_RETRY)  HEAD.lockdir jobid->$NEXT_ID state=PENDING"
         exit 0
     fi
@@ -685,6 +682,5 @@ for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
     fi
 done
 
-log "FATAL: sbatch failed after $MAX_SBATCH_RETRY attempts. Chain broken."
-log "       手動續跑: ./run.sh"
-exit
+log "ERROR: failed to submit next round after $MAX_SBATCH_RETRY attempts (fast-fail stop chain)"
+exit 1
