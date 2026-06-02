@@ -4,7 +4,18 @@
       "Read(//home/s8313697/D3Q27_PeriodicHill/Edit1_PeriodicHIllchannel/J_Frohlich/**)",
       "Read(//home/s8313697/D3Q27_PeriodicHill/Edit1_PeriodicHIllchannel/**)",
       "Bash(sort -rnk2)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(./run --h200 --no-queue-check)",
+      "Bash(sacct -j 69541 -o JobID,State,Partition,Start,Elapsed,NodeList%22)",
+      "Bash(squeue -j 69541 -o \"%.10i %.9P %.8T %.10M %R\")",
+      "Bash(git mv *)",
+      "Bash(mv repartition_jp.py chain_code/repartition_jp.py)",
+      "Bash(mv changejp.sh chain_code/changejp.sh)",
+      "Bash(chmod +x changejp.sh chain_code/changejp.sh chain_code/repartition_jp.py)",
+      "Bash(bash changejp.sh 32)",
+      "Bash(python3 chain_code/repartition_jp.py --help)",
+      "Bash(squeue -j 69541 -h -o \"%.10i %.9P %.8T %.10M %R\")",
+      "Bash(sacct -j 69541 -n -o JobID,State)"
     ]
   }
 }
