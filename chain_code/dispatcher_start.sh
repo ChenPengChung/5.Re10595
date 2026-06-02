@@ -96,6 +96,12 @@ if [ -f restart/STOP_NOCAPACITY ]; then
     exit 6
 fi
 
+# [restart-gap race fix] 建立持久 INTENT 標記: 宣告本 chain 由 dispatcher 管理。
+# jobscript 據此 + heartbeat 新鮮度決定「交棒 vs 自投」, 不再用瞬時 DISPATCHER_ACTIVE
+# (daemon 重啟/crash 時該檔短暫消失, 會害 jobscript 誤判自投舊 jp → 與 jp 切換衝突)。
+# 只有 dispatcher_stop 才移除 INTENT; daemon 重啟/crash 都保留。heartbeat 先給初值, daemon 每輪 touch。
+touch restart/DISPATCHER_INTENT restart/dispatcher.heartbeat
+
 if [ "$FOREGROUND" -eq 1 ]; then
     echo "[dispatcher_start] 前景模式啟動 (Ctrl+C 可停)"
     exec bash "$DAEMON"

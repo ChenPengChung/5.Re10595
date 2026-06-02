@@ -803,6 +803,9 @@ if [ "${DISPATCHER_SELFTEST:-0}" = "1" ]; then
 fi
 
 while true; do
+    # [restart-gap race fix] 每輪 touch heartbeat: jobscript(compute node)用此檔 mtime 判斷 daemon 是否存活
+    # (跨節點無法 kill -0 login PID)。daemon 健康時每 ~POLL_INTERVAL touch 一次, jobscript 容忍 180s。
+    touch restart/dispatcher.heartbeat 2>/dev/null || true
     # Stop 條件 1: STOP_DISPATCHER
     if [ -f "$STOP_SENTINEL" ]; then
         log "偵測到 $STOP_SENTINEL -> dispatcher 停止"
