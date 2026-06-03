@@ -618,6 +618,28 @@ else
     rm -f restart/fast_fail_count
 fi
 
+# ===== 5.5b [LATE-MPI-CRASH force-blacklist] 修補 5.5 只擋 <60s 的缺口 (同 H200) =====
+# RC=205 等 MPI「lost communication with a remote daemon」晚崩(>=60s)是真節點/fabric 故障,
+# 但 NCHC 常仍報 healthy → bl_add 拒絕。對 .err 有 daemon-loss 簽章的晚崩, 把肇事節點直接寫
+# GLOBAL_BAD_FILE(非 NCHC-gated; 50% cap 防過度排除), 讓下一輪自動避開, 避免反覆撞同節點重算。
+if [ "$ELAPSED" -ge 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 42 ]; then
+    _ERRF="slurm_${SLURM_JOB_ID}.err"
+    if [ -f "$_ERRF" ] && grep -qiE 'lost communication with a remote daemon|ORTE has lost|PMIx.*(lost|abort)|node (failed|down)' "$_ERRF"; then
+        _CRASH_NODES=$(grep -oE 'on node [A-Za-z0-9_-]+' "$_ERRF" 2>/dev/null | awk '{print $3}' | sort -u)
+        [ -z "$_CRASH_NODES" ] && _CRASH_NODES=$(scontrol show hostnames "$SLURM_NODELIST" 2>/dev/null)
+        _GBF="${GLOBAL_BAD_FILE:-$HOME/.bad_nodes_global}"; touch "$_GBF" 2>/dev/null || true
+        while IFS= read -r _h; do
+            [ -z "$_h" ] && continue
+            if ! grep -qxF "$_h" "$_GBF" 2>/dev/null; then
+                echo "$_h" >> "$_GBF"
+                log "LATE-MPI-CRASH force-blacklist $_h -> $_GBF (RC=$RC elapsed=${ELAPSED}s, .err daemon-loss; 非 NCHC-gated, 下一輪自動避開)"
+            else
+                log "LATE-MPI-CRASH $_h 已在 $_GBF (略過)"
+            fi
+        done <<< "$_CRASH_NODES"
+    fi
+fi
+
 # ===== 6. Exit code 判斷 + 續鏈決策 =====
 # [POLICY-C1 FIX 2026-04-25]
 #   過去只用 RC=0 當「自然停止」訊號, 但 jobscript 在 DISPATCHER 模式下
