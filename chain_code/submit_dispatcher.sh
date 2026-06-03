@@ -661,7 +661,7 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16 8}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
 K_DOWN="${K_DOWN:-2}"                              # scale-down 也需連續確認 (對稱防抖, 修 HIGH-1)
