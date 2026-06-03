@@ -38,7 +38,7 @@ SC_ACCT="${SC_ACCT:-MST115169}"
 #   - 16 : dev/normal/4nodes 三者皆可(≤cap)且 a.out.jp16 ready → 可投(視 live headroom;
 #          帳號手足 job 佔滿 cap 則 QOS-BLOCK 警告、罰分不投, 換有空檔的 partition)。
 #   要真正用 >32 GPU 須換更細網格(NY-1≥896 才能讓 128 slab≥7)或放寬 cap, 屬不同解析度/配額的 DNS。
-SC_VALID_JP="${SC_VALID_JP:-128 64 32 16}"
+SC_VALID_JP="${SC_VALID_JP:-128 64 32 16 8}"
 SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
