@@ -28,12 +28,15 @@ _log() { echo "[$(date '+%F %T')] [keepalive] $*" >> "$LOG" 2>/dev/null; }
 [ -f restart/STOP_CHAIN ] && exit 0
 
 # ════ watcher auto-heal (與 dispatcher 模式無關; chain 在跑就維持 watcher 存活) ════
-# 用專案啟動器 hill_watcher_start.sh (自帶 dup-guard + stale-PID 清理), 僅在 watcher 死時呼叫。
-# 跨節點 caveat: kill -0 為同 login node 判活; 啟動器的 dup-guard 為跨節點誤啟的 backstop。
+# 用專案啟動器 hill_watcher_start.sh (自帶 heartbeat dup-guard + 跨專案安全孤兒清理)。
+# [跨節點判活] 以 live/watcher.heartbeat mtime 新鮮度判活 (watcher 每 ~POLL_SEC=30s touch),
+# 不靠 kill -0 — cron 可能在與 watcher 不同的 login node, kill -0 會誤判死 → 反覆誤殺重啟 (churn)。
 if [ -x watcher/hill_watcher_start.sh ]; then
-    _wp="$(tr -dc 0-9 < live/watcher.pid 2>/dev/null)"
-    if [ -z "$_wp" ] || ! kill -0 "$_wp" 2>/dev/null; then
-        _log "WATCHDOG: watcher (pid=${_wp:-none}) 死 → 經 hill_watcher_start.sh 重啟 (auto-heal)"
+    _whb_stale="${WATCHER_HB_STALE:-180}"
+    _wage=999999
+    [ -f live/watcher.heartbeat ] && _wage=$(( $(date +%s) - $(stat -c %Y live/watcher.heartbeat 2>/dev/null || echo 0) ))
+    if [ "$_wage" -gt "$_whb_stale" ]; then
+        _log "WATCHDOG: watcher heartbeat stale ${_wage}s (>$_whb_stale) → 經 hill_watcher_start.sh 重啟 (auto-heal)"
         bash watcher/hill_watcher_start.sh >> "$LOG" 2>&1 || true
         _log "  watcher 重啟 → pid=$(cat live/watcher.pid 2>/dev/null || echo '?')"
     fi

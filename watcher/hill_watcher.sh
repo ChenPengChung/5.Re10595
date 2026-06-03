@@ -9,6 +9,7 @@ RESULT_DIR="$PROJECT_DIR/result"
 LIVE_DIR="$PROJECT_DIR/live"
 LOG_FILE="$LIVE_DIR/watcher.log"
 PID_FILE="$LIVE_DIR/watcher.pid"
+HEARTBEAT="$LIVE_DIR/watcher.heartbeat"
 
 CONV_SCRIPT="$RESULT_DIR/4.Ma_U_Time.py"
 BENCH_SCRIPT="$RESULT_DIR/2.Benchmark.py"
@@ -41,7 +42,7 @@ if [[ -f "$PID_FILE" ]]; then
     fi
 fi
 echo "$$" > "$PID_FILE"
-trap 'rm -f "$PID_FILE"; log "watcher exiting (pid=$$)"' EXIT
+trap 'rm -f "$PID_FILE" "$HEARTBEAT"; log "watcher exiting (pid=$$)"' EXIT
 
 pick_latest_vtk() {
     # Pick by modification time, NOT by the step number in the filename.
@@ -225,11 +226,20 @@ last_mtime=""
 last_bench_step=""
 
 while :; do
+    # [跨節點判活] 每輪 touch heartbeat; keepalive/啟動器以此檔 mtime 新鮮度判活,
+    # 不靠 kill -0 (cron 可能在別 login node, kill -0 會誤判 watcher 死 → 反覆誤殺重啟 churn)。
+    touch "$HEARTBEAT" 2>/dev/null || true
+
     RE=$(_read_re)
 
     if ! check_nan_divergence; then
         log "ALERT: simulation may be diverging — check slurm log immediately"
     fi
+
+    # [改] 收斂圖每輪都重產: 4.Ma_U_Time.py 讀 .dat 時間序列(非 VTK), 每輪都有新資料點
+    # → live/monitor_latest.png 持續更新, 不再被「等下一顆 VTK(~NDTVTK 步)」卡住變舊圖。
+    cstep=$(get_latest_metrics | grep -oP '\[Step \K[0-9]+' | head -1)
+    run_convergence "${cstep:-live}" || true
 
     vtk=$(pick_latest_vtk || true)
     if [[ -n "$vtk" ]]; then
@@ -244,10 +254,10 @@ while :; do
             metrics=$(get_latest_metrics)
 
             log "──────────────────────────────────────"
-            log "PROCESS step=$step  FTT=$ftt  accu=$accu"
+            log "PROCESS step=$step  FTT=$ftt  accu=$accu (new VTK)"
             [[ -n "$metrics" ]] && log "  $metrics"
 
-            run_convergence "$step" || true
+            # 收斂圖已在每輪迴圈頂端重產 (見上方 run_convergence), 此處不重複呼叫。
 
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,
