@@ -42,7 +42,7 @@ cd "$PROJECT_ROOT" || { echo "[dispatcher] FATAL: cannot cd to $PROJECT_ROOT" >&
 mkdir -p restart 2>/dev/null
 echo $$ > restart/dispatcher.pid 2>/dev/null || true
 echo $$ > DISPATCHER_ACTIVE 2>/dev/null || true
-trap 'rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null' EXIT
+trap '[ "$BASHPID" = "$$" ] && rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null' EXIT  # 只在主程序退出時清(防 subshell 誤觸)
 
 # ─────────────────────────────────────────────────────────────────────────
 # [SINGLE-HEAD] 載入 HEAD.lockdir 共用函式庫
