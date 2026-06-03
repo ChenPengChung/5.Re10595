@@ -33,15 +33,32 @@ exec >>"$LOG_FILE" 2>&1
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
-if [[ -f "$PID_FILE" ]]; then
-    old_pid=$(cat "$PID_FILE" 2>/dev/null || true)
-    if [[ -n "${old_pid:-}" && "$old_pid" != "$$" ]] && kill -0 "$old_pid" 2>/dev/null; then
-        log "another watcher already running (pid=$old_pid), refusing to start"
-        exit 1
+# ── Cross-node-safe single-instance guard (atomic lockdir + per-loop heartbeat) ──
+# Why not kill -0 on watcher.pid: PIDs are per-login-node, so a PID written by a
+# watcher on ANOTHER login node always fails kill -0 here → false "dead" → a
+# duplicate watcher is spawned. Why not log/image mtime: this loop only writes
+# output when a NEW vtk appears, so mtime goes stale while the watcher is alive.
+# The authoritative liveness signal is therefore $HB_FILE, refreshed every loop
+# iteration below (shared FS, node-independent). The lockdir makes the
+# single-instance decision atomic even under a simultaneous-start race.
+HB_FILE="$LIVE_DIR/watcher.heartbeat"
+LOCK_DIR="$LIVE_DIR/watcher.lock.d"
+HB_FRESH=300   # must exceed the slowest single loop (a CONV render can take up to CONV_TIMEOUT=180s)
+HOST="$(hostname 2>/dev/null || echo '?')"
+_hb_age() { echo $(( $(date +%s) - $(stat -c %Y "$HB_FILE" 2>/dev/null || echo 0) )); }
+_write_hb() { printf '%s %s %s\n' "$(date +%s)" "$HOST" "$$" > "$HB_FILE" 2>/dev/null || true; }
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    if [[ -f "$HB_FILE" ]] && (( $(_hb_age) < HB_FRESH )); then
+        log "another watcher alive (heartbeat $(_hb_age)s ago: $(cat "$HB_FILE" 2>/dev/null)) — refusing to start (pid=$$ host=$HOST)"
+        exit 0
     fi
+    log "stale watcher lock (heartbeat $(_hb_age)s) — taking over (pid=$$ host=$HOST)"
+    rmdir "$LOCK_DIR" 2>/dev/null || true
+    mkdir "$LOCK_DIR" 2>/dev/null || { log "lock race lost — refusing (pid=$$ host=$HOST)"; exit 0; }
 fi
 echo "$$" > "$PID_FILE"
-trap 'rm -f "$PID_FILE"; log "watcher exiting (pid=$$)"' EXIT
+_write_hb
+trap 'rmdir "$LOCK_DIR" 2>/dev/null; rm -f "$PID_FILE" "$HB_FILE"; log "watcher exiting (pid=$$ host=$HOST)"' EXIT
 
 pick_latest_vtk() {
     # Pick by modification time, NOT by the step number in the filename.
@@ -213,7 +230,7 @@ run_tauwall() {
 
 log "=========================================="
 log "Periodic Hill Re$RE watcher started"
-log "  pid=$$  ppid=$PPID  poll=${POLL_SEC}s"
+log "  pid=$$  ppid=$PPID  host=$HOST  poll=${POLL_SEC}s"
 log "  project  = $PROJECT_DIR"
 log "  conv     = $CONV_SCRIPT"
 log "  bench    = $BENCH_SCRIPT"
@@ -226,6 +243,7 @@ last_bench_step=""
 
 while :; do
     RE=$(_read_re)
+    _write_hb            # cross-node liveness heartbeat — refresh every iteration
 
     if ! check_nan_divergence; then
         log "ALERT: simulation may be diverging — check slurm log immediately"
@@ -268,5 +286,6 @@ while :; do
             last_mtime="$cur_mtime"
         fi
     fi
+    _write_hb           # refresh heartbeat again before sleeping (bounds staleness)
     sleep "$POLL_SEC"
 done

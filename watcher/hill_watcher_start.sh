@@ -16,6 +16,21 @@ WATCHER="$SCRIPT_DIR/hill_watcher.sh"
 
 mkdir -p "$LIVE_DIR"
 
+# ── Cross-node single-instance guard (shared-FS heartbeat) ──
+# A fresh watcher.heartbeat means a watcher is alive on SOME login node. The
+# kill -0 check below is node-local and cannot see a watcher on another login
+# node, so without this guard each node spawns its own duplicate. Heartbeat is
+# refreshed every loop by hill_watcher.sh.
+HB_FILE="$LIVE_DIR/watcher.heartbeat"
+HB_FRESH=300
+if [[ -f "$HB_FILE" ]]; then
+    hb_age=$(( $(date +%s) - $(stat -c %Y "$HB_FILE" 2>/dev/null || echo 0) ))
+    if (( hb_age < HB_FRESH )); then
+        echo "watcher already alive (heartbeat ${hb_age}s ago: $(cat "$HB_FILE" 2>/dev/null)) — not starting a duplicate"
+        exit 0
+    fi
+fi
+
 if [[ -f "$PID_FILE" ]]; then
     old_pid=$(cat "$PID_FILE" 2>/dev/null || true)
     if [[ -n "${old_pid:-}" ]] && kill -0 "$old_pid" 2>/dev/null; then

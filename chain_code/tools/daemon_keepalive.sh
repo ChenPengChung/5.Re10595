@@ -31,11 +31,17 @@ _log() { echo "[$(date '+%F %T')] [keepalive] $*" >> "$LOG" 2>/dev/null; }
 # 用專案啟動器 hill_watcher_start.sh (自帶 dup-guard + stale-PID 清理), 僅在 watcher 死時呼叫。
 # 跨節點 caveat: kill -0 為同 login node 判活; 啟動器的 dup-guard 為跨節點誤啟的 backstop。
 if [ -x watcher/hill_watcher_start.sh ]; then
-    _wp="$(tr -dc 0-9 < live/watcher.pid 2>/dev/null)"
-    if [ -z "$_wp" ] || ! kill -0 "$_wp" 2>/dev/null; then
-        _log "WATCHDOG: watcher (pid=${_wp:-none}) 死 → 經 hill_watcher_start.sh 重啟 (auto-heal)"
+    # Cross-node-safe liveness via shared-FS heartbeat mtime, NOT node-local kill -0:
+    # the watcher may run on a different login node (kill -0 on its PID always fails
+    # here → false "dead" → duplicate spawns). hill_watcher.sh refreshes the
+    # heartbeat every loop; hill_watcher_start.sh refuses to start a duplicate when
+    # it is fresh, so this call is idempotent and cross-node-safe.
+    _hbf="live/watcher.heartbeat"; _hbage=999999
+    [ -f "$_hbf" ] && _hbage=$(( $(date +%s) - $(stat -c %Y "$_hbf" 2>/dev/null || echo 0) ))
+    if [ "$_hbage" -ge "${WATCHER_HB_STALE:-300}" ]; then
+        _log "WATCHDOG: watcher heartbeat stale ${_hbage}s → 經 hill_watcher_start.sh 重啟 (auto-heal)"
         bash watcher/hill_watcher_start.sh >> "$LOG" 2>&1 || true
-        _log "  watcher 重啟 → pid=$(cat live/watcher.pid 2>/dev/null || echo '?')"
+        _log "  watcher (re)start → heartbeat=$(cat "$_hbf" 2>/dev/null || echo '?')"
     fi
 fi
 
