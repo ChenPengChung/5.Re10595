@@ -654,7 +654,10 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [JP=16 加入] 16 GPU = 2 nodes, (NY-1)%16=896%16=0, NYD6=63>=7 → 物理合法;
+#   當帳號 GPU 上限=16 時, jp={128,64,32} 全超標被「試過再警告跳過」, jp=16 是唯一吃得下 cap 的可行 downsize,
+#   讓 chain 降規模續跑而非「無可行組合」卡死。切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理。
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
 K_DOWN="${K_DOWN:-2}"                              # scale-down 也需連續確認 (對稱防抖, 修 HIGH-1)
