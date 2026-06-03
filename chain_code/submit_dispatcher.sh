@@ -269,6 +269,15 @@ chain_last_exit_code() {
 # ─────────────────────────────────────────────────────────────────────────
 pick_cluster() {
     local entry c part target
+    # [LOCK 臨時開關 2026-06-03] restart/LOCK_COMBO 存在 → 鎖定 partition(繞過矩陣評估).
+    #   還原自由跳轉(partition&&jp): rm restart/LOCK_COMBO + ./run dispatcher 重啟 (見 CLAUDE.md「還原回自由跳轉」).
+    if [ -f restart/LOCK_COMBO ]; then
+        local _lc _ltgt; _lc="$(tr -d '\r\n' < restart/LOCK_COMBO 2>/dev/null)"; _ltgt="${_lc#* }"
+        if [ -n "$_ltgt" ] && [ "$_ltgt" != "$_lc" ]; then
+            log "  pick_cluster: [LOCK] LOCK_COMBO 臨時鎖定 partition → $_ltgt (還原: rm restart/LOCK_COMBO)" >&2
+            echo "$_ltgt"; return 0
+        fi
+    fi
     # 收集所有「可投」候選: 平行陣列 (target / ETA epoch / walltime 秒)
     local -a _T=() _E=() _W=()
     # 目前 jp(= 要投的 GPU 數), 供 MaxTRESPerAccount 過濾
@@ -779,6 +788,15 @@ _pick_partition_for_jp() {
 # 主決策: echo "KEEP <jp> <ARCH@part>" 或 "CHANGE_JP <jp> <ARCH@part>"。
 pick_jp_and_partition() {
   local cur acc ftt locked now n i; cur="$(_jp_read_current)"; cur="${cur:-0}"
+  # [LOCK 臨時開關 2026-06-03] restart/LOCK_COMBO 存在 → 凍結 jp(維持當前) + 鎖 partition(繞過矩陣評估).
+  #   還原自由跳轉(partition&&jp): rm restart/LOCK_COMBO + ./run dispatcher 重啟 (見 CLAUDE.md「還原回自由跳轉」).
+  if [ -f restart/LOCK_COMBO ]; then
+    local _lc _ltgt; _lc="$(tr -d '\r\n' < restart/LOCK_COMBO 2>/dev/null)"; _ltgt="${_lc#* }"
+    if [ -n "$_ltgt" ] && [ "$_ltgt" != "$_lc" ]; then
+      log "[JP-CTL] [LOCK] LOCK_COMBO → 凍結 jp=$cur + 鎖 partition=$_ltgt (還原自由跳轉: rm restart/LOCK_COMBO)" >&2
+      echo "KEEP $cur $_ltgt"; return 0
+    fi
+  fi
   read -r acc ftt < <(_jp_read_meta)
   locked=0
   # [6-b] STOP_JPSWITCH 專屬開關: 凍結「自動 jp 切換」(jp 不變), 但 chain / dispatcher / partition 自動切換照常。

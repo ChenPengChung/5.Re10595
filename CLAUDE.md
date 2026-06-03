@@ -356,3 +356,29 @@ kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
 一階 Hermite 是 `w_q · 3 · c_y`（純格子速度方向），**不是** `w_q · 3 · (c_y − v)`。
 `−v` 項屬於二階展開的一部分（用於消除 Fv 質量矩以保證 Galilean invariance）。
 混淆此兩者會導致 `Fv` 基底的零階矩 = −3，造成不可逆密度漂移。
+
+## 臨時鎖定 / 還原自由跳轉 (Temporary lock toggle — partition && jp)
+
+dispatcher 預設**自由跳轉**：每輪界即時掃描 `{128,64,32,16} × {normal,4nodes,dev}` 矩陣，
+超 cap/inuse 的組合「試過 `--test-only` 再警告跳過」，在可行組合中選最佳（高 jp 優先 + 抓空閒、不看 walltime）。
+
+### 臨時開關：`restart/LOCK_COMBO` sentinel
+
+當 NCHC 政策 / 帳號飽和等情況需要**暫時固定**到某 `jp|partition` 時，用此 sentinel 鎖定（繞過矩陣評估）：
+
+- **檔案**：`restart/LOCK_COMBO`，內容格式 `<jp> <ARCH@partition>`（例：`16 H200@dev`）。
+- **作用**：dispatcher 的 `pick_jp_and_partition`（凍結 jp = 當前值）+ `pick_cluster`（鎖 partition）都檢查此檔，
+  存在時直接回傳鎖定組合、**不做矩陣評估 / 不自動跳轉**。jp 凍結在「當前值」（`KEEP cur`，不重切、無 repartition）。
+- **設定（鎖定）**：`echo "16 H200@dev" > restart/LOCK_COMBO`，再停舊 dispatcher（cwd 驗證後 SIGTERM 特定 PID）+ `./run dispatcher start` 讓 daemon 載入新狀態。
+- **目前狀態（2026-06-03 設定）**：鎖定 `16 H200@dev`（因帳號 mst114348 被別用戶占滿 normal 16/16、4nodes 32/32，僅 dev 有空檔）。
+
+### 快捷指令：`還原回自由跳轉`（或 `還原回自由跳轉 partition&&jp`）
+
+When the user types **`還原回自由跳轉`**（或含 `partition&&jp`），還原 dispatcher 的**自由跳轉**機制：
+
+1. `rm -f restart/LOCK_COMBO`（移除臨時鎖）。
+2. 重啟 dispatcher 讓 daemon 回到矩陣評估：停當前 dispatcher（**cwd 驗證、SIGTERM 特定 PID**，絕不 `pkill -f`）→ `./run dispatcher start`。
+3. 驗證：`DISPATCHER_SELFTEST=1 bash chain_code/submit_dispatcher.sh` 應回到矩陣評估（不再印 `[LOCK]`），在可行組合中選最佳。
+4. 回報：自由跳轉已還原，dispatcher 重新依容量自動切換 `partition × jp`。
+
+**守門**：只操作當前專案（cwd=Edit8）；遵守跨專案 Job 隔離；`scancel` 只用 `./run job-guard`；不在跑著的原目錄重編 a.out。
