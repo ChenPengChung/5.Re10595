@@ -16,6 +16,32 @@ WATCHER="$SCRIPT_DIR/hill_watcher.sh"
 
 mkdir -p "$LIVE_DIR"
 
+# [硬化] systemd 是 watcher 的唯一真相來源 — service 若 active 就不再手動啟動重複實例。
+# (歷史故障: 恢復時重複跑本腳本 + 下面的 PID_FILE-only dup-guard 被 stale watcher.pid 打敗
+#  → 累積多隻 watcher 同時 racing 狂出圖、灌爆 login node。)
+if systemctl --user is-active --quiet edit6-watcher.service 2>/dev/null; then
+    SYS_PID=$(systemctl --user show -p MainPID --value edit6-watcher.service 2>/dev/null)
+    echo "watcher 已由 systemd 管理 (edit6-watcher.service, MainPID=$SYS_PID), 不重複啟動"
+    [[ -n "${SYS_PID:-}" ]] && echo "$SYS_PID" > "$PID_FILE" 2>/dev/null || true
+    exit 0
+fi
+
+# [硬化] cwd-based dup-guard (跨專案安全): 掃所有 hill_watcher.sh, 用 /proc/PID/cwd 判本專案歸屬。
+# 涵蓋絕對+相對路徑啟動 — 純 PID_FILE 比對會被 stale pid 打敗而漏判 → 啟出重複實例。
+# 別專案 (Edit7/Edit8/...) 的 watcher cwd 不在本專案 → 絕不誤判、絕不誤殺。
+for _p in $(pgrep -f 'hill_watcher\.sh' 2>/dev/null); do
+    [[ "$_p" = "$$" ]] && continue
+    _last=$(tr '\0' '\n' </proc/"$_p"/cmdline 2>/dev/null | tail -1)
+    case "$_last" in *hill_watcher.sh) : ;; *) continue ;; esac
+    _cwd=$(readlink /proc/"$_p"/cwd 2>/dev/null)
+    case "$_cwd" in
+        "$PROJECT_DIR"|"$PROJECT_DIR"/*)
+            echo "本專案 watcher 已在執行 (PID=$_p, cwd 判定), 不重複啟動"
+            echo "$_p" > "$PID_FILE" 2>/dev/null || true
+            exit 1 ;;
+    esac
+done
+
 if [[ -f "$PID_FILE" ]]; then
     old_pid=$(cat "$PID_FILE" 2>/dev/null || true)
     if [[ -n "${old_pid:-}" ]] && kill -0 "$old_pid" 2>/dev/null; then
