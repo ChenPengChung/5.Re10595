@@ -32,7 +32,7 @@ SC_ACCT="${SC_ACCT:-MST115169}"
 #   - 64 : 只能 dev(>normal cap16 / >4nodes cap32)。  32: dev/4nodes(>normal cap16)。
 #   - 16 : 三者皆可但未預編 a.out.jp16 → 評估 binary 後帶理由跳過。
 #   要真正用 >64 GPU 須換更細網格(NY-1≥896 才能讓 128 的 slab≥7), 屬不同解析度的 DNS。
-SC_VALID_JP="${SC_VALID_JP:-128 64 32 16}"
+SC_VALID_JP="${SC_VALID_JP:-128 64 32 16 8}"
 SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
