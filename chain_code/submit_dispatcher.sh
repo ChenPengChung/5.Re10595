@@ -654,10 +654,12 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
-# [JP=16 加入] 16 GPU = 2 nodes, (NY-1)%16=896%16=0, NYD6=63>=7 → 物理合法;
-#   當帳號 GPU 上限=16 時, jp={128,64,32} 全超標被「試過再警告跳過」, jp=16 是唯一吃得下 cap 的可行 downsize,
-#   讓 chain 降規模續跑而非「無可行組合」卡死。切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理。
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16 8}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [JP=16/8 加入] 候選 {128,64,32,16,8} 對應 {16,8,4,2,1} nodes (8 GPU/node):
+#   16 GPU=2 nodes (896%16=0, NYD6=63);  8 GPU=1 node (896%8=0, NYD6=119); 兩者物理合法 (slab>=7).
+#   帳號 GPU cap=16(normal/dev)/32(4nodes), 且跨使用者共用動態占用; jp 大的全超標被「試過 --test-only 再警告跳過」,
+#   留最小可行 footprint 降規模續跑而非「無可行組合」卡死: 剩 16 GPU→jp=16, 只剩 8 GPU 空檔→jp=8 仍能擠進.
+#   切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理; accu=0 不丟統計。
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
 K_DOWN="${K_DOWN:-2}"                              # scale-down 也需連續確認 (對稱防抖, 修 HIGH-1)
