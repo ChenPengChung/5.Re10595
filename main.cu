@@ -22,6 +22,7 @@ double  *rho_h_p,  *u_h_p,  *v_h_p,  *w_h_p;
 /************************** Device Variables **************************/
 double  *ft[19], *fd[19];
 double  *rho_d,  *u,  *v,  *w;
+double  *rho_pre_d, *u_pre_d, *v_pre_d, *w_pre_d;
 
 /* double  *KT,    *DISS,
         *DUDX2, *DUDY2, *DUDZ2,
@@ -398,7 +399,9 @@ static void PrecheckCheckpointGridConsistency(const char *checkpoint_dir, int ra
 #define ANIM_WIDTH         3840           // PNG/MP4 寬度 (3840 = 4K), 高度自動算
 #define ANIM_CODEC         "libx264"      // lossless: "libx264" (廣相容) / "ffv1" (更小)
 #define ANIM_PIX_FMT       "yuv444p"      // true lossless: "yuv444p" / 相容: "yuv420p"
+#if ANIM_ENABLE
 #include "animation/mp4_snapshot.h"
+#endif
 
 int main(int argc, char *argv[])
 {
@@ -1571,6 +1574,8 @@ int main(int argc, char *argv[])
         }
     }
 
+    bool itb_cross_step_precompute_ready = false;
+
     //從此開始進入迴圈 (FTT-gated two-stage time averaging)
     for( step = loop_start ; step < loop_start + loop ; step++, accu_num++ ) {
         double FTT_now = step * dt_global / (double)flow_through_time;
@@ -1604,7 +1609,21 @@ int main(int argc, char *argv[])
 
         // ===== Sub-step 1: even step =====
         // [方案B] 讀 f_post_read → 插值+碰撞 → 寫 f_post_write → MPI/periodic
-        Launch_CollisionStreaming( f_post_read, f_post_write );
+        {
+            const bool use_precomputed_rows = itb_cross_step_precompute_ready;
+            itb_cross_step_precompute_ready = false;
+#if SKIP_MIDSTEP_MASSCORR
+            const bool precompute_next_rows = true;
+#else
+            // rho_modify_d is updated between even and odd; precomputing odd here
+            // would use the previous mass-correction scalar.
+            const bool precompute_next_rows = false;
+#endif
+            itb_cross_step_precompute_ready =
+                Launch_CollisionStreaming(f_post_read, f_post_write,
+                                          use_precomputed_rows,
+                                          precompute_next_rows);
+        }
         // Swap: 下一步讀本步的 output
         { double *tmp = f_post_read; f_post_read = f_post_write; f_post_write = tmp; }
 
@@ -1688,7 +1707,19 @@ int main(int argc, char *argv[])
 #endif
 
         // [方案B] 讀 f_post_read → 插值+碰撞 → 寫 f_post_write → MPI/periodic
-        Launch_CollisionStreaming( f_post_read, f_post_write );
+        {
+            const bool use_precomputed_rows = itb_cross_step_precompute_ready;
+            const bool force_updates_before_next_step = (step % (int)NDTFRC == 1);
+            const bool masscorr_updates_before_next_step =
+                (step % NDTVTK == 1) && (step % NDTBIN == 1);
+            const bool precompute_next_rows =
+                !(force_updates_before_next_step || masscorr_updates_before_next_step);
+            itb_cross_step_precompute_ready = false;
+            itb_cross_step_precompute_ready =
+                Launch_CollisionStreaming(f_post_read, f_post_write,
+                                          use_precomputed_rows,
+                                          precompute_next_rows);
+        }
         // Swap: 下一步讀本步的 output
         { double *tmp = f_post_read; f_post_read = f_post_write; f_post_write = tmp; }
 
@@ -2151,8 +2182,10 @@ int main(int argc, char *argv[])
 
             fileIO_velocity_vtk_merged( step );
 
+#if ANIM_ENABLE
             // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
             AnimRenderAndRebuild( step );
+#endif
 
             // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
             if (step % NDTBIN == 1) {
@@ -2247,8 +2280,10 @@ int main(int argc, char *argv[])
         fileIO_velocity_vtk_merged( step );
         SaveBinaryCheckpoint( step );     // binary checkpoint (f^neq + tavg + RS + metadata)
 
+#if ANIM_ENABLE
         // ===== Animation: final GIF append (blocking, 等背景任務收尾) =====
         AnimFinalize( step );
+#endif
 
         // Write merged statistics to ./statistics/ (backward compat for Python analysis scripts)
         if (accu_count > 0 && (int)TBSWITCH) {

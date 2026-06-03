@@ -746,7 +746,22 @@ __global__ void periodicSW_macro(
 // u/v/w/rho 不交換 — 下一次 kernel 從正確的 f_post 重新計算。
 // ════════════════════════════════════════════════════════════════════════════
 
-void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
+#ifndef ITB_CROSS_STEP_PRECOMPUTE
+#define ITB_CROSS_STEP_PRECOMPUTE 1
+#endif
+
+static inline bool ITB_CrossStepPrecomputeSupported()
+{
+#if ITB_CROSS_STEP_PRECOMPUTE && USE_ITBLBM_STREAMING && !USE_WENO7
+    return (NX6 > 12 && NYD6 >= 14);
+#else
+    return false;
+#endif
+}
+
+bool Launch_CollisionStreaming(double *f_post_read, double *f_post_write,
+                               bool use_precomputed_mpi_rows,
+                               bool precompute_next_mpi_rows) {
     dim3 griddimSW(  1,      NYD6/NT+1, NZ6);
     dim3 blockdimSW( 3, NT,        1 );
 
@@ -766,6 +781,15 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
 
     // [P0 v3] 從 Buffer 移出的 2 行：j=3 和 j=NYD6-4，各 1 row
     dim3 griddimRow1(NX6/NT+1, 1, NZ6);
+
+    const bool cross_step_supported = ITB_CrossStepPrecomputeSupported();
+    const bool consume_precomputed_rows = use_precomputed_mpi_rows && cross_step_supported;
+    const bool launch_next_precompute = precompute_next_mpi_rows && cross_step_supported;
+    const int pre_j_left = 6;
+    const int pre_j_right = NYD6 - 7;
+    const int pre_n_rows = (pre_j_left == pre_j_right) ? 1 : 2;
+    const int pre_i_count = NX6 - 12;
+    dim3 griddimPre((pre_i_count + NT - 1) / NT, pre_n_rows, NZ6);
 
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_iter_start, stream0);
@@ -788,34 +812,62 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     // ═══════════════════════════════════════════════════════════════
 
     // Left boundary: j = 4..6 (3 rows, MPI iToLeft 精確範圍)
-    Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
-        f_post_read, f_post_write,
-        zeta_z_d, zeta_y_d,
-        xi_y_d, xi_z_d, bk_precomp_d,
-	        z_zeta_d,
-	        u, v, w, rho_d,
-	        rho_modify_d, Force_d,
+    if (consume_precomputed_rows) {
+        Algorithm1_FusedKernel_GTS_BufferSkipXMiddle<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+            f_post_read, f_post_write,
+            zeta_z_d, zeta_y_d,
+            xi_y_d, xi_z_d, bk_precomp_d,
+            z_zeta_d,
+            u, v, w, rho_d,
+            rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
-	        itb_yz_coeff_d,
+            itb_yz_coeff_d,
 #endif
-	        4);
+            4, pre_j_left);
+    } else {
+        Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+            f_post_read, f_post_write,
+            zeta_z_d, zeta_y_d,
+            xi_y_d, xi_z_d, bk_precomp_d,
+            z_zeta_d,
+            u, v, w, rho_d,
+            rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+            itb_yz_coeff_d,
+#endif
+            4);
+    }
     CHECK_CUDA( cudaGetLastError() );
 
     // [PERF rank1] pack+start LEFT halo (j=4..6 done) — MPI-left now in flight, overlaps Buf-right below
     MPI_FPost_PackStart_Left(f_post_write, mpi_send_buf_left_d, req_persist, stream1);
 
     // Right boundary: j = NYD6-7..NYD6-5 (3 rows, MPI iToRight 精確範圍)
-    Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
-        f_post_read, f_post_write,
-        zeta_z_d, zeta_y_d,
-        xi_y_d, xi_z_d, bk_precomp_d,
-	        z_zeta_d,
-	        u, v, w, rho_d,
-	        rho_modify_d, Force_d,
+    if (consume_precomputed_rows) {
+        Algorithm1_FusedKernel_GTS_BufferSkipXMiddle<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+            f_post_read, f_post_write,
+            zeta_z_d, zeta_y_d,
+            xi_y_d, xi_z_d, bk_precomp_d,
+            z_zeta_d,
+            u, v, w, rho_d,
+            rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
-	        itb_yz_coeff_d,
+            itb_yz_coeff_d,
 #endif
-	        NYD6 - 7);
+            NYD6 - 7, pre_j_right);
+    } else {
+        Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+            f_post_read, f_post_write,
+            zeta_z_d, zeta_y_d,
+            xi_y_d, xi_z_d, bk_precomp_d,
+            z_zeta_d,
+            u, v, w, rho_d,
+            rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+            itb_yz_coeff_d,
+#endif
+            NYD6 - 7);
+    }
     CHECK_CUDA( cudaGetLastError() );
 
     // [PERF rank1] pack+start RIGHT halo (j=NYD6-7..-5 done) — MPI-right now in flight
@@ -913,9 +965,39 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
 	        NYD6 - 4);
     CHECK_CUDA( cudaGetLastError() );
 
+    if (consume_precomputed_rows) {
+        CopyMacroXMiddleRows<<<griddimPre, blockdimInt, 0, stream0>>>(
+            rho_d, u, v, w,
+            rho_pre_d, u_pre_d, v_pre_d, w_pre_d,
+            pre_j_left, pre_j_right, pre_n_rows);
+        CHECK_CUDA( cudaGetLastError() );
+    }
+
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_step1_stop, stream0);
 #endif
+
+    if (launch_next_precompute) {
+        CopyMacroXMiddleRows<<<griddimPre, blockdimInt, 0, stream0>>>(
+            rho_pre_d, u_pre_d, v_pre_d, w_pre_d,
+            rho_d, u, v, w,
+            pre_j_left, pre_j_right, pre_n_rows);
+        CHECK_CUDA( cudaGetLastError() );
+
+        Algorithm1_FusedKernel_GTS_PrecomputeXMiddleRows<<<griddimPre, blockdimInt, 0, stream0>>>(
+            f_post_write, f_post_read,
+            zeta_z_d, zeta_y_d,
+            xi_y_d, xi_z_d, bk_precomp_d,
+            z_zeta_d,
+            u_pre_d, v_pre_d, w_pre_d, rho_pre_d,
+            u_pre_d, v_pre_d, w_pre_d, rho_pre_d,
+            rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+            itb_yz_coeff_d,
+#endif
+            pre_j_left, pre_j_right, pre_n_rows);
+        CHECK_CUDA( cudaGetLastError() );
+    }
 
 #if USE_TIMING && TIMING_DETAIL
     // ev_mpi_start: Buffer 已完成, 記錄 MPI phase 起點
@@ -965,6 +1047,7 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     if (g_timing_sample) cudaEventRecord(g_timing.ev_iter_stop, stream0);
 #endif
 
+    return launch_next_precompute;
 }
 
 void Launch_ModifyForcingTerm()
