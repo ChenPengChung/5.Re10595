@@ -193,7 +193,7 @@
 //    20000/20000: VTK+ckpt 同步每 2 萬步, 共用一次 gather, 每步攤提 I/O ~2.5ms。
 //    崩潰最多損失 2 萬步 (~70s 計算量); 60 FTT 估 ~14 天 (vs 原 1000/1000 的 ~130 天)。
 //    回到密集輸出 (除錯/觀察暫態) 改回 1000/1000 即可。
-#define     NDTBIN      100000   // 每 N 步輸出 binary checkpoint (注意: checkpoint 巢狀於 VTK 區塊 main.cu:2101, 真實間隔=lcm(NDTVTK,NDTBIN); 設為 NDTVTK 倍數使名實相符 → 100000=2×NDTVTK)
+#define     NDTBIN      50000   // 每 N 步輸出 binary checkpoint (注意: checkpoint 巢狀於 VTK 區塊 main.cu:2101, 真實間隔=lcm(NDTVTK,NDTBIN); 設為 NDTVTK 倍數使名實相符 → 50000=1×NDTVTK; 2026-06-03 100000→50000: ckpt 與 VTK 同步每 5 萬步共用 gather, 崩潰重算窗減半 ≤50k)
 #define     NDTVTK      50000     // 每 N 步輸出 VTK
 #if (NDTBIN % NDTVTK != 0)
 #error "FATAL: NDTBIN 必須為 NDTVTK 的整數倍 — checkpoint piggyback 在 VTK 區塊內 (main.cu:2101 巢狀於 step%NDTVTK==1)。否則 checkpoint 實際週期 = lcm(NDTVTK,NDTBIN), 不等於 NDTBIN。"

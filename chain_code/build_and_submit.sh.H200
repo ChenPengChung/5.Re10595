@@ -97,13 +97,13 @@ if [ "$BUILD" -eq 1 ]; then
         -L${MATH_LIBS}/lib \
         -L${HPCX_MPI_DIR}/lib -lmpi \
         -lcufft \
-        -o a.out
+        -o "${BUILD_OUT:-a.out}"
 
-    echo "Compilation successful (x86_64 binary, sm_90 Hopper)."
-    file a.out
+    echo "Compilation successful (x86_64 binary, sm_90 Hopper) → ${BUILD_OUT:-a.out}"
+    file "${BUILD_OUT:-a.out}"
 
-    if [ ! -x ./a.out ]; then
-        echo "[FATAL] Compilation failed - a.out not produced."
+    if [ ! -x "./${BUILD_OUT:-a.out}" ]; then
+        echo "[FATAL] Compilation failed - ${BUILD_OUT:-a.out} not produced."
         exit 1
     fi
 else
