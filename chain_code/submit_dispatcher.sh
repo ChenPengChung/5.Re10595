@@ -294,6 +294,13 @@ pick_cluster() {
             log "    [$target] 略過: jp=$cur_jp > 該 partition 每帳號 GPU 上限 $_gcap (MaxGRESPerAccount)" >&2
             continue
         fi
+        # [即時 headroom, 抓空閒] 靜態 cap 容得下, 但帳號此刻在此 partition 已被(他 job)占用 → 即投仍 PENDING。
+        # test-only 盲於 MaxTRESPerAccount; JP-CTL 已有此檢查, pick_cluster 也加上 → 只選「真正空閒」partition。
+        local _inuse2; _inuse2="$(partition_account_gpu_inuse "$part" 2>/dev/null || echo 0)"
+        if [ "$cur_jp" -gt $(( _gcap - _inuse2 )) ]; then
+            log "    [$target] 略過: cap=$_gcap 但帳號此刻已用 ${_inuse2}GPU, 剩 $(( _gcap - _inuse2 ))<$cur_jp → 即投會 PENDING(即時占用)" >&2
+            continue
+        fi
         local js; js="$(cluster_jobscript "$c")" || continue
         if [ ! -f "$js" ]; then
             log "    [$target] 略過: jobscript $js 不存在" >&2
@@ -322,18 +329,18 @@ pick_cluster() {
     now="$(date +%s)"
     soon=$(( now + ${PARTITION_START_SOON_SEC:-120} ))
 
-    # ── 規則1: 在「可即起 (ETA<=now+SOON)」候選中, 選 walltime 最長 ──
-    #           walltime 平手 → ETA 早者 → PARTITION_CANDIDATES 先到先選
+    # ── 規則1: 在「可即起 (ETA<=now+SOON)」候選中, 選 ETA 最早 (抓最快開始/空閒; walltime 不影響本 chain) ──
+    #   [jp-over-walltime] 本 chain SIGUSR1 final-ckpt+無縫續投, walltime 1h/24h 對進度無差 → 不再偏好長 walltime;
+    #   候選已過「即時 headroom」過濾(上方), 故這裡都是真空閒, 選最快開得起來者。
     bi=-1
     for (( i=0; i<n; i++ )); do
         [ "${_E[$i]}" -le "$soon" ] || continue
         if   [ "$bi" -lt 0 ]; then bi=$i
-        elif [ "${_W[$i]}" -gt "${_W[$bi]}" ]; then bi=$i
-        elif [ "${_W[$i]}" -eq "${_W[$bi]}" ] && [ "${_E[$i]}" -lt "${_E[$bi]}" ]; then bi=$i
+        elif [ "${_E[$i]}" -lt "${_E[$bi]}" ]; then bi=$i
         fi
     done
     if [ "$bi" -ge 0 ]; then
-        log "  pick_cluster: [規則1] 有容量可即起 → 選最長 walltime: ${_T[$bi]}" >&2
+        log "  pick_cluster: [規則1] 有容量可即起 → 選最快開始 ETA(walltime 無關, 抓空閒): ${_T[$bi]}" >&2
         echo "${_T[$bi]}"
         return 0
     fi
@@ -788,7 +795,7 @@ pick_jp_and_partition() {
     local sw=0; [ "${J[$i]}" != "$cur" ] && sw=270
     local wsec=${W[$i]}; [ "$wsec" -le 0 ] && wsec=1
     local eff=$(( wsec - wait - sw )); [ "$eff" -lt 0 ] && eff=0
-    local score=$(( ${J[$i]} * eff * 1000 / wsec ))
+    local score=$(( ${J[$i]} * 1000 - wait - sw ))   # [jp-over-walltime] jp 主導(×1000), wait 懲罰(抓空閒/最快開始), walltime(wsec)不計 — 本 chain 有 SIGUSR1 final-ckpt 無縫續投, 不受 walltime 影響
     [ "${J[$i]}" = "$cur" ] && cur_score=$score
     log "[JP-CTL]   jp=${J[$i]} ${T[$i]} wait=${wait}s wt=${wsec}s sw=$sw score=$score" >&2
     if [ "$score" -gt "$best_score" ] || { [ "$score" -eq "$best_score" ] && [ "$best" -ge 0 ] && [ "${J[$i]}" -gt "${J[$best]}" ]; }; then best=$i; best_score=$score; fi
