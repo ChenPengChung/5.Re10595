@@ -325,6 +325,28 @@ pick_cluster() {
         return 1
     fi
 
+    # ── [LOCK_JP_PARTITION 臨時鎖, NCHC 政策用] 旗標存在且 pin 分區在「可投清單」中 → 直接回 pin,
+    #    跳過自由 ETA 選擇 (配合 pick_jp_and_partition 凍 jp = 把跳轉機鎖死在 jp|partition)。
+    #    守門: pin 必須已過上方靜態 cap + 即時 headroom 過濾(在 _T 中)才回; 否則記警告並落回
+    #    自由選擇 → 絕不強投滿/不可投的 partition 造成永久 PENDING。
+    #    還原自由跳轉: rm restart/LOCK_JP_PARTITION (見 CLAUDE.md「還原回自由跳轉 partition&&jp」)。
+    if [ -f restart/LOCK_JP_PARTITION ]; then
+        local _pin _pintgt _j
+        _pin="$(h200_active_partition 2>/dev/null)"
+        _pintgt="H200@${_pin}"
+        if [ -n "$_pin" ]; then
+            for (( _j=0; _j<n; _j++ )); do
+                if [ "${_T[$_j]}" = "$_pintgt" ]; then
+                    log "  pick_cluster: [LOCK_JP_PARTITION] 鎖定生效 → 回 pin 分區 $_pintgt (跳過自由 ETA 選擇)" >&2
+                    echo "$_pintgt"; return 0
+                fi
+            done
+            log "  pick_cluster: [LOCK_JP_PARTITION] WARN pin=$_pin 此刻不可投(不在可投清單/headroom 不足) → 落回自由選擇, 避免永久 PENDING" >&2
+        else
+            log "  pick_cluster: [LOCK_JP_PARTITION] WARN 無 h200_partition pin → 鎖定無對象, 落回自由選擇" >&2
+        fi
+    fi
+
     local now soon i bi
     now="$(date +%s)"
     soon=$(( now + ${PARTITION_START_SOON_SEC:-120} ))
@@ -771,6 +793,8 @@ pick_jp_and_partition() {
   # [6-b] STOP_JPSWITCH 專屬開關: 凍結「自動 jp 切換」(jp 不變), 但 chain / dispatcher / partition 自動切換照常。
   # 與 STOP_CHAIN(停整條鏈) 與 JP_FREEZE_ON_STATS(統計階段才凍) 不同 → 提供「只凍 jp、不停鏈」的中間檔。
   [ -f restart/STOP_JPSWITCH ] && { locked=1; log "[JP-CTL] 偵測 restart/STOP_JPSWITCH → 凍結 jp 自動切換(仍自由切 partition)" >&2; }
+  # [臨時鎖, NCHC 政策] LOCK_JP_PARTITION: 同時凍 jp(這裡)+ 鎖 partition(pick_cluster 回 pin) → 鎖死 jp|partition。還原: rm restart/LOCK_JP_PARTITION
+  [ -f restart/LOCK_JP_PARTITION ] && { locked=1; log "[JP-CTL] 偵測 restart/LOCK_JP_PARTITION → 凍結 jp(臨時鎖 jp|partition; partition 由 pick_cluster pin 鎖定)" >&2; }
   if [ "${JP_FREEZE_ON_STATS:-1}" = "1" ]; then
     { [ "${acc:-0}" != "0" ] || awk "BEGIN{exit !((${ftt:-0})>=(${FTT_PRELOCK}))}"; } && locked=1
   fi

@@ -356,3 +356,42 @@ kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
 一階 Hermite 是 `w_q · 3 · c_y`（純格子速度方向），**不是** `w_q · 3 · (c_y − v)`。
 `−v` 項屬於二階展開的一部分（用於消除 Fv 質量矩以保證 Galilean invariance）。
 混淆此兩者會導致 `Fv` 基底的零階矩 = −3，造成不可逆密度漂移。
+
+## 跳轉機臨時鎖 / 還原回自由跳轉 partition&&jp（NCHC 政策用臨時開關）
+
+正常情況下 dispatcher 會「自由跳轉」：依即時空閒自動切 `jp`（候選 `{128,64,32,16}`）
+與 H200 partition（`normal`/`4nodes`/`dev`）。當 NCHC 政策需要把規模**暫時固定**時，
+用下方「單一旗標」臨時鎖死，政策結束再一鍵還原。**鎖只影響排程選擇，不碰流場/checkpoint。**
+
+### 臨時鎖定（目前狀態：鎖定 `jp=16 | dev`）
+
+單一哨兵檔 **`restart/LOCK_JP_PARTITION`** 同時鎖 jp 與 partition：
+
+| 機制 | 檔案 / 行為 | 效果 |
+|------|------------|------|
+| 凍 jp | `submit_dispatcher.sh` `pick_jp_and_partition`：旗標在 → `locked=1` → `KEEP` 現 jp | jp 停在當前值（=16），不自動升降 |
+| 鎖 partition | `submit_dispatcher.sh` `pick_cluster`：旗標在 + `restart/h200_partition` pin 的分區**在可投清單中**（已過靜態 cap + 即時 headroom）→ 直接回 pin，跳過自由 ETA 選擇 | partition 釘在 pin（=dev） |
+| 守門 | pin 此刻不可投（滿/headroom 不足）→ 記警告**落回自由選擇**，不強投造成永久 PENDING | 不會把鏈卡在 PENDING |
+
+**手動上鎖步驟**（已套用，供日後重做）：
+```bash
+echo dev > restart/h200_partition       # pin 目標 partition（claude_changepartition 亦可）
+touch restart/LOCK_JP_PARTITION          # 上鎖（jp 凍在當前值 + partition 釘 pin）
+./run dispatcher stop && sleep 38 && rm -f STOP_DISPATCHER && ./run dispatcher start  # 重啟載入鎖定碼
+DISPATCHER_SELFTEST=1 bash chain_code/submit_dispatcher.sh   # 應印 ">>> 決策結果: KEEP <jp> H200@dev"
+```
+> 旗標是**執行期讀取**：碼一旦載入（重啟過一次），之後 `touch`/`rm` 旗標即時生效，**無需再重啟**。
+
+### 還原回自由跳轉 partition&&jp（政策結束時執行）
+
+```bash
+rm -f restart/LOCK_JP_PARTITION          # 解鎖：jp 與 partition 都恢復自由跳轉
+rm -f restart/STOP_JPSWITCH              # （保險）若另有單獨凍 jp 的旗標一併清掉
+# （可選）放掉 partition pin，讓直投/jobscript 自投也完全自由：
+#   rm -f restart/h200_partition         # 清 pin（pick_cluster 解鎖後本就忽略 pin，但直投路徑會用到）
+# 驗證已還原（應印自由選擇而非鎖定）：
+DISPATCHER_SELFTEST=1 bash chain_code/submit_dispatcher.sh   # 決策應依即時空閒自由選 jp+partition
+```
+解鎖**不需重啟** dispatcher（旗標執行期讀取）；下一輪界起即恢復「抓空閒、偏高 jp」的自由跳轉。
+JP 候選與自由跳轉邏輯（score=`jp*1000−wait−sw`、即時 headroom 過濾、pick_cluster 最早 ETA）
+皆原封保留，解鎖即生效。
