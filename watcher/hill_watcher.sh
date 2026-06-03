@@ -33,15 +33,53 @@ exec >>"$LOG_FILE" 2>&1
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
+# ── 跨節點單例鎖 (atomic mkdir on shared FS) + heartbeat ──────────────────────
+# 因 ~/.config/systemd/user 在共享 home → systemd enable 等於全 5 個登入節點都啟用 →
+# 每節點各起一隻 watcher(跨節點重複, 其中一節點曾 spin 到 ~140 隻)。enable/disable 是
+# 共享符號連結, 無法只關某一節點; 故唯一正解 = 腳本內跨節點單例鎖: 全叢集同時只有一隻
+# watcher 真正工作, 其餘節點 exit 0 退讓(systemd Restart=on-failure 不會重啟 exit 0)。
+MYHOST="$(hostname)"
+NODELOCK="$LIVE_DIR/watcher.nodelock"     # 原子 mkdir(NFS 上 mkdir 仍為原子)
+HEARTBEAT="$LIVE_DIR/watcher.heartbeat"   # MYHOST:pid:epoch, 每輪刷新; o 的 source-3 跨節點權威
+HB_STALE=180                              # 心跳 > 180s 視為擁有者已死, 可奪鎖
+_hb_age()  { local ts; ts=$(cut -d: -f3 "$HEARTBEAT" 2>/dev/null); [ -n "${ts:-}" ] && echo $(( $(date +%s) - ts )) || echo 999999; }
+_hb_host() { cut -d: -f1 "$HEARTBEAT" 2>/dev/null; }
+_write_hb(){ printf '%s:%s:%s\n' "$MYHOST" "$$" "$(date +%s)" > "$HEARTBEAT" 2>/dev/null || true; }
+_take()    { rm -rf "$NODELOCK" 2>/dev/null; mkdir "$NODELOCK" 2>/dev/null && { echo "$MYHOST:$$" > "$NODELOCK/owner" 2>/dev/null; _write_hb; }; return 0; }
+_claim_lock() {   # 0=取得鎖(可工作); 1=他節點活躍擁有→退讓
+    if mkdir "$NODELOCK" 2>/dev/null; then echo "$MYHOST:$$" > "$NODELOCK/owner" 2>/dev/null; _write_hb; return 0; fi
+    local oh age; oh=$(_hb_host); age=$(_hb_age)
+    [ "${oh:-}" = "$MYHOST" ] && { _take; return 0; }   # 本節點殘留鎖 → 奪回
+    [ "$age" -lt "$HB_STALE" ] && return 1               # 他節點心跳新鮮 → 退讓
+    _take; return 0                                       # 他節點心跳過期(已死)→ 奪鎖; 失敗也 fail-open
+}
+
+# 清本節點自己殘留的 stale marker(kill -9 時 run_convergence 的 rm 沒跑到 → 洩漏)
+find "$LIVE_DIR" -maxdepth 1 \( -name '.conv.marker.*' -o -name '.bench.marker.*' -o -name '.tauwall.marker.*' \) ! -name "*.$$" -mmin +2 -delete 2>/dev/null || true
+
+# node-local 防重(同節點)
 if [[ -f "$PID_FILE" ]]; then
     old_pid=$(cat "$PID_FILE" 2>/dev/null || true)
     if [[ -n "${old_pid:-}" && "$old_pid" != "$$" ]] && kill -0 "$old_pid" 2>/dev/null; then
-        log "another watcher already running (pid=$old_pid), refusing to start"
-        exit 1
+        log "same-node watcher already running (pid=$old_pid), refusing"
+        exit 0
     fi
 fi
+
+# 跨節點單例: 他節點活躍擁有鎖 → 本節點退讓(exit 0)
+if ! _claim_lock; then
+    log "another login node ($(_hb_host)) owns watcher lock (hb age $(_hb_age)s); deferring on $MYHOST"
+    exit 0
+fi
 echo "$$" > "$PID_FILE"
-trap 'rm -f "$PID_FILE"; log "watcher exiting (pid=$$)"' EXIT
+log "watcher started on $MYHOST (pid=$$), holds cross-node lock"
+# EXIT: 清 pid + 釋放鎖(僅當擁有者仍是自己, 避免刪到他節點奪走的鎖)+ 清自己的 marker
+trap '
+  rm -f "$PID_FILE";
+  [ "$(cut -d: -f1 "$HEARTBEAT" 2>/dev/null)" = "$MYHOST" ] && rm -rf "$NODELOCK" 2>/dev/null;
+  find "$LIVE_DIR" -maxdepth 1 -name ".*.marker.$$" -delete 2>/dev/null;
+  log "watcher exiting (pid=$$) on $MYHOST"
+' EXIT
 
 pick_latest_vtk() {
     local f best_step=-1 best_path="" step
@@ -225,6 +263,7 @@ last_processed=""
 last_bench_step=""
 
 while :; do
+    _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
     RE=$(_read_re)
 
     if ! check_nan_divergence; then

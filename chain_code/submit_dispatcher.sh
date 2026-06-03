@@ -603,6 +603,7 @@ _nocapacity_count=0
 _pending_reselect=   # [Codex A2 fix] set to 1 after a PENDING-timeout cancel → next select uses 1h horizon
 
 while true; do
+    printf '%s:%s:%s\n' "$(hostname)" "$$" "$(date +%s)" > restart/dispatcher.heartbeat 2>/dev/null || true   # 跨節點心跳(o source-3; 判哪個登入節點在跑)
     # Stop 條件 1: STOP_DISPATCHER
     if [ -f "$STOP_SENTINEL" ]; then
         log "偵測到 $STOP_SENTINEL -> dispatcher 停止"
