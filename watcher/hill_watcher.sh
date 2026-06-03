@@ -42,7 +42,11 @@ if [[ -f "$PID_FILE" ]]; then
     fi
 fi
 echo "$$" > "$PID_FILE"
-trap 'rm -f "$PID_FILE" "$HEARTBEAT"; log "watcher exiting (pid=$$)"' EXIT
+trap 'rm -f "$PID_FILE" "$HEARTBEAT" "$LIVE_DIR"/.conv.marker.$$ "$LIVE_DIR"/.bench.marker.$$ "$LIVE_DIR"/.tauwall.marker.$$ 2>/dev/null; log "watcher exiting (pid=$$)"' EXIT
+
+# [清殘留 marker] 啟動時掃除前代被殺(尤其 SIGKILL, trap 無效)殘留的 .*.marker.* temp 檔。
+# 只清本專案 live/ (跨專案安全)。conv 已改無-marker, 此為清歷史殘留 + 防 bench/tauwall 殘留。
+rm -f "$LIVE_DIR"/.conv.marker.* "$LIVE_DIR"/.bench.marker.* "$LIVE_DIR"/.tauwall.marker.* 2>/dev/null || true
 
 pick_latest_vtk() {
     # Pick by modification time, NOT by the step number in the filename.
@@ -119,31 +123,36 @@ check_nan_divergence() {
 
 run_convergence() {
     local step="$1" capture rc
-    local before_marker="$LIVE_DIR/.conv.marker.$$"
-    : > "$before_marker"
+    # [無 marker 檔] 記執行前 conv 圖 mtime 當基準, 取代原 .conv.marker.$$ temp 檔。
+    # 原因: conv 現在每輪都跑(~常駐), watcher 若被殺正落在 conv 中, 原本的 rm 不會執行 →
+    # 殘留一堆 .conv.marker.<死PID>。改用 mtime 比對(無檔)→ 被殺也不留垃圾。
+    local pre_png_mt=0 pre_pdf_mt=0 _f _m
+    _f=$(ls -t "$RESULT_DIR"/monitor_convergence_*.png 2>/dev/null | head -1 || true); [[ -n "$_f" ]] && pre_png_mt=$(stat -c %Y "$_f" 2>/dev/null || echo 0)
+    _f=$(ls -t "$RESULT_DIR"/monitor_convergence_*.pdf 2>/dev/null | head -1 || true); [[ -n "$_f" ]] && pre_pdf_mt=$(stat -c %Y "$_f" 2>/dev/null || echo 0)
 
     capture=$(cd "$RESULT_DIR" && timeout "$CONV_TIMEOUT" python3 "$CONV_SCRIPT" --Re "$RE" 2>&1)
     rc=$?
 
     if (( rc == 124 )); then
-        log "CONV step=$step  TIMEOUT after ${CONV_TIMEOUT}s"; rm -f "$before_marker"; return 1
+        log "CONV step=$step  TIMEOUT after ${CONV_TIMEOUT}s"; return 1
     fi
     if (( rc != 0 )); then
         log "CONV step=$step  FAILED rc=$rc :: $(printf '%s' "$capture" | tail -c 300 | tr '\n' ' ')"
-        rm -f "$before_marker"; return 1
+        return 1
     fi
 
     local src_png src_pdf copied_png="" copied_pdf=""
     src_png=$(ls -t "$RESULT_DIR"/monitor_convergence_*.png 2>/dev/null | head -1 || true)
     src_pdf=$(ls -t "$RESULT_DIR"/monitor_convergence_*.pdf 2>/dev/null | head -1 || true)
 
-    if [[ -n "$src_png" ]] && [[ "$src_png" -nt "$before_marker" ]]; then
-        cp -f "$src_png" "$LIVE_DIR/monitor_latest.png"; copied_png=$(basename "$src_png")
+    if [[ -n "$src_png" ]]; then
+        _m=$(stat -c %Y "$src_png" 2>/dev/null || echo 0)
+        (( _m > pre_png_mt )) && { cp -f "$src_png" "$LIVE_DIR/monitor_latest.png"; copied_png=$(basename "$src_png"); }
     fi
-    if [[ -n "$src_pdf" ]] && [[ "$src_pdf" -nt "$before_marker" ]]; then
-        cp -f "$src_pdf" "$LIVE_DIR/monitor_latest.pdf"; copied_pdf=$(basename "$src_pdf")
+    if [[ -n "$src_pdf" ]]; then
+        _m=$(stat -c %Y "$src_pdf" 2>/dev/null || echo 0)
+        (( _m > pre_pdf_mt )) && { cp -f "$src_pdf" "$LIVE_DIR/monitor_latest.pdf"; copied_pdf=$(basename "$src_pdf"); }
     fi
-    rm -f "$before_marker"
 
     local conv_line
     conv_line=$(printf '%s\n' "$capture" | grep -E '\[OK\]|CONVERGED|NEAR|NOT_CONVERGED|CV' | tail -1 | sed -E 's/^[[:space:]]+//' || true)
