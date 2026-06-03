@@ -60,7 +60,6 @@ void AllocateMemory() {
     }
 
     AllocateDeviceArray(nBytes, 4,  &rho_d, &u, &v, &w);
-    AllocateDeviceArray(nBytes, 4,  &rho_pre_d, &u_pre_d, &v_pre_d, &w_pre_d);
     AllocateHostArray( nBytes, 1,  &rho_cv_weight_h );
     AllocateDeviceArray(nBytes, 1,  &rho_cv_weight_d );
     memset(rho_cv_weight_h, 0, nBytes);
@@ -273,7 +272,6 @@ void FreeSource() {
         CHECK_CUDA( cudaFree( fd[i] ) );
     }
     FreeDeviceArray(4,  rho_d, u, v, w);
-    FreeDeviceArray(4,  rho_pre_d, u_pre_d, v_pre_d, w_pre_d);
 
     if( TBSWITCH ) {
         FreeDeviceArray(4,  U,  V,  W,  P);
