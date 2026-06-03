@@ -181,10 +181,17 @@ static inline int ITB_NewtonSolveHost(
 
 static inline void ITB_FillCenterCoeff(ITB_YZCoeff *c, int j, int k)
 {
-    (void)j;
-    (void)k;
-    c->r = 0.0;
-    c->s = 0.0;
+    const int half = ITB_YZ_ORDER / 2;
+    int k0 = k - half;
+    if (k0 < 3) k0 = 3;
+    if (k0 > NZ6 - 3 - ITB_YZ_ORDER) k0 = NZ6 - 3 - ITB_YZ_ORDER;
+    c->j0 = j - half;
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
+        c->k_idx[a] = k0 + a;
+        c->wr[a] = (a == half) ? 1.0 : 0.0;
+        c->ws[a] = (a == half) ? 1.0 : 0.0;
+    }
+    c->flags = 0;
 }
 
 static inline void ITB_FoldKWeightsHost(
@@ -286,21 +293,6 @@ static inline void ITB_AccumulateWeightStats(
         stats->max_abs_sumw_minus_1_folded = efold;
 }
 
-static inline void ITB_ReconstructFoldedWeightsHost(
-    const ITB_YZCoeff *c,
-    int k,
-    double wr[ITB_YZ_ORDER],
-    double ws_folded[ITB_YZ_ORDER])
-{
-    double dwr[ITB_YZ_ORDER];
-    double ws_raw[ITB_YZ_ORDER], dws[ITB_YZ_ORDER];
-    int k_idx[ITB_YZ_ORDER];
-    unsigned char flags = 0;
-    ITB_YZShapeHost(c->r, wr, dwr);
-    ITB_YZShapeHost(c->s, ws_raw, dws);
-    ITB_FoldKWeightsHost(k, ws_raw, k_idx, ws_folded, &flags);
-}
-
 static inline void ITB_ComputeMirrorDiagnostics(
     const double *raw_w,
     const ITB_YZCoeff *coeff,
@@ -316,10 +308,6 @@ static inline void ITB_ComputeMirrorDiagnostics(
             for (int k = 3; k < NZ6 - 3; k++) {
                 const ITB_YZCoeff *csrc = &coeff[ITB_CoeffIndex(src, j, k)];
                 const ITB_YZCoeff *cdst = &coeff[ITB_CoeffIndex(dst, j, k)];
-                double src_wr[ITB_YZ_ORDER], src_ws[ITB_YZ_ORDER];
-                double dst_wr[ITB_YZ_ORDER], dst_ws[ITB_YZ_ORDER];
-                ITB_ReconstructFoldedWeightsHost(csrc, k, src_wr, src_ws);
-                ITB_ReconstructFoldedWeightsHost(cdst, k, dst_wr, dst_ws);
                 for (int a = 0; a < ITB_YZ_ORDER; a++) {
                     for (int b = 0; b < ITB_YZ_ORDER; b++) {
                         const double ws = raw_w[ITB_RawWeightIndex(
@@ -333,9 +321,9 @@ static inline void ITB_ComputeMirrorDiagnostics(
                         if (err > 1.0e-10) stats->mirror_count_raw_gt_1e10++;
                         if (err > 1.0e-8)  stats->mirror_count_raw_gt_1e8++;
 
-                        const double fs = src_wr[ITB_YZ_ORDER - 1 - a]
-                                        * src_ws[ITB_YZ_ORDER - 1 - b];
-                        const double fd = dst_wr[a] * dst_ws[b];
+                        const double fs = csrc->wr[ITB_YZ_ORDER - 1 - a]
+                                        * csrc->ws[ITB_YZ_ORDER - 1 - b];
+                        const double fd = cdst->wr[a] * cdst->ws[b];
                         const double ferr = fabs(fd - fs);
                         if (ferr > stats->mirror_max_abs_folded)
                             stats->mirror_max_abs_folded = ferr;
@@ -396,7 +384,7 @@ static inline void ITB_PrintPrecomputeStats(
         const double avg_iter = (gsum[0] > 0) ? (double)gsum[3] / (double)gsum[0] : 0.0;
         const double rms_raw = (gcmp > 0) ? sqrt(gsumsq[0] / (double)gcmp) : 0.0;
         const double rms_folded = (gcmp > 0) ? sqrt(gsumsq[1] / (double)gcmp) : 0.0;
-        printf("[ITB] compact coordinate table:\n");
+        printf("[ITB] coefficient table:\n");
         printf("  yz classes                 = %d\n", ITB_YZ_CLASS_COUNT);
         printf("  active moving classes       = 8\n");
         printf("  coeff count per rank        = %d*NYD6*NZ6\n", ITB_YZ_CLASS_COUNT);
@@ -498,24 +486,28 @@ static inline void ITB_PrecomputeCoefficientsHost(
                 if (fabs(s) > 1.0) stats.count_abs_s_gt_1++;
 
                 ITB_YZCoeff *c = &coeff[ITB_CoeffIndex(yz_id, j, k)];
+                c->j0 = j0;
+                c->flags = 0;
                 if (fabs(r) > 1.05 || fabs(s) > 1.05) {
+                    c->flags |= ITB_COEFF_OUTSIDE_WARN;
                     stats.count_abs_r_or_s_gt_1p05++;
                 }
                 if (!ok) {
+                    c->flags |= ITB_COEFF_NEWTON_FAILED;
                     r = 0.0;
                     s = 0.0;
                 }
-                c->r = r;
-                c->s = s;
 
                 double wr[ITB_YZ_ORDER], dwr[ITB_YZ_ORDER];
                 double ws_raw[ITB_YZ_ORDER], dws[ITB_YZ_ORDER];
                 double ws_folded[ITB_YZ_ORDER];
                 ITB_YZShapeHost(r, wr, dwr);
                 ITB_YZShapeHost(s, ws_raw, dws);
-                int k_idx[ITB_YZ_ORDER];
+                for (int a = 0; a < ITB_YZ_ORDER; a++) c->wr[a] = wr[a];
                 unsigned char fold_flags = 0;
-                ITB_FoldKWeightsHost(k, ws_raw, k_idx, ws_folded, &fold_flags);
+                ITB_FoldKWeightsHost(k, ws_raw, c->k_idx, ws_folded, &fold_flags);
+                c->flags |= fold_flags;
+                for (int b = 0; b < ITB_YZ_ORDER; b++) c->ws[b] = ws_folded[b];
 
                 for (int a = 0; a < ITB_YZ_ORDER; a++) {
                     for (int b = 0; b < ITB_YZ_ORDER; b++) {

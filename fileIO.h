@@ -1289,6 +1289,70 @@ void statistics_readbin_merged_stress() {
  * ═══════════════════════════════════════════════════════════
  */
 // 合併所有 GPU 結果，輸出單一 VTK 檔案 (Paraview)
+void DiagnoseVTKMacroRows(int step) {
+    static int diag_count = 0;
+    if (diag_count >= 4) return;
+    diag_count++;
+
+    const int nface = NX6 * NZ6;
+    int local_zero_rows = 0;
+    int local_rows = 0;
+    double local_max = 0.0;
+    double local_min_row_max = 1.0e300;
+    double row_max_report[NYD6];
+
+    for (int j = 0; j < NYD6; j++) row_max_report[j] = -1.0;
+
+    for (int j = 3; j < NYD6 - 3; j++) {
+        double row_max = 0.0;
+        for (int k = 3; k < NZ6 - 3; k++) {
+        for (int i = 3; i < NX6 - 3; i++) {
+            const int idx = j * nface + k * NX6 + i;
+            const double au = fabs(u_h_p[idx]);
+            const double av = fabs(v_h_p[idx]);
+            const double aw = fabs(w_h_p[idx]);
+            if (au > row_max) row_max = au;
+            if (av > row_max) row_max = av;
+            if (aw > row_max) row_max = aw;
+        }}
+
+        row_max_report[j] = row_max;
+        local_rows++;
+        if (row_max > local_max) local_max = row_max;
+        if (row_max < local_min_row_max) local_min_row_max = row_max;
+        if (row_max == 0.0) local_zero_rows++;
+    }
+
+    int global_zero_rows = 0;
+    int global_rows = 0;
+    double global_max = 0.0;
+    double global_min_row_max = 0.0;
+    CHECK_MPI(MPI_Allreduce(&local_zero_rows, &global_zero_rows, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD));
+    CHECK_MPI(MPI_Allreduce(&local_rows, &global_rows, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD));
+    CHECK_MPI(MPI_Allreduce(&local_max, &global_max, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD));
+    CHECK_MPI(MPI_Allreduce(&local_min_row_max, &global_min_row_max, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD));
+
+    if (global_zero_rows > 0) {
+        if (myid == 0) {
+            fprintf(stderr,
+                    "[VTK-MACRO][WARN] step=%d: %d/%d local-y macro rows are exactly zero "
+                    "after SendMacroCPU (global max=%.6e, min row max=%.6e). "
+                    "Merged VTK would be sparse/corrupt.\n",
+                    step, global_zero_rows, global_rows, global_max, global_min_row_max);
+        }
+        if (local_zero_rows > 0 && myid < 4) {
+            fprintf(stderr, "[VTK-MACRO][rank %d] row max |u,v,w|:", myid);
+            for (int j = 3; j < NYD6 - 3; j++)
+                fprintf(stderr, " j%d=%.3e", j, row_max_report[j]);
+            fprintf(stderr, "\n");
+        }
+    } else if (diag_count == 1 && myid == 0) {
+        printf("[VTK-MACRO] row diagnostic OK: %d local-y rows checked, "
+               "min row max=%.6e, max=%.6e\n",
+               global_rows, global_min_row_max, global_max);
+    }
+}
+
 void fileIO_velocity_vtk_merged(int step) {
     // 每個 GPU 內部有效區域的 y 層數 (不含 ghost)
     const int nyLocal = NYD6 - 6;  // 去除上下各3層ghost
@@ -1588,10 +1652,12 @@ void fileIO_velocity_vtk_merged(int step) {
         
         ostringstream oss;
         oss << "./result/velocity_merged_" << setfill('0') << setw(6) << step << ".vtk";
-        ofstream out(oss.str().c_str(), ios::binary);
+        const string vtk_path = oss.str();
+        const string vtk_tmp_path = vtk_path + ".tmp";
+        ofstream out(vtk_tmp_path.c_str(), ios::binary);
 
         if( !out.is_open() ) {
-            cerr << "ERROR: Cannot open VTK file: " << oss.str() << endl;
+            cerr << "ERROR: Cannot open VTK temp file: " << vtk_tmp_path << endl;
             free(u_global); free(v_global); free(w_global); free(y_global); free(z_global);
             free(u_local); free(v_local); free(w_local); free(y_local); free(z_local);
             return;
@@ -1733,14 +1799,30 @@ void fileIO_velocity_vtk_merged(int step) {
         #undef VTK_WRITE_SCALAR
 
         out.close();
+        bool vtk_write_ok = false;
+        if (!out) {
+            cerr << "ERROR: Failed while writing VTK temp file: " << vtk_tmp_path << endl;
+            remove(vtk_tmp_path.c_str());
+        } else if (rename(vtk_tmp_path.c_str(), vtk_path.c_str()) != 0) {
+            cerr << "ERROR: Cannot promote VTK temp file to final path: "
+                 << vtk_tmp_path << " -> " << vtk_path << endl;
+            remove(vtk_tmp_path.c_str());
+        } else {
+            vtk_write_ok = true;
+        }
 
         // ============================================================
         // VTK output confirmation log
         // ============================================================
-        cout << "Merged VTK output: velocity_merged_"
-             << setfill('0') << setw(6) << step << ".vtk";
-        if (accu_count > 0) cout << " (accu=" << accu_count << ")";
-        cout << "\n";
+        if (vtk_write_ok) {
+            cout << "Merged VTK output: velocity_merged_"
+                 << setfill('0') << setw(6) << step << ".vtk";
+            if (accu_count > 0) cout << " (accu=" << accu_count << ")";
+            cout << "\n";
+        } else {
+            cerr << "[VTK][WARN] merged VTK step " << step
+                 << " was not committed; final .vtk path was left untouched.\n";
+        }
 
         // ============================================================
         // Rolling retention: keep only newest 10 VTK files

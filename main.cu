@@ -1267,6 +1267,7 @@ int main(int argc, char *argv[])
             fd[10], fd[11], fd[12], fd[13], fd[14], fd[15], fd[16], fd[17], fd[18],
             f_post_d
         );
+        CHECK_CUDA( cudaGetLastError() );
         CHECK_CUDA( cudaDeviceSynchronize() );
 
         // [方案B] 初始化雙緩衝指標:
@@ -1624,6 +1625,7 @@ int main(int argc, char *argv[])
                 dim3 blockdimSW_m(3, NT, 1);
                 periodicSW_macro<<<griddimSW_m, blockdimSW_m, 0, stream1>>>(
                     rho_d, u, v, w);
+                CHECK_CUDA( cudaGetLastError() );
             }
             CHECK_CUDA( cudaStreamSynchronize(stream1) );
 
@@ -1706,6 +1708,7 @@ int main(int argc, char *argv[])
                 dim3 blockdimSW_m(3, NT, 1);
                 periodicSW_macro<<<griddimSW_m, blockdimSW_m, 0, stream1>>>(
                     rho_d, u, v, w);
+                CHECK_CUDA( cudaGetLastError() );
             }
             CHECK_CUDA( cudaStreamSynchronize(stream1) );
 
@@ -2095,6 +2098,7 @@ int main(int argc, char *argv[])
         if ( step % NDTVTK == 1 ) {
             Launch_UnpackFPost_Direct(f_post_read);  // [FIX] direct f_post → fh_p[q] (bypass ft[])
             SendMacroCPU();                           // only u/v/w/rho D2H (f already in fh_p)
+            DiagnoseVTKMacroRows(step);
             const size_t tavg_bytes = (size_t)NX6 * NYD6 * NZ6 * sizeof(double);
             CHECK_CUDA( cudaMemcpy(u_tavg_h, u_tavg_d, tavg_bytes, cudaMemcpyDeviceToHost) );
             CHECK_CUDA( cudaMemcpy(v_tavg_h, v_tavg_d, tavg_bytes, cudaMemcpyDeviceToHost) );

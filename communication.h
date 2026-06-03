@@ -238,8 +238,10 @@ void MPI_Exchange_FPost_Packed(
     // ── Step 1: GPU Pack (兩個方向的 halo 打包到連續 buffer) ──
     PackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, send_buf_left, iToLeft, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     PackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, send_buf_right, iToRight, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     CHECK_CUDA( cudaStreamSynchronize(stream_pack) );
 
     // ── Step 2: MPI Persistent Start + Wait ──
@@ -253,12 +255,74 @@ void MPI_Exchange_FPost_Packed(
     // ── Step 3: GPU Unpack (recv buffer → f_post ghost zones) ──
     UnpackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, recv_buf_right, iFromRight, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     UnpackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, recv_buf_left,  iFromLeft,  icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     // 不在此處 sync — 呼叫端 (evolution.h) 負責雙流同步:
     //   cudaStreamSynchronize(stream0)  等 Full kernel 完成
     //   cudaStreamSynchronize(stream1)  等 Unpack 完成
     // 兩者都完成後才執行 periodicSW_fpost (在 stream0 上)
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+// [PERF rank1] L/R-split halo exchange — pipeline MPI behind compute
+//   MPI-left  只需 send_buf_left  (Buffer rows j=4..6);
+//   MPI-right 只需 send_buf_right (Buffer rows j=NYD6-7..NYD6-5).
+//   先 PackStart_Left → 再算 Buf-right → PackStart_Right → 算 free rows，
+//   使 MPI-left 與 Buf-right 重疊、MPI-right 與 free rows 重疊 (回收暴露的 MPI)。
+//   Persistent reqs: [0]=send→l, [3]=recv←l (LEFT) ; [2]=send→r, [1]=recv←r (RIGHT)。
+//   正確性: 與原 MPI_Exchange_FPost_Packed 交換完全相同的 halo，僅改變排程順序。
+// ════════════════════════════════════════════════════════════════════════════
+static inline void itb_pack_grid(dim3 &grid_pack, dim3 &block_pack) {
+    const int pack_threads = 256;
+    grid_pack  = dim3((icount_sw + pack_threads - 1) / pack_threads, N_MPI_XI_DIRS);
+    block_pack = dim3(pack_threads);
+}
+
+void MPI_FPost_PackStart_Left(double *f_post, double *send_buf_left,
+                              MPI_Request req_persist[4], cudaStream_t stream_pack) {
+    dim3 grid_pack, block_pack; itb_pack_grid(grid_pack, block_pack);
+    PackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
+        f_post, send_buf_left, iToLeft, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
+    CHECK_CUDA( cudaStreamSynchronize(stream_pack) );   // pack-left 完成才能送
+    CHECK_MPI( MPI_Start(&req_persist[0]) );  // send → l_nbr
+    CHECK_MPI( MPI_Start(&req_persist[3]) );  // recv ← l_nbr
+}
+
+void MPI_FPost_PackStart_Right(double *f_post, double *send_buf_right,
+                               MPI_Request req_persist[4], cudaStream_t stream_pack) {
+    dim3 grid_pack, block_pack; itb_pack_grid(grid_pack, block_pack);
+    PackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
+        f_post, send_buf_right, iToRight, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
+    CHECK_CUDA( cudaStreamSynchronize(stream_pack) );   // pack-right 完成才能送
+    CHECK_MPI( MPI_Start(&req_persist[2]) );  // send → r_nbr
+    CHECK_MPI( MPI_Start(&req_persist[1]) );  // recv ← r_nbr
+}
+
+void MPI_FPost_WaitUnpack_Left(double *f_post, double *recv_buf_left,
+                               MPI_Request req_persist[4], cudaStream_t stream_pack) {
+    MPI_Request r[2]; r[0] = req_persist[0]; r[1] = req_persist[3];
+    MPI_Status st[2];
+    CHECK_MPI( MPI_Waitall(2, r, st) );      // 等 send→l + recv←l 完成
+    dim3 grid_pack, block_pack; itb_pack_grid(grid_pack, block_pack);
+    UnpackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
+        f_post, recv_buf_left, iFromLeft, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
+}
+
+void MPI_FPost_WaitUnpack_Right(double *f_post, double *recv_buf_right,
+                                MPI_Request req_persist[4], cudaStream_t stream_pack) {
+    MPI_Request r[2]; r[0] = req_persist[2]; r[1] = req_persist[1];
+    MPI_Status st[2];
+    CHECK_MPI( MPI_Waitall(2, r, st) );      // 等 send→r + recv←r 完成
+    dim3 grid_pack, block_pack; itb_pack_grid(grid_pack, block_pack);
+    UnpackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
+        f_post, recv_buf_right, iFromRight, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
 }
 
 
@@ -355,8 +419,10 @@ void MPI_Exchange_Macro_Packed(
     // Pack
     PackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, send_buf_left, iToLeft, icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
     PackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, send_buf_right, iToRight, icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
     CHECK_CUDA( cudaStreamSynchronize(stream_pack) );
 
     // MPI Persistent Start + Wait
@@ -367,8 +433,10 @@ void MPI_Exchange_Macro_Packed(
     // Unpack
     UnpackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, recv_buf_right, iFromRight, icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
     UnpackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, recv_buf_left,  iFromLeft,  icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
 }
 
 
@@ -578,7 +646,6 @@ void SendDataToCPU(double *f_new[19]) {
 }
 
 #endif
-
 
 
 
