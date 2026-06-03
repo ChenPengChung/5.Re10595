@@ -322,18 +322,18 @@ pick_cluster() {
     now="$(date +%s)"
     soon=$(( now + ${PARTITION_START_SOON_SEC:-120} ))
 
-    # ── 規則1: 在「可即起 (ETA<=now+SOON)」候選中, 選 walltime 最長 ──
-    #           walltime 平手 → ETA 早者 → PARTITION_CANDIDATES 先到先選
+    # ── 規則1: 在「可即起 (ETA<=now+SOON)」候選中, 選 ETA 最早(抓空閒) ──
+    #   [PREF 2026-06-03] 不看 walltime: chain 自動續投機制不受 walltime 影響,
+    #   故短 walltime(dev 1h) 與長 walltime(normal 2d) 同等對待, 純粹抓最早能起的(最空閒).
     bi=-1
     for (( i=0; i<n; i++ )); do
         [ "${_E[$i]}" -le "$soon" ] || continue
         if   [ "$bi" -lt 0 ]; then bi=$i
-        elif [ "${_W[$i]}" -gt "${_W[$bi]}" ]; then bi=$i
-        elif [ "${_W[$i]}" -eq "${_W[$bi]}" ] && [ "${_E[$i]}" -lt "${_E[$bi]}" ]; then bi=$i
+        elif [ "${_E[$i]}" -lt "${_E[$bi]}" ]; then bi=$i
         fi
     done
     if [ "$bi" -ge 0 ]; then
-        log "  pick_cluster: [規則1] 有容量可即起 → 選最長 walltime: ${_T[$bi]}" >&2
+        log "  pick_cluster: [規則1] 有容量可即起 → 抓最早 ETA(不看 walltime): ${_T[$bi]}" >&2
         echo "${_T[$bi]}"
         return 0
     fi
@@ -792,8 +792,12 @@ pick_jp_and_partition() {
     local wait=$(( ${E[$i]} - now )); [ "$wait" -lt 0 ] && wait=0
     local sw=0; [ "${J[$i]}" != "$cur" ] && sw=270
     local wsec=${W[$i]}; [ "$wsec" -le 0 ] && wsec=1
-    local eff=$(( wsec - wait - sw )); [ "$eff" -lt 0 ] && eff=0
-    local score=$(( ${J[$i]} * eff * 1000 / wsec ))
+    # [PREF 2026-06-03] 高 jp 優先 + 抓空閒(低 wait); 移除 walltime(wsec) 權重.
+    #   舊式 jp*eff*1000/wsec (eff=wsec-wait-sw) 會偏好長 walltime: 同樣 wait 在短 walltime(dev 1h)
+    #   佔比大 → eff 低 → 分數低 → dev 被冷落. 但 chain 自動續投不受 walltime 影響, 短 walltime 無妨.
+    #   新式: score = jp*1000 - wait - sw. jp 主導(8→128 = 8000→128000 級距), wait/switch 秒數為次要懲罰
+    #   (偏好能即起的空閒 partition + 少切換), walltime 完全不計. 平手再由下方 tie-break 取較高 jp.
+    local score=$(( ${J[$i]} * 1000 - wait - sw )); [ "$score" -lt 0 ] && score=0
     [ "${J[$i]}" = "$cur" ] && cur_score=$score
     log "[JP-CTL]   jp=${J[$i]} ${T[$i]} wait=${wait}s wt=${wsec}s sw=$sw score=$score" >&2
     if [ "$score" -gt "$best_score" ] || { [ "$score" -eq "$best_score" ] && [ "$best" -ge 0 ] && [ "${J[$i]}" -gt "${J[$best]}" ]; }; then best=$i; best_score=$score; fi
