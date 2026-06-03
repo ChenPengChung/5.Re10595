@@ -1,0 +1,4 @@
+# Edit6_5600DNS health_watchdog 警報日誌 (tracked → 可推遠端供跨 session 查看)
+# 由 chain_code/health_watchdog.sh (systemd --user timer, 每 10 分) 在偵測到問題時追加。
+# 無問題時不寫入此檔 (心跳 OK 行寫在本地 live/health_watchdog.log, 不推)。
+# 每筆含: 問題點 / watchdog 已自動補救 / 需 Claude(Route A) 修碼的對應解法指引。

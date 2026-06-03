@@ -47,6 +47,36 @@ Do NOT submit, cancel, rebuild, or mutate any job / chain / checkpoint state.
 
 Report concisely. This shortcut is **read-only** — it never changes job/chain state.
 
+## Daemon health monitoring — two routes (Route A = Claude / Route B = systemd timer)
+
+監控 watcher + dispatcher 存活 + partition×jp 切換機制是否正確,死亡則維修+推送,沒問題則回報。
+**這套行為可被任何 session 重現**(不必重貼長 prompt):
+
+### Route A — `/edit6-monitor`(Claude 在 session 內;能修程式碼)
+- 任何 session 打 **`/edit6-monitor`** 即執行一輪完整巡檢(定義於
+  `.claude/commands/edit6-monitor.md`,隨 git 散佈)。連續監控:**`/loop /edit6-monitor`**。
+- 等價觸發詞 **`claude_monitor`**(= 同一行為;本檔已載入每個 session,故任何 session 都認得)。
+- 行為:(1) 存活檢查(systemd is-active + `/proc/PID/cwd` 判本專案實例);(2) 死亡/crash-loop →
+  journalctl 診斷 → 修對應程式碼 → `bash -n` → `systemctl --user restart` → **逐檔 commit + 獨立 push**
+  (繁中、含問題點+解法、三大紀錄檔先 gzip、禁 `-A`、禁 `--force`);(3) 切換機制稽核
+  (sacct job / chain_jobid↔squeue / `live/osc_check.sh` 震盪 / PENDING re-select / accu 連續);
+  (4) 沒問題 → 回報「沒問題」表格。
+
+### Route B — systemd watchdog timer(無 session 也運作;不修碼)
+- `chain_code/health_watchdog.sh` 由 **`edit6-watchdog.timer`(每 10 分)** 執行,
+  做存活+切換稽核,**自動 `systemctl --user restart`** 死掉的 daemon、watcher 多實例則
+  `daemon_reset.sh` 清成單一,並把問題 best-effort 推到 tracked `chain_code/health_watchdog_alerts.log`。
+- **不修程式碼**(那需 Claude/Route A);code-level 問題只推「診斷 + 需 Claude 修」的報告。
+- 安裝/重裝(冪等):`bash chain_code/install_systemd.sh`;查下次巡檢:
+  `systemctl --user list-timers edit6-watchdog.timer`。
+
+### 跨 session / 別專案邊界(MUST)
+- **唯一真相 = systemd user service**(`edit6-dispatcher` / `edit6-watcher`);存活看
+  `systemctl --user is-active` + `NRestarts`。
+- **殺/數 daemon 一律用 `/proc/PID/cwd` 判專案歸屬**(涵蓋絕對+相對路徑、跨專案安全);
+  **絕不** `pkill -f` / cmdline 路徑字串;**絕不**碰 Edit7/Edit8/2.Re1400 等別專案 daemon。
+- Route B 是 systemd timer,**不靠 user crontab**(避免歷史的 cross-project crontab clobber)。
+
 ## Project info
 
 - Branch: Edit6_5600DNS
