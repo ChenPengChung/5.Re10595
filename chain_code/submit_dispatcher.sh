@@ -294,6 +294,15 @@ pick_cluster() {
             log "    [$target] 略過: jp=$cur_jp > 該 partition 每帳號 GPU 上限 $_gcap (MaxGRESPerAccount)" >&2
             continue
         fi
+        # [FIX 2026-06-03] 即時 headroom: 靜態 cap 容得下, 但帳號此刻在此 partition 已被(同帳號其他
+        #   user 的 RUNNING job)占用 → 即投仍會 PENDING. sbatch --test-only 盲於 MaxTRESPerAccount,
+        #   故 pick_cluster 須在此額外擋掉(對齊 jp_partition_eta:730-734), 否則會選滿的 4nodes 而 PENDING,
+        #   永遠到不了空閒的 dev. (這是 dev|16 跑不起來的第四個根因.)
+        local _ginuse; _ginuse="$(partition_account_gpu_inuse "$part" 2>/dev/null || echo 0)"
+        if [ "$cur_jp" -gt $(( _gcap - _ginuse )) ]; then
+            log "    [$target] 略過: cap=$_gcap 容得下但帳號此刻已用 ${_ginuse}GPU, 剩 $(( _gcap - _ginuse ))<$cur_jp → 即投會 PENDING(即時占用非靜態cap)" >&2
+            continue
+        fi
         local js; js="$(cluster_jobscript "$c")" || continue
         if [ ! -f "$js" ]; then
             log "    [$target] 略過: jobscript $js 不存在" >&2
@@ -654,11 +663,11 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16 8}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
-# [JP=16/8 加入] 候選 {128,64,32,16,8} 對應 {16,8,4,2,1} nodes (8 GPU/node):
-#   16 GPU=2 nodes (896%16=0, NYD6=63);  8 GPU=1 node (896%8=0, NYD6=119); 兩者物理合法 (slab>=7).
-#   帳號 GPU cap=16(normal/dev)/32(4nodes), 且跨使用者共用動態占用; jp 大的全超標被「試過 --test-only 再警告跳過」,
-#   留最小可行 footprint 降規模續跑而非「無可行組合」卡死: 剩 16 GPU→jp=16, 只剩 8 GPU 空檔→jp=8 仍能擠進.
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [2026-06-03 移除 jp=8] 候選 {128,64,32,16} 對應 {16,8,4,2} nodes (8 GPU/node):
+#   使用者偏好高 jp(吞吐優先), jp=8(1 node, NYD6=119) 太低 → 移出候選; 最低 footprint 為 jp=16(2 nodes, NYD6=63).
+#   16 GPU=2 nodes (896%16=0, NYD6=63, slab>=7 物理合法). 帳號 GPU cap=16(normal/dev)/32(4nodes),
+#   跨使用者共用動態占用; jp 大的全超標被「試過 --test-only 再警告跳過」, 留最小可行 footprint(jp=16)續跑.
 #   切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理; accu=0 不丟統計。
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
