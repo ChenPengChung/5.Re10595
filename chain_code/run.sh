@@ -407,6 +407,15 @@ if [ -z "$CLUSTER" ] \
                 _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: jp=${_RUNSH_JP} > cap=${_cap} (skip: MaxGRESPerAccount)\n"
                 continue
             fi
+            # [FIX 2026-06-03] 即時 inuse headroom: 靜態 cap 容得下但同帳號此刻 RUNNING 已占用 → 即投 PENDING.
+            #   sbatch --test-only 盲於 MaxTRESPerAccount, 故須額外擋 (對齊 dispatcher pick_cluster; 修直投選滿 4nodes).
+            if type partition_account_gpu_inuse >/dev/null 2>&1; then
+                _inuse="$(partition_account_gpu_inuse "$_part" 2>/dev/null || echo 0)"
+                if [ "${_RUNSH_JP:-0}" -gt $(( ${_cap:-100000} - _inuse )) ]; then
+                    _ETA_LOG="${_ETA_LOG}    ${_c}@${_part}: cap=${_cap} 已用 ${_inuse} 剩 $(( _cap - _inuse ))<${_RUNSH_JP} (skip: 即時占用會 PENDING)\n"
+                    continue
+                fi
+            fi
         fi
 
         _eta=$(_eta_epoch "$_js" "$_part")

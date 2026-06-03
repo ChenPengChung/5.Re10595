@@ -67,22 +67,13 @@ h200_partition_walltime() {
 # 可用 H200 partition, walltime 長→短排序 (供 dispatcher 候選 + 手動切換清單)
 h200_known_partitions() { echo "normal 4nodes dev"; }
 
-# [FIX 2026-06-03] arch-agnostic 包裝. dispatcher 多處呼叫 partition_walltime <part>
-#   (submit_dispatcher.sh:307/358/478/711/751), 但本檔僅定義 h200_/gb200_ 版 →
-#   `type partition_walltime` 失敗 / 直接呼叫得空字串 → probe `sbatch --test-only` 不帶
-#   --time → 改用 jobscript #SBATCH --time(2天) → dev(1h上限) 被 SLURM 拒
-#   ("allocation failure: Requested time limit is invalid") → eta=-1 → dev 永遠被判無可行.
-#   依 partition 名路由: gb200* → GB200 版; 其餘 (normal/4nodes/dev) → H200 版.
-partition_walltime() {
-    case "$1" in
-        gb200*) gb200_partition_walltime "$1" ;;
-        *)      h200_partition_walltime "$1" ;;
-    esac
-}
+# 註: arch-agnostic partition_walltime() 的權威定義在本檔下方(gb200-first fallthrough 版).
+#   2026-06-03 一度誤判其未定義(當時測試 source 了錯誤路徑 chain_code/partition_lib.sh 而非
+#   真正的 chain_code/tools/partition_lib.sh)而在此加了重複版, 已移除 — 兩版對所有輸入等價。
+#   真正解鎖 dev 的是 partition_account_gpu_inuse 改 -t RUNNING + pick_cluster/pick_for_jp 加即時 headroom 過濾。
 
 # 每帳號 GPU 上限 (MaxTRESPerAccount) — 來自 sacctmgr show qos:
-#   p_normal=16 / p_4nodes=32 (2026-06 實測, 動態查 sacctmgr) → account 在該 partition 的 GPU 上限
-#   p_dev               : 無上限
+#   p_normal=16 / p_4nodes=32 / p_dev=16 (2026-06 實測, 動態查 sacctmgr) → account 在該 partition 的 GPU 上限
 # 超過此上限的 jp(GPU 數)在該 partition 會永遠 PENDING (Reason=MaxGRESPerAccount),
 # 故 pick 時必須先過濾掉「jp > 上限」的 partition。
 partition_gpu_cap_per_account() {
@@ -92,11 +83,11 @@ partition_gpu_cap_per_account() {
     local part="$1" cap
     cap="$(timeout 5 sacctmgr -nP show qos "p_${part}" format=MaxTRESPA 2>/dev/null | grep -oE 'gres/gpu=[0-9]+' | head -1 | cut -d= -f2)"
     if [ -n "$cap" ]; then echo "$cap"; return; fi
-    # fallback(sacctmgr 不可用時; 已對齊 2026-06 實測值)
+    # fallback(sacctmgr 不可用時; 已對齊 2026-06 實測值: sacctmgr p_dev MaxTRESPA=gres/gpu=16, 非無上限)
     case "$part" in
         normal) echo 16 ;;
         4nodes) echo 32 ;;
-        dev)    echo 100000 ;;
+        dev)    echo 16 ;;
         *)      echo 100000 ;;
     esac
 }
@@ -120,16 +111,38 @@ h200_sbatch_partition_args() {
     echo "--partition=$part --time=$wt"
 }
 
-# 依 jp(GPU 數) 選一個「帳號 GPU 上限容得下」的 H200 partition (審計 PS-1/PS-4).
-# 順序: pin(若已設且容得下) → header 預設(預設 normal, 呼叫端可傳第2參數覆寫) → dev(無上限保底).
-# 避免 jp>cap(normal/4nodes=32) 落到該 partition 造成永久 PENDING (Reason=MaxGRESPerAccount).
+# 帳號此刻在某 partition 已用的 GPU (只算 RUNNING; 排除本 chain head). 供 cap headroom 過濾。
+#   與 submit_dispatcher.sh 內同名函式邏輯一致 (dispatcher 有自己一份; 此份供直投/自投/run.sh 共用)。
+#   只算 RUNNING: MaxGRESPerAccount 只計已配置 GRES, PENDING 不占; 共用帳號別用戶 PENDING 不該擋本專案。
+partition_account_gpu_inuse() {
+    local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
+    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+        { jid=$1; pj=$2; n=$3; g=$4
+          if (pj != p) next
+          if (me != "" && jid == me) next
+          sub(/.*gpu:/,"",g); sub(/[^0-9].*/,"",g); if (g=="") g=0
+          tot += n*g }
+        END { print tot+0 }'
+}
+
+# 依 jp(GPU 數) 選一個「帳號 GPU 上限容得下且此刻有空檔」的 H200 partition (審計 PS-1/PS-4).
+# 順序: pin(若已設且容得下) → header 預設(預設 normal, 呼叫端可傳第2參數覆寫) → dev(保底).
+# 雙重過濾: (1) 靜態 cap: jp>cap → 永久 PENDING(MaxGRESPerAccount); (2) 即時 inuse headroom:
+#   jp>cap-inuse → 此刻別 job 占滿, 即投也 PENDING. sbatch 盲於 MaxTRESPerAccount 故須額外擋。
 h200_pick_partition_for_jp() {
-    local jp="${1:-0}" hdr="${2:-normal}" p cap pin
+    local jp="${1:-0}" hdr="${2:-normal}" p cap pin inuse
     pin="$(h200_active_partition)"
     for p in "$pin" "$hdr" dev; do
         [ -n "$p" ] || continue
         cap="$(partition_gpu_cap_per_account "$p")"
-        if [ "$jp" -le "$cap" ]; then echo "$p"; return 0; fi
+        [ "$jp" -le "$cap" ] || continue
+        # [FIX 2026-06-03] 即時 inuse headroom (對齊 dispatcher pick_cluster): 修『直投/自投選中此刻
+        #   滿的 4nodes → PENDING』(dispatcher fix #4 只修了 dispatcher 一條入口, 未涵蓋直投/自投路徑)。
+        if type partition_account_gpu_inuse >/dev/null 2>&1; then
+            inuse="$(partition_account_gpu_inuse "$p" 2>/dev/null || echo 0)"
+            [ "$jp" -le $(( cap - inuse )) ] || continue
+        fi
+        echo "$p"; return 0
     done
     echo dev
 }
