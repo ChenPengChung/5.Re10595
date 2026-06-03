@@ -32,7 +32,7 @@ SC_ACCT="${SC_ACCT:-MST115169}"
 #   - 64 : 只能 dev(>normal cap16 / >4nodes cap32)。  32: dev/4nodes(>normal cap16)。
 #   - 16 : 三者皆可但未預編 a.out.jp16 → 評估 binary 後帶理由跳過。
 #   要真正用 >64 GPU 須換更細網格(NY-1≥896 才能讓 128 的 slab≥7), 屬不同解析度的 DNS。
-SC_VALID_JP="${SC_VALID_JP:-8}"
+SC_VALID_JP="${SC_VALID_JP:-128 64 32 16 8}"
 SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
@@ -42,7 +42,7 @@ SC_R32_DEFAULT="${SC_R32_DEFAULT:-0.93}"       # bootstrap FTT/hr @ jp=32 (measu
 SC_SCALE_EXP="${SC_SCALE_EXP:-0.85}"           # sub-linear weak-scaling exponent
 SC_HORIZON_H="${SC_HORIZON_H:-48}"             # round-end decision horizon (h)
 SC_HORIZON_PEND_H="${SC_HORIZON_PEND_H:-1}"    # pending re-select horizon (h) → favours start-now
-SC_RESTART_OVH_H="${SC_RESTART_OVH_H:-0.05}"   # ~3 min per-round restart
+SC_RESTART_OVH_H="${SC_RESTART_OVH_H:-0}"   # ~3 min per-round restart
 SC_SWITCH_OVH_H="${SC_SWITCH_OVH_H:-0.1}"      # ~6 min repartition when jp changes
 SC_CAPBLOCK_SD_H="${SC_CAPBLOCK_SD_H:-24}"     # startdelay assigned to a cap-blocked combo
 
