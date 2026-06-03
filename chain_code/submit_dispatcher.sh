@@ -36,13 +36,34 @@ CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 PROJECT_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 cd "$PROJECT_ROOT" || { echo "[dispatcher] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
 
+# ── 跨節點單例鎖 (atomic mkdir on shared FS) ─────────────────────────────────
+# ~/.config/systemd/user 在共享 home → systemd enable = 全 5 登入節點都起 dispatcher。
+# HEAD.lockdir 已保證單一 job 投遞(重複 dispatcher 不會重複投), 此鎖再讓他節點 dispatcher
+# 自動退讓做到徹底乾淨。fail-open: 不確定一律工作, 絕不變成零 dispatcher(Layer 2 jobscript
+# 自我續投仍是最後保命)。心跳檔由主迴圈每輪刷新。
+mkdir -p restart 2>/dev/null
+_DHOST="$(hostname)"; _DLOCK="restart/dispatcher.nodelock"; _DHB="restart/dispatcher.heartbeat"
+_dhb_age()  { local ts; ts=$(cut -d: -f3 "$_DHB" 2>/dev/null); [ -n "${ts:-}" ] && echo $(( $(date +%s) - ts )) || echo 999999; }
+_dhb_host() { cut -d: -f1 "$_DHB" 2>/dev/null; }
+_dtake()    { rm -rf "$_DLOCK" 2>/dev/null; mkdir "$_DLOCK" 2>/dev/null && echo "$_DHOST:$$" > "$_DLOCK/owner" 2>/dev/null; printf '%s:%s:%s\n' "$_DHOST" "$$" "$(date +%s)" > "$_DHB" 2>/dev/null; return 0; }
+if mkdir "$_DLOCK" 2>/dev/null; then
+    echo "$_DHOST:$$" > "$_DLOCK/owner" 2>/dev/null; printf '%s:%s:%s\n' "$_DHOST" "$$" "$(date +%s)" > "$_DHB" 2>/dev/null
+else
+    _doh=$(_dhb_host); _dage=$(_dhb_age)
+    if [ "${_doh:-}" = "$_DHOST" ]; then _dtake          # 本節點殘留鎖 → 奪回
+    elif [ "$_dage" -lt 180 ]; then
+        echo "[dispatcher] another login node (${_doh:-?}) owns dispatcher lock (hb ${_dage}s); deferring on $_DHOST" >&2
+        exit 0                                            # 他節點活躍擁有 → 退讓(systemd 不重啟 exit 0)
+    else _dtake; fi                                       # 他節點心跳過期(已死)→ 奪鎖; fail-open
+fi
+
 # [systemd/standalone] 自寫 pid + DISPATCHER_ACTIVE sentinel, 讓 jobscript hand-off 檢查
 # (kill -0 dispatcher.pid + [ -f DISPATCHER_ACTIVE ]) 認得本 daemon 活著。
 # 無論由 systemd (edit6-dispatcher.service) 或 dispatcher_start.sh 啟動皆正確; trap 在退出時清除。
 mkdir -p restart 2>/dev/null
 echo $$ > restart/dispatcher.pid 2>/dev/null || true
 echo $$ > DISPATCHER_ACTIVE 2>/dev/null || true
-trap '[ "$BASHPID" = "$$" ] && rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null' EXIT  # 只在主程序退出時清(防 subshell 誤觸)
+trap '[ "$BASHPID" = "$$" ] && { rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null; [ "$(cut -d: -f1 "$_DHB" 2>/dev/null)" = "$_DHOST" ] && rm -rf "$_DLOCK" 2>/dev/null; }' EXIT  # 只在主程序退出時清(防 subshell 誤觸)+ 釋放本節點持有的單例鎖
 
 # ─────────────────────────────────────────────────────────────────────────
 # [SINGLE-HEAD] 載入 HEAD.lockdir 共用函式庫
