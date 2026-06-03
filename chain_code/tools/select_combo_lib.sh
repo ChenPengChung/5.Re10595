@@ -3,7 +3,10 @@
 # select_combo_lib.sh — net-throughput (jp × partition) selector for the chain daemon.
 #
 # Picks the (jp, partition) combo that advances the most FTT over a decision
-# horizon, and NEVER idles (dev is uncapped → always a placeable fallback).
+# horizon. (NOTE 2026-06-03: dev is now QOS-capped at 16 GPU too — it is NO LONGER
+# an uncapped infinite fallback. If dev/normal/4nodes are all cap-blocked the
+# selector returns no-combo and the dispatcher retries — see submit_dispatcher
+# no-capacity trap. Never-idle now relies on free headroom existing somewhere.)
 #
 #   net(c) = r_ftt(jp) · max(0, H − startdelay − overhead)
 #     overhead = nrounds·restart_ovh + (jp≠current ? switch_ovh : 0),  nrounds = max(1,(H−sd)/walltime)
@@ -13,7 +16,7 @@
 #   * jp ∈ {16,32,64} valid for the grid (jpswitch_valid)
 #   * a.out.jp<N> pre-built + manifest-matched (jpswitch_binary_ready)
 #   * partition AllowAccounts permits our account (sc_acct_allowed)
-#   * jp ≤ per-account GPU cap of the partition (normal/4nodes=32, dev=∞)
+#   * jp ≤ per-account GPU cap of the partition (live QOS 2026-06-03: dev=16, normal=16, 4nodes=32)
 #   * cap-headroom: if jp > (cap − account-GPUs-running-in-partition) the combo can't
 #     start now → large startdelay (sbatch --test-only does NOT model this — Codex M2).
 #
@@ -26,13 +29,16 @@
 # =============================================================================
 
 SC_ACCT="${SC_ACCT:-MST115169}"
-# [自由切換候選 — 完全開啟] jp{128,64,32} × partition{normal,dev,4nodes}。
+# [自由切換候選 — 完全開啟] jp{128,64,32,16} × partition{normal,dev,4nodes}。
 #   完全開啟原則: 每一組都「實際評估後才跳過(帶理由)」, 不盲目預排除 (見 sc_audit / sc_enumerate)。
-#   - 128: 會被 jpswitch_valid 評估後判無效(640/128=5<7 slab, kernel 內部列=-2)→ 帶理由跳過。
-#   - 64 : 只能 dev(>normal cap16 / >4nodes cap32)。  32: dev/4nodes(>normal cap16)。
-#   - 16 : 三者皆可但未預編 a.out.jp16 → 評估 binary 後帶理由跳過。
-#   要真正用 >64 GPU 須換更細網格(NY-1≥896 才能讓 128 的 slab≥7), 屬不同解析度的 DNS。
-SC_VALID_JP="${SC_VALID_JP:-128 64 32 16 8}"
+#   [2026-06-03] 移除 jp8 (使用者要求: 不再降到 8 GPU)。live QOS cap = dev16 / normal16 / 4nodes32。
+#   - 128: jpswitch_valid 判無效(640/128=5<7 slab)+ 無 a.out.jp128 → 帶理由跳過。
+#   - 64 : >全部 cap(dev16/normal16/4nodes32)→ 每組 over-cap 警告跳過(a.out.jp64 在但不可投)。
+#   - 32 : 只能 4nodes(cap32); dev/normal cap16 → over-cap 警告跳過。a.out.jp32 ready。
+#   - 16 : dev/normal/4nodes 三者皆可(≤cap)且 a.out.jp16 ready → 可投(視 live headroom;
+#          帳號手足 job 佔滿 cap 則 QOS-BLOCK 警告、罰分不投, 換有空檔的 partition)。
+#   要真正用 >32 GPU 須換更細網格(NY-1≥896 才能讓 128 slab≥7)或放寬 cap, 屬不同解析度/配額的 DNS。
+SC_VALID_JP="${SC_VALID_JP:-128 64 32 16}"
 SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
