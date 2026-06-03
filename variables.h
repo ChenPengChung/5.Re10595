@@ -218,7 +218,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START      50.0    // 統計量開始累積
+#define     FTT_STATS_START      20.0    // 統計量開始累積
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
