@@ -106,21 +106,12 @@ if [ -f restart/STOP_NOCAPACITY ]; then
     exit 6
 fi
 
-# ── [自動綁定 watchdog] 啟動 dispatcher 時確保 watchdog crontab 存在 (冪等) ──
-# 讓「開 dispatcher = 自動有 watchdog」: dispatcher 若死, cron */5 會清殘留 + 重啟它。
-# 只操作本專案自己的 watchdog (跨專案安全); crontab 不可用時不致命 (jobscript 自我續投仍保鏈)。
-_WD="$CHAIN_DIR/dispatcher_watchdog.sh"
-if [ -x "$_WD" ]; then
-    if crontab -l 2>/dev/null | grep -qF "dispatcher_watchdog.sh"; then
-        echo "[dispatcher_start] ✓ watchdog crontab 已存在 (*/5, 死亡自動救回)"
-    elif ( crontab -l 2>/dev/null; echo "*/5 * * * * $_WD" ) | crontab - 2>/dev/null; then
-        echo "[dispatcher_start] ✓ 已自動裝 watchdog crontab (*/5, 死亡自動救回)"
-    else
-        echo "[dispatcher_start] ⚠ 無法裝 watchdog crontab (crontab 不可用?); jobscript 自我續投仍保鏈"
-    fi
-else
-    echo "[dispatcher_start] ⚠ 找不到 $_WD, 略過 watchdog 綁定"
-fi
+# ── [守護機制改用 systemd; 已脫離 crontab race] ──
+# 本專案 dispatcher 現由 systemd user service `edit6-dispatcher.service`(Restart=on-failure +
+# enable-linger)守護, 死了 systemd 自動重啟, 完全不碰 user crontab(避免與 Edit7/2.Re1400 搶寫
+# 同一 crontab 造成 lost-update→watchdog 消失的歷史故障)。安裝: bash chain_code/install_systemd.sh。
+# 本腳本(dispatcher_start.sh)保留為「無 systemd 環境」的手動 fallback, 不再自動裝 cron。
+echo "[dispatcher_start] (note) 守護建議用 systemd: bash chain_code/install_systemd.sh (Restart=on-failure, 不碰 crontab)"
 
 if [ "$FOREGROUND" -eq 1 ]; then
     echo "[dispatcher_start] 前景模式啟動 (Ctrl+C 可停)"
