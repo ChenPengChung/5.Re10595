@@ -75,7 +75,7 @@ if [ "${DISPATCHER_SELFTEST:-0}" = "1" ]; then
     SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest.$$.sentinel)"
     STOP_SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest_stop.$$)"
 fi
-ACCOUNT="${ACCOUNT:-MST115169}"
+ACCOUNT="${ACCOUNT:-MST114348}"
 
 # [P0 TRAP #2 FIX] 兩邊都忙時連續沒空位多少次後, 觸發明確停機 (避免隱形無限 sleep)
 # [never-idle] 放寬: 預設 480 次 × POLL_INTERVAL(30s) = 4 小時才放棄 (原 60=30 分太短)。
@@ -685,7 +685,7 @@ _jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; 
 # 用於即時 headroom 過濾: 靜態 cap 容得下、但此刻已被同帳號其他 job 占滿的 partition, 即投仍會 PENDING。
 partition_account_gpu_inuse() {
     local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
-    squeue -A "${ACCOUNT:-MST115169}" -h -t RUNNING,PENDING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING,PENDING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
         { jid=$1; pj=$2; n=$3; g=$4
           if (pj != p) next
           if (me != "" && jid == me) next
