@@ -685,7 +685,11 @@ _jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; 
 # 用於即時 headroom 過濾: 靜態 cap 容得下、但此刻已被同帳號其他 job 占滿的 partition, 即投仍會 PENDING。
 partition_account_gpu_inuse() {
     local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
-    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING,PENDING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+    # [FIX 2026-06-03] 只算 RUNNING (不算 PENDING). MaxGRESPerAccount 只計入已配置(RUNNING)的
+    #   GRES; PENDING job 尚未占用任何 GPU. 共用帳號(mst114348 跨 teddyji0315/u8035407/本專案)時,
+    #   別用戶在某 partition 排隊(PENDING)的 job 不該被算成「占用」而擋掉本專案 → 否則 dev 上
+    #   u8035407 的 PENDING 會讓本專案誤判 dev 爆滿(已用 256GPU)而永遠跳過 dev.
+    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
         { jid=$1; pj=$2; n=$3; g=$4
           if (pj != p) next
           if (me != "" && jid == me) next
@@ -754,7 +758,9 @@ _pick_partition_for_jp() {
   local n=${#sT[@]}; [ "$n" -eq 0 ] && { echo ""; return 1; }
   bi=-1
   for ((i=0;i<n;i++)); do [ "${sE[$i]}" -le "$soon" ] || continue
-    if [ "$bi" -lt 0 ] || [ "${sW[$i]}" -gt "${sW[$bi]}" ] || { [ "${sW[$i]}" -eq "${sW[$bi]}" ] && [ "${sE[$i]}" -lt "${sE[$bi]}" ]; }; then bi=$i; fi
+    # [PREF 2026-06-03] 不看 walltime, 抓最早 ETA(最空閒). chain 自動續投不受 walltime 影響,
+    #   故短 walltime(dev 1h) 與長 walltime(normal 2d) 同等; 純粹抓能即起的空閒 partition.
+    if [ "$bi" -lt 0 ] || [ "${sE[$i]}" -lt "${sE[$bi]}" ]; then bi=$i; fi
   done
   if [ "$bi" -ge 0 ]; then echo "${sT[$bi]} ${sE[$bi]} ${sW[$bi]} 1"; return 0; fi
   bi=0; for ((i=1;i<n;i++)); do [ "${sE[$i]}" -lt "${sE[$bi]}" ] && bi=$i; done

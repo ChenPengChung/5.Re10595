@@ -67,6 +67,19 @@ h200_partition_walltime() {
 # 可用 H200 partition, walltime 長→短排序 (供 dispatcher 候選 + 手動切換清單)
 h200_known_partitions() { echo "normal 4nodes dev"; }
 
+# [FIX 2026-06-03] arch-agnostic 包裝. dispatcher 多處呼叫 partition_walltime <part>
+#   (submit_dispatcher.sh:307/358/478/711/751), 但本檔僅定義 h200_/gb200_ 版 →
+#   `type partition_walltime` 失敗 / 直接呼叫得空字串 → probe `sbatch --test-only` 不帶
+#   --time → 改用 jobscript #SBATCH --time(2天) → dev(1h上限) 被 SLURM 拒
+#   ("allocation failure: Requested time limit is invalid") → eta=-1 → dev 永遠被判無可行.
+#   依 partition 名路由: gb200* → GB200 版; 其餘 (normal/4nodes/dev) → H200 版.
+partition_walltime() {
+    case "$1" in
+        gb200*) gb200_partition_walltime "$1" ;;
+        *)      h200_partition_walltime "$1" ;;
+    esac
+}
+
 # 每帳號 GPU 上限 (MaxTRESPerAccount) — 來自 sacctmgr show qos:
 #   p_normal=16 / p_4nodes=32 (2026-06 實測, 動態查 sacctmgr) → account 在該 partition 的 GPU 上限
 #   p_dev               : 無上限
