@@ -39,6 +39,25 @@ if [ -x watcher/hill_watcher_start.sh ]; then
         _log "WATCHDOG: watcher heartbeat stale ${_wage}s (>$_whb_stale) → 經 hill_watcher_start.sh 重啟 (auto-heal)"
         bash watcher/hill_watcher_start.sh >> "$LOG" 2>&1 || true
         _log "  watcher 重啟 → pid=$(cat live/watcher.pid 2>/dev/null || echo '?')"
+    else
+        # [code-refresh 自動換新碼] watcher 活著但跑的是舊版 hill_watcher.sh
+        # (process 啟動時間早於腳本 mtime) → 殺掉換新碼, 讓修好的 watcher 程式碼自動上線。
+        # 只在 keepalive 與 watcher 同 node 時 /proc/PID 可讀(也才殺得到)→ 自洽;
+        # cron 與 watcher 本就同 node(watcher 由 keepalive 在該 node 啟動)。
+        # 跨專案安全: 殺前驗 /proc/PID/cwd == 本專案 PROJECT_ROOT, 絕不碰別專案 watcher。
+        _wp="$(tr -dc 0-9 < live/watcher.pid 2>/dev/null)"
+        if [ -n "$_wp" ] && [ -e "/proc/$_wp" ]; then
+            _wcwd="$(readlink "/proc/$_wp/cwd" 2>/dev/null)"
+            _wstart=$(stat -c %Y "/proc/$_wp" 2>/dev/null || echo 0)
+            _smt=$(stat -c %Y watcher/hill_watcher.sh 2>/dev/null || echo 0)
+            if [ "$_wcwd" = "$PROJECT_ROOT" ] && [ "$_wstart" -lt "$_smt" ]; then
+                _log "WATCHDOG: watcher pid=$_wp 跑舊碼 (start $_wstart < hill_watcher.sh mtime $_smt, cwd=$_wcwd 本專案) → 殺掉換新碼"
+                kill "$_wp" 2>/dev/null || true; sleep 2; kill -9 "$_wp" 2>/dev/null || true
+                rm -f live/watcher.heartbeat 2>/dev/null || true   # 清心跳, 避免 start 誤判仍活
+                bash watcher/hill_watcher_start.sh >> "$LOG" 2>&1 || true
+                _log "  watcher 換新碼重啟 → pid=$(cat live/watcher.pid 2>/dev/null || echo '?')"
+            fi
+        fi
     fi
 fi
 
