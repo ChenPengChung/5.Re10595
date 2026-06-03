@@ -2,7 +2,7 @@
 #SBATCH --job-name=Edit6_5600DNS 
 #SBATCH --account=MST115169
 #SBATCH --partition=dev
-#SBATCH --nodes=8
+#SBATCH --nodes=2
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
