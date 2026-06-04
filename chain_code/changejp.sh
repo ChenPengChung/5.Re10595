@@ -5,7 +5,8 @@
 # 把本 GILBM chain 從「當前 jp」切換到「目標 jp」, 完全保留現有流場 (checkpoint),
 # 不冷啟動, 並維持既有 chain/dispatcher/watcher 流程, 只改變平行規模。
 #
-# 任意有效 jp 皆可 (16/32/64/128 … 只要通過下方驗證), 不限 4 的次方。
+# 任意有效 jp 皆可 (16/32/64 … 只要通過下方驗證), 不限 4 的次方。
+# (本專案 NCHC 政策自由切換集 = {16,32,64}; 暫時鎖定 jp=16。)
 #
 # 用法:
 #   bash changejp.sh <NEW_JP>            # DRY-RUN: 只驗證 + 印出完整計畫, 不改任何東西
@@ -86,7 +87,7 @@ fi
 if [ "${CHUNK:-0}" -lt 7 ]; then
   say "  [✗] slab=${CHUNK:-?} < 7 → 內部 kernel 列數 = slab-7 < 0, 不可用"; ERRS=1
 elif [ "${CHUNK:-0}" -eq 7 ]; then
-  say "  [!] slab=7 → 內部 kernel 列數=0 (零裕度, 與 jp=128 同樣在邊緣); 可跑但無餘裕"; WARN=1
+  say "  [!] slab=7 → 內部 kernel 列數=0 (零裕度, 已達 slab 下限邊緣); 可跑但無餘裕"; WARN=1
 else
   say "  [✓] slab 下限: $CHUNK >= 7 (內部 kernel 列數 = $((CHUNK-7)), 有裕度)"
 fi

@@ -50,7 +50,8 @@ show_list() {
         printf " %-12s %-12s %6s %6s %6s  %s\n" "$p" "$wt" "$idle" "$mix" "$down" "$mark"
     done
     echo "═══════════════════════════════════════════════════════════"
-    echo "  注意: $CL 每帳號 GPU 上限 — normal/4nodes=32, dev 無上限 (見 partition_lib)。"
+    echo "  注意: $CL 每帳號 GPU 上限(動態查 sacctmgr, 2026-06-04 實測) — normal=16/4nodes=32/dev=4,"
+    echo "        16gpus=16 / 32gpus=32 / 64gpus=64; jp>cap 會永久 PENDING。normal/4nodes 目前 INACTIVE。"
     echo "  用法: ./run partition set <name> | ./run partition <name> | ./run partition reset"
 }
 

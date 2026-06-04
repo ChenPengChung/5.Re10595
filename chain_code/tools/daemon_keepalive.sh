@@ -27,6 +27,28 @@ _log() { echo "[$(date '+%F %T')] [keepalive] $*" >> "$LOG" 2>/dev/null; }
 # ── 守門: 整條 chain 已被使用者停 → 兩個 daemon 都不重啟 ──
 [ -f restart/STOP_CHAIN ] && exit 0
 
+# ── [a.out 生命週期死亡閘, 2026-06-04] a.out 不存在 = 專案已拆除 (build artifact 已刪) →
+#    watcher + dispatcher 應死亡且「不再被救活」。本 keepalive:
+#      (1) 殺本機本專案 watcher / dispatcher (跨節點者由各 daemon 自身 a.out self-die 守門處理);
+#      (2) 自我移除本專案的 */5 keepalive cron (死透, 不再每 5 分跑);
+#      (3) exit, 不進入下方任何 auto-heal/重啟。
+#    復活: ./run --rebuild 產生 a.out 後, 再 ./run dispatcher start (會重裝 cron)。
+if [ ! -e a.out ]; then
+    _log "DEATH-GATE: a.out 不存在 → 專案已拆除; 殺本機 watcher/dispatcher + 自我移除 keepalive cron, 不救活"
+    for _p in $(pgrep -f 'hill_watcher\.sh' 2>/dev/null); do
+        if [ "$(readlink "/proc/$_p/cwd" 2>/dev/null)" = "$PROJECT_ROOT" ]; then kill "$_p" 2>/dev/null || true; fi
+    done
+    for _p in $(pgrep -f 'submit_dispatcher\.sh' 2>/dev/null); do
+        if [ "$(readlink "/proc/$_p/cwd" 2>/dev/null)" = "$PROJECT_ROOT" ]; then kill "$_p" 2>/dev/null || true; fi
+    done
+    rm -f live/watcher.heartbeat live/watcher.pid DISPATCHER_ACTIVE restart/dispatcher.heartbeat 2>/dev/null || true
+    if command -v crontab >/dev/null 2>&1; then
+        _kp_pat="$(basename "$PROJECT_ROOT")/chain_code/tools/daemon_keepalive.sh"
+        crontab -l 2>/dev/null | grep -vF "$_kp_pat" | crontab - 2>/dev/null || true
+    fi
+    exit 0
+fi
+
 # ════ watcher auto-heal (與 dispatcher 模式無關; chain 在跑就維持 watcher 存活) ════
 # 用專案啟動器 hill_watcher_start.sh (自帶 heartbeat dup-guard + 跨專案安全孤兒清理)。
 # [跨節點判活] 以 live/watcher.heartbeat mtime 新鮮度判活 (watcher 每 ~POLL_SEC=30s touch),

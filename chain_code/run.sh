@@ -347,7 +347,8 @@ if [ -z "$CLUSTER" ] \
     fi
 
     # 候選清單: ARCH:partition (順序 = 平手時的優先級, 與 dispatcher 一致)
-    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev H200:normal H200:4nodes}"
+    # [2026-06-04] 與 dispatcher 一致: H200 改用 16gpus/32gpus/64gpus (normal/4nodes INACTIVE、dev cap=4)
+    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:16gpus H200:32gpus H200:64gpus H200:normal H200:4nodes H200:dev}"
     _RUNSH_TIE_TOL=30   # ETA 差距 <= 30s 視為平手, 用候選順序先到先選
     # [PS-4] 讀 jp 供 GPU-cap 前過濾 (與 dispatcher pick_cluster 一致, 避免 jp>cap 候選永久 PENDING)
     _RUNSH_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _RUNSH_JP="${_RUNSH_JP:-0}"

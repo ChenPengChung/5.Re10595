@@ -59,13 +59,19 @@ h200_partition_walltime() {
     case "$1" in
         normal)  echo "2-00:00:00" ;;   # 2 天 (partition MaxTime)
         4nodes)  echo "1-00:00:00" ;;   # 1 天 (名稱暗示 <=4 節點)
-        dev)     echo "01:00:00"   ;;   # 1 小時 (測試用)
+        dev)     echo "04:00:00"   ;;   # [2026-06-04] 實測 MaxTime=4h (舊值 1h 為低估)
+        # [2026-06-04] *gpus 系列 (同一池 H200, 依每帳號 GPU cap 命名), MaxTime 實測:
+        8gpus)   echo "2-00:00:00" ;;   # cap 8,  2 天
+        16gpus)  echo "2-00:00:00" ;;   # cap 16, 2 天
+        32gpus)  echo "1-00:00:00" ;;   # cap 32, 1 天
+        64gpus)  echo "1-00:00:00" ;;   # cap 64, 1 天
         *)       echo "" ;;
     esac
 }
 
 # 可用 H200 partition, walltime 長→短排序 (供 dispatcher 候選 + 手動切換清單)
-h200_known_partitions() { echo "normal 4nodes dev"; }
+# [2026-06-04] 加入 *gpus 系列 (UP 且 cap 對得上 jp16/32/64); normal/4nodes 目前 INACTIVE、dev cap=4。
+h200_known_partitions() { echo "16gpus 32gpus 64gpus normal 4nodes dev"; }
 
 # 每帳號 GPU 上限 (MaxTRESPerAccount) — 來自 sacctmgr show qos:
 #   p_normal=16 / p_4nodes=32 (2026-06 實測, 動態查 sacctmgr) → account 在該 partition 的 GPU 上限
@@ -79,11 +85,15 @@ partition_gpu_cap_per_account() {
     local part="$1" cap
     cap="$(timeout 5 sacctmgr -nP show qos "p_${part}" format=MaxTRESPA 2>/dev/null | grep -oE 'gres/gpu=[0-9]+' | head -1 | cut -d= -f2)"
     if [ -n "$cap" ]; then echo "$cap"; return; fi
-    # fallback(sacctmgr 不可用時; 已對齊 2026-06 實測值)
+    # fallback(sacctmgr 不可用時; 已對齊 2026-06-04 實測值)
     case "$part" in
         normal) echo 16 ;;
         4nodes) echo 32 ;;
-        dev)    echo 100000 ;;
+        dev)    echo 4 ;;       # [2026-06-04] NCHC 把 dev 從「無上限」砍到 4 GPU/帳號
+        8gpus)  echo 8 ;;
+        16gpus) echo 16 ;;
+        32gpus) echo 32 ;;
+        64gpus) echo 64 ;;
         *)      echo 100000 ;;
     esac
 }
@@ -111,14 +121,20 @@ h200_sbatch_partition_args() {
 # 順序: pin(若已設且容得下) → header 預設(預設 normal, 呼叫端可傳第2參數覆寫) → dev(無上限保底).
 # 避免 jp>cap(normal/4nodes=32) 落到該 partition 造成永久 PENDING (Reason=MaxGRESPerAccount).
 h200_pick_partition_for_jp() {
-    local jp="${1:-0}" hdr="${2:-normal}" p cap pin
+    local jp="${1:-0}" hdr="${2:-normal}" p cap pin st
     pin="$(h200_active_partition)"
-    for p in "$pin" "$hdr" dev; do
+    # [2026-06-04] state-aware: 候選 pin → 16/32/64gpus(cap 小→大) → hdr → dev;
+    #   跳過「超 cap」與「非 up(INACTIVE/down)」者。修「normal/4nodes 已 INACTIVE 仍被選 → sbatch 失敗」。
+    for p in "$pin" 16gpus 32gpus 64gpus "$hdr" dev; do
         [ -n "$p" ] || continue
         cap="$(partition_gpu_cap_per_account "$p")"
-        if [ "$jp" -le "$cap" ]; then echo "$p"; return 0; fi
+        [ "$jp" -le "$cap" ] || continue
+        st="$(sinfo -h -p "$p" -o '%a' 2>/dev/null | head -1 | tr -d '[:space:]')"
+        [ "$st" = "up" ] || continue
+        echo "$p"; return 0
     done
-    echo dev
+    # 保底: 無 up+容得下者 → 回 hdr/pin 讓 SLURM 明確報錯 (勝過靜默回超 cap 的 dev → 永久 PENDING)
+    echo "${pin:-$hdr}"
 }
 
 # 同 h200_sbatch_partition_args, 但「依 jp 做 GPU-cap 過濾」並「無條件」回傳可行 partition 的

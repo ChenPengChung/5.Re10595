@@ -17,7 +17,7 @@
 #   - 登入節點 x86_64 + H200 計算節點 x86_64 → 原地編譯, 不需 salloc
 #   - nvcc -arch=sm_90 (Hopper H200), 非 sm_100 (Blackwell GB200)
 #   - HPC-SDK 路徑: Linux_x86_64/...x86_64-linux, 非 Linux_aarch64/...sbsa-linux
-#   - 投遞目標: jobscript_chain.slurm.H200 (16 nodes × 8 GPU = 128 GPU, partition=h200)
+#   - 投遞目標: jobscript_chain.slurm.H200 (2 nodes × 8 GPU = 16 GPU, partition=16gpus)
 #
 # 路徑規範 (升級後):
 #   所有 chain state 集中於 restart/ (chain_jobid / chain_count / bad_nodes /
@@ -268,7 +268,7 @@ if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
     . "$CHAIN_DIR/tools/partition_lib.sh"
     # [PS-1/PS-4] 依 jp(GPU 數) 做 GPU-cap 過濾選 partition (pin>header>dev),
     # 避免 jp>32 落 normal/4nodes 永久 PENDING; 與 dispatcher pick_cluster 一致.
-    _BS_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _BS_JP="${_BS_JP:-128}"
+    _BS_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _BS_JP="${_BS_JP:-16}"
     PART_ARGS="$(h200_sbatch_partition_args_for_jp "$_BS_JP")"
     SUBMIT_PARTITION="$(h200_pick_partition_for_jp "$_BS_JP")"
     [ -n "$SUBMIT_PARTITION" ] && echo "[partition] H200 submit for jp=$_BS_JP -> $SUBMIT_PARTITION (walltime=$(h200_partition_walltime "$SUBMIT_PARTITION")) [cap-aware, PS-1/PS-4]"

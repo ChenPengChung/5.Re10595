@@ -235,6 +235,15 @@ last_mtime=""
 last_bench_step=""
 
 while :; do
+    # [a.out 生命週期自死, 2026-06-04] a.out 不存在 = 專案已拆除 → watcher 自死。
+    # 跨節點 watcher 也能「自己停」, 不需 ssh 去殺 (解決 watcher-ignores-stopchain 的跨節點難題)。
+    # 同時尊重 STOP_CHAIN (使用者刻意停)。死前清自己的 heartbeat/pid, 免 keepalive/啟動器誤判仍活。
+    if [ ! -e "$PROJECT_DIR/a.out" ] || [ -f "$PROJECT_DIR/restart/STOP_CHAIN" ]; then
+        if [ -e "$PROJECT_DIR/a.out" ]; then log "STOP_CHAIN 偵測到 → watcher 自死 (使用者已停 chain)"
+        else log "a.out 不存在 → watcher 自死 (專案已拆除)"; fi
+        rm -f "$HEARTBEAT" "$PID_FILE" 2>/dev/null || true
+        exit 0
+    fi
     # [跨節點判活] 每輪 touch heartbeat; keepalive/啟動器以此檔 mtime 新鮮度判活,
     # 不靠 kill -0 (cron 可能在別 login node, kill -0 會誤判 watcher 死 → 反覆誤殺重啟 churn)。
     touch "$HEARTBEAT" 2>/dev/null || true

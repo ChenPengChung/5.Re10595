@@ -75,7 +75,7 @@ if [ "${DISPATCHER_SELFTEST:-0}" = "1" ]; then
     SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest.$$.sentinel)"
     STOP_SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest_stop.$$)"
 fi
-ACCOUNT="${ACCOUNT:-MST115169}"
+ACCOUNT="${ACCOUNT:-MST114348}"   # [NCHC 政策] 計畫編號 MST114348
 
 # [P0 TRAP #2 FIX] 兩邊都忙時連續沒空位多少次後, 觸發明確停機 (避免隱形無限 sleep)
 # [never-idle] 放寬: 預設 480 次 × POLL_INTERVAL(30s) = 4 小時才放棄 (原 60=30 分太短)。
@@ -87,12 +87,17 @@ NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 # Partition 候選清單: <ARCH>:<partition>
 # - GB200 partitions 共用 a.out.GB200 / jobscript_chain.slurm.GB200
 # - H200 partitions 共用 a.out.H200 / jobscript_chain.slurm.H200
-#   叢集改版後舊 `h200` partition 已移除; 本帳號 (mst*) 可用 normal/4nodes/dev
-#   (large/slinky/taide 限 gov* 帳號)。候選依 walltime 長→短列。pick_cluster 的
-#   2-tier 政策會自動「有容量→選最長walltime / 全pending→選最短ETA」, 各 partition
-#   的 --time= cap 由 partition_walltime() 決定 (見 tools/partition_lib.sh)。
+#   [2026-06-04] 本專案運行於 jp∈{16,32,64} 規模 (見 JP_CANDIDATES)。NCHC 變動實測:
+#   `dev` cap 砍到 4 (jp16/32/64 都裝不下)、`normal`/`4nodes` 轉為 INACTIVE; 真正 UP 且
+#   cap 對得上的是「同一池 H200」(196 nodes / 8 GPU/node) 的:
+#       16gpus (cap16, 2d) / 32gpus (cap32, 1d) / 64gpus (cap64, 1d)
+#   ⇒ jp=16 可投 16gpus/32gpus/64gpus; jp=32 可投 32gpus/64gpus; jp=64 可投 64gpus。故 H200 候選改列這三者
+#     優先; normal/4nodes/dev 保留(INACTIVE 或超 cap 時由 ETA/cap 過濾自動略過, 日後恢復
+#     UP 即重新生效)。large/slinky/taide/ngs* 限他帳號 (gov*/mst109178) 不可用。
+#   每帳號 GPU cap 由 partition_gpu_cap_per_account 動態查 sacctmgr (p_<part>); jp>cap 的
+#   組合一律過濾 (否則永久 PENDING)。walltime 由 partition_walltime() 決定。
 # - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:normal H200:4nodes H200:dev}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:16gpus H200:32gpus H200:64gpus H200:normal H200:4nodes H200:dev}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
@@ -325,10 +330,14 @@ pick_cluster() {
         return 1
     fi
 
-    # ── [LOCK_JP_PARTITION 臨時鎖, NCHC 政策用] 旗標存在且 pin 分區在「可投清單」中 → 直接回 pin,
+    # ── [LOCK_JP_PARTITION 嚴格鎖, NCHC 政策用] 旗標存在且 pin 分區在「可投清單」中 → 直接回 pin,
     #    跳過自由 ETA 選擇 (配合 pick_jp_and_partition 凍 jp = 把跳轉機鎖死在 jp|partition)。
-    #    守門: pin 必須已過上方靜態 cap + 即時 headroom 過濾(在 _T 中)才回; 否則記警告並落回
-    #    自由選擇 → 絕不強投滿/不可投的 partition 造成永久 PENDING。
+    #    [STRICT, 2026-06-04 依使用者「限定 16gpus」] pin 已過上方「先 --test-only 探測 + 靜態 cap +
+    #    即時 headroom」過濾(在 _T 中)才回。若 pin 此刻不可投(超 cap/帳號占滿/非 up):
+    #      → 已『試過』(_T 的探測即實際 sbatch --test-only) 但確認不可投 → 跳過本輪 + 警告, 維持鎖定,
+    #        絕不落回別分區(那會違反 jp|partition 鎖定), 也絕不強投造成永久 PENDING。下輪再試。
+    #      → 連續無容量達 NOCAPACITY_LIMIT 輪(預設 480×30s≈4h) 才觸發 STOP_NOCAPACITY 收工(既有 backstop)。
+    #    例外: 無 h200_partition pin = 鎖定無對象(誤配置) → 落回自由選擇(安全保底)。
     #    還原自由跳轉: rm restart/LOCK_JP_PARTITION (見 CLAUDE.md「還原回自由跳轉 partition&&jp」)。
     if [ -f restart/LOCK_JP_PARTITION ]; then
         local _pin _pintgt _j
@@ -341,9 +350,10 @@ pick_cluster() {
                     echo "$_pintgt"; return 0
                 fi
             done
-            log "  pick_cluster: [LOCK_JP_PARTITION] WARN pin=$_pin 此刻不可投(不在可投清單/headroom 不足) → 落回自由選擇, 避免永久 PENDING" >&2
+            log "  pick_cluster: [LOCK_JP_PARTITION][strict] WARN pin=$_pin 已試 --test-only 但此刻不可投(超 cap/帳號占滿/非 up) → 跳過本輪+警告, 維持鎖定(不落回別分區), 下輪再試" >&2
+            echo ""; return 1
         else
-            log "  pick_cluster: [LOCK_JP_PARTITION] WARN 無 h200_partition pin → 鎖定無對象, 落回自由選擇" >&2
+            log "  pick_cluster: [LOCK_JP_PARTITION] WARN 無 h200_partition pin → 鎖定無對象, 落回自由選擇(誤配置保底)" >&2
         fi
     fi
 
@@ -683,7 +693,12 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [NCHC 政策] 暫時狀態: 候選 jp 限定為 {16} (鎖定 16gpus@16), auto-controller 只跑 jp=16, 不自動跳 32/64。
+#   jp=16 有 16gpus/32gpus/64gpus 三個可投 partition; score=jp*1000-wait-sw 仍以 jp 為主,
+#   單一候選下每輪固定 KEEP 16。手動切 32/64 不受影響: changejp.sh 32/64(直接改 variables.h, 不經 auto-controller)。
+#   自由切換集 = {16,32,64} (16gpus@16 / 32gpus@32 / 64gpus@64); 政策結束恢復自由跳轉:
+#   把預設改回 "64 32 16"(或設環境變數 JP_CANDIDATES="64 32 16")。
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
 K_DOWN="${K_DOWN:-2}"                              # scale-down 也需連續確認 (對稱防抖, 修 HIGH-1)
@@ -709,7 +724,7 @@ _jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; 
 # 用於即時 headroom 過濾: 靜態 cap 容得下、但此刻已被同帳號其他 job 占滿的 partition, 即投仍會 PENDING。
 partition_account_gpu_inuse() {
     local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
-    squeue -A "${ACCOUNT:-MST115169}" -h -t RUNNING,PENDING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING,PENDING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
         { jid=$1; pj=$2; n=$3; g=$4
           if (pj != p) next
           if (me != "" && jid == me) next
@@ -868,6 +883,12 @@ while true; do
     # [restart-gap race fix] 每輪 touch heartbeat: jobscript(compute node)用此檔 mtime 判斷 daemon 是否存活
     # (跨節點無法 kill -0 login PID)。daemon 健康時每 ~POLL_INTERVAL touch 一次, jobscript 容忍 180s。
     touch restart/dispatcher.heartbeat 2>/dev/null || true
+    # Stop 條件 0 [a.out 生命週期自死, 2026-06-04]: a.out 不存在 = 專案已拆除 → dispatcher 自死。
+    #   與 keepalive 的 a.out 死亡閘一致; 跨節點時 daemon 也能自己停。
+    if [ ! -e a.out ]; then
+        log "a.out 不存在 -> 專案已拆除, dispatcher 自死 (收工)"
+        break
+    fi
     # Stop 條件 1: STOP_DISPATCHER
     if [ -f "$STOP_SENTINEL" ]; then
         log "偵測到 $STOP_SENTINEL -> dispatcher 停止"

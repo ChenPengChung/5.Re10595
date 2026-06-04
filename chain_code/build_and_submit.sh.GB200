@@ -65,7 +65,7 @@ fi
 if [ "$BUILD" -eq 1 ]; then
     echo "=== Compiling main.cu on GB200 node (aarch64) ==="
 
-    salloc -p gb200-dev -N 1 --gres=gpu:1 -t 00:10:00 --account=MST115169 \
+    salloc -p gb200-dev -N 1 --gres=gpu:1 -t 00:10:00 --account=MST114348 \
       srun bash -c '
         set -eo pipefail
         module purge
