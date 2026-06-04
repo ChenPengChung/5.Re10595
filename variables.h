@@ -262,7 +262,7 @@
 //     Phase 1 (PID):    |Re%| > SWITCH_THRESHOLD
 //     Phase 2 (Gehrke): |Re%| <= SWITCH_THRESHOLD
 //     Ref: Gehrke & Rung (2020), Int J Numer Meth Fluids
-#define     FORCE_CTRL_MODE         1
+#define     FORCE_CTRL_MODE         0 //回到穩定狀態模擬 
 
 // ── Mode 1 專用參數 (FORCE_CTRL_MODE==0 時不生效) ──
 #define     FORCE_KP                2.0     // PID 比例增益
