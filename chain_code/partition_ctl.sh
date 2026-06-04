@@ -1,7 +1,7 @@
 #!/bin/bash
 # partition_ctl.sh — partition 管理 CLI (依登入節點架構自動選 H200/GB200)
 # 用法: ./run partition [list|set <name>|reset|<name>]
-#   x86_64 登入節點 → 操作 H200 partition (normal/4nodes/dev), 寫 restart/h200_partition
+#   x86_64 登入節點 → 操作 H200 partition (16gpus/32gpus/64gpus/normal/4nodes/dev), 寫 restart/h200_partition
 #   aarch64 登入節點 → 操作 GB200 partition, 寫 restart/gb200_partition
 # 此 pin 在「直接 ./run 投遞」時生效; dispatcher 運行中會用 2-tier/ETA 自動選, pin 僅在 dispatcher 停止後生效。
 

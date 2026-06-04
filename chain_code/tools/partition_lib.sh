@@ -47,10 +47,11 @@ gb200_sbatch_partition_args() {
 # ============================================================================
 # H200 partition 支援
 # ----------------------------------------------------------------------------
-# 叢集改版後舊的 `h200` partition 已移除。本帳號 (mst*) 在 H200 機器上有權的
-# partition 為 dev / normal / 4nodes（large/slinky/taide 限 gov* 帳號, 不可用）。
+# [2026-06-04 NCHC] 本帳號 (mst*) 在 H200 上可投的主力 partition (同一池 H200) 為
+# 16gpus(cap16,2d) / 32gpus(cap32,1d) / 64gpus(cap64,1d), 對映自由切換 jp∈{16,32,64};
+# normal/4nodes 目前 INACTIVE、dev cap=4 為 fallback（large/slinky/taide 限 gov* 帳號, 不可用）。
 # 自動選擇政策 (見 dispatcher pick_cluster):
-#   規則1 有容量可即起 → 選 walltime 最長 (最少重投)  → normal 優先
+#   規則1 有容量可即起 → 選最快 ETA (抓空閒; walltime 無關, 本 chain SIGUSR1 無縫續投)
 #   規則2 全部得排隊   → 選 ETA 最短 (最快排到)
 # ============================================================================
 H200_PARTITION_FILE="${H200_PARTITION_FILE:-restart/h200_partition}"

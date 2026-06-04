@@ -6,11 +6,12 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 叢集改版後 h200 partition 已移除; 預設改用 normal (MaxTime 2 天)。
-#             walltime 上限隨 partition 而異: normal=2 天 / 4nodes=1 天 / dev=1 時。
-#             dispatcher / ./run partition 會於投遞時用對應 partition 的 --time= 覆寫;
-#             本 header 為非 dispatcher (直投/自我續投) 路徑的 fallback。
-#             TIMEOUT 於 runtime 由 scontrol 自動偵測, 任何 partition 都能啟動 walltime 救援。
+# [POLICY-B1] 預設 partition=16gpus (cap=16 容 jp=16, MaxTime 2 天)。NCHC 政策自由切換集
+#             {16gpus,32gpus,64gpus} 對映 jp {16,32,64}; walltime: 16gpus=2 天 / 32gpus,64gpus=1 天 /
+#             dev=4 時 (normal/4nodes 目前 INACTIVE)。dispatcher / ./run partition / 自我續投 於投遞時
+#             用 h200_pick_partition_for_jp 依 jp 選可行 partition 並以 --time= 覆寫;
+#             本 header 為直投/自我續投 fallback。TIMEOUT 於 runtime 由 scontrol 自動偵測, 任何
+#             partition 都能啟動 walltime 救援。
 #SBATCH --time=2-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err

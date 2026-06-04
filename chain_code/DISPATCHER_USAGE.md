@@ -4,10 +4,10 @@
 
 原本的 chain restart (方案 A) 只能綁在**單一 partition** 上：
 - `./run.sh` 在 GB200 login → 所有 round 都投 `gb200-dev`
-- `./run.sh` 在 H200  login → 所有 round 都投 `dev`
+- `./run.sh` 在 H200  login → 所有 round 都投 `16gpus` (NCHC 政策自由切換集 {16gpus,32gpus,64gpus})
 
 **方案 B 新增一個背景 daemon** (`submit_dispatcher.sh`)，在每輪結束後，
-自動查 `sinfo` 決定下一輪要丟 `gb200-dev` 還是 `dev`，哪邊閒丟哪邊。
+自動查 `sinfo` 決定下一輪要丟 `gb200-dev` 還是 `16gpus/32gpus/64gpus`，哪邊閒丟哪邊。
 
 適用情境：
 - 24h/48h 級長跑，想盡量塞滿兩個 partition 的空檔

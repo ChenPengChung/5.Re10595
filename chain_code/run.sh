@@ -334,7 +334,7 @@ fi
 
 # [2] Partition-smart-ETA: 掃描所有候選 partition, 選 ETA 最早的
 # 候選清單與 dispatcher (submit_dispatcher.sh) 一致: GB200:gb200, gb200-full,
-#   gb200-rack1, gb200-rack2, gb200-dev; H200:dev
+#   gb200-rack1, gb200-rack2, gb200-dev; H200:16gpus, 32gpus, 64gpus (normal/4nodes/dev fallback, cap 過濾)
 # 每個候選用 sbatch --test-only --partition=<part> --time=<walltime> 查 ETA.
 # 需要對應 arch 的 a.out.{CLUSTER} 存在才會列入.
 if [ -z "$CLUSTER" ] \
