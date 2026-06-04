@@ -405,18 +405,19 @@ kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
 
 ## 臨時鎖定 / 還原自由跳轉 (Temporary lock toggle — partition && jp)
 
-dispatcher 預設**自由跳轉**：每輪界即時掃描 `{128,64,32,16} × {normal,4nodes,dev}` 矩陣，
+dispatcher 預設**自由跳轉**：每輪界即時掃描 NCHC 政策三組 `{64,32,16} × {64gpus,32gpus,16gpus}` 矩陣（計畫 MST115169），
 超 cap/inuse 的組合「試過 `--test-only` 再警告跳過」，在可行組合中選最佳（高 jp 優先 + 抓空閒、不看 walltime）。
 
 ### 臨時開關：`restart/LOCK_COMBO` sentinel
 
 當 NCHC 政策 / 帳號飽和等情況需要**暫時固定**到某 `jp|partition` 時，用此 sentinel 鎖定（繞過矩陣評估）：
 
-- **檔案**：`restart/LOCK_COMBO`，內容格式 `<jp> <ARCH@partition>`（例：`16 H200@dev`）。
+- **檔案**：`restart/LOCK_COMBO`，內容格式 `<jp> <ARCH@partition>`（例：`64 H200@64gpus`）。
 - **作用**：dispatcher 的 `pick_jp_and_partition`（凍結 jp = 當前值）+ `pick_cluster`（鎖 partition）都檢查此檔，
   存在時直接回傳鎖定組合、**不做矩陣評估 / 不自動跳轉**。jp 凍結在「當前值」（`KEEP cur`，不重切、無 repartition）。
-- **設定（鎖定）**：`echo "16 H200@dev" > restart/LOCK_COMBO`，再停舊 dispatcher（cwd 驗證後 SIGTERM 特定 PID）+ `./run dispatcher start` 讓 daemon 載入新狀態。
-- **目前狀態（2026-06-03 設定）**：鎖定 `16 H200@dev`（因帳號 mst114348 被別用戶占滿 normal 16/16、4nodes 32/32，僅 dev 有空檔）。
+- **設定（鎖定）**：`echo "64 H200@64gpus" > restart/LOCK_COMBO`，再停舊 dispatcher（cwd 驗證後 SIGTERM 特定 PID）+ `./run dispatcher start` 讓 daemon 載入新狀態。
+- **驗證**：`bash chain_code/tools/verify_combo.sh`（純靜態唯讀；可帶 `EXPECT_COMBO="64 H200@64gpus"` 防漂移）— 檢查 LOCK_COMBO / variables.h jp / partition cap / jobscript header(8 nodes×8) / mpirun -np 一致。
+- **目前狀態（2026-06-04 NCHC 政策設定）**：鎖定 `64 H200@64gpus`（計畫 **MST115169**；對應 `variables.h` jp=64 / jobscript H200 8 nodes×8 GPU）。自由跳轉候選收斂為 H200 三組 `{64gpus@64, 32gpus@32, 16gpus@16}`（`normal`/`4nodes` 已 inactive、`dev`(cap4)/`8gpus`(cap8) 太小、GB200 跨架構預設不列入）。
 
 ### 快捷指令：`還原回自由跳轉`（或 `還原回自由跳轉 partition&&jp`）
 

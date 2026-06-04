@@ -333,8 +333,8 @@ if [ -n "$MODE_CLUSTER" ]; then
 fi
 
 # [2] Partition-smart-ETA: 掃描所有候選 partition, 選 ETA 最早的
-# 候選清單與 dispatcher (submit_dispatcher.sh) 一致: GB200:gb200, gb200-full,
-#   gb200-rack1, gb200-rack2, gb200-dev; H200:dev
+# 候選清單與 dispatcher (submit_dispatcher.sh) 一致: H200:64gpus, 32gpus, 16gpus
+#   (NCHC 政策 MST115169; GB200 跨架構預設不列入, 可 env 覆寫 PARTITION_CANDIDATES)
 # 每個候選用 sbatch --test-only --partition=<part> --time=<walltime> 查 ETA.
 # 需要對應 arch 的 a.out.{CLUSTER} 存在才會列入.
 if [ -z "$CLUSTER" ] \
@@ -347,7 +347,9 @@ if [ -z "$CLUSTER" ] \
     fi
 
     # 候選清單: ARCH:partition (順序 = 平手時的優先級, 與 dispatcher 一致)
-    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev H200:normal H200:4nodes}"
+    # [2026-06-04 NCHC 政策鎖定 MST115169] 與 dispatcher 一致: H200 GPU-數命名 partition 三組 {64,32,16}gpus
+    #   (normal/4nodes 已 inactive、dev/8gpus cap 太小、GB200 跨架構預設不列入; 如需以 env 覆寫 PARTITION_CANDIDATES)。
+    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-H200:64gpus H200:32gpus H200:16gpus}"
     _RUNSH_TIE_TOL=30   # ETA 差距 <= 30s 視為平手, 用候選順序先到先選
     # [PS-4] 讀 jp 供 GPU-cap 前過濾 (與 dispatcher pick_cluster 一致, 避免 jp>cap 候選永久 PENDING)
     _RUNSH_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _RUNSH_JP="${_RUNSH_JP:-0}"

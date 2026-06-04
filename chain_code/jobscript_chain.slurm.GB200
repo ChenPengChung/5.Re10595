@@ -2,7 +2,7 @@
 #SBATCH --job-name=Edit8_ITB10595
 #SBATCH --account=MST115169
 #SBATCH --partition=gb200
-#SBATCH --nodes=4
+#SBATCH --nodes=16
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=1
@@ -10,9 +10,9 @@
 #             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-# [jp=128] GB200=4 GPU/node, 故 128 ranks 需 32 nodes (32×4=128)。
-#          只有 gb200-full (36 nodes, QOS p_gb200_full MinTRES gpu>=100) 容得下。
-#          gb200-dev(10)/rack1(18)/rack2(18) 節點數不足, 不可用於 jp=128。
+# [jp=64] GB200=4 GPU/node, 故 64 ranks 需 16 nodes (16×4=64)。
+#          gb200 / gb200-full(36) / gb200-rack1(18) / gb200-rack2(18) 節點數皆足夠; gb200-dev(10) 不足。
+#          (本專案目前鎖 H200 64gpus@64; GB200 為跨架構備援, 預設不在 dispatcher 候選內。)
 #SBATCH --time=12:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
@@ -23,9 +23,9 @@
 #
 # ==============================================================================
 # jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
-# 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes(32) / ntasks(4/node) / mpirun ppr(4:node)
-# 對應 variables.h jp=128 (128 streamwise MPI ranks): 32 nodes × 4 GPU/node = 128 ranks
-# (H200 是 16 nodes × 8 GPU/node = 128 ranks; GB200 每 node 只有 4 GPU 故需 32 nodes)
+# 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes(16) / ntasks(4/node) / mpirun ppr(4:node)
+# 對應 variables.h jp=64 (64 streamwise MPI ranks): 16 nodes × 4 GPU/node = 64 ranks
+# (H200 是 8 nodes × 8 GPU/node = 64 ranks; GB200 每 node 只有 4 GPU 故需 16 nodes)
 #
 # Round 1      -> ./a.out --cold
 # Round >= 2   -> ./a.out --restart=restart/checkpoint/step_<latest>
@@ -256,7 +256,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-16}
+NP=${SLURM_NTASKS:-64}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -526,9 +526,10 @@ rm -f "$WATCHDOG_SENTINEL"
 WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
-# [GB200] 32 節點 128 GPU: -np 128 --map-by ppr:4:node (對應 variables.h jp=128)
+# [GB200] mpirun -np = ${NP} (= SLURM_NTASKS = --nodes×4 = jp). 動態追蹤 header, 改 jp 只需動 --nodes,
+#   np 自動跟著走, 永不 stale (與 H200 同一防呆; GB200 為 4 GPU/node, ppr:4:node)。
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 16 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np ${NP} --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 

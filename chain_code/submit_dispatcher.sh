@@ -75,7 +75,7 @@ if [ "${DISPATCHER_SELFTEST:-0}" = "1" ]; then
     SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest.$$.sentinel)"
     STOP_SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest_stop.$$)"
 fi
-ACCOUNT="${ACCOUNT:-MST114348}"
+ACCOUNT="${ACCOUNT:-MST115169}"   # [2026-06-04 NCHC 政策] 計畫編號 MST115169 (原 MST114348 已停用)
 
 # [P0 TRAP #2 FIX] 兩邊都忙時連續沒空位多少次後, 觸發明確停機 (避免隱形無限 sleep)
 # [never-idle] 放寬: 預設 480 次 × POLL_INTERVAL(30s) = 4 小時才放棄 (原 60=30 分太短)。
@@ -85,14 +85,16 @@ NOCAPACITY_LIMIT="${NOCAPACITY_LIMIT:-480}"
 NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 
 # Partition 候選清單: <ARCH>:<partition>
-# - GB200 partitions 共用 a.out.GB200 / jobscript_chain.slurm.GB200
-# - H200 partitions 共用 a.out.H200 / jobscript_chain.slurm.H200
-#   叢集改版後舊 `h200` partition 已移除; 本帳號 (mst*) 可用 normal/4nodes/dev
-#   (large/slinky/taide 限 gov* 帳號)。候選依 walltime 長→短列。pick_cluster 的
-#   2-tier 政策會自動「有容量→選最長walltime / 全pending→選最短ETA」, 各 partition
-#   的 --time= cap 由 partition_walltime() 決定 (見 tools/partition_lib.sh)。
-# - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:64gpus H200:32gpus H200:16gpus H200:8gpus H200:dev}"
+# [2026-06-04 NCHC 政策鎖定 — 計畫 MST115169]
+#   本專案 partition@jp 組合定義為 H200「GPU-數命名」partition 三組:
+#     64gpus@64 / 32gpus@32 / 16gpus@16  (partition 名稱即每帳號 GPU cap: p_64gpus=64/p_32gpus=32/p_16gpus=16)。
+#   暫時鎖定 64gpus@64 (見 restart/LOCK_COMBO); 自由跳轉時 dispatcher 在這三組中選最佳。
+# - H200 partitions 共用 a.out.H200 / jobscript_chain.slurm.H200; pick_cluster 2-tier 政策
+#   自動「有容量→最早 ETA / 全 pending→最短 ETA」, 各 partition 的 --time= 由 partition_walltime() 決定。
+# - 8gpus(cap8)/dev(cap4) 不列入 (jp 最小 16 已超其 cap, 本來就投不出); normal/4nodes 已 inactive。
+# - GB200 (跨架構) 預設不在候選內 (本專案鎖 H200); 如需啟用以 env 覆寫 PARTITION_CANDIDATES
+#   (jobscript_chain.slurm.GB200 已同步為 jp=64 / 16 nodes)。
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-H200:64gpus H200:32gpus H200:16gpus}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
@@ -672,13 +674,14 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-64 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
-# [2026-06-04 NCHC partition 改版] 候選縮為 {32,16} 對應 {4,2} nodes (8 GPU/node):
-#   使用者策略「jp 16↔32 自由跳轉, 目前暫鎖 32」. partition 改 GPU-數命名(cap=名稱):
-#   jp=32→{32gpus,64gpus}, jp=16→{16gpus,32gpus,64gpus}; dev(cap4)/8gpus(cap8) 被 cap 過濾自動排除.
-#   (舊 {128,64,32,16}×{normal,4nodes,dev} 已隨 normal/4nodes inactive + dev cap 降4 而過時.)
-#   16 GPU=2 nodes (896%16=0, NYD6=63, slab>=7 物理合法). 帳號 GPU cap=16(normal/dev)/32(4nodes),
-#   跨使用者共用動態占用; jp 大的全超標被「試過 --test-only 再警告跳過」, 留最小可行 footprint(jp=16)續跑.
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [2026-06-04 NCHC 政策鎖定 — 計畫 MST115169] 候選 = {64,32,16} 對應 H200 {8,4,2} nodes (8 GPU/node):
+#   使用者策略「partition@jp 三組自由跳轉: 64gpus@64 / 32gpus@32 / 16gpus@16, 目前暫鎖 64gpus@64」.
+#   partition 以 GPU-數命名(cap=名稱數字): jp=64→64gpus, jp=32→{32gpus,64gpus}, jp=16→{16gpus,32gpus,64gpus};
+#   8gpus(cap8)/dev(cap4) 不在候選內 (jp 最小 16 已超其 cap, 本來就投不出).
+#   (舊 {128,64,32,16}×{normal,4nodes,dev} 已隨 normal/4nodes inactive + 128 超 64-GPU 帳號 cap 而過時.)
+#   64 GPU=8 nodes / 32=4 / 16=2 (896%{64,32,16}=0, slab={14,28,56}>=7 物理合法). 帳號 GPU cap=p_Xgpus=X;
+#   跨使用者共用動態占用; jp 大的全超標被「直接跳過警告(不先試 --test-only)」, 留最小可行 footprint 續跑.
 #   切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理; accu=0 不丟統計。
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
@@ -706,10 +709,10 @@ _jp_state_set() { mkdir -p restart; while [ $# -ge 2 ]; do local k="$1" v="$2"; 
 partition_account_gpu_inuse() {
     local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
     # [FIX 2026-06-03] 只算 RUNNING (不算 PENDING). MaxGRESPerAccount 只計入已配置(RUNNING)的
-    #   GRES; PENDING job 尚未占用任何 GPU. 共用帳號(mst114348 跨 teddyji0315/u8035407/本專案)時,
+    #   GRES; PENDING job 尚未占用任何 GPU. 共用帳號(mst115169 跨 teddyji0315/u8035407/本專案)時,
     #   別用戶在某 partition 排隊(PENDING)的 job 不該被算成「占用」而擋掉本專案 → 否則 dev 上
     #   u8035407 的 PENDING 會讓本專案誤判 dev 爆滿(已用 256GPU)而永遠跳過 dev.
-    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+    squeue -A "${ACCOUNT:-MST115169}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
         { jid=$1; pj=$2; n=$3; g=$4
           if (pj != p) next
           if (me != "" && jid == me) next
@@ -720,7 +723,7 @@ partition_account_gpu_inuse() {
 
 # 假設 jp 在 (ARCH,part) 的開始 epoch; -1 = 不可行。先用 MaxTRESPerAccount 過濾, 再 --test-only(--nodes/--ntasks override 已實測有效)。
 jp_partition_eta() {
-  local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts eta _ny _nm1 _probed
+  local jp="$1" c="$2" part="$3" cap nodes js wt ta out ts eta _ny _nm1
   # [JPC-1] 網格整除 + slab 下限前驗: 非法 jp 物理上不可跑(changejp 也會擋), 連 SLURM 都不必試。
   _ny="$(awk '/^#define[[:space:]]+NY[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"
   if [ -n "$_ny" ] && [ "$jp" -gt 0 ]; then
@@ -732,20 +735,13 @@ jp_partition_eta() {
   case "$c" in H200) nodes=$((jp/8)) ;; GB200) nodes=$((jp/4)) ;; *) nodes=$((jp/8)) ;; esac
   [ "$nodes" -lt 1 ] && { echo -1; return; }
   js="$(cluster_jobscript "$c")" || { echo -1; return; }; [ -f "$js" ] || { echo -1; return; }
-  wt="$(partition_walltime "$part")"; ta=""; [ -n "$wt" ] && ta="--time=$wt"
-  # 先「實際試一次」: 無論是否超 cap, 都先用 sbatch --test-only 問 SLURM 此組合的 ETA
-  # (做過選擇才跳過 — 不是連試都沒試)。
-  out="$(sbatch --test-only --partition="$part" --nodes="$nodes" --ntasks="$jp" $ta "$js" 2>&1 || true)"
-  if echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
-    ts="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -1)"; eta="$(date -d "$ts" +%s 2>/dev/null || echo -1)"
-  elif echo "$out" | grep -qE "allocation .*can be allocated|to start immediately|to start now"; then eta="$(date +%s)"
-  else eta=-1; fi
-  _probed="無可解析ETA"; { [ -n "$eta" ] && [ "$eta" -ge 0 ]; } 2>/dev/null && _probed="SLURM回報可起"
-  # 試完才依「帳號 GPU 上限」決定是否跳過: 實測 sbatch --test-only 看不到 MaxTRESPerAccount
-  # (對超 cap 組合會誤報「立即可起」), 故超 cap 必須在試過後額外擋掉, 否則選了會永久 PENDING。
+  # [2026-06-04 改 / 使用者要求「遇上限直接跳過給警告, 不要連試試看」]
+  #   超 cap / 超即時 headroom 的組合: 直接跳過並警告, 不再先花一次 sbatch --test-only 探測。
+  #   理由: --test-only 盲於 MaxTRESPerAccount, 對超 cap 組合會誤報「立即可起」, 其 ETA 結果反正
+  #   會被丟棄(下方一律 echo -1) → 先試純粹浪費一次 sbatch 往返。故 cap/headroom 過不了就不探測。
   cap="$(partition_gpu_cap_per_account "$part" 2>/dev/null || echo 100000)"
   if [ "$jp" -gt "$cap" ]; then
-    log "[JP-CTL]   考慮 jp=$jp@$part → 已試 --test-only($_probed) 但帳號GPU上限 $cap<$jp → 跳過(--test-only 盲於此上限, 投了永久PENDING)" >&2
+    log "[JP-CTL]   考慮 jp=$jp@$part → 帳號GPU上限 $cap<$jp → 直接跳過(不試 --test-only; 投了永久 PENDING MaxGRESPerAccount)" >&2
     echo -1; return
   fi
   # [4] 即時 headroom: 靜態 cap 容得下, 但帳號此刻在此 partition 已被(同帳號其他 job)占用 → 仍會 PENDING。
@@ -753,11 +749,18 @@ jp_partition_eta() {
   # 卻仍被選中→PENDING、要等 watchdog 1800s 才補救」。
   local _inuse; _inuse="$(partition_account_gpu_inuse "$part")"
   if [ "$jp" -gt $(( cap - _inuse )) ]; then
-    log "[JP-CTL]   考慮 jp=$jp@$part → cap=$cap 容得下但帳號此刻已用 ${_inuse}GPU, 剩 $(( cap - _inuse ))<$jp → 跳過(即投會 PENDING; 即時占用非靜態 cap)" >&2
+    log "[JP-CTL]   考慮 jp=$jp@$part → cap=$cap 容得下但帳號此刻已用 ${_inuse}GPU, 剩 $(( cap - _inuse ))<$jp → 直接跳過(不試 --test-only; 即投會 PENDING)" >&2
     echo -1; return
   fi
+  # cap + 即時 headroom 都通過, 才值得實際向 SLURM 問此組合 ETA(此時 --test-only 結果不會被丟棄)。
+  wt="$(partition_walltime "$part")"; ta=""; [ -n "$wt" ] && ta="--time=$wt"
+  out="$(sbatch --test-only --partition="$part" --nodes="$nodes" --ntasks="$jp" $ta "$js" 2>&1 || true)"
+  if echo "$out" | grep -qE "to start at[[:space:]]+[0-9]{4}-"; then
+    ts="$(echo "$out" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+' | head -1)"; eta="$(date -d "$ts" +%s 2>/dev/null || echo -1)"
+  elif echo "$out" | grep -qE "allocation .*can be allocated|to start immediately|to start now"; then eta="$(date +%s)"
+  else eta=-1; fi
   if [ -z "$eta" ] || [ "$eta" -lt 0 ]; then
-    log "[JP-CTL]   考慮 jp=$jp@$part → 已試 --test-only 但 SLURM 無可解析 ETA → 跳過" >&2; echo -1; return
+    log "[JP-CTL]   考慮 jp=$jp@$part → cap 通過但 --test-only 無可解析 ETA → 跳過" >&2; echo -1; return
   fi
   echo "$eta"
 }
@@ -830,7 +833,7 @@ pick_jp_and_partition() {
     # [PREF 2026-06-03] 高 jp 優先 + 抓空閒(低 wait); 移除 walltime(wsec) 權重.
     #   舊式 jp*eff*1000/wsec (eff=wsec-wait-sw) 會偏好長 walltime: 同樣 wait 在短 walltime(dev 1h)
     #   佔比大 → eff 低 → 分數低 → dev 被冷落. 但 chain 自動續投不受 walltime 影響, 短 walltime 無妨.
-    #   新式: score = jp*1000 - wait - sw. jp 主導(8→128 = 8000→128000 級距), wait/switch 秒數為次要懲罰
+    #   新式: score = jp*1000 - wait - sw. jp 主導(16→64 = 16000→64000 級距), wait/switch 秒數為次要懲罰
     #   (偏好能即起的空閒 partition + 少切換), walltime 完全不計. 平手再由下方 tie-break 取較高 jp.
     local score=$(( ${J[$i]} * 1000 - wait - sw )); [ "$score" -lt 0 ] && score=0
     [ "${J[$i]}" = "$cur" ] && cur_score=$score
