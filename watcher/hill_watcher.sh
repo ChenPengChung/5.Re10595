@@ -249,6 +249,13 @@ while :; do
         log "ALERT: simulation may be diverging — check slurm log immediately"
     fi
 
+    # ── live convergence plot EVERY poll (decoupled from VTK arrival) ──
+    # 4.Ma_U_Time.py reads ONLY the time-series .dat (Ustar_Force_record/
+    # checkrho/timing_log, updated every ~50 steps ≈ 1s) — no VTK needed.
+    # Refresh live/monitor_latest.png every poll (~3s/run) so the operator
+    # sees Re/Ma/Ub/Force in near-real-time instead of every ~18min (VTK cadence).
+    run_convergence "live" || true
+
     vtk=$(pick_latest_vtk || true)
     if [[ -n "$vtk" ]]; then
         cur_mtime=$(stat -c %Y "$vtk" 2>/dev/null || echo 0)
@@ -265,7 +272,8 @@ while :; do
             log "PROCESS step=$step  FTT=$ftt  accu=$accu"
             [[ -n "$metrics" ]] && log "  $metrics"
 
-            run_convergence "$step" || true
+            # convergence plot already runs EVERY poll above (decoupled from
+            # VTK arrival) — no need to re-run it here on new-VTK detection.
 
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,
