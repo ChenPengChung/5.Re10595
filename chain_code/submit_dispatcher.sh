@@ -92,7 +92,7 @@ NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 #   2-tier 政策會自動「有容量→選最長walltime / 全pending→選最短ETA」, 各 partition
 #   的 --time= cap 由 partition_walltime() 決定 (見 tools/partition_lib.sh)。
 # - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:normal H200:4nodes H200:dev}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:64gpus H200:32gpus H200:16gpus H200:8gpus H200:dev}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
@@ -672,9 +672,11 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-128 64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
-# [2026-06-03 移除 jp=8] 候選 {128,64,32,16} 對應 {16,8,4,2} nodes (8 GPU/node):
-#   使用者偏好高 jp(吞吐優先), jp=8(1 node, NYD6=119) 太低 → 移出候選; 最低 footprint 為 jp=16(2 nodes, NYD6=63).
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [2026-06-04 NCHC partition 改版] 候選縮為 {32,16} 對應 {4,2} nodes (8 GPU/node):
+#   使用者策略「jp 16↔32 自由跳轉, 目前暫鎖 32」. partition 改 GPU-數命名(cap=名稱):
+#   jp=32→{32gpus,64gpus}, jp=16→{16gpus,32gpus,64gpus}; dev(cap4)/8gpus(cap8) 被 cap 過濾自動排除.
+#   (舊 {128,64,32,16}×{normal,4nodes,dev} 已隨 normal/4nodes inactive + dev cap 降4 而過時.)
 #   16 GPU=2 nodes (896%16=0, NYD6=63, slab>=7 物理合法). 帳號 GPU cap=16(normal/dev)/32(4nodes),
 #   跨使用者共用動態占用; jp 大的全超標被「試過 --test-only 再警告跳過」, 留最小可行 footprint(jp=16)續跑.
 #   切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理; accu=0 不丟統計。

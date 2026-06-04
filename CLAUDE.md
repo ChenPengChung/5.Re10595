@@ -46,6 +46,44 @@ This user runs multiple simulation projects on the same HPC cluster.
 
 A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically blocks bare `scancel` and modifying `scontrol` commands. If the hook blocks you, do NOT attempt to bypass it.
 
+## 禁止跨專案操作 (MANDATORY — Cross-Project Isolation for this project)
+
+**本專案 = `5.Re10595/Edit8_NewInterpolation`。所有操作只能針對「本專案」。**
+本使用者在同一個 `5.Re10595/` 樹下有多個並存的子專案
+（`Edit1_non-clamp` … `Edit6_5600DNS`、`Edit7_10595SNS`、`Edit8_ITBopt_bench`、`Edit8_NewInterpolation` …），
+每個子專案有自己的 job / dispatcher / watcher / crontab / checkpoint。
+
+### 絕對禁止 (FORBIDDEN — 對任何「非本專案」的子專案)
+
+1. **絕不** 取消、修改、暫停、requeue 其他子專案的 SLURM job
+   （沿用上節 SLURM 規則；`scancel` 只能用 `./run job-guard scancel`，且只動本專案記錄的 job）。
+2. **絕不** kill / 重啟其他子專案的 dispatcher、watcher、`hill_watcher.sh`、
+   `nan_monitor.py`、a.out/mpirun，或其 codex/claude session。
+3. **絕不** 在 crontab 增加、修改指向「非本專案」的行；
+   本專案安裝的 keepalive cron **只能** 指向 `Edit8_NewInterpolation/chain_code/tools/daemon_keepalive.sh`。
+4. **絕不** `rm`/`mv`/`>`/`touch STOP_CHAIN` 到其他子專案的 `restart/`、`live/`、checkpoint、原始碼。
+5. **唯讀允許**：`cat`/`head`/`tail`/`grep`/`diff`、`squeue`/`sacct`/`scontrol show`、`cp 其他專案/檔 ./` 是允許的（對照參考用）。
+
+### Edit7 已退役 (RETIRED — 2026-06-04)
+
+- `Edit7_10595SNS` 已退役，工作改在 **Edit8_NewInterpolation** 進行（warm-start 自 Edit7 checkpoint）。
+- **不再對 Edit7 做任何操作**（讀取對照除外）。Edit7 仍可能有使用者自己的 IDE / claude / codex / tmux session 在跑 → 一律不碰。
+- 一次性清理（已於 2026-06-04 執行）：移除了 crontab 中殘留、每 5 分鐘重生 Edit7 `live/`、`restart/` 的
+  keepalive 行 `*/5 * * * * .../Edit7_10595SNS/chain_code/tools/daemon_keepalive.sh`
+  （備份於 `~/.claude/crontab_backup_20260604_161745.txt`，僅保留 `2.Re1400` 監控行）。
+
+### `live/` 與 `restart/` 為何會「持續重生」(成因備忘)
+
+- 兩者皆為執行期產物，已被 `.gitignore` 忽略；幾乎每個 `chain_code/*.sh` 啟動時都會 `mkdir -p restart/`，watcher 會建 `live/`。
+- **重生引擎 = keepalive cron**：`chain_code/dispatcher_start.sh` 在 `./run dispatcher start` 時會
+  **自動裝一條 `*/5 * * * *` 的 keepalive cron**（指向本專案 `daemon_keepalive.sh`），
+  之後每 5 分鐘把 watcher（→`live/`）與 dispatcher（INTENT 在時 →`restart/`）救活。
+- **已知漏洞**：`chain_code/dispatcher_stop.sh` 只移除 `DISPATCHER_INTENT`/heartbeat，
+  **不移除那條 cron**；且 keepalive 的 watcher 分支只看 `restart/STOP_CHAIN`、不看 `STOP_DISPATCHER`。
+  → 因此單純 `dispatcher stop` 後，`live/` 仍會每 5 分鐘被 cron 重生。
+- **要完全停止本專案的重生**：建 `restart/STOP_CHAIN`（`./run job-guard stop-chain`）讓 keepalive 整個退出，
+  **並** 手動移除本專案那條 keepalive cron（`crontab -l | grep -vF '<本專案>/chain_code/tools/daemon_keepalive.sh' | crontab -`）。
+
 ## Periodic Hill testing shortcut (triggered by user command)
 
 When the user types **`periodichill-testing`** (any spacing/case), execute the

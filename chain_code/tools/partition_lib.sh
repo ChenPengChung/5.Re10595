@@ -56,16 +56,23 @@ gb200_sbatch_partition_args() {
 H200_PARTITION_FILE="${H200_PARTITION_FILE:-restart/h200_partition}"
 
 h200_partition_walltime() {
+    # 2026-06 NCHC 改版: partition 改以 GPU 數命名 (QOS p_Xgpus, MaxTRESPerAccount=X);
+    #   舊 normal/4nodes/large 已 inactive. dev 改 4h、cap 降為 4 (僅 jp<=4).
     case "$1" in
-        normal)  echo "2-00:00:00" ;;   # 2 天 (partition MaxTime)
-        4nodes)  echo "1-00:00:00" ;;   # 1 天 (名稱暗示 <=4 節點)
-        dev)     echo "01:00:00"   ;;   # 1 小時 (測試用)
+        8gpus)   echo "2-00:00:00" ;;   # 2 天, cap 8
+        16gpus)  echo "2-00:00:00" ;;   # 2 天, cap 16
+        32gpus)  echo "1-00:00:00" ;;   # 1 天, cap 32
+        64gpus)  echo "1-00:00:00" ;;   # 1 天, cap 64
+        dev)     echo "04:00:00"   ;;   # 4 小時, cap 4 (測試用)
+        normal)  echo "2-00:00:00" ;;   # legacy (已 inactive, 保留以防殘留 pin)
+        4nodes)  echo "1-00:00:00" ;;   # legacy (已 inactive)
         *)       echo "" ;;
     esac
 }
 
-# 可用 H200 partition, walltime 長→短排序 (供 dispatcher 候選 + 手動切換清單)
-h200_known_partitions() { echo "normal 4nodes dev"; }
+# 可用 H200 partition, cap 高→低排序 (供 dispatcher 候選 + 手動切換清單)
+# 2026-06 NCHC 改版後的 GPU-數命名 partition (cap=名稱數字); dev cap=4 保底.
+h200_known_partitions() { echo "64gpus 32gpus 16gpus 8gpus dev"; }
 
 # 註: arch-agnostic partition_walltime() 的權威定義在本檔下方(gb200-first fallthrough 版).
 #   2026-06-03 一度誤判其未定義(當時測試 source 了錯誤路徑 chain_code/partition_lib.sh 而非
@@ -83,11 +90,15 @@ partition_gpu_cap_per_account() {
     local part="$1" cap
     cap="$(timeout 5 sacctmgr -nP show qos "p_${part}" format=MaxTRESPA 2>/dev/null | grep -oE 'gres/gpu=[0-9]+' | head -1 | cut -d= -f2)"
     if [ -n "$cap" ]; then echo "$cap"; return; fi
-    # fallback(sacctmgr 不可用時; 已對齊 2026-06 實測值: sacctmgr p_dev MaxTRESPA=gres/gpu=16, 非無上限)
+    # fallback(sacctmgr 不可用時; 對齊 2026-06 NCHC 改版實測: p_Xgpus MaxTRESPA=gres/gpu=X, p_dev=4)
     case "$part" in
-        normal) echo 16 ;;
-        4nodes) echo 32 ;;
-        dev)    echo 16 ;;
+        8gpus)  echo 8  ;;
+        16gpus) echo 16 ;;
+        32gpus) echo 32 ;;
+        64gpus) echo 64 ;;
+        dev)    echo 4  ;;
+        normal) echo 16 ;;   # legacy (已 inactive)
+        4nodes) echo 32 ;;   # legacy (已 inactive)
         *)      echo 100000 ;;
     esac
 }
@@ -126,16 +137,19 @@ partition_account_gpu_inuse() {
 }
 
 # 依 jp(GPU 數) 選一個「帳號 GPU 上限容得下且此刻有空檔」的 H200 partition (審計 PS-1/PS-4).
-# 順序: pin(若已設且容得下) → header 預設(預設 normal, 呼叫端可傳第2參數覆寫) → dev(保底).
+# 順序: pin(若已設且容得下) → header 預設(預設 16gpus, 呼叫端可傳第2參數覆寫) → 64gpus(保底,cap最高).
 # 雙重過濾: (1) 靜態 cap: jp>cap → 永久 PENDING(MaxGRESPerAccount); (2) 即時 inuse headroom:
 #   jp>cap-inuse → 此刻別 job 占滿, 即投也 PENDING. sbatch 盲於 MaxTRESPerAccount 故須額外擋。
 h200_pick_partition_for_jp() {
-    local jp="${1:-0}" hdr="${2:-normal}" p cap pin inuse
+    local jp="${1:-0}" hdr="${2:-16gpus}" p cap pin inuse capfit=""
     pin="$(h200_active_partition)"
-    for p in "$pin" "$hdr" dev; do
+    # cap 升序涵蓋完整 GPU-數 partition 範圍 → jp 落在 exact-fit partition
+    #   (NCHC 改版: jp=16→16gpus, jp=32→32gpus; 漏列會 fallback 到 dev 投不出).
+    for p in "$pin" "$hdr" 8gpus 16gpus 32gpus 64gpus; do
         [ -n "$p" ] || continue
         cap="$(partition_gpu_cap_per_account "$p")"
         [ "$jp" -le "$cap" ] || continue
+        [ -z "$capfit" ] && capfit="$p"   # 第一個 cap 容得下的(不論 inuse) = PENDING-safe fallback
         # [FIX 2026-06-03] 即時 inuse headroom (對齊 dispatcher pick_cluster): 修『直投/自投選中此刻
         #   滿的 4nodes → PENDING』(dispatcher fix #4 只修了 dispatcher 一條入口, 未涵蓋直投/自投路徑)。
         if type partition_account_gpu_inuse >/dev/null 2>&1; then
@@ -144,13 +158,15 @@ h200_pick_partition_for_jp() {
         fi
         echo "$p"; return 0
     done
-    echo dev
+    # 全部 cap-fit 的 partition 此刻都無 headroom → 回 cap-fit 的(PENDING 到有空檔再跑);
+    #   無任何 cap-fit(jp 超過所有 partition) → 64gpus(cap 最高). 不再回 dev(cap4 對 jp>4 投不出).
+    echo "${capfit:-64gpus}"
 }
 
 # 同 h200_sbatch_partition_args, 但「依 jp 做 GPU-cap 過濾」並「無條件」回傳可行 partition 的
-# --partition/--time (即使無 pin 也保證避開超 cap 的 normal). 供 jobscript 自我續投 + 直投共用.
+# --partition/--time (即使無 pin 也保證避開超 cap 的 partition). 供 jobscript 自我續投 + 直投共用.
 h200_sbatch_partition_args_for_jp() {
-    local jp="${1:-0}" hdr="${2:-normal}" p wt
+    local jp="${1:-0}" hdr="${2:-16gpus}" p wt
     p="$(h200_pick_partition_for_jp "$jp" "$hdr")"
     wt="$(h200_partition_walltime "$p")"
     [ -z "$wt" ] && wt="01:00:00"
