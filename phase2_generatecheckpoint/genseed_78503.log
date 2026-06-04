@@ -1,0 +1,197 @@
+================================================================
+[genseed] START 2026-06-04 20:15:55  node=25a-hgpn058  jobid=78503
+[genseed] partition=16gpus  account=mst114348
+[genseed] threads=104  cwd=/home/s8313697/5.Re10595/Edit7_10595SNS
+[genseed] RAM: 2015 GB total, 1927 GB avail
+================================================================
+[auto] NEW grid from variables.h: NX=449 NY=897 NZ=449 jp=16 GAMMA=2.1972245773362196 ALPHA=0.5
+[auto] Origin checkpoint: /home/s8313697/5.Re10595/Edit7_10595SNS/phase2_generatecheckpoint/oldcheckpoint_Re10595_step_12550001
+[auto] Grid directory: /home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid
+  OK: NEW phase1 filename STRETCH_A s=0.800000 matches variables.h
+[auto] OLD grid (uniform gamma=2.0, alpha=0.5): oldgrid_I257_J129_g2.0_a0.5.dat
+[auto] NEW grid (variable gamma=2.1972245773362196, alpha=0.5): newgrid_3.fine grid_I897_J449_s0.800000.dat
+
+--- Configuring OLD grid ---
+  Auto-detected from metadata: NX=129 NY=257 NZ=129 jp=8
+  OK: OLD grid .dat validated: I=257=NY, J=129=NZ
+
+--- Configuring NEW grid ---
+  Project mode: reading from /home/s8313697/5.Re10595/Edit7_10595SNS/variables.h
+    NX = 449
+    NY = 897
+    NZ = 449
+    jp = 16
+    GAMMA = 2.1972245773362196
+    ALPHA = 0.5
+  OK: NEW grid filename STRETCH_A s=0.800000 matches variables.h
+  OK: NEW grid .dat validated: I=897=NY, J=449=NZ
+
+  WARNING: OLD GAMMA=2.0 vs NEW GAMMA=2.1972245773362196 differ by 0.20
+           Physical-space interpolation handles this correctly,
+           but verify OLD grid .dat matches the source checkpoint.
+========================================================================
+LBM checkpoint interpolator: 129x257x129 (jp=8) -> 449x897x449 (jp=16)
+========================================================================
+OLD: NX=129 NY=257 NZ=129 jp=8 GAMMA=2.0 grid=/home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid/oldgrid_I257_J129_g2.0_a0.5.dat
+NEW: NX=449 NY=897 NZ=449 jp=16 GAMMA=2.1972245773362196 grid=/home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid/newgrid_3.fine grid_I897_J449_s0.800000.dat
+Domain: LX=4.5 LY=9.0 LZ=3.036 H_HILL=1.0
+Density control-volume method: jacobian-gl (variables.h:CELL_VOLUME_METHOD=1)
+u* divergence output gate: max|div(u*)| < 1.000000e-10 before f_eq
+
+Rank repartition plan:
+  OLD jp=8  unique j/rank=32  local NYD6=39  input files: 19*f + rho per rank
+  NEW jp=16  unique j/rank=56  local NYD6=63  output files: 19*f + rho per rank
+  Repartition: stitch OLD ranks into one global field, apply conservation/projection globally, then split into NEW ranks.
+
+  OK: solver runtime filename STRETCH_A s=0.800000 matches variables.h
+--- Validating NEW grid against solver runtime grid ---
+  OK: NEW grid coordinates match solver runtime grid
+      NEW grid:    /home/s8313697/5.Re10595/Edit7_10595SNS/phase1_generategrid/newgrid_3.fine grid_I897_J449_s0.800000.dat
+      solver grid: /home/s8313697/5.Re10595/Edit7_10595SNS/J_Frohlich/adaptive_3.fine grid_I897_J449_s0.800000.dat
+      compared 402753 points, max_abs_diff=0.000e+00, tol=0.000e+00
+      grid parameter fingerprint: not present (legacy .dat headers)
+
+Output directory: restart/checkpoint/step_00000001 (from --output-root + --step)
+
+[1/8] Reading old metadata: /home/s8313697/5.Re10595/Edit7_10595SNS/phase2_generatecheckpoint/oldcheckpoint_Re10595_step_12550001/metadata.dat
+      grid_dims=135,39,135 mpi_rank_count=8 step=12550001 FTT=77.396301956801139 Force=3.746299e-06
+      source dt_global=3.700221312658000e-03 half_Fdt=6.931067979211275e-09
+[2/8] Building OLD grid coordinates
+      Y interior range [-0.0000, 9.0000] (expect [0, 9.0])
+      Z interior range [1.0000, 3.0357] (expect [hill, 3.036])
+      OLD grid coordinate SHA-256: 62e2efe47d0a431b...9433ac2d
+      OLD grid provenance: source checkpoint has no coordinate hash (legacy)
+[3/8] Reading 152 f-files (8 ranks x 19 directions)
+      f00: stitched 8 ranks
+      f01: stitched 8 ranks
+      f02: stitched 8 ranks
+      f03: stitched 8 ranks
+      f04: stitched 8 ranks
+      f05: stitched 8 ranks
+      f06: stitched 8 ranks
+      f07: stitched 8 ranks
+      f08: stitched 8 ranks
+      f09: stitched 8 ranks
+      f10: stitched 8 ranks
+      f11: stitched 8 ranks
+      f12: stitched 8 ranks
+      f13: stitched 8 ranks
+      f14: stitched 8 ranks
+      f15: stitched 8 ranks
+      f16: stitched 8 ranks
+      f17: stitched 8 ranks
+      f18: stitched 8 ranks
+      OLD interior rho = [0.999074, 1.000580], mean = 1.000000
+      OLD interior max|u| = 1.927301e-02, max|v| = 2.641253e-02, max|w| = 1.685908e-02
+      OLD Ub (j=BFR cross-section) = 1.500536958300180e-02
+      OLD rho volume-weighted mean = 1.000003269544840
+      OLD absolute rho mass = 1.143477650408855e+02, control volume = 1.143473911769627e+02
+      OLD Jacobian-GL volume: rel diff vs shoelace = 2.284687e-06, fallback cells = 0
+      OLD max |rho_file - sum(f)| = 4.992e-04
+      WARN: rho_file != sum(f) by 4.992e-04 (expected from LBM mass correction)
+            Using sum(f) as authoritative rho for feq/fneq computation
+[4/8] Building NEW grid coordinates
+      Y interior range [-0.0000, 9.0000]
+      Z interior range [1.0000, 3.0360]
+[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+      interpolation order: 6 (7-point Lagrange O(h^6) + cubic wall ghost extrapolation)
+      Phys mapping cache HIT: 402753 cells loaded from mapping_cache/544ec88ea2bfbe23.npz (skipped cell search)
+      mapping cache build: 0.0s
+      [interp] using VECTORIZED path (default; ~30-100x faster)
+      rho:  336.9s
+      ux:   336.9s
+      uy:   336.9s
+      uz:   336.9s
+      Applying wall velocity constraint: u=v=w=0 (preserve rho)
+      max |u_wall| before clamp = 6.972e-03
+      max |rho_wall - 1| preserved = 5.801e-04
+      rho mass correction target: volume-weighted mean rho = 1.0
+      rho control-volume method: jacobian-gl (variables.h:CELL_VOLUME_METHOD=1)
+      Jacobian-GL volume: shoelace = 1.143589976046684e+02, jacobian = 1.143590157789085e+02
+      Jacobian-GL diagnostics: rel volume diff = 1.589227e-07, max cell rel diff = 1.968161e-02, mean cell rel diff = 1.829082e-05, fallback cells = 0
+      rho mass correction (volume-weighted): rho_modify = -3.306392e-06
+      global control volume = 1.143590157789085e+02
+      rho volume-weighted mean: 1.000003306392410 -> 1.000000000000001 (target 1.000000000000000)
+      rho absolute mass: 1.143593938946904e+02 -> 1.143590157789086e+02 (target 1.143590157789085e+02)
+      Enforcing periodic duplicate nodes and filling ghost cells
+      NEW interior rho = [0.999053, 1.000577], mean = 0.999996
+      NEW interior max|u| = 1.952324e-02, max|v| = 2.644383e-02, max|w| = 1.739642e-02
+      Ub correction: OLD Ub = 1.500536958300180e-02
+      Ub correction: NEW Ub (before) = 1.500354369160076e-02
+      Ub correction: scale = 1.000121697342879e+00
+      Ub correction: NEW Ub (after)  = 1.500536958300179e-02
+      Ub correction: residual = 5.204e-18
+      Periodic duplicate enforcement and ghost-cell fill before projection
+      --- Velocity projection ---
+      Div-exact velocity projection: 180232192 DOFs (896 x 449 x 448)
+      div(u) BEFORE: RMS = 5.488761e-04, max = 7.171315e-02, mean = -4.270159e-06
+      direct D correction target: RMS <= 1.000e-06
+      exact D velocity projector: 402304 x 402304 (3609984 nnz), 225 modes (factor deferred to parallel solve) built in 0.71s
+      div-exact factor+solve: 225 modes, 1 worker(s), 2858.00s
+      Div-exact direct solve in 2873.4s
+      div(u) AFTER:
+        all points: RMS = 4.209273e-13, max = 9.318761e-13, mean = -3.914756e-13
+        interior (excl walls): RMS = 4.216108e-13, max = 9.318761e-13
+      reduction: 7.67e-10x (all), 7.68e-10x (interior)
+      max |du| correction = 3.642511e-04
+      wall velocity constrained inside projection
+      Final periodic duplicate enforcement and ghost-cell fill
+      Final Ub before f_eq = 1.500116724416812e-02 (target 1.500536958300180e-02, residual 4.202e-06)
+[6/8] Computing NEW-grid dt_global
+      dt_global_new = 9.659306e-04  (CFL=0.5, metric_order=6, dx=1.004464e-02)
+      dt limited by zeta (alpha=15) component
+      u* divergence check (CD2, unique physical DOFs): rms = 4.209273e-13, max|div(u*)| = 9.318761e-13
+      u* divergence gate PASSED: max|div(u*)| = 9.318761e-13 < 1e-10
+[7/8] Reconstructing f_eq and writing per-rank files
+      wrote rho_0..rho_15.bin
+      mode = chapman-enskog: niu = 9.438414e-07
+      omega_new = 3*niu/dt_global_new + 0.5 = 5.029313950322e-01
+      ce_coeff = -(omega)*dt = -4.857968e-04  (= -3niu - 0.5dt = -4.857968e-04)
+      metric order = 6 (Fornberg j-central + k-adaptive)
+      velocity gradient tensor: 137.8s
+      max |div(u)|  = 2.610e-01   (incompressibility residual)
+      max |grad u|  = 1.542e+00
+      wrote f00_0..f00_15 (CE)
+      wrote f01_0..f01_15 (CE)
+      wrote f02_0..f02_15 (CE)
+      wrote f03_0..f03_15 (CE)
+      wrote f04_0..f04_15 (CE)
+      wrote f05_0..f05_15 (CE)
+      wrote f06_0..f06_15 (CE)
+      wrote f07_0..f07_15 (CE)
+      wrote f08_0..f08_15 (CE)
+      wrote f09_0..f09_15 (CE)
+      wrote f10_0..f10_15 (CE)
+      wrote f11_0..f11_15 (CE)
+      wrote f12_0..f12_15 (CE)
+      wrote f13_0..f13_15 (CE)
+      wrote f14_0..f14_15 (CE)
+      wrote f15_0..f15_15 (CE)
+      wrote f16_0..f16_15 (CE)
+      wrote f17_0..f17_15 (CE)
+      wrote f18_0..f18_15 (CE)
+      max |f_neq / f_eq|  = 2.659e-03   (Knudsen-like; should be << 1)
+      f range after reconstruction = [2.499479214349332e-02, 3.335430438870412e-01]
+      max |sum(f_new)-rho_new| = 8.882e-16
+[8/8] Writing new metadata.dat
+      Controller state preserved from origin: Force_integral=0.000000000000000 error_prev=0.000000000000000 ctrl_initialized=0 gehrke_activated=0
+      accu_count=0, FTT=0 (regrid pipeline does NOT write stats binaries; preserving accu_count>0 would break checkpoint load)
+      origin FTT=77.396301956801139 accu_count=6063903 kept as provenance only
+      Force=3.746299e-06  step=1  jp=16  grid_dims=455,63,455
+      dt_global written as 9.659306483099735e-04
+      (naive minSize for reference: 2.255592e-03; runtime Imamura dt typically ~0.4-0.5x of this)
+      Atomic rename: restart/checkpoint/step_00000001.WRITING -> restart/checkpoint/step_00000001
+      grid_provenance written: /home/s8313697/5.Re10595/Edit7_10595SNS/restart/grid_provenance
+
+Done in 6413.9s. New checkpoint at: restart/checkpoint/step_00000001
+Total files: 19f x 16 ranks + 16 rho + 1 metadata = 321
+================================================================
+[genseed] interp_checkpoint.py exit code = 0
+[genseed] END 2026-06-04 22:02:50
+[genseed] 產物: restart/checkpoint/step_00000001/  +  restart/grid_provenance
+total 32606724
+drwxr-xr-x 1 s8313697 MST114348         0 Jun  4 22:02 .
+drwxr-xr-x 1 s8313697 MST114348         0 Jun  4 22:02 ..
+-rw-r--r-- 1 s8313697 MST114348 104340600 Jun  4 21:32 f00_0.bin
+-rw-r--r-- 1 s8313697 MST114348 104340600 Jun  4 21:32 f00_1.bin
+================================================================
