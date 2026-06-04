@@ -64,6 +64,9 @@ _is_owned_daemon() {
     local -a _argv
     cwd="$(readlink "/proc/$pid/cwd" 2>/dev/null)" || return 1
     [ "$cwd" = "$PROJECT_ROOT" ] || return 1
+    # never kill a SELFTEST dry-run: it shares argv with the real daemon but is a
+    # throwaway (submits nothing, uses mktemp sentinels) — exclude via its env marker.
+    grep -aqz 'DISPATCHER_SELFTEST=1' "/proc/$pid/environ" 2>/dev/null && return 1
     mapfile -d '' -t _argv < "/proc/$pid/cmdline" 2>/dev/null || return 1
     a0="${_argv[0]:-}"; a1="${_argv[1]:-}"
     case "${a0##*/}" in bash|sh|dash) ;; *) return 1 ;; esac
@@ -105,7 +108,7 @@ if ! keepalive_solver_binary_present; then
     _signal_owned "hill_watcher.sh"      KILL
     # 3) clean sentinels WITHOUT recreating restart/ or live/
     rm -f DISPATCHER_ACTIVE STOP_DISPATCHER 2>/dev/null || true
-    [ -d restart ] && rm -f restart/DISPATCHER_INTENT restart/dispatcher.heartbeat 2>/dev/null || true
+    [ -d restart ] && rm -f restart/DISPATCHER_INTENT restart/dispatcher.heartbeat restart/dispatcher.pid 2>/dev/null || true
     [ -d live ]    && rm -f live/watcher.pid live/watcher.heartbeat 2>/dev/null || true
     [ -d live/watcher.lock.d ] && rmdir live/watcher.lock.d 2>/dev/null || true
     # 4) self-destruct: remove THIS project's keepalive cron
