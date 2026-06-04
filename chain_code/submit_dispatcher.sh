@@ -672,7 +672,7 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-64 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
 # [2026-06-04 NCHC partition 改版] 候選縮為 {32,16} 對應 {4,2} nodes (8 GPU/node):
 #   使用者策略「jp 16↔32 自由跳轉, 目前暫鎖 32」. partition 改 GPU-數命名(cap=名稱):
 #   jp=32→{32gpus,64gpus}, jp=16→{16gpus,32gpus,64gpus}; dev(cap4)/8gpus(cap8) 被 cap 過濾自動排除.

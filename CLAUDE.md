@@ -74,6 +74,14 @@ A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically block
 
 ### `live/` 與 `restart/` 為何會「持續重生」(成因備忘)
 
+> **[2026-06-04 已根除自我重生引擎]** 依使用者「完全根除生成源頭」要求，已永久停用
+> `chain_code/dispatcher_start.sh` 的 `*/5min` keepalive cron 自動安裝（改為主動清除本專案殘留的
+> cron 行，只比對本專案 `daemon_keepalive.sh` 路徑、`grep -vF` 保留其他所有行含別專案）。
+> 現況：**0 keepalive cron、0 daemon、0 job**，`live/`+`restart/` 不再自我重生。下方「成因備忘」
+> 保留為歷史說明；`mkdir -p restart/` 仍會在**手動執行 chain 腳本時**按需重建（checkpoint 必需，
+> 屬正常行為，非自我重生）。**代價（使用者已接受）：dispatcher 不再被 cron auto-heal，死了需
+> 手動 `./run dispatcher start` 重啟。**
+
 - 兩者皆為執行期產物，已被 `.gitignore` 忽略；幾乎每個 `chain_code/*.sh` 啟動時都會 `mkdir -p restart/`，watcher 會建 `live/`。
 - **重生引擎 = keepalive cron**：`chain_code/dispatcher_start.sh` 在 `./run dispatcher start` 時會
   **自動裝一條 `*/5 * * * *` 的 keepalive cron**（指向本專案 `daemon_keepalive.sh`），

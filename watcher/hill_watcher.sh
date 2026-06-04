@@ -60,6 +60,13 @@ echo "$$" > "$PID_FILE"
 _write_hb
 trap 'rmdir "$LOCK_DIR" 2>/dev/null; rm -f "$PID_FILE" "$HB_FILE"; log "watcher exiting (pid=$$ host=$HOST)"' EXIT
 
+# [STOP guard 2026-06-04] 環境未就緒(chain 停)時不空轉: 對齊 daemon_keepalive 的 STOP_CHAIN 邏輯。
+# STOP_CHAIN 在 → 不啟動 (被 keepalive/並行session 重生的新 watcher 載入此碼即立刻退出, 消除空轉噪音)。
+if [ -f restart/STOP_CHAIN ]; then
+    log "STOP_CHAIN present — watcher NOT starting (env not ready, pid=$$ host=$HOST)"
+    exit 0
+fi
+
 pick_latest_vtk() {
     # Pick by modification time, NOT by the step number in the filename.
     # After a chain restart from an earlier checkpoint the global step counter
@@ -242,6 +249,11 @@ last_mtime=""
 last_bench_step=""
 
 while :; do
+    # [STOP guard 2026-06-04] 每輪檢查: chain 停/環境未就緒 → 乾淨退出, 不再空轉。
+    if [ -f restart/STOP_CHAIN ]; then
+        log "STOP_CHAIN present — watcher exiting (pid=$$ host=$HOST)"
+        exit 0
+    fi
     RE=$(_read_re)
     _write_hb            # cross-node liveness heartbeat — refresh every iteration
 
