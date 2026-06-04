@@ -5,6 +5,8 @@ set -u
 _SELF="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_DIR" || exit 1   # pin process cwd to PROJECT_ROOT so the keepalive death-kill's
+                              # cwd guard matches this watcher, and relative restart/* checks work
 RESULT_DIR="$PROJECT_DIR/result"
 LIVE_DIR="$PROJECT_DIR/live"
 LOG_FILE="$LIVE_DIR/watcher.log"
@@ -253,6 +255,19 @@ while :; do
     if [ -f restart/STOP_CHAIN ]; then
         log "STOP_CHAIN present — watcher exiting (pid=$$ host=$HOST)"
         exit 0
+    fi
+    # [a.out death gate] solver binary 全消失 → 專案已拆除 → watcher self-exit (跨節點安全:
+    # 每個 watcher 各自檢查共享 FS 上的 a.out*; 補強 keepalive 同節點 kill 的盲點)。
+    if [ ! -s "$PROJECT_DIR/a.out" ] && [ ! -s "$PROJECT_DIR/a.out.H200" ] && [ ! -s "$PROJECT_DIR/a.out.GB200" ]; then
+        # FALSE-DEATH guard: a ./run build holds .run.lock flock while binaries may be
+        # transiently absent — keep running through the build window instead of exiting.
+        if [ -e "$PROJECT_DIR/.run.lock" ] && command -v flock >/dev/null 2>&1 \
+                && ! ( flock -n 9 ) 9< "$PROJECT_DIR/.run.lock" 2>/dev/null; then
+            log "DEATH GATE: binary 暫缺但 .run.lock 被佔用 (build 進行中) — watcher 續跑 (pid=$$ host=$HOST)"
+        else
+            log "DEATH GATE: no solver binary (a.out/.H200/.GB200) — watcher exiting (pid=$$ host=$HOST)"
+            exit 0
+        fi
     fi
     RE=$(_read_re)
     _write_hb            # cross-node liveness heartbeat — refresh every iteration

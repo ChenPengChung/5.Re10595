@@ -18,6 +18,8 @@ statistics/
 live/
 slurm_*.log
 slurm_*.err
+keepalive.log
+.keepalive.lock
 nan_monitor_log.txt
 gilbm_metrics_full.dat
 meshYZ.DAT

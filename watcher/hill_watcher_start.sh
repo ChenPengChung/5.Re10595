@@ -16,6 +16,16 @@ WATCHER="$SCRIPT_DIR/hill_watcher.sh"
 
 mkdir -p "$LIVE_DIR"
 
+# [a.out-GATED keepalive — BIRTH via watcher] ensure the */5 keepalive cron is
+# installed (runs even when this invocation early-returns because a watcher is
+# already alive). The keepalive self-terminates + removes this cron once every
+# solver binary (a.out/.H200/.GB200) is gone. See chain_code/tools/daemon_keepalive.sh.
+if [[ -f "$PROJECT_DIR/chain_code/tools/keepalive_cron_lib.sh" ]]; then
+    set +e
+    . "$PROJECT_DIR/chain_code/tools/keepalive_cron_lib.sh" && keepalive_cron_install
+    set -e
+fi
+
 # ── Cross-node single-instance guard (shared-FS heartbeat) ──
 # A fresh watcher.heartbeat means a watcher is alive on SOME login node. The
 # kill -0 check below is node-local and cannot see a watcher on another login

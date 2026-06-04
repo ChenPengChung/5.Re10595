@@ -102,21 +102,17 @@ fi
 # 只有 dispatcher_stop 才移除 INTENT; daemon 重啟/crash 都保留。heartbeat 先給初值, daemon 每輪 touch。
 touch restart/DISPATCHER_INTENT restart/dispatcher.heartbeat
 
-# [自我重生引擎已永久停用 2026-06-04] 依使用者要求根除 live/、restart/ 的「每 5 分鐘自我重生」源頭:
-# dispatcher 啟動「不再」自動安裝 */5min keepalive crontab。改為主動清除「本專案」殘留的 keepalive
-# cron 行 (只比對本專案 daemon_keepalive.sh 路徑, grep -vF 保留其他所有行含別專案), 確保不自我復活。
-# 代價 (使用者已接受): dispatcher 不再被 cron auto-heal; 死了需手動 ./run dispatcher start 重啟。
-if command -v crontab >/dev/null 2>&1; then
-    _WD="$PROJECT_ROOT/chain_code/tools/daemon_keepalive.sh"
-    if crontab -l 2>/dev/null | grep -qF "$_WD"; then
-        if crontab -l 2>/dev/null | grep -vF "$_WD" | crontab - 2>/dev/null; then
-            echo "[dispatcher_start] ✓ 已移除殘留的本專案 keepalive cron (自我重生引擎已永久停用)"
-        else
-            echo "[dispatcher_start] ⚠ 偵測到本專案 keepalive cron 但無法移除; 請手動 crontab -e 刪除指向 $_WD 的行"
-        fi
-    else
-        echo "[dispatcher_start] keepalive cron 自動安裝已停用 → 不會重生 live/ restart/ (no auto-heal)"
-    fi
+# [a.out-GATED keepalive — BIRTH] dispatcher 首次啟動 → 安裝 */5 keepalive cron。
+# keepalive 在「有 solver binary (a.out/.H200/.GB200)」時 auto-heal dispatcher(→restart/) +
+# watcher(→live/); 當 binary 全部消失 (lbm-clean / reset / 拆專案) 時, 主動終止兩個 daemon、
+# 清 sentinel、並移除此 cron (自我終止) → live/、restart/ 不再重生, 直到手動 rebuild + 重啟。
+# 生死閘門詳見 chain_code/tools/daemon_keepalive.sh 頂部註解。安裝為 idempotent (重覆呼叫不會重複)。
+if [ -f "$CHAIN_DIR/tools/keepalive_cron_lib.sh" ]; then
+    # shellcheck source=tools/keepalive_cron_lib.sh
+    . "$CHAIN_DIR/tools/keepalive_cron_lib.sh"
+    keepalive_cron_install
+else
+    echo "[dispatcher_start] ⚠ 找不到 keepalive_cron_lib.sh → 不安裝 keepalive cron (dispatcher 不會被 auto-heal)"
 fi
 
 if [ "$FOREGROUND" -eq 1 ]; then

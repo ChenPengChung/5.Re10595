@@ -884,6 +884,19 @@ while true; do
     # [restart-gap race fix] 每輪 touch heartbeat: jobscript(compute node)用此檔 mtime 判斷 daemon 是否存活
     # (跨節點無法 kill -0 login PID)。daemon 健康時每 ~POLL_INTERVAL touch 一次, jobscript 容忍 180s。
     touch restart/dispatcher.heartbeat 2>/dev/null || true
+    # Stop 條件 0 [a.out death gate]: solver binary 全消失 (lbm-clean/reset/拆專案) → 專案已拆除,
+    # dispatcher clean-exit。補強 keepalive 同節點 kill 的跨節點盲點: 即使 daemon 在別的 login node,
+    # 也會在自己這輪自我退出。(注意: 啟動期檢查只在進迴圈前跑一次, 故迴圈內需此 per-loop 閘門。)
+    if [ ! -s a.out ] && [ ! -s a.out.H200 ] && [ ! -s a.out.GB200 ]; then
+        # FALSE-DEATH guard: ./run build 持有 .run.lock flock 時 binary 可能暫缺 → 不退出, 續跑等 build 完成。
+        if [ -e .run.lock ] && command -v flock >/dev/null 2>&1 && ! ( flock -n 9 ) 9< .run.lock 2>/dev/null; then
+            log "DEATH GATE: binary 暫缺但 .run.lock 被佔用 (build 進行中) -> dispatcher 續跑"
+        else
+            log "DEATH GATE: 無 solver binary (a.out/.H200/.GB200) -> dispatcher clean-exit (專案已拆除)"
+            rm -f restart/DISPATCHER_INTENT restart/dispatcher.heartbeat 2>/dev/null || true
+            break
+        fi
+    fi
     # Stop 條件 1: STOP_DISPATCHER
     if [ -f "$STOP_SENTINEL" ]; then
         log "偵測到 $STOP_SENTINEL -> dispatcher 停止"

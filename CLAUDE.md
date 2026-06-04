@@ -59,8 +59,10 @@ A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically block
    （沿用上節 SLURM 規則；`scancel` 只能用 `./run job-guard scancel`，且只動本專案記錄的 job）。
 2. **絕不** kill / 重啟其他子專案的 dispatcher、watcher、`hill_watcher.sh`、
    `nan_monitor.py`、a.out/mpirun，或其 codex/claude session。
-3. **絕不** 在 crontab 增加、修改指向「非本專案」的行；
-   本專案安裝的 keepalive cron **只能** 指向 `Edit8_NewInterpolation/chain_code/tools/daemon_keepalive.sh`。
+3. **絕不** 在 crontab 增加、修改指向「非本專案」的行。
+   本專案的 keepalive cron **只能** 指向本專案 `chain_code/tools/daemon_keepalive.sh`
+   （由 dispatcher/watcher 啟動時 idempotent 安裝；binary 消失時自我移除）；**絕不** 為任何
+   **非本專案**的子專案新增/修改 keepalive cron 行（`grep -vF` 只比對本專案路徑，保留其他所有行）。
 4. **絕不** `rm`/`mv`/`>`/`touch STOP_CHAIN` 到其他子專案的 `restart/`、`live/`、checkpoint、原始碼。
 5. **唯讀允許**：`cat`/`head`/`tail`/`grep`/`diff`、`squeue`/`sacct`/`scontrol show`、`cp 其他專案/檔 ./` 是允許的（對照參考用）。
 
@@ -72,25 +74,39 @@ A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically block
   keepalive 行 `*/5 * * * * .../Edit7_10595SNS/chain_code/tools/daemon_keepalive.sh`
   （備份於 `~/.claude/crontab_backup_20260604_161745.txt`，僅保留 `2.Re1400` 監控行）。
 
-### `live/` 與 `restart/` 為何會「持續重生」(成因備忘)
+### `live/`、`restart/` 的 keepalive 生命週期（a.out 生死閘門，2026-06-04 重新設計）
 
-> **[2026-06-04 已根除自我重生引擎]** 依使用者「完全根除生成源頭」要求，已永久停用
-> `chain_code/dispatcher_start.sh` 的 `*/5min` keepalive cron 自動安裝（改為主動清除本專案殘留的
-> cron 行，只比對本專案 `daemon_keepalive.sh` 路徑、`grep -vF` 保留其他所有行含別專案）。
-> 現況：**0 keepalive cron、0 daemon、0 job**，`live/`+`restart/` 不再自我重生。下方「成因備忘」
-> 保留為歷史說明；`mkdir -p restart/` 仍會在**手動執行 chain 腳本時**按需重建（checkpoint 必需，
-> 屬正常行為，非自我重生）。**代價（使用者已接受）：dispatcher 不再被 cron auto-heal，死了需
-> 手動 `./run dispatcher start` 重啟。**
+> **[2026-06-04 a.out-gated keepalive]** 依使用者要求，keepalive 機制**保留**（需要 dispatcher /
+> watcher crash 後自我救活），但補上先前缺少的**真正死亡機制**：生死閘門綁定 **solver binary
+> 是否存在**。先前一度「完全刪除」keepalive，現改為「**受控復活 + a.out 死亡閘門**」。
 
-- 兩者皆為執行期產物，已被 `.gitignore` 忽略；幾乎每個 `chain_code/*.sh` 啟動時都會 `mkdir -p restart/`，watcher 會建 `live/`。
-- **重生引擎 = keepalive cron**：`chain_code/dispatcher_start.sh` 在 `./run dispatcher start` 時會
-  **自動裝一條 `*/5 * * * *` 的 keepalive cron**（指向本專案 `daemon_keepalive.sh`），
-  之後每 5 分鐘把 watcher（→`live/`）與 dispatcher（INTENT 在時 →`restart/`）救活。
-- **已知漏洞**：`chain_code/dispatcher_stop.sh` 只移除 `DISPATCHER_INTENT`/heartbeat，
-  **不移除那條 cron**；且 keepalive 的 watcher 分支只看 `restart/STOP_CHAIN`、不看 `STOP_DISPATCHER`。
-  → 因此單純 `dispatcher stop` 後，`live/` 仍會每 5 分鐘被 cron 重生。
-- **要完全停止本專案的重生**：建 `restart/STOP_CHAIN`（`./run job-guard stop-chain`）讓 keepalive 整個退出，
-  **並** 手動移除本專案那條 keepalive cron（`crontab -l | grep -vF '<本專案>/chain_code/tools/daemon_keepalive.sh' | crontab -`）。
+**生命週期（gate = `a.out` / `a.out.H200` / `a.out.GB200` 任一存在）**
+
+| 階段 | 觸發 | 行為 |
+|------|------|------|
+| **BIRTH 出生** | 第一次 `./run dispatcher start` 或啟動 watcher | `dispatcher_start.sh` / `hill_watcher_start.sh` **idempotent 安裝** `*/5` keepalive cron（經 `chain_code/tools/keepalive_cron_lib.sh`） |
+| **ALIVE 存活** | 有任一 solver binary | 每 5 分鐘 auto-heal：watcher heartbeat stale → 重啟（→`live/`）；dispatcher 模式（`DISPATCHER_INTENT` 在）heartbeat stale → 重啟（→`restart/`） |
+| **DEATH 死亡** | **所有** binary 都不存在（`lbm-clean` / `reset` / 拆專案） | keepalive **主動 SIGTERM→SIGKILL** 本專案 dispatcher + watcher（同節點、驗 `cwd`），清 sentinel，**自我移除此 cron** → `live/`+`restart/` 不再重生 |
+
+**跨節點補強**：`submit_dispatcher.sh` 與 `hill_watcher.sh` 的**主迴圈各自加了 per-loop a.out 死亡閘門** →
+即使 daemon 在別的 login node（keepalive 同節點 kill 打不到），也會在自己下一輪自我退出。
+（注意：dispatcher 原本只在「進迴圈前」檢查 binary 一次，故迴圈內需此 per-loop 閘門。）
+
+**復活方式**：手動 rebuild（binary 重新出現）+ `./run dispatcher start`（重新安裝 cron）。
+
+**相關檔案**：
+- `chain_code/tools/daemon_keepalive.sh` — 引擎（BIRTH 由 cron 觸發；含 ALIVE/DEATH 分支）
+- `chain_code/tools/keepalive_cron_lib.sh` — 共用 install/remove/gate 函式（cron 只動本專案那條，`grep -vF`）
+- `chain_code/dispatcher_start.sh` / `watcher/hill_watcher_start.sh` — BIRTH（安裝 cron）
+- `chain_code/submit_dispatcher.sh` / `watcher/hill_watcher.sh` — per-loop a.out 死亡閘門
+- keepalive 自身的 log 寫在 root `keepalive.log`（**刻意不寫 `restart/`/`live/`**，故 DEATH 不會復活那兩個目錄；已加入 `.gitignore`）
+
+**兩種「停」的差異**：
+- **軟暫停**：`restart/STOP_CHAIN`（`./run job-guard stop-chain`）→ keepalive 不 revive，但 cron 留著，清掉 STOP_CHAIN 後自動恢復。
+- **硬死亡**：移除所有 `a.out*`（`lbm-clean`/`reset`）→ keepalive 殺 daemon + 移除自己的 cron，需手動 rebuild 才復活。
+
+> 備註：`mkdir -p restart/` 仍會在手動執行 chain 腳本（投 job、續跑）時按需重建——那是 checkpoint
+> 必需的正常行為。keepalive 只在「有 binary」時才會主動建 `live/`/`restart/`，「無 binary」時保證不建。
 
 ## Periodic Hill testing shortcut (triggered by user command)
 
