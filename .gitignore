@@ -8,6 +8,8 @@ __pycache__/
 
 # Large data files
 *.vtk
+*.vtk.tmp
+*.tmp
 *.bin
 
 # Simulation runtime outputs
