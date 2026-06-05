@@ -98,3 +98,6 @@ Output directory: restart/checkpoint/step_00000001 (from --output-root + --step)
       Phys mapping cache HIT: 402753 cells loaded from mapping_cache/544ec88ea2bfbe23.npz (skipped cell search)
       mapping cache build: 0.0s
       [interp] using VECTORIZED path (default; ~30-100x faster)
+      rho:  360.7s
+      ux:   398.5s
+      uy:   729.9s
