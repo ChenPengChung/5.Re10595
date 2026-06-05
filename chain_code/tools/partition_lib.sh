@@ -102,6 +102,10 @@ partition_gpu_cap_per_account() {
 }
 
 h200_active_partition() {
+    # [LOCK_JP_PARTITION] 嚴格鎖定中 H200 pin 一律正規化為鎖定值 16gpus (忽略檔案內容, 防被竄改/陳舊
+    #   pin 讓任何路徑投到非 16gpus)。所有 pin 讀取(dispatcher pick_cluster / pick_partition_for_jp /
+    #   sbatch_partition_args / partition_ctl)皆經此函式 → 單點根因修正 (Codex r4)。
+    if [ -e "$(dirname "$H200_PARTITION_FILE")/LOCK_JP_PARTITION" ]; then echo 16gpus; return 0; fi
     [ -f "$H200_PARTITION_FILE" ] || return 0
     local p; p="$(tr -d '[:space:]' < "$H200_PARTITION_FILE" 2>/dev/null)"
     [ -n "$p" ] && echo "$p"
@@ -128,7 +132,11 @@ h200_pick_partition_for_jp() {
     pin="$(h200_active_partition)"
     # [2026-06-05] NCHC 政策 jp=32 自由切換集 {8gpus,16gpus,32gpus} (cap 皆=32, jp=32 皆可投);
     #   候選 pin → 8gpus → 16gpus → 32gpus; 跳過「超 cap」與「非 up」者。
-    for p in "$pin" 8gpus 16gpus 32gpus; do
+    # [LOCK_JP_PARTITION] 嚴格鎖: 只准鎖定 pin (=16gpus, 已由 h200_active_partition 正規化), 不落回別分區
+    #   (即使 16gpus 此刻不可投也不跳 8/32gpus; 回 pin 讓其 PENDING 或上層跳過本輪, Codex r4)。
+    local _cands=("$pin" 8gpus 16gpus 32gpus)
+    [ -e "$(dirname "$H200_PARTITION_FILE")/LOCK_JP_PARTITION" ] && _cands=("$pin")
+    for p in "${_cands[@]}"; do
         [ -n "$p" ] || continue
         cap="$(partition_gpu_cap_per_account "$p")"
         [ "$jp" -le "$cap" ] || continue

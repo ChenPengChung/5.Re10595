@@ -353,7 +353,17 @@ pick_cluster() {
             log "  pick_cluster: [LOCK_JP_PARTITION][strict] WARN pin=$_pin 已試 --test-only 但此刻不可投(超 cap/帳號占滿/非 up) → 跳過本輪+警告, 維持鎖定(不落回別分區), 下輪再試" >&2
             echo ""; return 1
         else
-            log "  pick_cluster: [LOCK_JP_PARTITION] WARN 無 h200_partition pin → 鎖定無對象, 落回自由選擇(誤配置保底)" >&2
+            # [LOCK_JP_PARTITION] pin 缺失 → 不落回自由選擇(會打破嚴格鎖, Codex r3); 還原 pin=16gpus 走嚴格鎖。
+            mkdir -p restart 2>/dev/null; echo 16gpus > restart/h200_partition
+            _pin=16gpus; _pintgt="H200@${_pin}"
+            for (( _j=0; _j<n; _j++ )); do
+                if [ "${_T[$_j]}" = "$_pintgt" ]; then
+                    log "  pick_cluster: [LOCK_JP_PARTITION] pin 缺失→還原 16gpus, 鎖定生效 → 回 $_pintgt" >&2
+                    echo "$_pintgt"; return 0
+                fi
+            done
+            log "  pick_cluster: [LOCK_JP_PARTITION][strict] pin 缺失→還原 16gpus 但此刻不可投 → 跳過本輪+警告, 維持鎖定" >&2
+            echo ""; return 1
         fi
     fi
 

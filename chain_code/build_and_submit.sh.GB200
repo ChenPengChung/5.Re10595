@@ -27,6 +27,14 @@ CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 PROJECT_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 cd "$PROJECT_ROOT" || { echo "[build.GB200] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
 
+# [LOCK_JP_PARTITION] H200@16gpus@jp=32 嚴格鎖定中拒絕 GB200 build/submit (鎖是 H200, GB200 與之衝突,
+#   且其 build-clean 會 rm -rf restart/ 靜默解鎖)。要用 GB200 須先解鎖。(Codex r3 全路徑一致。)
+if [ -e restart/LOCK_JP_PARTITION ]; then
+    echo "[build.GB200][LOCK] FATAL: restart/LOCK_JP_PARTITION 鎖定 H200@jp=32; 拒絕 GB200 build/submit。" >&2
+    echo "             要用 GB200 請先解鎖: rm -f restart/LOCK_JP_PARTITION" >&2
+    exit 3
+fi
+
 CLEAN_CHAIN=1
 SUBMIT=1
 BUILD=1

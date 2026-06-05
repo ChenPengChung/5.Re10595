@@ -172,8 +172,17 @@ fi
 
 if [ "$CLEAN_CHAIN" -eq 1 ]; then
     echo "Cleaning chain state (restart/ — 整個資料夾重建)"
+    # [LOCK_JP_PARTITION] 保存鎖定狀態, 跨 build-clean 還原 (build a.out for jp=32 不應靜默解鎖, Codex r3)。
+    _SAVED_LOCK=0; _SAVED_PIN=""
+    [ -e restart/LOCK_JP_PARTITION ] && _SAVED_LOCK=1
+    [ -s restart/h200_partition ] && _SAVED_PIN="$(tr -d '[:space:]' < restart/h200_partition)"
     rm -rf restart/
     mkdir -p restart/
+    if [ "$_SAVED_LOCK" = "1" ]; then
+        touch restart/LOCK_JP_PARTITION
+        echo "${_SAVED_PIN:-16gpus}" > restart/h200_partition
+        echo "  [LOCK] 還原 LOCK_JP_PARTITION + h200_partition=${_SAVED_PIN:-16gpus} (政策跨 build-clean 存活)"
+    fi
 else
     echo "[--no-clean] Preserving chain state for warm re-submit."
     mkdir -p restart/
