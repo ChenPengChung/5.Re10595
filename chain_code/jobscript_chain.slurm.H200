@@ -1,16 +1,16 @@
 #!/bin/bash
 #SBATCH --job-name=Edit6_5600DNS 
 #SBATCH --account=MST115169
-#SBATCH --partition=dev
-#SBATCH --nodes=2
+#SBATCH --partition=16gpus
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 預設 walltime = 4 天 (NCHC h200 partition 上限);
-#             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
+# [POLICY-B1] 暫時鎖定 16gpus partition → 預設 walltime = 2 天 (NCHC 16gpus MaxTime);
+#             可由 sbatch --time= 覆寫 (dispatcher 自由切換時) / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=1:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -22,13 +22,14 @@
 # jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
-#   (1) partition/nodes/gres — h200 / 8 nodes / 8 GPU×8=64  (GB200: gb200 / 16 nodes / 4)
-#       對應 variables.h jp=64 (64 streamwise MPI ranks)
+#   (1) partition/nodes/gres — 16gpus / 4 nodes × 8 GPU/node=32  (GB200: gb200 / 8 nodes × 4 GPU/node=32)
+#       對應 variables.h jp=32 (32 streamwise MPI ranks)。jp 固定 32 (NCHC 2026-06 政策);
+#       暫時鎖定 16gpus (per-account cap=32), dispatcher 自由切換 {8gpus,16gpus,32gpus}。
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
 #                              (GB200: /usr/local/cuda-13.0 on compute node)
-#   (4) mpirun 對映          — -np 64 --map-by ppr:8:node (8 nodes 64 GPU)
-#                              (GB200: -np 64 --map-by ppr:4:node on 16 nodes)
+#   (4) mpirun 對映          — -np 32 --map-by ppr:8:node (4 nodes 32 GPU)
+#                              (GB200: -np 32 --map-by ppr:4:node on 8 nodes)
 #   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
 #
 # 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.

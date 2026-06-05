@@ -3,20 +3,22 @@
 # select_combo_lib.sh — net-throughput (jp × partition) selector for the chain daemon.
 #
 # Picks the (jp, partition) combo that advances the most FTT over a decision
-# horizon. (NOTE 2026-06-03: dev is now QOS-capped at 16 GPU too — it is NO LONGER
-# an uncapped infinite fallback. If dev/normal/4nodes are all cap-blocked the
-# selector returns no-combo and the dispatcher retries — see submit_dispatcher
-# no-capacity trap. Never-idle now relies on free headroom existing somewhere.)
+# horizon. (NOTE 2026-06-05 NCHC policy: jp is LOCKED at 32; the candidate set is the
+# three partitions {8gpus,16gpus,32gpus}, each with per-account GPU cap 32 ≥ jp32, so
+# the selector effectively picks the partition with the earliest start (free headroom).
+# dev (cap=4) and 64gpus (needs jp64+finer grid) are excluded. If all three are
+# cap-blocked the selector returns no-combo and the dispatcher retries — see
+# submit_dispatcher no-capacity trap.)
 #
 #   net(c) = r_ftt(jp) · max(0, H − startdelay − overhead)
 #     overhead = nrounds·restart_ovh + (jp≠current ? switch_ovh : 0),  nrounds = max(1,(H−sd)/walltime)
 #   → penalises long start delay, short walltime (dev's 1h ⇒ many restarts), and jp changes.
 #
 # Admissibility (hard filters):
-#   * jp ∈ {16,32,64} valid for the grid (jpswitch_valid)
+#   * jp ∈ {32} valid for the grid (jpswitch_valid; NY-1=640 → 640/32=20≥7 slab, 32%8=0)
 #   * a.out.jp<N> pre-built + manifest-matched (jpswitch_binary_ready)
 #   * partition AllowAccounts permits our account (sc_acct_allowed)
-#   * jp ≤ per-account GPU cap of the partition (live QOS 2026-06-03: dev=16, normal=16, 4nodes=32)
+#   * jp ≤ per-account GPU cap of the partition (live QOS 2026-06-05: 8gpus/16gpus/32gpus=32, dev=4, 64gpus=64)
 #   * cap-headroom: if jp > (cap − account-GPUs-running-in-partition) the combo can't
 #     start now → large startdelay (sbatch --test-only does NOT model this — Codex M2).
 #
@@ -29,17 +31,22 @@
 # =============================================================================
 
 SC_ACCT="${SC_ACCT:-MST115169}"
-# [自由切換候選 — 完全開啟] jp{128,64,32,16} × partition{normal,dev,4nodes}。
+# [NCHC 2026-06-05 政策改版] 舊 federated normal/4nodes/large 已 State=INACTIVE 不可投;
+#   新單叢集 H200 partition = dev / 8gpus / 16gpus / 32gpus / 64gpus, per-account GPU cap
+#   由 QOS p_<partition> MaxTRESPerAccount 決定: dev=4, 8gpus=32, 16gpus=32, 32gpus=32, 64gpus=64。
+#
+# [本專案 partition@jp 政策] jp 鎖定 32 (= 32 GPU = 4 H200 node)。關鍵發現: 單一帳號最高可在
+#   "16gpus" partition 填滿 32 GPU (QOS p_16gpus cap=32) → jp=32 在 8gpus/16gpus/32gpus 三者皆 ≤cap。
+#   暫時鎖定 (jobscript header 預設) = 16gpus@jp32 (2-day walltime);
+#   自由切換候選集 = {8gpus, 16gpus, 32gpus} × jp32 → 本選擇器抓最佳 net-throughput partition。
 #   完全開啟原則: 每一組都「實際評估後才跳過(帶理由)」, 不盲目預排除 (見 sc_audit / sc_enumerate)。
-#   [2026-06-03] 移除 jp8 (使用者要求: 不再降到 8 GPU)。live QOS cap = dev16 / normal16 / 4nodes32。
-#   - 128: jpswitch_valid 判無效(640/128=5<7 slab)+ 無 a.out.jp128 → 帶理由跳過。
-#   - 64 : >全部 cap(dev16/normal16/4nodes32)→ 每組 over-cap 警告跳過(a.out.jp64 在但不可投)。
-#   - 32 : 只能 4nodes(cap32); dev/normal cap16 → over-cap 警告跳過。a.out.jp32 ready。
-#   - 16 : dev/normal/4nodes 三者皆可(≤cap)且 a.out.jp16 ready → 可投(視 live headroom;
-#          帳號手足 job 佔滿 cap 則 QOS-BLOCK 警告、罰分不投, 換有空檔的 partition)。
-#   要真正用 >32 GPU 須換更細網格(NY-1≥896 才能讓 128 slab≥7)或放寬 cap, 屬不同解析度/配額的 DNS。
-SC_VALID_JP="${SC_VALID_JP:-128 64 32 16 8}"
-SC_PARTITIONS="${SC_PARTITIONS:-normal 4nodes dev}"
+#   - 8gpus : cap=32 ≥ jp32 → 可投 (2-day walltime)。a.out.jp32 ready。
+#   - 16gpus: cap=32 ≥ jp32 → 可投 (2-day walltime)。← 暫時鎖定的預設 partition。
+#   - 32gpus: cap=32 ≥ jp32 → 可投 (1-day walltime)。
+#   (dev cap=4 < 32、64gpus 需 jp64 + 更細網格; 兩者皆不在候選集。)
+#   帳號手足 job 佔滿某 partition 的 cap 時該組 QOS-BLOCK 罰分不投, 換有空檔的 partition (never-idle)。
+SC_VALID_JP="${SC_VALID_JP:-32}"
+SC_PARTITIONS="${SC_PARTITIONS:-8gpus 16gpus 32gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
 SC_JS="${SC_JS:-chain_code/jobscript_chain.slurm.H200}"
@@ -64,15 +71,16 @@ _sc_to_hours() {  # D-HH:MM:SS | HH:MM:SS -> hours
 }
 
 sc_cap() {  # $1=partition -> per-account GPU cap (QOS MaxTRESPerAccount; live read, hardcoded fallback)
-    # [Codex A3 fix] caps are PER-QOS and NOT uniform: verified p_normal=16, p_4nodes=32, dev=uncapped.
-    # The old hardcoded "normal|4nodes)=32" was wrong for normal (16) → jp=32 was wrongly deemed
-    # admissible on normal and every submit there PENDs (MaxGRESPerAccount). Read live from sacctmgr
-    # (NCHC QOS = p_<partition>); fall back to the verified values if sacctmgr is unavailable.
+    # caps are PER-QOS and NOT uniform. Read live from sacctmgr (NCHC QOS = p_<partition>);
+    # fall back to the values verified 2026-06-05 if sacctmgr is unavailable:
+    #   p_dev=4, p_8gpus=32, p_16gpus=32, p_32gpus=32, p_64gpus=64.
+    # NOTE: an UNKNOWN partition falls back to cap 0 (not "infinite") — since the 2026-06
+    # revision there is no uncapped partition, so a stray name must never be deemed admissible.
     local part="$1" cap
     cap=$(sacctmgr -n -P show qos "p_${part}" format=MaxTRESPerAccount 2>/dev/null \
             | grep -oE 'gres/gpu=[0-9]+' | cut -d= -f2 | head -1)
     [ -n "$cap" ] && { echo "$cap"; return; }
-    case "$part" in normal) echo 16 ;; 4nodes) echo 32 ;; *) echo 100000 ;; esac
+    case "$part" in dev) echo 4 ;; 8gpus|16gpus|32gpus) echo 32 ;; 64gpus) echo 64 ;; *) echo 0 ;; esac
 }
 
 sc_acct_allowed() {  # $1=partition -> 0 allowed
@@ -189,7 +197,9 @@ sc_pick_combo() {  # [--pending] -> "jp part"  (含 anti-thrash 遲滯)
     # 最佳就是當前 jp → 直接用 (partition 內切換免遲滯)
     if [ "$best_jp" = "$cur" ]; then printf '%s\n' "$best" | awk '{print $1, $2}'; return; fi
     # [弱點#1 修補] 最佳是「不同 jp」→ 須淨贏過「當前 jp 最佳組合」× margin(預設1.15)才切, 否則留在當前 jp。
-    # 防 r_ftt 雜訊造成 jp32↔jp64 來回 thrash(每切一次=一個 repartition+restart)。
+    # 防 r_ftt 雜訊造成跨 jp 來回 thrash(每切一次=一個 repartition+restart)。
+    # [NCHC 2026-06 jp 鎖定 32] SC_VALID_JP 單值 → 此 jp-切換分支恆不觸發(僅 partition 內換);
+    #   保留機制以備未來解鎖多 jp 候選集。
     best_cur=$(printf '%s\n' "$enum" | awk -v c="$cur" '$1==c' | head -1)
     [ -z "$best_cur" ] && { printf '%s\n' "$best" | awk '{print $1, $2}'; return; }  # 當前 jp 不可投→必須切
     nb=$(printf '%s\n' "$best" | awk '{print $4}'); nc=$(printf '%s\n' "$best_cur" | awk '{print $4}')
