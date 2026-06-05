@@ -188,7 +188,7 @@
 // ================================================================
 #define     loop        50000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
-#define     NDTFRC      50        // 每 N 步更新外力項
+#define     NDTFRC      1000        // 每 N 步更新外力項
 // ── 生產統計跑 (FTT 10→70) I/O 節流: 原 1000/1000 每步攤提 50ms I/O (~93% wall) ──
 //    checkpoint 巢狀在 VTK 區塊內 (main.cu:2101 piggyback 同一次 D2H gather):
 //    → checkpoint 不可比 VTK 更頻繁, 且需 NDTVTK | NDTBIN。
