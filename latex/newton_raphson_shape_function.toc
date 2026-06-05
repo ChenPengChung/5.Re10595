@@ -1,0 +1,30 @@
+\contentsline {section}{\numberline {1}緒論：實作目的與問題定義}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}背景}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}要解的方程}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}何時解、解幾次}{3}{subsection.1.3}%
+\contentsline {section}{\numberline {2}理論}{3}{section.2}%
+\contentsline {subsection}{\numberline {2.1}一維七點 Lagrange 形狀函數}{3}{subsection.2.1}%
+\contentsline {subsection}{\numberline {2.2}映射值與 Jacobian 的張量積組裝}{4}{subsection.2.2}%
+\contentsline {subsection}{\numberline {2.3}阻尼 Newton--Raphson 迭代}{4}{subsection.2.3}%
+\contentsline {subsection}{\numberline {2.4}失敗處理}{5}{subsection.2.4}%
+\contentsline {subsection}{\numberline {2.5}近壁 ghost 外插與權重摺疊}{5}{subsection.2.5}%
+\contentsline {section}{\numberline {3}程式碼實作}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}節點與形狀函數：\texttt {ITB\_YZNodeHost} / \texttt {ITB\_YZShapeHost}}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}映射與 Jacobian 組裝：\texttt {ITB\_EvaluateMapHost}}{6}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}Newton 求解器：\texttt {ITB\_NewtonSolveHost}}{6}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}呼叫端：出發點、求解、權重固化}{8}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}GPU 消費端：純查表（Scheme A，不重算）}{8}{subsection.3.5}%
+\contentsline {section}{\numberline {4}逐段解釋}{9}{section.4}%
+\contentsline {subsection}{\numberline {4.1}為什麼殘差/Jacobian 的搭配是對的}{9}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}阻尼策略的三層保險}{9}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}收斂判據為何用兩種單位}{9}{subsection.4.3}%
+\contentsline {subsection}{\numberline {4.4}初值為何取 $(0,0)$ 而不用更聰明的猜測}{9}{subsection.4.4}%
+\contentsline {subsection}{\numberline {4.5}失敗 fallback 的因果鏈}{9}{subsection.4.5}%
+\contentsline {subsection}{\numberline {4.6}已知的非數值性瑕疵（誠實記錄）}{9}{subsection.4.6}%
+\contentsline {section}{\numberline {5}實作目的與意義}{9}{section.5}%
+\contentsline {subsection}{\numberline {5.1}Host 一次性預計算 vs.\ kernel 每步重算}{9}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Scheme A：存權重而非存 $(r,s)$}{10}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}9 類別壓縮}{10}{subsection.5.3}%
+\contentsline {subsection}{\numberline {5.4}方法學意義}{10}{subsection.5.4}%
+\contentsline {section}{\numberline {6}驗證摘要}{10}{section.6}%
+\contentsline {paragraph}{限制與注意事項}{10}{section*.2}%

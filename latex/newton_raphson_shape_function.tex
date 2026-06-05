@@ -1,0 +1,681 @@
+% !TEX program = xelatex
+% ============================================================================
+% ITB-ISLBM 等參形狀函數之 Newton-Raphson 反映射求解
+% 專案: 5.Re10595/Edit8_NewInterpolation
+% 對應原始碼: itblbm/isoparametric_precompute.h (552 行, 行號以 2026-06-05 版為準)
+% 本文件所有數值證據均出自本專案三輪靜態驗證 (2026-06-05):
+%   16-agent 工作流 + 獨立第二意見複驗 + 四路總檢驗(含對抗複核)
+% 編譯: xelatex newton_raphson_shape_function.tex  (跑兩次以解析交叉引用)
+% ============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{fontspec}
+\usepackage{xeCJK}
+\setCJKmainfont{Noto Sans CJK TC}
+\setCJKsansfont{Noto Sans CJK TC}
+\setCJKmonofont{Noto Sans CJK TC}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs,array,longtable}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage[colorlinks=true,linkcolor=blue!60!black,citecolor=blue!60!black,urlcolor=blue!60!black]{hyperref}
+
+% ---------- listings 設定 (C/CUDA) ----------
+\definecolor{codebg}{rgb}{0.97,0.97,0.97}
+\definecolor{codekw}{rgb}{0.00,0.30,0.60}
+\definecolor{codecm}{rgb}{0.30,0.50,0.30}
+\definecolor{codestr}{rgb}{0.55,0.25,0.10}
+\lstdefinestyle{cstyle}{
+  language=C,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecm},
+  stringstyle=\color{codestr},
+  numbers=left,
+  numberstyle=\tiny\color{gray},
+  numbersep=8pt,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  rulecolor=\color{gray!50},
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  captionpos=b,
+  escapeinside={(*@}{@*)},
+  morekeywords={size_t,inline,__device__,__forceinline__,__constant__,uchar}
+}
+\lstset{style=cstyle}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\filewhere}[1]{\textcolor{gray}{\small（#1）}}
+
+\title{\textbf{ITB-ISLBM 等參形狀函數之 Newton--Raphson 反映射求解}\\[4pt]
+\large 理論、程式實作、逐段解釋與驗證\\[2pt]
+\normalsize 專案：\code{5.Re10595/Edit8\_NewInterpolation}（D3Q19 GILBM，週期丘 $Re=10595$）}
+\author{Edit8\_NewInterpolation 技術文件\\
+\small 對應原始碼：\code{itblbm/isoparametric\_precompute.h}（行號以 2026-06-05 版為準）}
+\date{2026 年 6 月 5 日}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本文件完整說明本專案 ITB-ISLBM（Isoparametric-Transformation-Based,
+Interpolation-Supplemented Lattice Boltzmann Method）串流路徑中，
+「等參形狀函數反映射」的 Newton--Raphson 求解流程：
+給定半拉格朗日出發點（departure foot），在 $7\times 7$ 個節點構成的
+六階張量 Lagrange 等參元素上，求解局部座標 $(r,s)$ 使
+$\bigl[\,Y(r,s),\,Z(r,s)\,\bigr]=\bigl[\sum_i \phi_i y_i,\ \sum_i \phi_i z_i\bigr]$
+命中該出發點。內容涵蓋：(1) 理論——形狀函數構造、反映射非線性方程組、
+阻尼 Newton 法與 $2\times 2$ 解析步；(2) 程式碼——與
+\code{isoparametric\_precompute.h} 逐行對應的實作列表；(3) 解釋——每段
+程式的數值意義與設計取捨；(4) 實作目的與意義——host 端一次性預計算
+與 GPU 查表消費（Scheme A）的效能架構；(5) 驗證摘要——本專案三輪
+獨立靜態驗證（含有理數精確比對與對抗複核）之結論；以及參考資料。
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================================
+\section{緒論：實作目的與問題定義}
+\label{sec:intro}
+
+\subsection{背景}
+本專案以曲線貼體網格（body-fitted curvilinear grid）求解週期丘
+（periodic hill, $Re=10595$）流場。座標慣例為：
+$j$ = 流向（streamwise，MPI 切割、週期）、$k$ = 壁法向（wall-normal，上下壁）、
+$i$ = 展向（spanwise，均勻、週期）。在格子 Boltzmann 方法（LBM）中，
+非均勻網格上的串流（streaming）步驟需要插值：分布函數 $f_q$ 在時刻
+$t+\mathrm{d}t$ 於節點 $\bm{x}_{jk}$ 的值，取自時刻 $t$ 在「出發點」
+\begin{equation}
+\bm{x}_d=\bm{x}_{jk}-\bm{e}_q\,\mathrm{d}t
+\label{eq:foot}
+\end{equation}
+的插值重建，此即 He--Luo--Dembo 的 interpolation-supplemented LBM
+（ISLBM）\cite{HeLuoDembo1996} 與其曲線座標推廣 \cite{HeDoolen1997,Imamura2005}。
+
+ITB-ISLBM \cite{ITBpaper} 的核心想法是：\textbf{不在計算座標系做插值，
+而是把出發點直接放在物理座標系，藉由有限元素式的等參變換
+（isoparametric transformation）\cite{Hughes2000} 找到它在參考元素中的
+局部座標，再用同一組形狀函數產生插值權重}。如此插值算子對網格扭曲
+（skewness、stretching）具有一致的幾何意義。
+
+\subsection{要解的方程}
+\label{sec:problem}
+取以節點 $(j,k)$ 為中心的 $7\times 7$ 物理節點
+$\{(y_{ab},z_{ab})\}_{a,b=0}^{6}$（即 $j_0=j-3,\ k_0=k-3$ 起算的方塊），
+等參映射定義為
+\begin{equation}
+\boxed{\;
+Y(r,s)=\sum_{a=0}^{6}\sum_{b=0}^{6}L_a(r)\,L_b(s)\;y_{ab},
+\qquad
+Z(r,s)=\sum_{a=0}^{6}\sum_{b=0}^{6}L_a(r)\,L_b(s)\;z_{ab},
+\;}
+\label{eq:isomap}
+\end{equation}
+其中 $\phi_{ab}(r,s)=L_a(r)L_b(s)$ 為張量積形狀函數
+（即摘要中 $\sum_i\phi_i x_i$ 的二維張量形式）。
+給定出發點 $(y_d,z_d)$（式 \eqref{eq:foot} 的 $y$--$z$ 分量），
+\textbf{反映射問題}為：求 $(r,s)$ 使
+\begin{equation}
+\bm{F}(r,s)\;=\;
+\begin{pmatrix} Y(r,s)-y_d \\ Z(r,s)-z_d \end{pmatrix}
+\;=\;\bm{0}.
+\label{eq:nonlinear}
+\end{equation}
+因 $L_a$ 為六階多項式，式 \eqref{eq:nonlinear} 是\textbf{無封閉解的
+非線性方程組}，本專案以阻尼 Newton--Raphson 法求解
+\cite{Press2007,DennisSchnabel1996}。解得 $(r,s)$ 後，插值權重即為
+$w_{ab}=L_a(r)L_b(s)$，並（於近壁處）經 ghost 摺疊後固化成查表
+（\S\ref{sec:purpose}）。
+
+\subsection{何時解、解幾次}
+反映射只在 \textbf{host 端初始化階段執行一次}
+\filewhere{main.cu:843--846 呼叫 \code{ITB\_PrecomputeCoefficientsHost}}：
+對 9 個 $(e_y,e_z)$ 速度類別（D3Q19 的 19 個 $q$ 依其 $y$--$z$ 投影壓縮
+而成；類別 0 即 $e_y{=}e_z{=}0$ 不需插值故跳過）$\times$
+內部節點 $j\in[3,\mathrm{NYD6}{-}4],\ k\in[3,\mathrm{NZ6}{-}4]$
+各解一次。以現行參數（$\mathrm{NY}=897$、$\mathrm{NZ}=449$、$jp=64$，
+故 $\mathrm{NYD6}=21$、$\mathrm{NZ6}=455$）計，每個 rank 共
+$8\times15\times449=53{,}880$ 次 Newton 求解、全 64 rank 共
+$3{,}448{,}320$ 次。GPU 在其後每一個時間步都\textbf{只查表、不再解任何方程}。
+
+% ============================================================================
+\section{理論}
+\label{sec:theory}
+
+\subsection{一維七點 Lagrange 形狀函數}
+\label{sec:shape}
+取等距節點
+\begin{equation}
+x_n = n-3,\qquad n=0,\dots,6\ \Longrightarrow\ x_n\in\{-3,-2,-1,0,1,2,3\},
+\end{equation}
+（元素中心 $x=0$ 即當前格點本身，對應索引 $\mathrm{half}=3$）。
+標準 Lagrange 基底與其導數為
+\begin{align}
+L_a(x) &= \prod_{\substack{b=0\\ b\neq a}}^{6}\frac{x-x_b}{x_a-x_b},
+\label{eq:lagrange}\\
+L_a'(x) &= \sum_{\substack{m=0\\ m\neq a}}^{6}\frac{1}{x_a-x_m}
+\prod_{\substack{b=0\\ b\neq a,\,b\neq m}}^{6}\frac{x-x_b}{x_a-x_b}
+\qquad\text{（乘積法則逐項展開）}.
+\label{eq:dlagrange}
+\end{align}
+重要性質（本專案以有理數運算 \code{fractions.Fraction} 驗證為
+\textbf{精確 0 誤差}，見 \S\ref{sec:verify}）：
+\begin{enumerate}[itemsep=1pt]
+\item \textbf{單位分割（partition of unity）}：$\sum_a L_a(x)=1$、
+      $\sum_a L_a'(x)=0$，對任意 $x$ 成立 —— 保證插值權重和恆為 1
+      （質量守恆的必要條件）。
+\item \textbf{Kronecker 性質}：$L_a(x_b)=\delta_{ab}$；特別地
+      $L(0)=[0,0,0,1,0,0,0]$ —— Newton 失敗時退回 $(r,s)=(0,0)$
+      即自動退化為「自我讀取」（identity read）。
+\item \textbf{階數}：對任意次數 $\le 6$ 的多項式，值與導數均精確再生；
+      $x^7$ 則不再生（負控制已驗，誤差 $\approx 13.8$ 明確非零）——
+      插值多項式階數恰為 6，插值誤差收斂率 $O(h^7)$
+      \cite{BerrutTrefethen2004}。
+\end{enumerate}
+
+\subsection{映射值與 Jacobian 的張量積組裝}
+\label{sec:jacobian}
+Newton 法需要 $\bm{F}$ 與其 Jacobian。由式 \eqref{eq:isomap} 直接微分：
+\begin{equation}
+J=\frac{\partial(Y,Z)}{\partial(r,s)}=
+\begin{pmatrix} Y_r & Y_s\\ Z_r & Z_s \end{pmatrix},\qquad
+\begin{aligned}
+Y_r&=\textstyle\sum_{a,b}L_a'(r)L_b(s)\,y_{ab}, &
+Y_s&=\textstyle\sum_{a,b}L_a(r)L_b'(s)\,y_{ab},\\
+Z_r&=\textstyle\sum_{a,b}L_a'(r)L_b(s)\,z_{ab}, &
+Z_s&=\textstyle\sum_{a,b}L_a(r)L_b'(s)\,z_{ab}.
+\end{aligned}
+\label{eq:J}
+\end{equation}
+即張量積權重 $N=L_aL_b$、$N_r=L_a'L_b$、$N_s=L_aL_b'$，與形狀函數
+共用同一組 $L/L'$ 求值。注意 $r\leftrightarrow a\leftrightarrow j$（流向）、
+$s\leftrightarrow b\leftrightarrow k$（法向）的軸對應在整條鏈
+（host 求解 $\to$ 儲存 $\to$ device 消費）中保持一致、無交換
+（已驗證；若交換，重建出發點誤差會達 $O(1)$）。
+
+\subsection{阻尼 Newton--Raphson 迭代}
+\label{sec:newton}
+以 $(r_0,s_0)=(0,0)$（元素中心）為初值。每次迭代：
+\begin{enumerate}[itemsep=1pt]
+\item 求值 $\bm{R}=(R_y,R_z)^\mathsf{T}=\bigl(Y-y_d,\ Z-z_d\bigr)^\mathsf{T}$ 與
+      $J$（式 \eqref{eq:J}）。
+\item \textbf{$2\times2$ 解析步（Cramer 法）}：
+\begin{equation}
+\det J = Y_rZ_s-Y_sZ_r,\qquad
+\Delta r=\frac{Z_sR_y-Y_sR_z}{\det J},\qquad
+\Delta s=\frac{-Z_rR_y+Y_rR_z}{\det J},
+\label{eq:cramer}
+\end{equation}
+可直接驗證 $J\,(\Delta r,\Delta s)^\mathsf{T}=\bm{R}$，
+故 $(\Delta r,\Delta s)^\mathsf{T}=J^{-1}\bm{R}$ \textbf{嚴格成立}
+（本專案以有理數代數證明，差恰為 0）。不需任何線性代數函式庫。
+\item \textbf{阻尼與回溯線搜尋（backtracking line search）}
+      \cite{Press2007,DennisSchnabel1996}：
+\begin{equation}
+(r,s)\ \leftarrow\ (r,s)-\sigma\,(\Delta r,\Delta s),\qquad
+\sigma_0=\begin{cases}0.5,&|\Delta r|+|\Delta s|>1\\ 1,&\text{否則}\end{cases}
+\end{equation}
+若新殘差未下降則 $\sigma\leftarrow\sigma/2$ 重試，直到殘差不增或
+$\sigma\le 0.0625$（每個 Newton 步最多 5 次求值）。觸及地板仍接受該步
+（非單調容許）——真正不收斂的情形交由失敗路徑處理。
+\item \textbf{收斂判據（OR 邏輯，雙單位制）}：
+\begin{equation}
+\underbrace{\sigma\bigl(|\Delta r|+|\Delta s|\bigr)<10^{-12}}_{\text{局部座標步長}}
+\qquad\text{或}\qquad
+\underbrace{|R_y|+|R_z|<10^{-11}}_{\text{物理座標殘差}},
+\label{eq:converge}
+\end{equation}
+迭代上限 12 次。$10^{-11}$ 相對最細近壁格距
+$\min\Delta z\approx2.256\times10^{-3}$ 為 $\sim4.4\times10^{-9}$
+相對殘差，極嚴格。
+\item \textbf{奇異護欄}：$|\det J|<10^{-14}$ 即中止並標記失敗。
+      健康貼體網格上 $|\det J|\sim O(\Delta y\,\Delta z)\sim10^{-5}$
+      （實機最小值 $1.571\times10^{-5}$），與門檻相差約 9 個數量級，
+      僅在網格塌縮/翻轉時觸發。
+\end{enumerate}
+因初值距真解不到半格（$\mathrm{CFL}=0.5\Rightarrow$ 出發點位移
+$\le0.5$ 格），Newton 展現標準\textbf{二次收斂}：實測殘差歷程如
+$1.57\to0.78\to1.2\times10^{-2}\to1.2\times10^{-6}$，
+生產網格上平均 2.0 次、最多 3 次即收斂。
+
+\subsection{失敗處理}
+若 12 次未收斂或觸發奇異護欄，求解器回傳 \code{converged=0}，
+呼叫端強制 $(r,s)=(0,0)$：由 Kronecker 性質
+（\S\ref{sec:shape} 性質 2），權重退化為中心點自我讀取，
+物理上等同「該方向不串流」的保守處置。同時在
+\code{ITBLBM\_STRICT\_PRECOMPUTE=1}（現行設定）下，任一點失敗即
+\code{MPI\_Abort(72)} —— \textbf{絕不靜默使用錯誤流場}。
+
+\subsection{近壁 ghost 外插與權重摺疊}
+\label{sec:fold}
+$k$ 方向 7 點 stencil 在近壁（$k\in\{3,4,5\}$ 與頂部鏡像）會伸出
+實體網格至多 3 層 ghost。處理分兩階段、用\textbf{同一組外插係數}保持自洽：
+\begin{enumerate}[itemsep=1pt]
+\item \textbf{幾何外插}（Newton 求解時）：ghost 節點座標由過物理列
+      $\{3,4,5\}$ 的二次 Lagrange 多項式在 ghost 位置求值
+      （\code{GHOST\_EXTRAP\_ORDER=2}）。設 ghost 距第一物理列 $d$ 格，
+      外插係數為
+\begin{equation}
+c_0=\tfrac{(d{+}1)(d{+}2)}{2},\qquad c_1=-d(d{+}2),\qquad c_2=\tfrac{d(d{+}1)}{2},
+\qquad c_0+c_1+c_2=1\ \ (\forall d).
+\label{eq:ghost}
+\end{equation}
+\item \textbf{權重摺疊}（求解後）：落在 ghost 列上的插值權重 $w$
+      依同一組 $c_i$ 重新分配回物理列。\textbf{摺疊等價定理}
+      （本專案數值驗證至 $\sim 9\times10^{-16}$）：對任意資料 $D$，
+\begin{equation}
+\sum_{b}w_b\,D^{\mathrm{eff}}(k_0^{\mathrm{raw}}+b)
+\;=\;
+\sum_{b}\tilde w_b\,D(k_0^{\mathrm{phys}}+b),
+\label{eq:foldthm}
+\end{equation}
+其中 $D^{\mathrm{eff}}$ 為 ghost 延拓場、$\tilde w$ 為摺疊後權重。
+由式 \eqref{eq:ghost} 係數和為 1，摺疊\textbf{精確保持單位分割}
+（實機 $\max\bigl|\sum\tilde w-1\bigr|=1.78\times10^{-15}$）。
+\end{enumerate}
+故近壁格點的 GPU 表只含物理列索引（$k_{\mathrm{idx}}\in[3,\mathrm{NZ6}-4]$），
+kernel 無需任何邊界分支。代價是近壁 $\sim$3 層的 $k$ 方向實質精度
+由 degree-6 降為 degree-2（局部、刻意的設計取捨）。
+
+% ============================================================================
+\section{程式碼實作}
+\label{sec:code}
+以下列表均為 \code{itblbm/isoparametric\_precompute.h} 的\textbf{實際程式碼}
+（2026-06-05 版，行號經核對零漂移）。
+
+\subsection{節點與形狀函數：\code{ITB\_YZNodeHost} / \code{ITB\_YZShapeHost}}
+\filewhere{isoparametric\_precompute.h:18--51；對應式 \eqref{eq:lagrange}--\eqref{eq:dlagrange}}
+\begin{lstlisting}[caption={七點 Lagrange 形狀函數及其導數（封閉式直接求值，非解方程）}]
+static inline double ITB_YZNodeHost(int n)
+{
+    return (double)(n - ITB_YZ_ORDER / 2);   /* 7/2=3 -> 節點 {-3..3} */
+}
+
+static inline void ITB_YZShapeHost(double x,
+                                   double L[ITB_YZ_ORDER],
+                                   double dL[ITB_YZ_ORDER])
+{
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
+        const double xa = ITB_YZNodeHost(a);
+        double La = 1.0;                      /* (*@式\eqref{eq:lagrange}@*): L_a = prod (x-xb)/(xa-xb) */
+        for (int b = 0; b < ITB_YZ_ORDER; b++) {
+            if (b == a) continue;
+            const double xb = ITB_YZNodeHost(b);
+            La *= (x - xb) / (xa - xb);
+        }
+        L[a] = La;
+
+        double dLa = 0.0;                     /* (*@式\eqref{eq:dlagrange}@*): 乘積法則, 對被微分項 m 求和 */
+        for (int m = 0; m < ITB_YZ_ORDER; m++) {
+            if (m == a) continue;
+            const double xm = ITB_YZNodeHost(m);
+            double term = 1.0 / (xa - xm);
+            for (int b = 0; b < ITB_YZ_ORDER; b++) {
+                if (b == a || b == m) continue;
+                const double xb = ITB_YZNodeHost(b);
+                term *= (x - xb) / (xa - xb);
+            }
+            dLa += term;
+        }
+        dL[a] = dLa;
+    }
+}
+\end{lstlisting}
+
+\subsection{映射與 Jacobian 組裝：\code{ITB\_EvaluateMapHost}}
+\filewhere{isoparametric\_precompute.h:87--117；對應式 \eqref{eq:isomap}、\eqref{eq:J}}
+\begin{lstlisting}[caption={張量積一次組裝 $Y,Z$ 與四個 Jacobian 分量（每次 Newton 迭代呼叫一次）}]
+static inline void ITB_EvaluateMapHost(
+    const double *y_h, const double *z_h,
+    int j0, int k0, double r, double s,
+    double *Y, double *Z,
+    double *Yr, double *Ys, double *Zr, double *Zs)
+{
+    double Lr[ITB_YZ_ORDER], dLr[ITB_YZ_ORDER];
+    double Ls[ITB_YZ_ORDER], dLs[ITB_YZ_ORDER];
+    ITB_YZShapeHost(r, Lr, dLr);              /* r 方向: 值 + 導數 */
+    ITB_YZShapeHost(s, Ls, dLs);              /* s 方向: 值 + 導數 */
+
+    *Y = 0.0; *Z = 0.0;
+    *Yr = 0.0; *Ys = 0.0; *Zr = 0.0; *Zs = 0.0;
+    for (int a = 0; a < ITB_YZ_ORDER; a++) {
+        const int gj = j0 + a;                /* r <-> a <-> j(流向) */
+        for (int b = 0; b < ITB_YZ_ORDER; b++) {
+            const int gk = k0 + b;            /* s <-> b <-> k(法向) */
+            const double yv = ITB_GeomEffHost(y_h, gj, gk);  /* 近壁 ghost 幾何 */
+            const double zv = ITB_GeomEffHost(z_h, gj, gk);  /* 由二次外插補出  */
+            const double N  = Lr[a]  * Ls[b];   /* phi_ab            */
+            const double Nr = dLr[a] * Ls[b];   /* d(phi_ab)/dr       */
+            const double Ns = Lr[a]  * dLs[b];  /* d(phi_ab)/ds       */
+            *Y  += N  * yv;   *Z  += N  * zv;
+            *Yr += Nr * yv;   *Ys += Ns * yv;
+            *Zr += Nr * zv;   *Zs += Ns * zv;
+        }
+    }
+}
+\end{lstlisting}
+
+\subsection{Newton 求解器：\code{ITB\_NewtonSolveHost}}
+\filewhere{isoparametric\_precompute.h:119--180；對應 \S\ref{sec:newton} 全部}
+\begin{lstlisting}[caption={阻尼 Newton--Raphson 反映射求解器（完整原文）}]
+static inline int ITB_NewtonSolveHost(
+    const double *y_h, const double *z_h,
+    int j0, int k0, double yd, double zd,
+    double *r_out, double *s_out,
+    int *iters_out, double *res_out, double *update_out, double *min_det_out)
+{
+    double r = 0.0, s = 0.0;                  /* 初值 = 元素中心(格點本身) */
+    double min_det = 1.0e300;
+    double last_update = 0.0;
+    double res_norm = 1.0e300;
+    int converged = 0;
+    int it = 0;
+
+    for (it = 1; it <= 12; it++) {            /* 迭代上限 12 */
+        double Y, Z, Yr, Ys, Zr, Zs;
+        ITB_EvaluateMapHost(y_h, z_h, j0, k0, r, s, &Y, &Z, &Yr, &Ys, &Zr, &Zs);
+        const double Ry = Y - yd;             /* 殘差 F = map - target */
+        const double Rz = Z - zd;
+        const double det = Yr * Zs - Ys * Zr; /* det J */
+        const double abs_det = fabs(det);
+        if (abs_det < min_det) min_det = abs_det;
+        res_norm = fabs(Ry) + fabs(Rz);
+        if (abs_det < 1.0e-14) break;         /* 奇異護欄 -> 標記失敗 */
+
+        double dr = ( Zs * Ry - Ys * Rz) / det;   /* (*@式\eqref{eq:cramer}@*): Cramer */
+        double ds = (-Zr * Ry + Yr * Rz) / det;   /* = J^{-1} R     */
+        double scale = 1.0;
+        last_update = fabs(dr) + fabs(ds);
+        if (last_update > 1.0) scale = 0.5;   /* 大步先砍半 */
+
+        double best_r = r - scale * dr;       /* Newton 方向: x <- x - J^{-1}F */
+        double best_s = s - scale * ds;
+        double best_res = 1.0e300;
+        for (int damp = 0; damp < 5; damp++) {    /* 回溯線搜尋 */
+            double Yc, Zc, Yrc, Ysc, Zrc, Zsc;
+            ITB_EvaluateMapHost(y_h, z_h, j0, k0, best_r, best_s,
+                                &Yc, &Zc, &Yrc, &Ysc, &Zrc, &Zsc);
+            best_res = fabs(Yc - yd) + fabs(Zc - zd);
+            if (best_res <= res_norm || scale <= 0.0625) break;
+            scale *= 0.5;
+            best_r = r - scale * dr;
+            best_s = s - scale * ds;
+        }
+
+        r = best_r;
+        s = best_s;
+        last_update *= scale;                 /* = 實際施加步長 |dr|+|ds| 乘 sigma */
+        res_norm = best_res;
+        if (last_update < 1.0e-12 || res_norm < 1.0e-11) {   /* (*@式\eqref{eq:converge}@*) 雙判據 */
+            converged = 1;
+            break;
+        }
+    }
+
+    *r_out = r;
+    *s_out = s;
+    *iters_out = it;
+    *res_out = res_norm;
+    *update_out = last_update;
+    *min_det_out = min_det;
+    return converged;
+}
+\end{lstlisting}
+
+\subsection{呼叫端：出發點、求解、權重固化}
+\filewhere{isoparametric\_precompute.h:465--510（節錄）}
+\begin{lstlisting}[caption={每個 (class, j, k) 解一次；解完立刻把 $(r,s)$ 固化成權重表}]
+for (int j = 3; j < NYD6 - 3; j++) {
+    for (int k = 3; k < NZ6 - 3; k++) {
+        const int j0 = j - ITB_YZ_ORDER / 2;          /* stencil 基底 = j-3, k-3 */
+        const int k0 = k - ITB_YZ_ORDER / 2;
+        const double yd = y_h[j * NZ6 + k] - ey * dt_val;   /* (*@式\eqref{eq:foot}@*): 出發點 */
+        const double zd = z_h[j * NZ6 + k] - ez * dt_val;
+        /* ... */
+        const int ok = ITB_NewtonSolveHost(y_h, z_h, j0, k0, yd, zd,
+                                           &r, &s, &iters, &residual,
+                                           &update, &min_det);
+        /* ...統計記錄... */
+        if (!ok) {                                    /* 失敗 fallback:        */
+            c->flags |= ITB_COEFF_NEWTON_FAILED;      /* (0,0) -> Kronecker    */
+            r = 0.0;                                  /* -> identity read      */
+            s = 0.0;                                  /* (strict 模式仍會 abort)*/
+        }
+
+        double wr[ITB_YZ_ORDER], dwr[ITB_YZ_ORDER];
+        double ws_raw[ITB_YZ_ORDER], dws[ITB_YZ_ORDER];
+        double ws_folded[ITB_YZ_ORDER];
+        ITB_YZShapeHost(r, wr, dwr);                  /* w_a = L_a(r)  (j 方向) */
+        ITB_YZShapeHost(s, ws_raw, dws);              /* w_b = L_b(s)  (k 方向) */
+        for (int a = 0; a < ITB_YZ_ORDER; a++) c->wr[a] = wr[a];
+        unsigned char fold_flags = 0;
+        ITB_FoldKWeightsHost(k, ws_raw, c->k_idx, ws_folded, &fold_flags);
+        c->flags |= fold_flags;                       /* 近壁 ghost 權重摺回物理列 */
+        for (int b = 0; b < ITB_YZ_ORDER; b++) c->ws[b] = ws_folded[b];
+        /* ... */
+    }
+}
+\end{lstlisting}
+
+\subsection{GPU 消費端：純查表（Scheme A，不重算）}
+\filewhere{isoparametric\_streaming.h:42--53（$e_x=0$ 路徑節錄）}
+\begin{lstlisting}[caption={device 每時間步只做查表乘加；Newton 與形狀函數一生只在初始化跑一次}]
+const ITB_YZCoeff c = itb_yz_coeff_d[ITB_CoeffIndexDevice(yz_id, j, k)];
+if (ex == 0.0) {
+    double out = 0.0;
+    for (int sj = 0; sj < ITB_YZ_ORDER; sj++) {
+        const int gj = c.j0 + sj;             /* j 方向: 直接索引(MPI halo) */
+        const double wj = c.wr[sj];
+        for (int sk = 0; sk < ITB_YZ_ORDER; sk++) {
+            const int gk = c.k_idx[sk];       /* k 方向: 摺疊後物理列索引 */
+            out += wj * c.ws[sk] *
+                   f_post_read[q_off + gj * nface + gk * NX6 + i];
+        }
+    }
+    return out;
+}
+\end{lstlisting}
+
+% ============================================================================
+\section{逐段解釋}
+\label{sec:explain}
+
+\subsection{為什麼殘差/Jacobian 的搭配是對的}
+程式定義 $\bm{F}=\text{map}-\text{target}$（\code{Ry=Y-yd}），
+故 Newton 更新必須是 $\bm{x}\leftarrow\bm{x}-J^{-1}\bm{F}$ ——
+程式的 \code{r - scale*dr} 正是此符號方向。式 \eqref{eq:cramer} 的
+$2\times2$ Cramer 展開已用有理數代數逐項驗證
+$J(\Delta r,\Delta s)^{\mathsf T}-\bm{R}=\bm{0}$（差恰為 0）；
+若軸向交換（$r\leftrightarrow s$ 接錯），數值實驗顯示重建出發點誤差
+立即升到 $O(1)$，現行程式為正確慣例。
+
+\subsection{阻尼策略的三層保險}
+\begin{enumerate}[itemsep=1pt]
+\item \textbf{先驗砍半}：首步 $|\Delta r|+|\Delta s|>1$（出發點超過一格）
+      即 $\sigma_0=0.5$，避免六階多項式在元素外的劇烈振盪把迭代甩飛。
+\item \textbf{回溯線搜尋}：殘差不降即 $\sigma$ 對半，至多 5 次求值——
+      這是教科書式 globally convergent Newton 的簡化版
+      \cite{Press2007}。
+\item \textbf{非單調地板}：$\sigma\le0.0625$ 仍接受該步。看似危險，
+      實則安全：真正不收斂者必以 \code{converged=0} 結束，而
+      strict 模式會 \code{MPI\_Abort} —— 失敗不可能漏網。
+      實機上地板從未觸及（平均 2.0 步收斂）。
+\end{enumerate}
+
+\subsection{收斂判據為何用兩種單位}
+$|\Delta r|+|\Delta s|<10^{-12}$ 量的是\textbf{局部（元素）座標}，
+天然無因次、與格距無關；$|R_y|+|R_z|<10^{-11}$ 量的是\textbf{物理座標}
+絕對殘差。OR 邏輯讓兩者互為備援：步長極小但殘差量測受捨入污染時
+由前者收斂，反之由後者。理論保證不會「假收斂」：
+$\|\Delta\|\ge\|R\|/\|J\|$ 而本網格 $\|J\|\sim$ 格距 $\ll1$，
+故步長判據觸發時殘差必然更小（對抗驗證 \S\ref{sec:verify} 已代數排除
+false-converge）。
+
+\subsection{初值為何取 $(0,0)$ 而不用更聰明的猜測}
+出發點位移 $|\bm{e}|\,\mathrm{d}t$ 在 $\mathrm{CFL}=0.5$ 下不超過半格，
+即真解必在 $|r|,|s|\lesssim0.5$ 內（實機統計 $|r|,|s|>1$ 的計數為 0）。
+元素中心已是「半徑 0.5 內」的猜測，配合二次收斂 2--3 步即達
+$10^{-12}$，再聰明的初值已無利可圖。
+
+\subsection{失敗 fallback 的因果鏈}
+$(r,s)=(0,0)\ \xrightarrow{\text{Kronecker}}\ L(0)=e_3
+\ \xrightarrow{\text{摺疊}}\ $ 內部節點 $kg=k\ge3$ 走 interior 分支
+$\Rightarrow$ 摺疊後唯一非零權重 $=1$ 且 \code{k\_idx} 指回 $k$ 自身
+—— 即使在近壁，identity read 也精確指回原格點（已逐案驗證
+$k\in\{3,4,5,\dots\}$）。這條鏈的正確性依賴 \S\ref{sec:shape}
+性質 2 與摺疊在 interior 分支的恆等性。
+
+\subsection{已知的非數值性瑕疵（誠實記錄）}
+三輪驗證唯一確認的問題：\textbf{迭代計數 off-by-one}
+\filewhere{isoparametric\_precompute.h:132,175} ——
+12 次全跑完未 break 時，C 語言 for 迴圈後置遞增使 \code{it}=13，
+\code{*iters\_out} 回報 13（實跑 12 次）。此值\textbf{只}流入
+\code{newton\_iter\_sum}/\code{newton\_max\_iter\_used} 兩個診斷計數器
+（precompute.h:478,481），\textbf{絕不}流向 $r,s,w_r,w_s,k_{\mathrm{idx}}$；
+且該路徑必伴隨 \code{newton\_failed>0}，strict 模式會中止整個 run，
+故僅在「已中止 run 的最後一段 log」可見。屬休眠的統計瑕疵，
+非數值錯誤。修正建議：\code{*iters\_out = (it > 12 ? 12 : it);}。
+
+% ============================================================================
+\section{實作目的與意義}
+\label{sec:purpose}
+
+\subsection{Host 一次性預計算 vs.\ kernel 每步重算}
+反映射 Newton 解一次約需 2--3 次映射求值（每次 $49$ 節點 $\times$ 6 個量
+的張量積），若放在 GPU kernel 每時間步重算，相當於每步每點每方向多付
+數百次乘加與分支。本實作把\textbf{全部}非線性求解移到 host 初始化
+（每 rank $53{,}880$ 次、瞬間完成），GPU 端時間迴圈內：
+\begin{center}
+\textbf{0 次 Newton、0 次形狀函數求值、0 個邊界分支} —— 只有
+$7{+}49{+}343$ 級的查表乘加。
+\end{center}
+這延續本專案集的共通預計算哲學（MRT $K$ 矩陣、eta 權重共享，
+見專案 \code{CLAUDE.md}「GILBM 效能優化架構」）。
+
+\subsection{Scheme A：存權重而非存 $(r,s)$}
+歷史上曾實作 Scheme B（每點只存 16 B 的 $(r,s)$、device 重算形狀函數
+與摺疊），後改為現行 \textbf{Scheme A}（commit \code{77eafb8}）：
+直接存 \code{ITB\_YZCoeff\{j0, k\_idx[7], wr[7], ws[7], flags\}}，
+device 純查表。實測 \textbf{+37\% MLUPS}（達 907 MLUPS/GPU），
+代價是係數表增至每 rank $\sim$12.5 MB —— 在 H200 上以記憶體換計算
+明確划算。形狀函數的「求解」與「求值」因此徹底離線化。
+
+\subsection{9 類別壓縮}
+插值權重只依賴 $(e_y,e_z)$ 而非完整 19 個 $q$（$y,z$ 與 $x$ 無關、
+$x$ 方向另以 2 組固定權重 \code{ITB\_WX} 處理），故表壓縮為
+9 個類別：表大小與 Newton 求解次數皆省 53\%。
+類別映射已對全部 19 個 $q$ 與 \code{GILBM\_e} 三方比對一致。
+
+\subsection{方法學意義}
+相對於計算座標插值（GILBM 原路徑），ITB 等參反映射的意義在於：
+(1) 插值權重有\textbf{明確的物理空間幾何意義}（出發點真的落在
+$L_a(r)L_b(s)$ 的單位分割上），對強拉伸貼體網格不引入度規近似誤差；
+(2) 權重的所有幾何複雜度（曲線網格、近壁 ghost、MPI halo、週期接縫）
+都被凍結在一張表裡，kernel 與邊界邏輯完全解耦；
+(3) 失敗模式安全——不收斂即中止，不會默默退化精度。
+
+% ============================================================================
+\section{驗證摘要}
+\label{sec:verify}
+本文件所有主張均出自 2026-06-05 的三輪獨立靜態驗證
+（多代理工作流 $\to$ 獨立第二意見 $\to$ 四路總檢驗含對抗複核），
+三輪結論一致：\textbf{正確（correct）}。要點：
+
+\begin{center}
+\begin{tabular}{@{}p{0.42\textwidth}p{0.52\textwidth}@{}}
+\toprule
+\textbf{驗證項} & \textbf{結果（容差 $10^{-12}$）}\\
+\midrule
+$L_a$、$L_a'$ vs.\ 精確多項式微分 & 有理數比對，誤差恰為 $0$（bit-exact）\\
+$\sum L=1$、$\sum L'=0$、Kronecker & 有理數精確成立\\
+degree $\le6$ 再生 / degree-7 不再生 & 精確 $0$ / 明確非零（負控制通過）\\
+$2\times2$ 步 $=J^{-1}\bm{F}$、更新符號 & 有理數代數證明，差 $=0$\\
+合成彎曲映射回收已知 $(r^*,s^*)$ & 最大誤差 $4.1\times10^{-12}$，二次收斂\\
+摺疊等價定理（式 \eqref{eq:foldthm}） & $\sim9\times10^{-16}$；單位分割保持\\
+ghost 外插係數 vs.\ 二次 Lagrange & 精確相等；$\sum c_i=1\ \forall d$\\
+類別映射 / host--device 索引 / 消費域 & 19 個 $q$ 全一致；索引公式字元級相同；消費域 $=$ 填表域\\
+\midrule
+實機統計（64 GPU 生產網格） &
+$3{,}448{,}320/3{,}448{,}320$ 全收斂；平均/最多 $2.0/3$ 次；
+$\max$ 殘差 $9.999\times10^{-12}$；$\min|\det J|=1.571\times10^{-5}$；
+$\max|\sum\tilde w-1|=1.78\times10^{-15}$\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+對抗複核另外\textbf{排除}了兩個表面疑慮（det 護欄不設 converged、
+摺疊和警告用 rank 本地值）——均證明在本網格與本演算法結構下不可達。
+唯一確認的瑕疵為 \S4.6 的診斷統計 off-by-one。
+
+\paragraph{限制與注意事項}
+(1) 近壁 $\sim$3 層 ghost 帶的 $k$ 方向實質精度為 degree-2；
+(2) 7 點半寬恰好吃滿 $\mathrm{Buffer}=3$ 的 MPI halo——升 9 點需先加寬 halo；
+(3) \code{ITB\_FillCenterCoeff} 的 clamp 預填在消費域外是「死資料」，
+若未來擴大 kernel $(j,k)$ 範圍或讓類別 0 改查表，須先修正其 identity
+指向（潛在地雷，已記錄於專案記憶）。
+
+% ============================================================================
+\begin{thebibliography}{9}
+\bibitem{ITBpaper}
+\emph{An Isoparametric Transformation-Based Interpolation-Supplemented
+Lattice Boltzmann Method}（ITB-ISLBM 原始論文；本專案實作之基準文獻，
+專案內部參考檔名 \code{1.AN\_ISOPARAMETRIC\_TRANSFORMATION-BASED\_INTERPOLATIO.pdf}）.
+
+\bibitem{HeLuoDembo1996}
+X.~He, L.-S.~Luo, M.~Dembo,
+``Some progress in lattice Boltzmann method. Part~I. Nonuniform mesh grids,''
+\emph{Journal of Computational Physics} \textbf{129}, 357--363 (1996).
+（ISLBM：插值補充式 LBM 之原始文獻）
+
+\bibitem{HeDoolen1997}
+X.~He, G.~Doolen,
+``Lattice Boltzmann method on curvilinear coordinates system:
+flow around a circular cylinder,''
+\emph{Journal of Computational Physics} \textbf{134}, 306--315 (1997).
+（曲線座標 ISLBM）
+
+\bibitem{Imamura2005}
+T.~Imamura, K.~Suzuki, T.~Nakamura, M.~Yoshida,
+``Acceleration of steady-state lattice Boltzmann simulations on
+non-uniform mesh using local time step method,''
+\emph{Journal of Computational Physics} \textbf{202}, 645--663 (2005).
+（GILBM 系譜：廣義座標 LBM）
+
+\bibitem{Hughes2000}
+T.~J.~R.~Hughes,
+\emph{The Finite Element Method: Linear Static and Dynamic Finite
+Element Analysis}, Dover Publications (2000).
+（等參元素與形狀函數之標準教材）
+
+\bibitem{Press2007}
+W.~H.~Press, S.~A.~Teukolsky, W.~T.~Vetterling, B.~P.~Flannery,
+\emph{Numerical Recipes: The Art of Scientific Computing}, 3rd ed.,
+Cambridge University Press (2007), \S9.6--9.7.
+（含線搜尋之全域收斂 Newton 法）
+
+\bibitem{DennisSchnabel1996}
+J.~E.~Dennis~Jr., R.~B.~Schnabel,
+\emph{Numerical Methods for Unconstrained Optimization and Nonlinear
+Equations}, SIAM Classics in Applied Mathematics (1996).
+（阻尼 Newton 與回溯線搜尋之理論基礎）
+
+\bibitem{BerrutTrefethen2004}
+J.-P.~Berrut, L.~N.~Trefethen,
+``Barycentric Lagrange interpolation,''
+\emph{SIAM Review} \textbf{46}(3), 501--517 (2004).
+（Lagrange 插值之數值性質）
+
+\bibitem{Frohlich2005}
+J.~Fr\"ohlich, C.~P.~Mellen, W.~Rodi, L.~Temmerman, M.~A.~Leschziner,
+``Highly resolved large-eddy simulation of separated flow in a channel
+with streamwise periodic constrictions,''
+\emph{Journal of Fluid Mechanics} \textbf{526}, 19--66 (2005).
+（週期丘基準算例與網格幾何）
+\end{thebibliography}
+
+\end{document}

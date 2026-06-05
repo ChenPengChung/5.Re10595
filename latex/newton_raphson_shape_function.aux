@@ -1,0 +1,81 @@
+\relax 
+\providecommand\hyper@newdestlabel[2]{}
+\providecommand*\HyPL@Entry[1]{}
+\HyPL@Entry{0<</S/D>>}
+\citation{HeLuoDembo1996}
+\citation{HeDoolen1997}
+\citation{Imamura2005}
+\citation{ITBpaper}
+\citation{Hughes2000}
+\citation{Press2007}
+\citation{DennisSchnabel1996}
+\@writefile{toc}{\contentsline {section}{\numberline {1}緒論：實作目的與問題定義}{3}{section.1}\protected@file@percent }
+\newlabel{sec:intro}{{1}{3}{緒論：實作目的與問題定義}{section.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.1}背景}{3}{subsection.1.1}\protected@file@percent }
+\newlabel{eq:foot}{{1}{3}{背景}{equation.1}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.2}要解的方程}{3}{subsection.1.2}\protected@file@percent }
+\newlabel{sec:problem}{{1.2}{3}{要解的方程}{subsection.1.2}{}}
+\newlabel{eq:isomap}{{2}{3}{要解的方程}{equation.2}{}}
+\newlabel{eq:nonlinear}{{3}{3}{要解的方程}{equation.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {1.3}何時解、解幾次}{3}{subsection.1.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {2}理論}{3}{section.2}\protected@file@percent }
+\newlabel{sec:theory}{{2}{3}{理論}{section.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.1}一維七點 Lagrange 形狀函數}{3}{subsection.2.1}\protected@file@percent }
+\newlabel{sec:shape}{{2.1}{3}{一維七點 Lagrange 形狀函數}{subsection.2.1}{}}
+\citation{BerrutTrefethen2004}
+\citation{Press2007}
+\citation{DennisSchnabel1996}
+\newlabel{eq:lagrange}{{5}{4}{一維七點 Lagrange 形狀函數}{equation.5}{}}
+\newlabel{eq:dlagrange}{{6}{4}{一維七點 Lagrange 形狀函數}{equation.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}映射值與 Jacobian 的張量積組裝}{4}{subsection.2.2}\protected@file@percent }
+\newlabel{sec:jacobian}{{2.2}{4}{映射值與 Jacobian 的張量積組裝}{subsection.2.2}{}}
+\newlabel{eq:J}{{7}{4}{映射值與 Jacobian 的張量積組裝}{equation.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}阻尼 Newton--Raphson 迭代}{4}{subsection.2.3}\protected@file@percent }
+\newlabel{sec:newton}{{2.3}{4}{阻尼 Newton--Raphson 迭代}{subsection.2.3}{}}
+\newlabel{eq:cramer}{{8}{4}{阻尼 Newton--Raphson 迭代}{equation.8}{}}
+\newlabel{eq:converge}{{10}{4}{阻尼 Newton--Raphson 迭代}{equation.10}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.4}失敗處理}{5}{subsection.2.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.5}近壁 ghost 外插與權重摺疊}{5}{subsection.2.5}\protected@file@percent }
+\newlabel{sec:fold}{{2.5}{5}{近壁 ghost 外插與權重摺疊}{subsection.2.5}{}}
+\newlabel{eq:ghost}{{11}{5}{近壁 ghost 外插與權重摺疊}{equation.11}{}}
+\newlabel{eq:foldthm}{{12}{5}{近壁 ghost 外插與權重摺疊}{equation.12}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}程式碼實作}{5}{section.3}\protected@file@percent }
+\newlabel{sec:code}{{3}{5}{程式碼實作}{section.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.1}節點與形狀函數：\texttt  {ITB\_YZNodeHost} / \texttt  {ITB\_YZShapeHost}}{5}{subsection.3.1}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {1}七點 Lagrange 形狀函數及其導數（封閉式直接求值，非解方程）}{5}{lstlisting.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2}映射與 Jacobian 組裝：\texttt  {ITB\_EvaluateMapHost}}{6}{subsection.3.2}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {2}張量積一次組裝 $Y,Z$ 與四個 Jacobian 分量（每次 Newton 迭代呼叫一次）}{6}{lstlisting.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3}Newton 求解器：\texttt  {ITB\_NewtonSolveHost}}{6}{subsection.3.3}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {3}阻尼 Newton--Raphson 反映射求解器（完整原文）}{7}{lstlisting.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4}呼叫端：出發點、求解、權重固化}{8}{subsection.3.4}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {4}每個 (class, j, k) 解一次；解完立刻把 $(r,s)$ 固化成權重表}{8}{lstlisting.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5}GPU 消費端：純查表（Scheme A，不重算）}{8}{subsection.3.5}\protected@file@percent }
+\@writefile{lol}{\contentsline {lstlisting}{\numberline {5}device 每時間步只做查表乘加；Newton 與形狀函數一生只在初始化跑一次}{8}{lstlisting.5}\protected@file@percent }
+\citation{Press2007}
+\@writefile{toc}{\contentsline {section}{\numberline {4}逐段解釋}{9}{section.4}\protected@file@percent }
+\newlabel{sec:explain}{{4}{9}{逐段解釋}{section.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}為什麼殘差/Jacobian 的搭配是對的}{9}{subsection.4.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}阻尼策略的三層保險}{9}{subsection.4.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.3}收斂判據為何用兩種單位}{9}{subsection.4.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.4}初值為何取 $(0,0)$ 而不用更聰明的猜測}{9}{subsection.4.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.5}失敗 fallback 的因果鏈}{9}{subsection.4.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.6}已知的非數值性瑕疵（誠實記錄）}{9}{subsection.4.6}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5}實作目的與意義}{9}{section.5}\protected@file@percent }
+\newlabel{sec:purpose}{{5}{9}{實作目的與意義}{section.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Host 一次性預計算 vs.\ kernel 每步重算}{9}{subsection.5.1}\protected@file@percent }
+\bibcite{ITBpaper}{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Scheme A：存權重而非存 $(r,s)$}{10}{subsection.5.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}9 類別壓縮}{10}{subsection.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4}方法學意義}{10}{subsection.5.4}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {6}驗證摘要}{10}{section.6}\protected@file@percent }
+\newlabel{sec:verify}{{6}{10}{驗證摘要}{section.6}{}}
+\@writefile{toc}{\contentsline {paragraph}{限制與注意事項}{10}{section*.2}\protected@file@percent }
+\bibcite{HeLuoDembo1996}{2}
+\bibcite{HeDoolen1997}{3}
+\bibcite{Imamura2005}{4}
+\bibcite{Hughes2000}{5}
+\bibcite{Press2007}{6}
+\bibcite{DennisSchnabel1996}{7}
+\bibcite{BerrutTrefethen2004}{8}
+\bibcite{Frohlich2005}{9}
+\gdef \@abspage@last{11}
