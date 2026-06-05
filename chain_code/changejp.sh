@@ -6,8 +6,9 @@
 # 不冷啟動, 並維持既有 chain/dispatcher/watcher 流程, 只改變平行規模。
 #
 # 任意有效 jp 皆可 (只要通過下方網格/slab 驗證), 不限 4 的次方。
-# 本專案 NCHC 政策 (計畫 MST115169) 自由跳轉組合 = {16,32,64} (對應 16gpus/32gpus/64gpus partition,
-# 帳號 GPU cap = partition 名稱數字); jp=128 雖網格合法 (896/128=7) 但超 64-GPU 帳號 cap, 不適用於本專案。
+# 本專案 NCHC 政策 (計畫 MST115169, 2026-06-05) 自由跳轉 jp∈{32,64}: jp=32 cap-fit 於
+# 8gpus/16gpus/32gpus (MaxTRESPA=gres/gpu=32, 非名稱數字), jp=64 只 64gpus (cap=64);
+# jp=128 雖網格合法 (896/128=7) 但超帳號 cap, 不適用於本專案。
 #
 # 用法:
 #   bash changejp.sh <NEW_JP>            # DRY-RUN: 只驗證 + 印出完整計畫, 不改任何東西

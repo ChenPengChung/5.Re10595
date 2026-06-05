@@ -32,7 +32,9 @@ info() { printf '  [ INFO ] %s\n' "$*"; }
 # 依 partition 名靜態推 cap (對齊 tools/partition_lib.sh 的 fallback, 不查 sacctmgr → 快且離線可用)
 cap_for_part() {
   case "$1" in
-    [0-9]*gpus) echo "${1%%gpus}" ;;     # Ngpus → N
+    8gpus|16gpus|32gpus) echo 32 ;;      # MaxTRESPA=gres/gpu=32 (非名稱數字; 對齊 partition_lib.sh fallback)
+    64gpus)     echo 64 ;;               # p_64gpus MaxTRESPA=gres/gpu=64
+    [0-9]*gpus) echo "${1%%gpus}" ;;     # 其他未列 Ngpus → 名稱數字 (保底)
     dev)        echo 4 ;;
     normal)     echo 16 ;;
     4nodes)     echo 32 ;;

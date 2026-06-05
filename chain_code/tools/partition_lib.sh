@@ -48,19 +48,19 @@ gb200_sbatch_partition_args() {
 # H200 partition 支援
 # ----------------------------------------------------------------------------
 # 叢集改版後舊的 `h200` partition 已移除。本帳號 (mst*) 在 H200 機器上有權的
-# partition 為 dev / normal / 4nodes（large/slinky/taide 限 gov* 帳號, 不可用）。
+# partition 為 8gpus / 16gpus / 32gpus / 64gpus / dev（normal/4nodes/large 已 inactive）。
 # 自動選擇政策 (見 dispatcher pick_cluster):
-#   規則1 有容量可即起 → 選 walltime 最長 (最少重投)  → normal 優先
+#   規則1 有容量可即起 → 選最高 jp 可行組合 (64gpus@64 優先)
 #   規則2 全部得排隊   → 選 ETA 最短 (最快排到)
 # ============================================================================
 H200_PARTITION_FILE="${H200_PARTITION_FILE:-restart/h200_partition}"
 
 h200_partition_walltime() {
-    # 2026-06 NCHC 改版: partition 改以 GPU 數命名 (QOS p_Xgpus, MaxTRESPerAccount=X);
-    #   舊 normal/4nodes/large 已 inactive. dev 改 4h、cap 降為 4 (僅 jp<=4).
+    # 2026-06 NCHC: partition 以 GPU 數命名 (QOS p_Xgpus); MaxTRESPA: 8/16/32gpus=32, 64gpus=64 (非名稱數字);
+    #   舊 normal/4nodes/large 已 inactive. dev 改 4h、cap 4 (僅 jp<=4).
     case "$1" in
-        8gpus)   echo "2-00:00:00" ;;   # 2 天, cap 8
-        16gpus)  echo "2-00:00:00" ;;   # 2 天, cap 16
+        8gpus)   echo "2-00:00:00" ;;   # 2 天, cap 32 (MaxTRESPA)
+        16gpus)  echo "2-00:00:00" ;;   # 2 天, cap 32 (MaxTRESPA)
         32gpus)  echo "1-00:00:00" ;;   # 1 天, cap 32
         64gpus)  echo "1-00:00:00" ;;   # 1 天, cap 64
         dev)     echo "04:00:00"   ;;   # 4 小時, cap 4 (測試用)
@@ -71,7 +71,7 @@ h200_partition_walltime() {
 }
 
 # 可用 H200 partition, cap 高→低排序 (供 dispatcher 候選 + 手動切換清單)
-# 2026-06 NCHC 改版後的 GPU-數命名 partition (cap=名稱數字); dev cap=4 保底.
+# GPU-數命名 partition; cap(MaxTRESPA): 8/16/32gpus=32, 64gpus=64, dev=4 保底.
 h200_known_partitions() { echo "64gpus 32gpus 16gpus 8gpus dev"; }
 
 # 註: arch-agnostic partition_walltime() 的權威定義在本檔下方(gb200-first fallthrough 版).
@@ -90,12 +90,12 @@ partition_gpu_cap_per_account() {
     local part="$1" cap
     cap="$(timeout 5 sacctmgr -nP show qos "p_${part}" format=MaxTRESPA 2>/dev/null | grep -oE 'gres/gpu=[0-9]+' | head -1 | cut -d= -f2)"
     if [ -n "$cap" ]; then echo "$cap"; return; fi
-    # fallback(sacctmgr 不可用時; 對齊 2026-06 NCHC 改版實測: p_Xgpus MaxTRESPA=gres/gpu=X, p_dev=4)
+    # fallback(sacctmgr 不可用時; 對齊實測 MaxTRESPA: p_8gpus/p_16gpus/p_32gpus=gres/gpu=32, p_64gpus=64, p_dev=4)
     case "$part" in
-        8gpus)  echo 8  ;;
-        16gpus) echo 16 ;;
-        32gpus) echo 32 ;;
-        64gpus) echo 64 ;;
+        8gpus)  echo 32 ;;   # p_8gpus  MaxTRESPA=gres/gpu=32 (非名稱數字)
+        16gpus) echo 32 ;;   # p_16gpus MaxTRESPA=gres/gpu=32 (實測 32 GPU 進得了 16gpus)
+        32gpus) echo 32 ;;   # p_32gpus MaxTRESPA=gres/gpu=32
+        64gpus) echo 64 ;;   # p_64gpus MaxTRESPA=gres/gpu=64
         dev)    echo 4  ;;
         normal) echo 16 ;;   # legacy (已 inactive)
         4nodes) echo 32 ;;   # legacy (已 inactive)
@@ -144,7 +144,7 @@ h200_pick_partition_for_jp() {
     local jp="${1:-0}" hdr="${2:-16gpus}" p cap pin inuse capfit=""
     pin="$(h200_active_partition)"
     # cap 升序涵蓋完整 GPU-數 partition 範圍 → jp 落在 exact-fit partition
-    #   (NCHC 改版: jp=16→16gpus, jp=32→32gpus; 漏列會 fallback 到 dev 投不出).
+    #   (NEW 政策: jp=32 cap-fit 於 8gpus/16gpus/32gpus/64gpus(皆 cap≥32), jp=64 只 64gpus(cap64); 漏列會 fallback 到 dev 投不出).
     for p in "$pin" "$hdr" 8gpus 16gpus 32gpus 64gpus; do
         [ -n "$p" ] || continue
         cap="$(partition_gpu_cap_per_account "$p")"

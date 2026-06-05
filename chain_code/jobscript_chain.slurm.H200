@@ -6,7 +6,7 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1 / NCHC 政策鎖定 MST115169] 預設 partition=64gpus (對應 jp=64; 暫鎖 64gpus@64)。
+# [POLICY 2026-06-05 / MST115169] 預設 partition=64gpus (對應 jp=64; 暫鎖 64gpus@64)。自由跳轉集 {8gpus@32,16gpus@32,32gpus@32,64gpus@64}; jp 不再等於 partition 名數字。
 #             walltime 上限隨 partition 而異: 64gpus/32gpus=1 天 / 16gpus=2 天 / dev=4 時。
 #             dispatcher / ./run partition 會於投遞時用對應 partition 的 --time= 覆寫;
 #             本 header 為非 dispatcher (直投/自我續投) 路徑的 fallback (self-resubmit 另以
@@ -132,7 +132,7 @@ fi
 # [PARTITION-LIB / PS-1] partition 切換 + GPU-cap 過濾.
 # 審計 PS-1: H200 自我續投/直投的 header partition 僅為 fallback; 若 jp 超過該 partition 每帳號
 # GPU 上限 → 永久 PENDING(MaxGRESPerAccount)、無自癒. 故 self-resubmit 依 jp 選 cap-aware partition
-# (jp=64→64gpus / jp=32→32gpus / jp=16→16gpus), 與 dispatcher pick_cluster 的 cap 過濾一致.
+# (jp=64→64gpus only; jp=32→{8gpus,16gpus,32gpus,64gpus}, MaxTRESPA cap≥32), 與 dispatcher pick_cluster 的 cap 過濾一致.
 _RESUB_PART_ARGS=""; _RESUB_PARTITION=""
 if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
     # shellcheck source=/dev/null

@@ -85,16 +85,17 @@ NOCAPACITY_LIMIT="${NOCAPACITY_LIMIT:-480}"
 NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 
 # Partition 候選清單: <ARCH>:<partition>
-# [2026-06-04 NCHC 政策鎖定 — 計畫 MST115169]
-#   本專案 partition@jp 組合定義為 H200「GPU-數命名」partition 三組:
-#     64gpus@64 / 32gpus@32 / 16gpus@16  (partition 名稱即每帳號 GPU cap: p_64gpus=64/p_32gpus=32/p_16gpus=16)。
-#   暫時鎖定 64gpus@64 (見 restart/LOCK_COMBO); 自由跳轉時 dispatcher 在這三組中選最佳。
+# [2026-06-05 NEW 政策 — 計畫 MST115169]
+#   partition@jp 自由跳轉四組: 8gpus@32 / 16gpus@32 / 32gpus@32 / 64gpus@64。
+#     jp 不再等於 partition 名數字: p_8gpus/p_16gpus/p_32gpus MaxTRESPA=gres/gpu=32 (皆容得下 jp=32),
+#     p_64gpus=64 (容 jp=64)。故 jp∈{32,64}: jp=32→{8,16,32,64}gpus, jp=64→64gpus only。
+#   暫時鎖定 64gpus@64 (見 restart/LOCK_COMBO, 缺檔則自由跳轉); 64gpus@64 最高、優先。
 # - H200 partitions 共用 a.out.H200 / jobscript_chain.slurm.H200; pick_cluster 2-tier 政策
 #   自動「有容量→最早 ETA / 全 pending→最短 ETA」, 各 partition 的 --time= 由 partition_walltime() 決定。
-# - 8gpus(cap8)/dev(cap4) 不列入 (jp 最小 16 已超其 cap, 本來就投不出); normal/4nodes 已 inactive。
+# - dev(cap4) 不列入 (jp 最小 32 已超其 cap); normal/4nodes 已 inactive。
 # - GB200 (跨架構) 預設不在候選內 (本專案鎖 H200); 如需啟用以 env 覆寫 PARTITION_CANDIDATES
 #   (jobscript_chain.slurm.GB200 已同步為 jp=64 / 16 nodes)。
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-H200:64gpus H200:32gpus H200:16gpus}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-H200:64gpus H200:32gpus H200:16gpus H200:8gpus}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
@@ -674,13 +675,13 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-64 32 16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
-# [2026-06-04 NCHC 政策鎖定 — 計畫 MST115169] 候選 = {64,32,16} 對應 H200 {8,4,2} nodes (8 GPU/node):
-#   使用者策略「partition@jp 三組自由跳轉: 64gpus@64 / 32gpus@32 / 16gpus@16, 目前暫鎖 64gpus@64」.
-#   partition 以 GPU-數命名(cap=名稱數字): jp=64→64gpus, jp=32→{32gpus,64gpus}, jp=16→{16gpus,32gpus,64gpus};
-#   8gpus(cap8)/dev(cap4) 不在候選內 (jp 最小 16 已超其 cap, 本來就投不出).
-#   (舊 {128,64,32,16}×{normal,4nodes,dev} 已隨 normal/4nodes inactive + 128 超 64-GPU 帳號 cap 而過時.)
-#   64 GPU=8 nodes / 32=4 / 16=2 (896%{64,32,16}=0, slab={14,28,56}>=7 物理合法). 帳號 GPU cap=p_Xgpus=X;
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-64 32}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [2026-06-05 NEW 政策 — 計畫 MST115169] 候選 = {64,32} 對應 H200 {8,4} nodes (8 GPU/node):
+#   使用者策略「partition@jp 自由跳轉: 8gpus@32 / 16gpus@32 / 32gpus@32 / 64gpus@64, 暫鎖 64gpus@64」.
+#   jp 不再等於 partition 名數字 (MaxTRESPA): jp=64→64gpus only(cap64); jp=32→{8,16,32,64}gpus(皆 cap≥32);
+#   dev(cap4) 不在候選內 (jp 最小 32 已超其 cap).
+#   (舊 {64,32,16} 假設 cap=名稱數字, 已被實測 p_8/16/32gpus MaxTRESPA=32 推翻.)
+#   64 GPU=8 nodes / 32=4 (896%{64,32}=0, slab={14,28}>=7 物理合法). 帳號 GPU cap(MaxTRESPA)=8/16/32gpus→32, 64gpus→64;
 #   跨使用者共用動態占用; jp 大的全超標被「直接跳過警告(不先試 --test-only)」, 留最小可行 footprint 續跑.
 #   切 jp 由 changejp.sh --prepare-only(repartition 純資料重排, 流場一位元不差)處理; accu=0 不丟統計。
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"

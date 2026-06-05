@@ -421,8 +421,8 @@ kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
 
 ## 臨時鎖定 / 還原自由跳轉 (Temporary lock toggle — partition && jp)
 
-dispatcher 預設**自由跳轉**：每輪界即時掃描 NCHC 政策三組 `{64,32,16} × {64gpus,32gpus,16gpus}` 矩陣（計畫 MST115169），
-超 cap/inuse 的組合「試過 `--test-only` 再警告跳過」，在可行組合中選最佳（高 jp 優先 + 抓空閒、不看 walltime）。
+dispatcher 預設**自由跳轉**：每輪界即時掃描 NCHC 政策四組候選 `{8gpus@32, 16gpus@32, 32gpus@32, 64gpus@64}`（計畫 MST115169；jp 不再等於 partition 名數字 — 實測 p_8gpus/p_16gpus/p_32gpus 的 MaxTRESPA=gres/gpu=32、p_64gpus=64，故 8/16/32gpus 皆容得下 jp=32，只有 64gpus 跑 jp=64），
+超 cap/inuse 的組合「試過 `--test-only` 再警告跳過」，在可行組合中選最佳（高 jp 優先 + 抓空閒、不看 walltime；64gpus@64 最高、優先）。
 
 ### 臨時開關：`restart/LOCK_COMBO` sentinel
 
@@ -432,8 +432,8 @@ dispatcher 預設**自由跳轉**：每輪界即時掃描 NCHC 政策三組 `{64
 - **作用**：dispatcher 的 `pick_jp_and_partition`（凍結 jp = 當前值）+ `pick_cluster`（鎖 partition）都檢查此檔，
   存在時直接回傳鎖定組合、**不做矩陣評估 / 不自動跳轉**。jp 凍結在「當前值」（`KEEP cur`，不重切、無 repartition）。
 - **設定（鎖定）**：`echo "64 H200@64gpus" > restart/LOCK_COMBO`，再停舊 dispatcher（cwd 驗證後 SIGTERM 特定 PID）+ `./run dispatcher start` 讓 daemon 載入新狀態。
-- **驗證**：`bash chain_code/tools/verify_combo.sh`（純靜態唯讀；可帶 `EXPECT_COMBO="64 H200@64gpus"` 防漂移）— 檢查 LOCK_COMBO / variables.h jp / partition cap / jobscript header(8 nodes×8) / mpirun -np 一致。
-- **目前狀態（2026-06-04 NCHC 政策設定）**：鎖定 `64 H200@64gpus`（計畫 **MST115169**；對應 `variables.h` jp=64 / jobscript H200 8 nodes×8 GPU）。自由跳轉候選收斂為 H200 三組 `{64gpus@64, 32gpus@32, 16gpus@16}`（`normal`/`4nodes` 已 inactive、`dev`(cap4)/`8gpus`(cap8) 太小、GB200 跨架構預設不列入）。
+- **驗證**：`bash chain_code/tools/verify_combo.sh`（純靜態唯讀；可帶 `EXPECT_COMBO="64 H200@64gpus"` 防漂移）— 檢查 LOCK_COMBO / variables.h jp / partition cap (MaxTRESPA: 8/16/32gpus=32, 64gpus=64) / jobscript header(8 nodes×8) / mpirun -np 一致。
+- **目前狀態（2026-06-05 NCHC 政策更新）**：暫鎖 `64 H200@64gpus`（計畫 **MST115169**；對應 `variables.h` jp=64 / jobscript H200 8 nodes×8 GPU）。自由跳轉候選為 H200 四組 `{8gpus@32, 16gpus@32, 32gpus@32, 64gpus@64}`（實測 p_8gpus/p_16gpus/p_32gpus MaxTRESPA=gres/gpu=32、p_64gpus=64，故 8gpus/16gpus 也容得下 jp=32 — 已實測 32 GPU 進得了 16gpus；只有 64gpus 跑 jp=64；`normal`/`4nodes` 已 inactive、`dev`(cap4) 太小、GB200 跨架構預設不列入）。
 
 ### 快捷指令：`還原回自由跳轉`（或 `還原回自由跳轉 partition&&jp`）
 
