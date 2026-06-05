@@ -334,9 +334,15 @@ fi
 
 # [2] Partition-smart-ETA: 掃描所有候選 partition, 選 ETA 最早的
 # 候選清單與 dispatcher (submit_dispatcher.sh) 一致: GB200:gb200, gb200-full,
-#   gb200-rack1, gb200-rack2, gb200-dev; H200:16gpus, 32gpus, 64gpus (normal/4nodes/dev fallback, cap 過濾)
+#   gb200-rack1, gb200-rack2, gb200-dev; H200 自由切換集 {8gpus,16gpus,32gpus}@jp=32 (每帳號 cap 皆=32)
 # 每個候選用 sbatch --test-only --partition=<part> --time=<walltime> 查 ETA.
 # 需要對應 arch 的 a.out.{CLUSTER} 存在才會列入.
+# [LOCK_JP_PARTITION] 嚴格鎖定中: 直投固定走鎖定的 H200 + h200_partition pin, 不做 smart-ETA
+#   自由選擇、不覆寫 pin — 與 dispatcher 嚴格鎖一致, 避免直投打破 jp@partition 鎖 (Codex 8/9)。
+if [ -z "$CLUSTER" ] && [ -e restart/LOCK_JP_PARTITION ] && [ -s restart/h200_partition ]; then
+    CLUSTER="H200"
+    CLUSTER_SRC="LOCK_JP_PARTITION(pin=$(tr -d '[:space:]' < restart/h200_partition))"
+fi
 if [ -z "$CLUSTER" ] \
    && command -v sbatch >/dev/null 2>&1 \
    && command -v sinfo  >/dev/null 2>&1; then
@@ -347,8 +353,8 @@ if [ -z "$CLUSTER" ] \
     fi
 
     # 候選清單: ARCH:partition (順序 = 平手時的優先級, 與 dispatcher 一致)
-    # [2026-06-04] 與 dispatcher 一致: H200 改用 16gpus/32gpus/64gpus (normal/4nodes INACTIVE、dev cap=4)
-    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:16gpus H200:32gpus H200:64gpus H200:normal H200:4nodes H200:dev}"
+    # [2026-06-05] 與 dispatcher 一致: H200 自由切換集 {8gpus,16gpus,32gpus}@jp=32 (每帳號 cap 皆=32)
+    _RUNSH_CANDIDATES="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:8gpus H200:16gpus H200:32gpus}"
     _RUNSH_TIE_TOL=30   # ETA 差距 <= 30s 視為平手, 用候選順序先到先選
     # [PS-4] 讀 jp 供 GPU-cap 前過濾 (與 dispatcher pick_cluster 一致, 避免 jp>cap 候選永久 PENDING)
     _RUNSH_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _RUNSH_JP="${_RUNSH_JP:-0}"

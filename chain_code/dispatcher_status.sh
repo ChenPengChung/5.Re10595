@@ -82,7 +82,7 @@ echo ""
 #   (無寬度) 有正確 substitute.
 #   修法: 去掉 '-' dash, 改用 Slurm 官方認的 %<num><letter>, 在所有版本都相容.
 echo "> Partition status:"
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:16gpus H200:32gpus H200:64gpus H200:dev}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:8gpus H200:16gpus H200:32gpus}"
 _seen_parts=""
 for entry in $PARTITION_CANDIDATES_RAW; do
     p="${entry#*:}"

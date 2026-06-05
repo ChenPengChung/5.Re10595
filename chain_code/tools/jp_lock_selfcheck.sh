@@ -1,12 +1,12 @@
 #!/bin/bash
-# jp_lock_selfcheck.sh — 靜態檢驗「鎖定組合 jp=16 | partition=16gpus」是否正確生效 (心跳腳本)。
+# jp_lock_selfcheck.sh — 靜態檢驗「鎖定組合 jp=32 | partition=16gpus」是否正確生效 (心跳腳本)。
 #
 # 用途: 目前處於「鎖定組合狀態 (partition && jps)」, 依使用者要求只做『靜態檢驗』(不投遞、不 SELFTEST)。
-#   驗證: (A) 鎖定哨兵 LOCK_JP_PARTITION + h200_partition=16gpus + variables.h jp=16;
-#         (B) 候選機制限定 jp={16} 且 pin 分區 16gpus 在 PARTITION_CANDIDATES (才能被探測進可投清單);
+#   驗證: (A) 鎖定哨兵 LOCK_JP_PARTITION + h200_partition=16gpus + variables.h jp=32;
+#         (B) 候選機制限定 jp={32} 且 pin 分區 16gpus 在 PARTITION_CANDIDATES (才能被探測進可投清單);
 #         (C) 超上限處理: 先 sbatch --test-only 試過、再依 cap 跳過並警告 (不連試都沒試);
 #             嚴格鎖: pin 不可投時「跳過本輪+警告、維持鎖定、不落回別分區」(非亂跳/非強投);
-#         (D) live 可行性: 鎖定目標 16gpus 此刻 cap(=16)>=jp(=16) 且 state=up → 可投; 否則 WARN(執行期會跳過+警告)。
+#         (D) live 可行性: 鎖定目標 16gpus 此刻 cap(=32)>=jp(=32) 且 state=up → 可投; 否則 WARN(執行期會跳過+警告)。
 #
 # READ-ONLY: 只讀檔 / 查 sacctmgr+sinfo (無 sbatch、無投遞、無取消、不改任何 source/checkpoint/job)。
 #   「附加」一行心跳 → live/jp_lock_heartbeat.log; 寫狀態 → live/jp_lock_status; drift → live/jp_lock_DRIFT.alert。
@@ -26,10 +26,10 @@ STATUS_FILE="live/jp_lock_status"
 ALERT_FILE="live/jp_lock_DRIFT.alert"
 mkdir -p live
 
-EXPECT_JP=16                        # 鎖定的 jp (GPU 數)
+EXPECT_JP=32                        # 鎖定的 jp (GPU 數)
 EXPECT_PIN=16gpus                   # 鎖定的 partition (h200_partition pin)
-EXPECT_JPC="16"                     # JP_CANDIDATES 預期 (暫時鎖定 16; 自由切換集 {16,32,64}; auto-controller 只跑 16, 不自動跳 32/64)
-CANDS=(16gpus 32gpus 64gpus normal 4nodes dev)   # 全 H200 候選 (僅供 live 矩陣對照; 嚴格鎖下只採用 pin)
+EXPECT_JPC="32"                     # JP_CANDIDATES 預期 (暫時鎖定 32; 自由切換集 {8gpus,16gpus,32gpus}@32jp; auto-controller 只跑 32)
+CANDS=(8gpus 16gpus 32gpus)         # 全 H200 候選 (僅供 live 矩陣對照; 嚴格鎖下只採用 pin)
 
 drift=0; warn=0
 # 僅在 TTY 上色 (cron/redirect 時不輸出 ANSI)

@@ -87,17 +87,17 @@ NOCAPACITY_SENTINEL="restart/STOP_NOCAPACITY"
 # Partition 候選清單: <ARCH>:<partition>
 # - GB200 partitions 共用 a.out.GB200 / jobscript_chain.slurm.GB200
 # - H200 partitions 共用 a.out.H200 / jobscript_chain.slurm.H200
-#   [2026-06-04] 本專案運行於 jp∈{16,32,64} 規模 (見 JP_CANDIDATES)。NCHC 變動實測:
-#   `dev` cap 砍到 4 (jp16/32/64 都裝不下)、`normal`/`4nodes` 轉為 INACTIVE; 真正 UP 且
+#   [2026-06-05] 本專案固定 jp=32 規模 (見 JP_CANDIDATES)。NCHC 變動實測:
+#   `dev` cap 砍到 4 (jp=32 裝不下)、`normal`/`4nodes` 轉為 INACTIVE; 真正 UP 且
 #   cap 對得上的是「同一池 H200」(196 nodes / 8 GPU/node) 的:
-#       16gpus (cap16, 2d) / 32gpus (cap32, 1d) / 64gpus (cap64, 1d)
-#   ⇒ jp=16 可投 16gpus/32gpus/64gpus; jp=32 可投 32gpus/64gpus; jp=64 可投 64gpus。故 H200 候選改列這三者
-#     優先; normal/4nodes/dev 保留(INACTIVE 或超 cap 時由 ETA/cap 過濾自動略過, 日後恢復
-#     UP 即重新生效)。large/slinky/taide/ngs* 限他帳號 (gov*/mst109178) 不可用。
+#       8gpus (cap32, 2d) / 16gpus (cap32, 2d) / 32gpus (cap32, 1d)
+#   ⇒ jp=32 三者皆可投 (每帳號 cap 實測皆=32, 單帳號可填滿 32 GPU)。故 H200 候選 = {8gpus,16gpus,32gpus};
+#     64gpus(cap64) 已不在自由集; normal/4nodes/dev (INACTIVE 或超 cap) 由 ETA/cap 過濾自動略過。
+#     large/slinky/taide/ngs* 限他帳號 (gov*/mst109178) 不可用。
 #   每帳號 GPU cap 由 partition_gpu_cap_per_account 動態查 sacctmgr (p_<part>); jp>cap 的
 #   組合一律過濾 (否則永久 PENDING)。walltime 由 partition_walltime() 決定。
 # - NCHC 目前 rack partition 名稱是 gb200-rack1 / gb200-rack2, 不是 gb200-rack
-PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:16gpus H200:32gpus H200:64gpus H200:normal H200:4nodes H200:dev}"
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:8gpus H200:16gpus H200:32gpus}"
 read -r -a PARTITION_CANDIDATES <<< "$PARTITION_CANDIDATES_RAW"
 
 # Option C ETA-compare 的容忍區間 (秒). 兩邊 ETA 差距在此範圍內視為平手,
@@ -693,12 +693,12 @@ _pending_reselect_watchdog() {
 # 所有 log 走 >&2; 唯一 stdout = 決策字串 "KEEP|CHANGE_JP <jp> <ARCH@part>"。
 # ═════════════════════════════════════════════════════════════════════════
 JP_CONTROLLER="${JP_CONTROLLER:-1}"
-# [NCHC 政策] 暫時狀態: 候選 jp 限定為 {16} (鎖定 16gpus@16), auto-controller 只跑 jp=16, 不自動跳 32/64。
-#   jp=16 有 16gpus/32gpus/64gpus 三個可投 partition; score=jp*1000-wait-sw 仍以 jp 為主,
-#   單一候選下每輪固定 KEEP 16。手動切 32/64 不受影響: changejp.sh 32/64(直接改 variables.h, 不經 auto-controller)。
-#   自由切換集 = {16,32,64} (16gpus@16 / 32gpus@32 / 64gpus@64); 政策結束恢復自由跳轉:
-#   把預設改回 "64 32 16"(或設環境變數 JP_CANDIDATES="64 32 16")。
-JP_CANDIDATES_RAW="${JP_CANDIDATES:-16}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
+# [NCHC 政策 2026-06-05] 暫時狀態: 候選 jp 固定為 {32} (鎖定 16gpus@32jp, 每帳號 cap=32 容得下),
+#   auto-controller 只跑 jp=32, 不自動升降。jp=32 有 8gpus/16gpus/32gpus 三個可投 partition
+#   (三者每帳號 cap 實測皆=32); score=jp*1000-wait-sw 在單一 jp 候選下每輪固定 KEEP 32。
+#   自由切換集 = {8gpus,16gpus,32gpus}@32jp (partition 變、jp 固定 32); 政策結束恢復自由跳轉:
+#   改回多 jp 候選 (或設環境變數 JP_CANDIDATES="...")。
+JP_CANDIDATES_RAW="${JP_CANDIDATES:-32}"; read -r -a JP_CANDIDATES <<< "$JP_CANDIDATES_RAW"
 JP_CHANGE_COOLDOWN="${JP_CHANGE_COOLDOWN:-1800}"
 K_UP="${K_UP:-2}"                                 # scale-up 需連續確認次數
 K_DOWN="${K_DOWN:-2}"                              # scale-down 也需連續確認 (對稱防抖, 修 HIGH-1)

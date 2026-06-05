@@ -268,7 +268,7 @@ if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
     . "$CHAIN_DIR/tools/partition_lib.sh"
     # [PS-1/PS-4] 依 jp(GPU 數) 做 GPU-cap 過濾選 partition (pin>header>dev),
     # 避免 jp>32 落 normal/4nodes 永久 PENDING; 與 dispatcher pick_cluster 一致.
-    _BS_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _BS_JP="${_BS_JP:-16}"
+    _BS_JP="$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)"; _BS_JP="${_BS_JP:-32}"
     PART_ARGS="$(h200_sbatch_partition_args_for_jp "$_BS_JP")"
     SUBMIT_PARTITION="$(h200_pick_partition_for_jp "$_BS_JP")"
     [ -n "$SUBMIT_PARTITION" ] && echo "[partition] H200 submit for jp=$_BS_JP -> $SUBMIT_PARTITION (walltime=$(h200_partition_walltime "$SUBMIT_PARTITION")) [cap-aware, PS-1/PS-4]"

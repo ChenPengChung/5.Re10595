@@ -2,13 +2,13 @@
 #SBATCH --job-name=Edit7_10595SNS 
 #SBATCH --account=MST114348
 #SBATCH --partition=16gpus
-#SBATCH --nodes=2
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 預設 partition=16gpus (cap=16 容 jp=16, MaxTime 2 天)。NCHC 政策自由切換集
-#             {16gpus,32gpus,64gpus} 對映 jp {16,32,64}; walltime: 16gpus=2 天 / 32gpus,64gpus=1 天 /
-#             dev=4 時 (normal/4nodes 目前 INACTIVE)。dispatcher / ./run partition / 自我續投 於投遞時
+# [POLICY 2026-06-05] 鎖定 16gpus@32jp; 預設 partition=16gpus (每帳號 cap=32 容 jp=32, MaxTime 2 天)。
+#             NCHC 政策自由切換集 {8gpus,16gpus,32gpus} 皆 @jp=32 (三者每帳號 cap 實測=32);
+#             walltime: 8gpus,16gpus=2 天 / 32gpus=1 天。dispatcher / ./run partition / 自我續投 於投遞時
 #             用 h200_pick_partition_for_jp 依 jp 選可行 partition 並以 --time= 覆寫;
 #             本 header 為直投/自我續投 fallback。TIMEOUT 於 runtime 由 scontrol 自動偵測, 任何
 #             partition 都能啟動 walltime 救援。
@@ -24,13 +24,13 @@
 # jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
-#   (1) partition/nodes/gres — 16gpus / 2 nodes / 8 GPU×2=16  (GB200: gb200 / 4 nodes / 4)
-#       對應 variables.h jp=16 (16 streamwise MPI ranks)
+#   (1) partition/nodes/gres — 16gpus / 4 nodes / 8 GPU×4=32  (GB200: gb200 / 8 nodes / 4)
+#       對應 variables.h jp=32 (32 streamwise MPI ranks)
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
 #                              (GB200: /usr/local/cuda-13.0 on compute node)
-#   (4) mpirun 對映          — -np 16 --map-by ppr:8:node (2 nodes 16 GPU)
-#                              (GB200: -np 16 --map-by ppr:4:node on 4 nodes)
+#   (4) mpirun 對映          — -np 32 --map-by ppr:8:node (4 nodes 32 GPU)
+#                              (GB200: -np 32 --map-by ppr:4:node on 8 nodes)
 #   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
 #
 # 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.
@@ -132,13 +132,13 @@ fi
 # [PARTITION-LIB / PS-1] partition 切換 + GPU-cap 過濾.
 # 審計 PS-1: H200 自我續投/直投原本只用 header --partition=normal, 而 normal/4nodes 每帳號
 # GPU 上限=16/32; jp 超過該上限落 normal → 永久 PENDING(MaxGRESPerAccount)、無自癒. 故依 jp 選可行
-# partition (cap-aware: jp<=16→16gpus, <=32→32gpus, <=64→64gpus), 與 dispatcher pick_cluster 的 cap 過濾一致.
+# partition (cap-aware: jp=32 自由切換集 {8gpus,16gpus,32gpus} 三者每帳號 cap 皆=32 → 皆可投), 與 dispatcher pick_cluster 的 cap 過濾一致.
 _RESUB_PART_ARGS=""; _RESUB_PARTITION=""
 if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
     # shellcheck source=/dev/null
     . "$CHAIN_DIR/tools/partition_lib.sh"
     _H200_JP="${SLURM_NTASKS:-$(awk '/^#define[[:space:]]+jp[[:space:]]/{print $3; exit}' variables.h 2>/dev/null)}"
-    _H200_JP="${_H200_JP:-16}"
+    _H200_JP="${_H200_JP:-32}"
     _RESUB_PART_ARGS="$(h200_sbatch_partition_args_for_jp "$_H200_JP" 2>/dev/null || true)"
     _RESUB_PARTITION="$(h200_pick_partition_for_jp "$_H200_JP" 2>/dev/null || true)"
     [ -n "$_RESUB_PARTITION" ] && log "[partition] H200 resubmit for jp=$_H200_JP -> $_RESUB_PARTITION (walltime=$(h200_partition_walltime "$_RESUB_PARTITION" 2>/dev/null)) [cap-aware, PS-1]"
@@ -267,7 +267,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-16}
+NP=${SLURM_NTASKS:-32}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -536,9 +536,9 @@ rm -f "$WATCHDOG_SENTINEL"
 WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
-# [H200] 2 節點 16 GPU: -np 16 --map-by ppr:8:node (對應 variables.h jp=16)
+# [H200] 4 節點 32 GPU: -np 32 --map-by ppr:8:node (對應 variables.h jp=32)
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 16 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
+    mpirun -np 32 --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &
 SOLVER_PID=$!
 

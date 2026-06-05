@@ -47,9 +47,10 @@ gb200_sbatch_partition_args() {
 # ============================================================================
 # H200 partition 支援
 # ----------------------------------------------------------------------------
-# [2026-06-04 NCHC] 本帳號 (mst*) 在 H200 上可投的主力 partition (同一池 H200) 為
-# 16gpus(cap16,2d) / 32gpus(cap32,1d) / 64gpus(cap64,1d), 對映自由切換 jp∈{16,32,64};
-# normal/4nodes 目前 INACTIVE、dev cap=4 為 fallback（large/slinky/taide 限 gov* 帳號, 不可用）。
+# [2026-06-05 NCHC] 本帳號 (MST114348) 在 H200 上可投的主力 partition (同一池 H200) 為
+# 8gpus(cap32,2d) / 16gpus(cap32,2d) / 32gpus(cap32,1d), 對映固定 jp=32 (自由切換集 {8gpus,16gpus,32gpus}@32jp);
+# p_*gpus 每帳號 cap 實測皆=32 → 單帳號可填滿 32 GPU; normal/4nodes 目前 INACTIVE、dev cap=4 為 fallback
+# (large/slinky/taide 限 gov* 帳號, 不可用); 64gpus(cap64) 已不在自由集。
 # 自動選擇政策 (見 dispatcher pick_cluster):
 #   規則1 有容量可即起 → 選最快 ETA (抓空閒; walltime 無關, 本 chain SIGUSR1 無縫續投)
 #   規則2 全部得排隊   → 選 ETA 最短 (最快排到)
@@ -71,8 +72,9 @@ h200_partition_walltime() {
 }
 
 # 可用 H200 partition, walltime 長→短排序 (供 dispatcher 候選 + 手動切換清單)
-# [2026-06-04] 加入 *gpus 系列 (UP 且 cap 對得上 jp16/32/64); normal/4nodes 目前 INACTIVE、dev cap=4。
-h200_known_partitions() { echo "16gpus 32gpus 64gpus normal 4nodes dev"; }
+# [2026-06-05] NCHC 政策: jp=32 自由切換集 {8gpus,16gpus,32gpus} (p_*gpus 每帳號 cap 實測皆=32,
+#   故 jp=32 三者皆可投); normal/4nodes INACTIVE、dev cap=4、64gpus 已不在自由集。
+h200_known_partitions() { echo "8gpus 16gpus 32gpus"; }
 
 # 每帳號 GPU 上限 (MaxTRESPerAccount) — 來自 sacctmgr show qos:
 #   p_normal=16 / p_4nodes=32 (2026-06 實測, 動態查 sacctmgr) → account 在該 partition 的 GPU 上限
@@ -91,9 +93,9 @@ partition_gpu_cap_per_account() {
         normal) echo 16 ;;
         4nodes) echo 32 ;;
         dev)    echo 4 ;;       # [2026-06-04] NCHC 把 dev 從「無上限」砍到 4 GPU/帳號
-        8gpus)  echo 8 ;;
-        16gpus) echo 16 ;;
-        32gpus) echo 32 ;;
+        8gpus)  echo 32 ;;     # [2026-06-05 sacctmgr 實測] p_8gpus  MaxTRESPA gres/gpu=32
+        16gpus) echo 32 ;;     # [2026-06-05 sacctmgr 實測] p_16gpus = 32 (單帳號可填滿 32 GPU)
+        32gpus) echo 32 ;;     # [2026-06-05 sacctmgr 實測] p_32gpus = 32
         64gpus) echo 64 ;;
         *)      echo 100000 ;;
     esac
@@ -124,9 +126,9 @@ h200_sbatch_partition_args() {
 h200_pick_partition_for_jp() {
     local jp="${1:-0}" hdr="${2:-normal}" p cap pin st
     pin="$(h200_active_partition)"
-    # [2026-06-04] state-aware: 候選 pin → 16/32/64gpus(cap 小→大) → hdr → dev;
-    #   跳過「超 cap」與「非 up(INACTIVE/down)」者。修「normal/4nodes 已 INACTIVE 仍被選 → sbatch 失敗」。
-    for p in "$pin" 16gpus 32gpus 64gpus "$hdr" dev; do
+    # [2026-06-05] NCHC 政策 jp=32 自由切換集 {8gpus,16gpus,32gpus} (cap 皆=32, jp=32 皆可投);
+    #   候選 pin → 8gpus → 16gpus → 32gpus; 跳過「超 cap」與「非 up」者。
+    for p in "$pin" 8gpus 16gpus 32gpus; do
         [ -n "$p" ] || continue
         cap="$(partition_gpu_cap_per_account "$p")"
         [ "$jp" -le "$cap" ] || continue
