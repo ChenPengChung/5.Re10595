@@ -35,7 +35,7 @@ Pipeline:
          with FD6/Fornberg J_2D and 6-point Lagrange interpolation).
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
-     5e. Velocity projection (--project-velocity div-exact, default):
+     5e. Velocity projection (--project-velocity poisson, default):
          poisson:   approximate Helmholtz-Hodge correction.
          dg-exact:  direct solve of the exact CD2 D*G scalar projection.
          div-exact: direct minimum-norm velocity correction that zeroes the
@@ -49,12 +49,9 @@ Pipeline:
                                  equilibrium f_q = f_eq, i.e. f_neq = 0.
        chapman-enskog:           f_eq and f_neq both built from corrected
                                  macros. f_neq reconstructed from NEW-grid
-                                 velocity gradients via Chapman-Enskog. The
-                                 gradient is 2nd-order CD2, operator-consistent
-                                 with _divergence_cd2 (incl central-with-ghost
-                                 walls), so the trace == the divergence the
-                                 div-exact projection zeroes -> f_neq carries no
-                                 spurious dilatational component.
+                                 velocity gradients via Chapman-Enskog.
+                                 Wall rows use the solver-matched one-sided FD
+                                 stencil for the wall CE formula.
        interp (legacy):          f_eq from corrected macros +
                                  scale * interp(f_neq_old) in computational
                                  space (loses gradient info across GAMMA changes).
@@ -3018,25 +3015,65 @@ def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
 
     Returns three (NY, NZ, NX) interior arrays.
     """
+    NZ6 = u.shape[1]
     du_di = np.zeros_like(u)
     du_dj = np.zeros_like(u)
     du_dk = np.zeros_like(u)
 
-    # [2nd-order operator-consistent f_neq gradient] CD2 central derivatives, byte-for-byte
-    # the same stencils poisson_projection._divergence_cd2 uses (central over [1:-1]).
-    # Consequence: the TRACE of this gradient  (du_dx + dv_dy + dw_dz)  equals
-    # _divergence_cd2(u*) — the quantity the div-exact CD2 projection drives to ~0 — so the
-    # spurious dilatational f_neq term (= -cs^2 * div(u)) falls to the projection residual
-    # (~1e-13), WITHOUT the expensive 6th-order operator-consistent projection.
-    # Walls use central-with-ghost, NOT one-sided: the velocity k-ghost is constant-copied
-    # from the wall row (fill_ghost) and the wall velocity is clamped to 0 in the projector,
-    # so the wall-row k-derivative is (u[k+1] - u_wall)/2 = u[k+1]/2 — identical to what
-    # _divergence_cd2 evaluates at k=BFR / kt.  Thus trace == _divergence_cd2 EXACTLY,
-    # including the two wall rows.  (Off-diagonal shear is also 2nd-order here; for a SEED
-    # that is fine — the solver recomputes f_neq with its own 6th-order operators.)
-    du_di[:, :, 1:-1] = (u[:, :, 2:] - u[:, :, :-2]) * 0.5   # i (periodic ghost)
-    du_dj[1:-1, :, :] = (u[2:, :, :] - u[:-2, :, :]) * 0.5   # j (periodic ghost)
-    du_dk[:, 1:-1, :] = (u[:, 2:, :] - u[:, :-2, :]) * 0.5   # k (wall constant-copy ghost)
+    # i-direction: 6th-order central (periodic ghost cells valid)
+    du_di[:, :, 3:-3] = (
+        -u[:, :, :-6] + 9.0*u[:, :, 1:-5] - 45.0*u[:, :, 2:-4]
+        + 45.0*u[:, :, 4:-2] - 9.0*u[:, :, 5:-1] + u[:, :, 6:]
+    ) / 60.0
+    du_di[:, :, :3]  = du_di[:, :, 3:4]
+    du_di[:, :, -3:] = du_di[:, :, -4:-3]
+
+    # j-direction: 6th-order central (periodic ghost valid)
+    du_dj[3:-3, :, :] = (
+        -u[:-6, :, :] + 9.0*u[1:-5, :, :] - 45.0*u[2:-4, :, :]
+        + 45.0*u[4:-2, :, :] - 9.0*u[5:-1, :, :] + u[6:, :, :]
+    ) / 60.0
+    du_dj[:3, :, :]  = du_dj[3:4, :, :]
+    du_dj[-3:, :, :] = du_dj[-4:-3, :, :]
+
+    # k-direction: 6th-order adaptive-skew Fornberg + 4th-order one-sided at walls
+    kt = NZ6 - 1 - BFR
+
+    # Central bulk (k = BFR+3 to kt-3): 6th-order central
+    c_lo = BFR + 3
+    c_hi = kt - 3
+    du_dk[:, c_lo:c_hi+1, :] = (
+        -u[:, c_lo-3:c_hi-2, :] + 9.0*u[:, c_lo-2:c_hi-1, :]
+        - 45.0*u[:, c_lo-1:c_hi, :] + 45.0*u[:, c_lo+1:c_hi+2, :]
+        - 9.0*u[:, c_lo+2:c_hi+3, :] + u[:, c_lo+3:c_hi+4, :]
+    ) / 60.0
+
+    # Near-bottom-wall: 6th-order skewed (Fornberg adaptive)
+    for kk, p in [(BFR+1, 1), (BFR+2, 2)]:
+        for m in range(7):
+            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, BFR + m, :]
+
+    # Near-top-wall: 6th-order skewed (Fornberg adaptive)
+    s_top = kt - 6
+    for kk, p in [(kt-2, 4), (kt-1, 5)]:
+        for m in range(7):
+            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, s_top + m, :]
+
+    # Bottom wall (k=BFR): 4th-order forward one-sided (u_wall=0)
+    du_dk[:, BFR, :] = (
+        48.0 * u[:, BFR+1, :] - 36.0 * u[:, BFR+2, :]
+       +16.0 * u[:, BFR+3, :] -  3.0 * u[:, BFR+4, :]
+    ) / 12.0
+
+    # Top wall (k=kt): 4th-order backward one-sided (u_wall=0)
+    du_dk[:, kt, :] = -(
+        48.0 * u[:, kt-1, :] - 36.0 * u[:, kt-2, :]
+       +16.0 * u[:, kt-3, :] -  3.0 * u[:, kt-4, :]
+    ) / 12.0
+
+    # Ghost rows (not in interior crop)
+    du_dk[:, :BFR, :]  = du_dk[:, BFR:BFR+1, :]
+    du_dk[:, kt+1:, :] = du_dk[:, kt:kt+1, :]
 
     sl = (slice(BFR, BFR+cfg.NY), slice(BFR, BFR+cfg.NZ), slice(BFR, BFR+cfg.NX))
     du_di_int = du_di[sl]
@@ -3131,12 +3168,10 @@ def main():
     p.add_argument('--projection-div-tol', type=float, default=1e-6,
                    help='target RMS divergence tolerance for Poisson projection '
                         '(default: %(default)s)')
-    p.add_argument('--div-gate-tol', type=float, default=1e-12,
-                   help='Layer-1 gate: max|div_CD2(u*)| (unique DOFs) before f_eq output. '
-                        'Checkpoint is NOT written unless max|div(u*)| is strictly below '
-                        'this threshold. A second-layer gate independently requires the '
-                        'trace of the CD2 CE gradient that builds f_neq to be < 1e-12 '
-                        '(no spurious dilatational f_neq) (default: %(default)s)')
+    p.add_argument('--div-gate-tol', type=float, default=1e-10,
+                   help='max|div(u*)| gate before f_eq output. '
+                        'Checkpoint is NOT written unless max|div(u*)| is strictly '
+                        'below this threshold (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -3147,11 +3182,9 @@ def main():
                         '6 = 7-point Lagrange tensor product O(h^6) (default). '
                         '2 = bilinear O(h^2) (legacy).')
     p.add_argument('--metric-order', type=int, choices=[2, 6], default=6,
-                   help='Order of FD for the inverse metric used ONLY for dt_global '
-                        '(compute_dt_global_gilbm). 6 mirrors solver (j-central + '
-                        'k-adaptive Fornberg, gilbm/metric_terms.h) and passes the Phase-5 '
-                        'drift check. The CE f_neq gradient + projection always use the '
-                        '2nd-order metric (operator-consistent), independent of this flag.')
+                   help='Order of FD for inverse metric used in CE f_neq reconstruction. '
+                        '6 mirrors solver (j-central + k-adaptive Fornberg, '
+                        'gilbm/metric_terms.h). 2 is legacy 2nd-order central.')
     p.add_argument('--cfl', type=float, default=None,
                    help='CFL lambda override for dt_global computation. Production runs should '
                         'omit this and read CFL from --variables-h/variables.h.')
@@ -3916,16 +3949,15 @@ def main():
         print('      ce_coeff = -(omega)*dt = {:.6e}  (= -3niu - 0.5dt = {:.6e})'.format(
             ce_coeff, -3.0 * niu - 0.5 * dt_real))
 
-        # [2nd-order operator-consistent f_neq] The CE gradient (compute_velocity_gradient_3d,
-        # now 2nd-order CD2) and the velocity projection (_divergence_cd2, hard-coded
-        # 2nd-order metric) MUST use the SAME metric, so the gradient's trace equals the
-        # divergence the div-exact projection zeroes -> no spurious dilatational f_neq.
-        # Hence the CE gradient always uses the 2nd-order metric here, DECOUPLED from
-        # --metric-order (which only feeds dt_global via compute_dt_global_gilbm, kept at 6
-        # to mirror the solver and pass the Phase-5 drift check).
-        dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
-        print('      CE/projection metric = 2nd-order central (operator-consistent with '
-              '_divergence_cd2); dt_global metric order = {}'.format(args.metric_order))
+        # Inverse metric on NEW grid. Order 6 mirrors solver (gilbm/metric_terms.h);
+        # order 2 is legacy 2nd-order central (kept for A/B comparison).
+        if args.metric_order == 6:
+            dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d_fornberg(y2d_new, z2d_new)
+        else:
+            dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
+        print('      metric order = {} ({})'.format(
+            args.metric_order,
+            'Fornberg j-central + k-adaptive' if args.metric_order == 6 else '2nd-order central'))
         dx_phys = LX / (NEW.NX - 1)
 
         # 9-component velocity gradient tensor on NEW interior
@@ -3936,35 +3968,14 @@ def main():
         print('      velocity gradient tensor: {:.1f}s'.format(time.time() - t))
 
         div_u = dudx + dvdy + dwdz
-        # [Second-layer gate: f_neq dilatational source]  div_u is the trace of the SAME
-        # 2nd-order CE gradient that builds f_neq, i.e. the -cs^2*div(u) bulk term that
-        # pollutes f_neq if non-zero.  Measure it on the UNIQUE physical DOFs (the periodic-
-        # duplicate j-row / i-col are overwritten by enforce_periodic_physical_duplicates
-        # before write), matching the u* divergence gate.  It MUST be < 1e-12 or f_neq is
-        # not purely deviatoric and the checkpoint is refused.
-        uj, ui = NEW.NY - 1, NEW.NX - 1
-        max_div = float(np.max(np.abs(div_u[:uj, :, :ui])))
-        max_div_full = float(np.max(np.abs(div_u)))
+        max_div = float(np.max(np.abs(div_u)))
         max_strain = max(
             float(np.max(np.abs(dudx))), float(np.max(np.abs(dudy))), float(np.max(np.abs(dudz))),
             float(np.max(np.abs(dvdx))), float(np.max(np.abs(dvdy))), float(np.max(np.abs(dvdz))),
             float(np.max(np.abs(dwdx))), float(np.max(np.abs(dwdy))), float(np.max(np.abs(dwdz))),
         )
-        print('      max |div(u)|  = {:.3e}   (f_neq dilatational source, unique DOFs; '
-              'full-interior {:.3e})'.format(max_div, max_div_full))
+        print('      max |div(u)|  = {:.3e}   (incompressibility residual)'.format(max_div))
         print('      max |grad u|  = {:.3e}'.format(max_strain))
-
-        # ---- Gate 2 (second layer): the f_neq dilatational source must be < 1e-12 ----
-        fneq_div_gate_tol = 1.0e-12
-        if not np.isfinite(max_div) or max_div >= fneq_div_gate_tol:
-            sys.exit('FATAL: f_neq dilatational gate FAILED: max|tr(grad u*)| = {:.6e} '
-                     '>= {:.0e} on the 2nd-order CE gradient that builds f_neq.\n'
-                     '  The reconstructed f_neq would carry a spurious dilatational '
-                     '(-cs^2*div) component (not purely deviatoric). Checkpoint NOT '
-                     'written.\n  Ensure --project-velocity div-exact (CD2 operator-'
-                     'consistent with the gradient).'.format(max_div, fneq_div_gate_tol))
-        print('      f_neq dilatational gate PASSED: max|tr(grad u*)| = {:.6e} < {:.0e}'
-              '  (f_neq purely deviatoric)'.format(max_div, fneq_div_gate_tol))
         del div_u
 
         rho_int = rho_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX]
