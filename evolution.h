@@ -1009,7 +1009,7 @@ void Launch_ModifyForcingTerm()
     // ====================================================================
     // Mode 0: Simple Proportional Controller (C.A. Lin, original)
     // ====================================================================
-    double beta = fmax(0.001, 3.0/(double)Re);
+    double beta = fmax(0.001, 1.0/(double)Re);
     Force_h[0] = Force_h[0] + beta * ((double)Uref - Ub_avg) * (double)Uref / (double)LZ;
 
     // MPI average Force across all ranks
