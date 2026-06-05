@@ -166,3 +166,62 @@ Output directory: restart/checkpoint/step_00000001 (from --output-root + --step)
       wrote f06_0..f06_63 (CE)
       wrote f07_0..f07_63 (CE)
       wrote f08_0..f08_63 (CE)
+      wrote f09_0..f09_63 (CE)
+      wrote f10_0..f10_63 (CE)
+      wrote f11_0..f11_63 (CE)
+      wrote f12_0..f12_63 (CE)
+      wrote f13_0..f13_63 (CE)
+      wrote f14_0..f14_63 (CE)
+      wrote f15_0..f15_63 (CE)
+      wrote f16_0..f16_63 (CE)
+      wrote f17_0..f17_63 (CE)
+      wrote f18_0..f18_63 (CE)
+      max |f_neq / f_eq|  = 1.585e-03   (Knudsen-like; should be << 1)
+      f range after reconstruction = [2.499480728909166e-02, 3.335255959266430e-01]
+      max |sum(f_new)-rho_new| = 8.882e-16
+[8/8] Writing new metadata.dat
+      Controller state preserved from origin: Force_integral=0.000000000000000 error_prev=0.000000000000000 ctrl_initialized=0 gehrke_activated=0
+      accu_count=0, FTT=0 (regrid pipeline does NOT write stats binaries; preserving accu_count>0 would break checkpoint load)
+      origin FTT=77.396301956801139 accu_count=6063903 kept as provenance only
+      Force=3.746299e-06  step=1  jp=64  grid_dims=455,21,455
+      dt_global written as 9.659306483099735e-04
+      (naive minSize for reference: 2.255592e-03; runtime Imamura dt typically ~0.4-0.5x of this)
+      Atomic rename: restart/checkpoint/step_00000001.WRITING -> restart/checkpoint/step_00000001
+      grid_provenance written: /home/s8313697/5.Re10595/Edit8_NewInterpolation/restart/grid_provenance
+
+Done in 4829.6s. New checkpoint at: restart/checkpoint/step_00000001
+Total files: 19f x 64 ranks + 64 rho + 1 metadata = 1281
+================================================================
+[genseed] interp_checkpoint.py exit code = 0
+[genseed] END 2026-06-05 12:33:08
+[genseed] 產物: restart/checkpoint/step_00000001/  +  restart/grid_provenance
+total 43479044
+drwxr-xr-x 1 s8313697 MST114348        0 Jun  5 12:33 .
+drwxr-xr-x 1 s8313697 MST114348        0 Jun  5 12:33 ..
+-rw-r--r-- 1 s8313697 MST114348 34780200 Jun  5 12:26 f00_0.bin
+-rw-r--r-- 1 s8313697 MST114348 34780200 Jun  5 12:26 f00_1.bin
+-rw-r--r-- 1 s8313697 MST114348 34780200 Jun  5 12:26 f00_10.bin
+-rw-r--r-- 1 s8313697 MST114348 34780200 Jun  5 12:26 f00_11.bin
+-rw-r--r-- 1 s8313697 MST114348 34780200 Jun  5 12:26 f00_12.bin
+[genseed] grid_provenance:
+new_grid=/home/s8313697/5.Re10595/Edit8_NewInterpolation/phase1_generategrid/newgrid_3.fine grid_I897_J449_s0.800000.dat
+old_grid=/home/s8313697/5.Re10595/Edit8_NewInterpolation/phase1_generategrid/oldgrid_I257_J129_g2.0_a0.5.dat
+old_jp=8
+new_jp=64
+old_chunk_j=32
+new_chunk_j=14
+rho_volume_method=jacobian-gl
+rho_volume_method_source=variables.h:CELL_VOLUME_METHOD=1
+origin=/home/s8313697/5.Re10595/Edit8_NewInterpolation/phase2_generatecheckpoint/oldcheckpoint_Re10595_step_12550001
+origin_metadata_mtime=1780559113
+variables_h=/home/s8313697/5.Re10595/Edit8_NewInterpolation/variables.h
+variables_h_mtime=1780632770
+new_grid_mtime=1780403510
+old_grid_mtime=1780565423
+new_grid_params_sha256=
+old_grid_params_sha256=
+solver_grid=/home/s8313697/5.Re10595/Edit8_NewInterpolation/J_Frohlich/adaptive_3.fine grid_I897_J449_s0.800000.dat
+solver_grid_mtime=1780461098
+solver_grid_params_sha256=
+solver_grid_generated=0
+================================================================
