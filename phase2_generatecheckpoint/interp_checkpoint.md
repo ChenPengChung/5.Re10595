@@ -1,6 +1,6 @@
 # Regrid Checkpoint Pipeline — 網格重建資料點續跑機制
 
-> Edit3_Re5600newmesh 專案
+> Edit7_10595SNS 專案
 > 最後更新: 2026-05-03
 
 ---
@@ -175,7 +175,7 @@ dt_global=-1.0          ← 刻意寫 -1.0, 跳過 drift check
 **Provenance 欄位** (插值專用, solver 忽略):
 ```
 # --- provenance ---
-interp_source=restart/step_12758001_originRe5600
+interp_source=restart/step_12758001_originRe10595
 interp_old_grid=.../adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat
 interp_new_grid=.../adaptive_3.fine grid_I257_J129_a0.5.dat
 interp_old_gamma=2.0
@@ -195,7 +195,7 @@ interp_origin_metadata_mtime=1746268800
 ```
 new_grid=/abs/path/to/adaptive_3.fine grid_I257_J129_a0.5.dat
 old_grid=/abs/path/to/adaptive_3.fine grid_I257_J129_g2.0_a0.5.dat
-origin=/abs/path/to/restart/step_12758001_originRe5600
+origin=/abs/path/to/restart/step_12758001_originRe10595
 origin_metadata_mtime=1746268800
 variables_h=/abs/path/to/variables.h
 variables_h_mtime=1746268800

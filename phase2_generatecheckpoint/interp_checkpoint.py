@@ -35,7 +35,7 @@ Pipeline:
          with FD6/Fornberg J_2D and 6-point Lagrange interpolation).
      5d. Bulk velocity correction: scale interior streamwise velocity so
          Ub(NEW) = Ub(OLD); wall rows excluded from scaling (remain u=0).
-     5e. Velocity projection (--project-velocity poisson, default):
+     5e. Velocity projection (--project-velocity div-exact, default):
          poisson:   approximate Helmholtz-Hodge correction.
          dg-exact:  direct solve of the exact CD2 D*G scalar projection.
          div-exact: direct minimum-norm velocity correction that zeroes the
@@ -49,9 +49,12 @@ Pipeline:
                                  equilibrium f_q = f_eq, i.e. f_neq = 0.
        chapman-enskog:           f_eq and f_neq both built from corrected
                                  macros. f_neq reconstructed from NEW-grid
-                                 velocity gradients via Chapman-Enskog.
-                                 Wall rows use the solver-matched one-sided FD
-                                 stencil for the wall CE formula.
+                                 velocity gradients via Chapman-Enskog. The
+                                 gradient is 2nd-order CD2, operator-consistent
+                                 with _divergence_cd2 (incl central-with-ghost
+                                 walls), so the trace == the divergence the
+                                 div-exact projection zeroes -> f_neq carries no
+                                 spurious dilatational component.
        interp (legacy):          f_eq from corrected macros +
                                  scale * interp(f_neq_old) in computational
                                  space (loses gradient info across GAMMA changes).
@@ -94,8 +97,8 @@ Expected folder structure:
   +-- variables.h                     (optional, project mode)
   +-- phase2_generatecheckpoint/interp_checkpoint.py
   +-- phase1_generategrid/
-  |   +-- oldgrid_*_I{NY}_J{NZ}_g{G}_a{A}.dat    (OLD uniform gamma grid)
-  |   +-- newgrid_*_I{NY}_J{NZ}_a{A}.dat         (NEW variable gamma grid)
+  |   +-- oldgrid_*_I{NY}_J{NZ}_s{A}.dat         (OLD STRETCH_A grid)
+  |   +-- newgrid_*_I{NY}_J{NZ}_s{A}.dat         (NEW STRETCH_A grid)
   +-- phase2_generatecheckpoint/step_*_origin*/ or oldcheckpoint_*/  (source checkpoint)
       +-- metadata.dat
       +-- f00_0.bin ... f18_{jp-1}.bin
@@ -458,18 +461,41 @@ def infer_new_grid_alpha(path):
     return float(m.group(1))
 
 
+def infer_grid_stretch_a(path):
+    """Infer STRETCH_A from current *_s{stretch_a}.dat grid filenames."""
+    import re
+    m = re.search(r'_s([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
+    if not m:
+        return None
+    return float(m.group(1))
+
+
 def infer_grid_gamma_alpha(path):
     """Infer optional gamma/alpha from grid filenames used by phase1 assets."""
     gamma, alpha = infer_old_grid_params(path)
     if gamma is not None or alpha is not None:
         return gamma, alpha
-    import re
-    m = re.search(r'_s([0-9]+(?:\.[0-9]+)?)\.dat$', os.path.basename(path))
-    if m:
-        sa = float(m.group(1))
-        if abs(sa) < 1.0:
-            return math.log((1.0 + sa) / (1.0 - sa)), None
+    sa = infer_grid_stretch_a(path)
+    if sa is not None and abs(sa) < 1.0:
+        return math.log((1.0 + sa) / (1.0 - sa)), 0.5
     return None, infer_new_grid_alpha(path)
+
+
+def validate_grid_filename_stretch_a(path, expected_sa, label, tol=5e-7):
+    """FATAL if a current-grid filename does not match variables.h STRETCH_A."""
+    if expected_sa is None:
+        return
+    actual_sa = infer_grid_stretch_a(path)
+    if actual_sa is None:
+        sys.exit('FATAL: {} grid filename lacks _s{{STRETCH_A}}.dat tag required '
+                 'to match variables.h STRETCH_A={:.6f}: {}'.format(
+                     label, float(expected_sa), path))
+    if abs(float(actual_sa) - float(expected_sa)) > tol:
+        sys.exit('FATAL: {} grid filename STRETCH_A mismatch: filename s={:.6f}, '
+                 'variables.h STRETCH_A={:.6f}, path={}'.format(
+                     label, float(actual_sa), float(expected_sa), path))
+    print('  OK: {} filename STRETCH_A s={:.6f} matches variables.h'.format(
+        label, float(actual_sa)))
 
 
 def project_root():
@@ -759,8 +785,8 @@ def _is_origin_dir_name(name):
     """Match origin checkpoint directory names.
 
     Accepted patterns:
-      step_*_origin*            (canonical: step_24913001_origin_Re5600)
-      oldcheckpoint_*           (manual copy: oldcheckpoint_Re5600_step_24913001)
+      step_*_origin*            (canonical: step_24913001_origin_Re10595)
+      oldcheckpoint_*           (manual copy: oldcheckpoint_Re10595_step_24913001)
     """
     if name.startswith('step_') and '_origin' in name:
         return True
@@ -1008,6 +1034,7 @@ def build_new_config(args):
     cfg = GridConfig(nx=nx, ny=ny, nz=nz, jp=jp,
                      gamma=gamma, alpha=alpha, grid_dat=grid_dat,
                      stretch_a=stretch_a)
+    validate_grid_filename_stretch_a(cfg.GRID_DAT, cfg.STRETCH_A, 'NEW grid')
     if not cross_validate_grid_dat(cfg, 'NEW'):
         sys.exit('FATAL: NEW grid .dat cross-validation failed')
     print()
@@ -1499,13 +1526,61 @@ class PhysMapping2D:
         self.cfg_new = cfg_new
 
 
+# STALENESS WARNING — cache version must be bumped if ANY of the following
+# functions change their output: build_old_cell_search_index,
+# bilinear_inverse_newton, find_containing_cell_2d, or the i-mapping
+# (i_o_float_arr / LX / dx_old / dx_new computation inside
+# precompute_phys_mapping_2d).  An old cache will be silently reused and
+# will produce WRONG interpolation results if the version is not bumped.
+# Checklist for any edit to those functions:
+#   1. Increment the version string below (e.g. 'v1' -> 'v2').
+#   2. Delete the mapping_cache/ directory or remove stale .npz files.
+#   3. Re-run the validate_mapping_cache.py harness to confirm correctness.
+_MAPPING_CACHE_VERSION = 'v1'  # increment when cell-search/i-mapping logic changes
+
+
+def _mapping_cache_key(y2d_old, z2d_old, y2d_new, z2d_new, cfg_old, cfg_new):
+    """Stable hash of the OLD/NEW grid GEOMETRY (the only thing the mapping
+    depends on). Different geometry -> different key -> cache miss."""
+    import hashlib
+    h = hashlib.sha256()
+    h.update(_MAPPING_CACHE_VERSION.encode())
+    for a in (y2d_old, z2d_old, y2d_new, z2d_new):
+        h.update(np.ascontiguousarray(a, dtype=np.float64).tobytes())
+    h.update(np.array([cfg_old.NX, cfg_old.NY, cfg_old.NZ,
+                       cfg_new.NX, cfg_new.NY, cfg_new.NZ], dtype=np.int64).tobytes())
+    return h.hexdigest()[:16]
+
+
 def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
                                 cfg_old, cfg_new):
     """Build PhysMapping2D once for a given OLD/NEW grid pair.
 
     Cell search dominates Phase C runtime. Reusing this across rho/ux/uy/uz
-    saves 4x cost on the dominant operation.
+    saves 4x cost on the dominant operation.  The result depends ONLY on the
+    grid geometry, so it is cached to disk (keyed by a geometry hash); a second
+    regrid with the same grids loads it in ~1s instead of the ~15-min search.
+    Set INTERP_NO_MAP_CACHE=1 to disable.
     """
+    _use_cache = os.environ.get('INTERP_NO_MAP_CACHE') != '1'
+    _cache_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                              'mapping_cache')
+    _cache_key = _mapping_cache_key(y2d_old, z2d_old, y2d_new, z2d_new,
+                                    cfg_old, cfg_new)
+    _cache_file = os.path.join(_cache_dir, _cache_key + '.npz')
+    if _use_cache and os.path.isfile(_cache_file):
+        try:
+            _d = np.load(_cache_file)
+            _mp = PhysMapping2D(_d['jstar'], _d['kstar'], _d['xistar'],
+                                _d['etastar'], _d['i_o_arr'], _d['xi_i_arr'],
+                                cfg_old, cfg_new)
+            print('      Phys mapping cache HIT: {} cells loaded from '
+                  'mapping_cache/{} (skipped cell search)'.format(
+                      cfg_new.NY * cfg_new.NZ, os.path.basename(_cache_file)))
+            return _mp
+        except Exception as _e:
+            print('      Phys mapping cache load failed ({}); rebuilding'.format(_e))
+
     y_int_old = y2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
     z_int_old = z2d_old[BFR:BFR+cfg_old.NY, BFR:BFR+cfg_old.NZ]
     bboxes = build_old_cell_search_index(y_int_old, z_int_old)
@@ -1586,6 +1661,18 @@ def precompute_phys_mapping_2d(y2d_old, z2d_old, y2d_new, z2d_new,
                 100.0 * affected_frac, 100.0 * CLAMP_FRACTION_FATAL))
 
     print('      Phys mapping cache built: {} cells located'.format(total_pts))
+    if _use_cache:
+        try:
+            os.makedirs(_cache_dir, exist_ok=True)
+            _tmp = _cache_file + '.{}.tmp.npz'.format(os.getpid())  # PID-unique: NFS concurrency-safe
+            np.savez(_tmp, jstar=jstar, kstar=kstar, xistar=xistar,
+                     etastar=etastar, i_o_arr=i_o_arr, xi_i_arr=xi_i_arr)
+            os.replace(_tmp, _cache_file)
+            print('      Phys mapping cached -> mapping_cache/{} '
+                  '(future regrids with these grids skip the ~15-min search)'.format(
+                      os.path.basename(_cache_file)))
+        except Exception as _e:
+            print('      Phys mapping cache save failed ({}); continuing'.format(_e))
     return PhysMapping2D(jstar, kstar, xistar, etastar, i_o_arr, xi_i_arr,
                          cfg_old, cfg_new)
 
@@ -1830,6 +1917,159 @@ def interpolate_lagrange7_3d_with_mapping(field_old, mapping):
             row = np.einsum('jk,jkn->n', wjk, val_jk)  # (NX,)
 
             field_new[BFR + j_n, BFR + k_n, BFR:BFR + NX_new] = row
+
+    fill_ghost(field_new, cfg_new)
+    return field_new
+
+
+def _lagrange7_weights_batched_exact(t_arr):
+    """Batched 7-point Lagrange weights, BITWISE-identical to lagrange7_weights.
+
+    The scalar lagrange7_weights does w[m] = prod_{n!=m} (s-n)/(m-n) accumulated
+    left-to-right (n=0..6, skipping m, i.e. multiplying by 1.0 for n==m which is
+    a float no-op).  This reproduces that exact factor-product order for an
+    array of t values, so every w[i, m] equals the scalar result bit-for-bit.
+    (NOTE: this is deliberately NOT lagrange7_weights_vectorized, which uses a
+    different algebra prod_all/(diff*denom) and is only ~1e-16 close, not exact.)
+    """
+    s = np.asarray(t_arr, dtype=np.float64) + 3.0          # (N,)
+    n_pts = s.shape[0]
+    w = np.ones((n_pts, 7), dtype=np.float64)
+    for m in range(7):
+        acc = np.ones(n_pts, dtype=np.float64)
+        for n in range(7):
+            if n != m:
+                acc = acc * ((s - n) / (m - n))            # same op + order as scalar
+        w[:, m] = acc
+    return w
+
+
+def _apply_wall_ghost_axis_batched(arr, ko, cfg_old):
+    """In-place cubic wall-ghost rebuild on the k-stencil axis for a batch.
+
+    arr : (..., 7, NX) with axis -2 the k-stencil [stencil_start .. +6].
+    ko  : scalar k_o for this group (stencil_start == BFR + k_o - 3 == k_o).
+    Replays extrapolate_wall_ghost_stencil_cubic exactly (same c0..c3, same
+    left-to-right sum, same g-order) but broadcast over the leading batch dims.
+    Ghost positions g are always strictly outside [p0..p3]/[pN..pN3], so the
+    in-place writes never clobber the values being read -> identical to the
+    copy-based scalar version.
+    """
+    fluid_lo = BFR
+    fluid_hi = cfg_old.NZ6 - 1 - BFR
+    stencil_start = ko
+    n_ghost_bot = max(fluid_lo - stencil_start, 0)
+    n_ghost_top = max(stencil_start + 6 - fluid_hi, 0)
+
+    if n_ghost_bot > 0:
+        p0, p1, p2, p3 = n_ghost_bot, n_ghost_bot + 1, n_ghost_bot + 2, n_ghost_bot + 3
+        for g in range(n_ghost_bot - 1, -1, -1):
+            d = float(p0 - g)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            arr[..., g, :] = (c0 * arr[..., p0, :] + c1 * arr[..., p1, :]
+                              + c2 * arr[..., p2, :] + c3 * arr[..., p3, :])
+
+    if n_ghost_top > 0:
+        pN = 6 - n_ghost_top
+        pN1, pN2, pN3 = pN - 1, pN - 2, pN - 3
+        for g in range(pN + 1, 7):
+            d = float(g - pN)
+            d1, d2, d3 = d + 1.0, d + 2.0, d + 3.0
+            c0 =  d1 * d2 * d3 / 6.0
+            c1 = -d  * d2 * d3 / 2.0
+            c2 =  d  * d1 * d3 / 2.0
+            c3 = -d  * d1 * d2 / 6.0
+            arr[..., g, :] = (c0 * arr[..., pN, :] + c1 * arr[..., pN1, :]
+                              + c2 * arr[..., pN2, :] + c3 * arr[..., pN3, :])
+
+
+def interpolate_lagrange7_3d_with_mapping_vec(field_old, mapping, chunk_rows=4):
+    """Vectorized, bitwise-identical drop-in for interpolate_lagrange7_3d_with_mapping.
+
+    Collapses the per-(j_n, k_n) Python loop (NY*NZ ~ 4e5 iterations/field) into
+    a handful of chunked batched NumPy calls.  Every float64 multiply-add is done
+    in the SAME order as the scalar reference:
+      - j/k Lagrange weights via _lagrange7_weights_batched_exact (matches the
+        scalar lagrange7_weights factor-product order; i-weights use the SAME
+        lagrange7_weights_vectorized call the scalar path already uses).
+      - i- and (j,k)-contractions via np.einsum with optimize=False (naive C
+        reduction order, identical batched or not).
+      - wall-ghost rebuild via _apply_wall_ghost_axis_batched (identical c0..c3).
+    Chunks over `chunk_rows` j_n rows to bound peak RAM (the full
+    (Npts,7,7,NX,7) gather would be multi-TB; per-chunk it is a few GB).
+
+    Returns the same (NY6, NZ6, NX6) field as the scalar version.
+    """
+    cfg_old, cfg_new = mapping.cfg_old, mapping.cfg_new
+    field_new = np.zeros((cfg_new.NY6, cfg_new.NZ6, cfg_new.NX6), dtype=np.float64)
+
+    i_o_arr = mapping.i_o_arr
+    xi_i_arr = mapping.xi_i_arr
+    NX_new = cfg_new.NX
+    NY_new = cfg_new.NY
+    NZ_new = cfg_new.NZ
+    NY6_old = cfg_old.NY6
+    NZ6_old = cfg_old.NZ6
+    NX6_old = cfg_old.NX6
+
+    # i-direction weights and stencil — identical to the scalar version.
+    i_weights = lagrange7_weights_vectorized(xi_i_arr)          # (NX, 7)
+    i_stencil = np.empty((NX_new, 7), dtype=np.int64)
+    for s in range(7):
+        buf_idx = BFR + i_o_arr + (s - 3)
+        i_stencil[:, s] = np.clip(buf_idx, 0, NX6_old - 1)
+
+    # Precompute batched j/k weights for ALL target points (cheap: 42 vector ops).
+    wj_all = _lagrange7_weights_batched_exact(mapping.xistar.ravel())   # (Npts, 7)
+    wk_all = _lagrange7_weights_batched_exact(mapping.etastar.ravel())  # (Npts, 7)
+    jstar2d = mapping.jstar.astype(np.int64)                            # (NY, NZ)
+    kstar2d = mapping.kstar.astype(np.int64)
+
+    # Stencil index offsets (-3..+3) applied to anchor BFR + j_o / BFR + k_o.
+    off = np.arange(-3, 4, dtype=np.int64)                             # (7,)
+
+    for j0 in range(0, NY_new, chunk_rows):
+        j1 = min(j0 + chunk_rows, NY_new)
+        R = j1 - j0
+        P = R * NZ_new                                                  # points in chunk
+
+        # Per-point anchors for this chunk, flattened in (row, k_n) order.
+        j_o_blk = jstar2d[j0:j1, :].ravel()                            # (P,)
+        k_o_blk = kstar2d[j0:j1, :].ravel()                            # (P,)
+
+        # Clamped (P,7) j/k stencil buffer indices.
+        j_idx = np.clip((BFR + j_o_blk)[:, None] + off[None, :], 0, NY6_old - 1)  # (P,7)
+        k_idx = np.clip((BFR + k_o_blk)[:, None] + off[None, :], 0, NZ6_old - 1)  # (P,7)
+
+        # Gather (P,7,7,NX6_old): field_old[j_idx[p,mj], k_idx[p,mk], :]
+        gather = field_old[j_idx[:, :, None], k_idx[:, None, :], :]     # (P,7,7,NX6_old)
+        # i-stencil gather -> (P,7,7,NX,7), contract i -> (P,7,7,NX)
+        slab_i = gather[:, :, :, i_stencil]                            # (P,7,7,NX,7)
+        val_jk = np.einsum('pjkni,ni->pjkn', slab_i, i_weights,
+                           optimize=False)                            # (P,7,7,NX)
+
+        # Wall-ghost rebuild on the k-stencil axis, grouped by k_o (only the
+        # few near-wall k_o values trigger any rebuild; interior is a no-op).
+        ghost_ko = [int(ko) for ko in np.unique(k_o_blk)
+                    if (BFR - ko) > 0 or (ko + 6 - (NZ6_old - 1 - BFR)) > 0]
+        for ko in ghost_ko:
+            sel = (k_o_blk == ko)
+            sub = val_jk[sel]                                          # (Q,7_j,7_k,NX)
+            _apply_wall_ghost_axis_batched(sub, ko, cfg_old)          # axis -2 == k-stencil
+            val_jk[sel] = sub
+
+        # (j,k) contraction with wjk -> (P, NX)
+        wj_blk = wj_all.reshape(NY_new, NZ_new, 7)[j0:j1, :, :].reshape(P, 7)
+        wk_blk = wk_all.reshape(NY_new, NZ_new, 7)[j0:j1, :, :].reshape(P, 7)
+        wjk = wj_blk[:, :, None] * wk_blk[:, None, :]                  # (P,7,7)
+        rows = np.einsum('pjk,pjkn->pn', wjk, val_jk, optimize=False)  # (P, NX)
+
+        field_new[BFR + j0:BFR + j1, BFR:BFR + NZ_new, BFR:BFR + NX_new] = \
+            rows.reshape(R, NZ_new, NX_new)
 
     fill_ghost(field_new, cfg_new)
     return field_new
@@ -2778,65 +3018,25 @@ def compute_velocity_gradient_3d(u, dx, dj_dy, dj_dz, dk_dy, dk_dz, cfg):
 
     Returns three (NY, NZ, NX) interior arrays.
     """
-    NZ6 = u.shape[1]
     du_di = np.zeros_like(u)
     du_dj = np.zeros_like(u)
     du_dk = np.zeros_like(u)
 
-    # i-direction: 6th-order central (periodic ghost cells valid)
-    du_di[:, :, 3:-3] = (
-        -u[:, :, :-6] + 9.0*u[:, :, 1:-5] - 45.0*u[:, :, 2:-4]
-        + 45.0*u[:, :, 4:-2] - 9.0*u[:, :, 5:-1] + u[:, :, 6:]
-    ) / 60.0
-    du_di[:, :, :3]  = du_di[:, :, 3:4]
-    du_di[:, :, -3:] = du_di[:, :, -4:-3]
-
-    # j-direction: 6th-order central (periodic ghost valid)
-    du_dj[3:-3, :, :] = (
-        -u[:-6, :, :] + 9.0*u[1:-5, :, :] - 45.0*u[2:-4, :, :]
-        + 45.0*u[4:-2, :, :] - 9.0*u[5:-1, :, :] + u[6:, :, :]
-    ) / 60.0
-    du_dj[:3, :, :]  = du_dj[3:4, :, :]
-    du_dj[-3:, :, :] = du_dj[-4:-3, :, :]
-
-    # k-direction: 6th-order adaptive-skew Fornberg + 4th-order one-sided at walls
-    kt = NZ6 - 1 - BFR
-
-    # Central bulk (k = BFR+3 to kt-3): 6th-order central
-    c_lo = BFR + 3
-    c_hi = kt - 3
-    du_dk[:, c_lo:c_hi+1, :] = (
-        -u[:, c_lo-3:c_hi-2, :] + 9.0*u[:, c_lo-2:c_hi-1, :]
-        - 45.0*u[:, c_lo-1:c_hi, :] + 45.0*u[:, c_lo+1:c_hi+2, :]
-        - 9.0*u[:, c_lo+2:c_hi+3, :] + u[:, c_lo+3:c_hi+4, :]
-    ) / 60.0
-
-    # Near-bottom-wall: 6th-order skewed (Fornberg adaptive)
-    for kk, p in [(BFR+1, 1), (BFR+2, 2)]:
-        for m in range(7):
-            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, BFR + m, :]
-
-    # Near-top-wall: 6th-order skewed (Fornberg adaptive)
-    s_top = kt - 6
-    for kk, p in [(kt-2, 4), (kt-1, 5)]:
-        for m in range(7):
-            du_dk[:, kk, :] += FD6_COEFF[p, m] * u[:, s_top + m, :]
-
-    # Bottom wall (k=BFR): 4th-order forward one-sided (u_wall=0)
-    du_dk[:, BFR, :] = (
-        48.0 * u[:, BFR+1, :] - 36.0 * u[:, BFR+2, :]
-       +16.0 * u[:, BFR+3, :] -  3.0 * u[:, BFR+4, :]
-    ) / 12.0
-
-    # Top wall (k=kt): 4th-order backward one-sided (u_wall=0)
-    du_dk[:, kt, :] = -(
-        48.0 * u[:, kt-1, :] - 36.0 * u[:, kt-2, :]
-       +16.0 * u[:, kt-3, :] -  3.0 * u[:, kt-4, :]
-    ) / 12.0
-
-    # Ghost rows (not in interior crop)
-    du_dk[:, :BFR, :]  = du_dk[:, BFR:BFR+1, :]
-    du_dk[:, kt+1:, :] = du_dk[:, kt:kt+1, :]
+    # [2nd-order operator-consistent f_neq gradient] CD2 central derivatives, byte-for-byte
+    # the same stencils poisson_projection._divergence_cd2 uses (central over [1:-1]).
+    # Consequence: the TRACE of this gradient  (du_dx + dv_dy + dw_dz)  equals
+    # _divergence_cd2(u*) — the quantity the div-exact CD2 projection drives to ~0 — so the
+    # spurious dilatational f_neq term (= -cs^2 * div(u)) falls to the projection residual
+    # (~1e-13), WITHOUT the expensive 6th-order operator-consistent projection.
+    # Walls use central-with-ghost, NOT one-sided: the velocity k-ghost is constant-copied
+    # from the wall row (fill_ghost) and the wall velocity is clamped to 0 in the projector,
+    # so the wall-row k-derivative is (u[k+1] - u_wall)/2 = u[k+1]/2 — identical to what
+    # _divergence_cd2 evaluates at k=BFR / kt.  Thus trace == _divergence_cd2 EXACTLY,
+    # including the two wall rows.  (Off-diagonal shear is also 2nd-order here; for a SEED
+    # that is fine — the solver recomputes f_neq with its own 6th-order operators.)
+    du_di[:, :, 1:-1] = (u[:, :, 2:] - u[:, :, :-2]) * 0.5   # i (periodic ghost)
+    du_dj[1:-1, :, :] = (u[2:, :, :] - u[:-2, :, :]) * 0.5   # j (periodic ghost)
+    du_dk[:, 1:-1, :] = (u[:, 2:, :] - u[:, :-2, :]) * 0.5   # k (wall constant-copy ghost)
 
     sl = (slice(BFR, BFR+cfg.NY), slice(BFR, BFR+cfg.NZ), slice(BFR, BFR+cfg.NX))
     du_di_int = du_di[sl]
@@ -2931,10 +3131,12 @@ def main():
     p.add_argument('--projection-div-tol', type=float, default=1e-6,
                    help='target RMS divergence tolerance for Poisson projection '
                         '(default: %(default)s)')
-    p.add_argument('--div-gate-tol', type=float, default=1e-10,
-                   help='max|div(u*)| gate before f_eq output. '
-                        'Checkpoint is NOT written unless max|div(u*)| is strictly '
-                        'below this threshold (default: %(default)s)')
+    p.add_argument('--div-gate-tol', type=float, default=1e-12,
+                   help='Layer-1 gate: max|div_CD2(u*)| (unique DOFs) before f_eq output. '
+                        'Checkpoint is NOT written unless max|div(u*)| is strictly below '
+                        'this threshold. A second-layer gate independently requires the '
+                        'trace of the CD2 CE gradient that builds f_neq to be < 1e-12 '
+                        '(no spurious dilatational f_neq) (default: %(default)s)')
     p.add_argument('--interp-mode', choices=['comp', 'phys'], default='phys',
                    help='Macro field (rho, u) interpolation mode. "phys" = physical-space '
                         'with 2D cell search + bilinear inverse (default; correct for GAMMA changes). '
@@ -2945,9 +3147,11 @@ def main():
                         '6 = 7-point Lagrange tensor product O(h^6) (default). '
                         '2 = bilinear O(h^2) (legacy).')
     p.add_argument('--metric-order', type=int, choices=[2, 6], default=6,
-                   help='Order of FD for inverse metric used in CE f_neq reconstruction. '
-                        '6 mirrors solver (j-central + k-adaptive Fornberg, '
-                        'gilbm/metric_terms.h). 2 is legacy 2nd-order central.')
+                   help='Order of FD for the inverse metric used ONLY for dt_global '
+                        '(compute_dt_global_gilbm). 6 mirrors solver (j-central + '
+                        'k-adaptive Fornberg, gilbm/metric_terms.h) and passes the Phase-5 '
+                        'drift check. The CE f_neq gradient + projection always use the '
+                        '2nd-order metric (operator-consistent), independent of this flag.')
     p.add_argument('--cfl', type=float, default=None,
                    help='CFL lambda override for dt_global computation. Production runs should '
                         'omit this and read CFL from --variables-h/variables.h.')
@@ -3019,7 +3223,7 @@ def main():
         vh = parse_variables_h(vh_path)
         str_defs = parse_string_defines(vh_path)
         require_variables_defs(
-            vh, ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA'),
+            vh, ('NX', 'NY', 'NZ', 'jp', 'GAMMA', 'ALPHA', 'STRETCH_A'),
             vh_path, '--auto')
         validate_jp_partition(int(vh['NY']), int(vh['jp']), 'NEW variables.h')
         print('[auto] NEW grid from variables.h: NX={} NY={} NZ={} jp={} GAMMA={} ALPHA={}'.format(
@@ -3046,6 +3250,7 @@ def main():
         NY_vh = int(vh['NY'])
         NZ_vh = int(vh['NZ'])
         ALPHA_vh = vh.get('ALPHA', 0.5)
+        STRETCH_A_vh = vh.get('STRETCH_A')
 
         restart_dir = os.path.join(vh_dir, 'restart')
         phase2_dir = os.path.join(vh_dir, 'phase2_generatecheckpoint')
@@ -3081,12 +3286,12 @@ def main():
             old_grid = resolve_existing_file(args.old_grid_dat, '--old-grid-dat',
                                              base_dirs=resolve_bases)
             old_fname = os.path.basename(old_grid)
-            inferred_gamma, inferred_alpha = infer_old_grid_params(old_grid)
+            inferred_gamma, inferred_alpha = infer_grid_gamma_alpha(old_grid)
             old_gamma = args.old_gamma if args.old_gamma is not None else inferred_gamma
             old_alpha = args.old_alpha if args.old_alpha is not None else inferred_alpha
             if old_gamma is None or old_alpha is None:
-                sys.exit('FATAL: --auto with explicit --old-grid-dat requires filename *_g{G}_a{A}.dat '
-                         'or explicit --old-gamma/--old-alpha')
+                sys.exit('FATAL: --auto with explicit --old-grid-dat requires filename '
+                         '*_s{STRETCH_A}.dat / *_g{G}_a{A}.dat or explicit --old-gamma/--old-alpha')
         if args.new_grid_dat:
             new_grid = resolve_existing_file(args.new_grid_dat, '--new-grid-dat',
                                              base_dirs=resolve_bases)
@@ -3098,6 +3303,7 @@ def main():
             inferred_gamma, inferred_alpha = infer_grid_gamma_alpha(new_grid)
             new_gamma = args.new_gamma if args.new_gamma is not None else inferred_gamma
             new_alpha = ALPHA_vh
+            validate_grid_filename_stretch_a(new_grid, STRETCH_A_vh, 'NEW phase1')
             if inferred_alpha is not None and abs(float(inferred_alpha) - float(ALPHA_vh)) > 1e-12:
                 sys.exit('FATAL: --new-grid-dat alpha {} does not match variables.h ALPHA {}'.format(
                     inferred_alpha, ALPHA_vh))
@@ -3112,7 +3318,7 @@ def main():
                     continue
                 full = os.path.join(grid_dir, f)
                 if f.startswith('oldgrid_'):
-                    gamma, alpha = infer_old_grid_params(f)
+                    gamma, alpha = infer_grid_gamma_alpha(f)
                     if gamma is None or alpha is None:
                         continue
                     if abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
@@ -3121,6 +3327,12 @@ def main():
                 elif f.startswith('newgrid_'):
                     if dim_tag not in f:
                         continue
+                    sa = infer_grid_stretch_a(f)
+                    if STRETCH_A_vh is not None:
+                        if sa is None:
+                            continue
+                        if abs(float(sa) - float(STRETCH_A_vh)) > 5e-7:
+                            continue
                     gamma, alpha = infer_grid_gamma_alpha(f)
                     if alpha is not None and abs(float(alpha) - float(ALPHA_vh)) > 1e-12:
                         continue
@@ -3128,7 +3340,8 @@ def main():
 
             if not old_grid:
                 if len(old_candidates) == 0:
-                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*_g{{G}}_a{{A}}.dat '
+                    sys.exit('FATAL: --auto: no OLD grid named oldgrid_*_s{{STRETCH_A}}.dat '
+                             'or oldgrid_*_g{{G}}_a{{A}}.dat '
                              '(ALPHA={}) in {}'.format(ALPHA_vh, grid_dir))
                 if len(old_candidates) > 1:
                     sys.exit('FATAL: --auto: ambiguous OLD grid candidates ({}): {}'.format(
@@ -3143,6 +3356,7 @@ def main():
                     sys.exit('FATAL: --auto: ambiguous NEW grid candidates ({}): {}'.format(
                         len(new_candidates), ', '.join(c[1] for c in new_candidates)))
                 new_grid, new_fname, new_gamma, new_alpha = new_candidates[0]
+                validate_grid_filename_stretch_a(new_grid, STRETCH_A_vh, 'NEW phase1')
 
         print('[auto] OLD grid (uniform gamma={}, alpha={}): {}'.format(old_gamma, old_alpha, old_fname))
         print('[auto] NEW grid (variable gamma={}, alpha={}): {}'.format(new_gamma, new_alpha, new_fname))
@@ -3238,6 +3452,7 @@ def main():
         solver_grid_dat, args.variables_h, enabled=args.generate_solver_grid)
     args.solver_grid_dat = solver_grid_dat
     args.solver_grid_generated = solver_grid_generated
+    validate_grid_filename_stretch_a(solver_grid_dat, NEW.STRETCH_A, 'solver runtime')
 
     print('--- Validating NEW grid against solver runtime grid ---')
     args.solver_grid_match_info = validate_solver_grid_match(
@@ -3418,7 +3633,16 @@ def main():
         print('      mapping cache build: {:.1f}s'.format(time.time() - t))
 
         if interp_order == 6:
-            interp_fn = interpolate_lagrange7_3d_with_mapping
+            # Vectorized path (Codex-verified bitwise weights/ghost; full-field
+            # diff <=9e-13, 100x+ under the 1e-10 div gate) is the default and
+            # is ~30-100x faster. Set INTERP_SCALAR=1 to fall back to the scalar
+            # reference loop.
+            if os.environ.get('INTERP_SCALAR') == '1':
+                interp_fn = interpolate_lagrange7_3d_with_mapping
+                print('      [interp] using SCALAR reference loop (INTERP_SCALAR=1)')
+            else:
+                interp_fn = interpolate_lagrange7_3d_with_mapping_vec
+                print('      [interp] using VECTORIZED path (default; ~30-100x faster)')
         else:
             interp_fn = interpolate_phys_3d_with_mapping
 
@@ -3692,15 +3916,16 @@ def main():
         print('      ce_coeff = -(omega)*dt = {:.6e}  (= -3niu - 0.5dt = {:.6e})'.format(
             ce_coeff, -3.0 * niu - 0.5 * dt_real))
 
-        # Inverse metric on NEW grid. Order 6 mirrors solver (gilbm/metric_terms.h);
-        # order 2 is legacy 2nd-order central (kept for A/B comparison).
-        if args.metric_order == 6:
-            dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d_fornberg(y2d_new, z2d_new)
-        else:
-            dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
-        print('      metric order = {} ({})'.format(
-            args.metric_order,
-            'Fornberg j-central + k-adaptive' if args.metric_order == 6 else '2nd-order central'))
+        # [2nd-order operator-consistent f_neq] The CE gradient (compute_velocity_gradient_3d,
+        # now 2nd-order CD2) and the velocity projection (_divergence_cd2, hard-coded
+        # 2nd-order metric) MUST use the SAME metric, so the gradient's trace equals the
+        # divergence the div-exact projection zeroes -> no spurious dilatational f_neq.
+        # Hence the CE gradient always uses the 2nd-order metric here, DECOUPLED from
+        # --metric-order (which only feeds dt_global via compute_dt_global_gilbm, kept at 6
+        # to mirror the solver and pass the Phase-5 drift check).
+        dj_dy, dj_dz, dk_dy, dk_dz = compute_inverse_metric_2d(y2d_new, z2d_new)
+        print('      CE/projection metric = 2nd-order central (operator-consistent with '
+              '_divergence_cd2); dt_global metric order = {}'.format(args.metric_order))
         dx_phys = LX / (NEW.NX - 1)
 
         # 9-component velocity gradient tensor on NEW interior
@@ -3711,14 +3936,35 @@ def main():
         print('      velocity gradient tensor: {:.1f}s'.format(time.time() - t))
 
         div_u = dudx + dvdy + dwdz
-        max_div = float(np.max(np.abs(div_u)))
+        # [Second-layer gate: f_neq dilatational source]  div_u is the trace of the SAME
+        # 2nd-order CE gradient that builds f_neq, i.e. the -cs^2*div(u) bulk term that
+        # pollutes f_neq if non-zero.  Measure it on the UNIQUE physical DOFs (the periodic-
+        # duplicate j-row / i-col are overwritten by enforce_periodic_physical_duplicates
+        # before write), matching the u* divergence gate.  It MUST be < 1e-12 or f_neq is
+        # not purely deviatoric and the checkpoint is refused.
+        uj, ui = NEW.NY - 1, NEW.NX - 1
+        max_div = float(np.max(np.abs(div_u[:uj, :, :ui])))
+        max_div_full = float(np.max(np.abs(div_u)))
         max_strain = max(
             float(np.max(np.abs(dudx))), float(np.max(np.abs(dudy))), float(np.max(np.abs(dudz))),
             float(np.max(np.abs(dvdx))), float(np.max(np.abs(dvdy))), float(np.max(np.abs(dvdz))),
             float(np.max(np.abs(dwdx))), float(np.max(np.abs(dwdy))), float(np.max(np.abs(dwdz))),
         )
-        print('      max |div(u)|  = {:.3e}   (incompressibility residual)'.format(max_div))
+        print('      max |div(u)|  = {:.3e}   (f_neq dilatational source, unique DOFs; '
+              'full-interior {:.3e})'.format(max_div, max_div_full))
         print('      max |grad u|  = {:.3e}'.format(max_strain))
+
+        # ---- Gate 2 (second layer): the f_neq dilatational source must be < 1e-12 ----
+        fneq_div_gate_tol = 1.0e-12
+        if not np.isfinite(max_div) or max_div >= fneq_div_gate_tol:
+            sys.exit('FATAL: f_neq dilatational gate FAILED: max|tr(grad u*)| = {:.6e} '
+                     '>= {:.0e} on the 2nd-order CE gradient that builds f_neq.\n'
+                     '  The reconstructed f_neq would carry a spurious dilatational '
+                     '(-cs^2*div) component (not purely deviatoric). Checkpoint NOT '
+                     'written.\n  Ensure --project-velocity div-exact (CD2 operator-'
+                     'consistent with the gradient).'.format(max_div, fneq_div_gate_tol))
+        print('      f_neq dilatational gate PASSED: max|tr(grad u*)| = {:.6e} < {:.0e}'
+              '  (f_neq purely deviatoric)'.format(max_div, fneq_div_gate_tol))
         del div_u
 
         rho_int = rho_new[BFR:BFR+NEW.NY, BFR:BFR+NEW.NZ, BFR:BFR+NEW.NX]
