@@ -27,6 +27,16 @@ wt_of()  { "${PFX}_partition_walltime" "$1"; }
 known()  { "${PFX}_known_partitions"; }
 active() { "${PFX}_active_partition"; }
 
+# [LOCK_JP_PARTITION] H200 嚴格鎖定中拒絕變更/清除 H200 pin (避免手動打破 jp=32@16gpus 鎖)。
+# (Codex 8/9: partition_ctl 原本無鎖守衛, set/reset 可改 16gpus→8gpus/32gpus/64gpus 打破鎖。)
+_lock_guard() {
+    if [ "$CL" = "H200" ] && [ -e restart/LOCK_JP_PARTITION ]; then
+        echo "[FATAL][LOCK] restart/LOCK_JP_PARTITION 鎖定中 (H200@jp=32 嚴格鎖, pin=$(active 2>/dev/null))。" >&2
+        echo "  拒絕變更/清除 H200 partition pin。要改請先解鎖: rm -f restart/LOCK_JP_PARTITION" >&2
+        exit 3
+    fi
+}
+
 show_list() {
     local CURRENT; CURRENT="$(active)"
     echo "═══════════════════════════════════════════════════════════"
@@ -57,10 +67,12 @@ show_list() {
 
 _set_pin() {
     local part="$1" wt
+    _lock_guard
     wt="$(wt_of "$part")"
     if [ -z "$wt" ]; then
         echo "[FATAL] $CL 不認識的 partition: $part"; echo "  可用: $(known)"; exit 1
     fi
+    # 嚴格鎖已在 _lock_guard 攔下 H200; 非鎖定態才允許設 pin。
     mkdir -p restart
     echo "$part" > "$PFILE"
     echo "已設定 $CL pin: partition=$part  walltime=$wt  ($PFILE)"
@@ -76,6 +88,7 @@ case "${1:-list}" in
         [ -n "${2:-}" ] || { echo "用法: ./run partition set <name>"; echo "  可用: $(known)"; exit 1; }
         _set_pin "$2" ;;
     reset|clear)
+        _lock_guard
         if [ -f "$PFILE" ]; then rm -f "$PFILE"; echo "已清除 $CL partition pin, 回復自動/預設"; else echo "沒有 $CL partition pin 需要清除"; fi ;;
     -h|--help|help) show_list ;;
     *) _set_pin "$1" ;;

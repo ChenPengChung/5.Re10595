@@ -47,6 +47,15 @@ fi
 CHAIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
+
+# [LOCK_JP_PARTITION] 嚴格鎖定中拒絕真正改 jp (--apply/--prepare-only 會改 variables.h jp + jobscript,
+#   打破 jp=32 鎖); DRY-RUN 唯讀放行。(Codex 8/9: changejp.sh 原本無鎖守衛。)
+if [ -e restart/LOCK_JP_PARTITION ] && [ "$APPLY" = "1" ]; then
+  echo "[changejp][LOCK] FATAL: restart/LOCK_JP_PARTITION 鎖定中 (jp=32 嚴格鎖)。" >&2
+  echo "  拒絕變更 jp。要改規模請先解鎖: rm -f restart/LOCK_JP_PARTITION (DRY-RUN 不受限)。" >&2
+  exit 3
+fi
+
 VH="variables.h"
 JS_H200="chain_code/jobscript_chain.slurm.H200"
 JS_GB200="chain_code/jobscript_chain.slurm.GB200"

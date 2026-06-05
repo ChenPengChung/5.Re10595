@@ -337,9 +337,17 @@ fi
 #   gb200-rack1, gb200-rack2, gb200-dev; H200 自由切換集 {8gpus,16gpus,32gpus}@jp=32 (每帳號 cap 皆=32)
 # 每個候選用 sbatch --test-only --partition=<part> --time=<walltime> 查 ETA.
 # 需要對應 arch 的 a.out.{CLUSTER} 存在才會列入.
-# [LOCK_JP_PARTITION] 嚴格鎖定中: 直投固定走鎖定的 H200 + h200_partition pin, 不做 smart-ETA
-#   自由選擇、不覆寫 pin — 與 dispatcher 嚴格鎖一致, 避免直投打破 jp@partition 鎖 (Codex 8/9)。
-if [ -z "$CLUSTER" ] && [ -e restart/LOCK_JP_PARTITION ] && [ -s restart/h200_partition ]; then
+# [LOCK_JP_PARTITION] 嚴格鎖定中: 整條鏈鎖死 H200@<pin>@jp=32 (Codex 8/9 全路徑一致)。
+#   - 顯式 --gb200 與鎖衝突 → 拒絕 (此檢查在 MODE_CLUSTER override 之後, 故能攔截顯式覆寫)。
+#   - 否則強制 CLUSTER=H200 + 走 h200_partition pin, 跳過 smart-ETA、不覆寫 pin。
+#   - pin 缺失/空 → 還原為鎖定 partition 16gpus, 不讓 smart-ETA 介入 (pin-missing strict-safe)。
+if [ -e restart/LOCK_JP_PARTITION ]; then
+    if [ "$CLUSTER" = "GB200" ]; then
+        echo "[run.sh][LOCK] FATAL: LOCK_JP_PARTITION 鎖定 H200@jp=32; 與顯式 --gb200 衝突。" >&2
+        echo "             要切 GB200 請先解鎖: rm -f restart/LOCK_JP_PARTITION" >&2
+        exit 2
+    fi
+    [ -s restart/h200_partition ] || { mkdir -p restart; echo 16gpus > restart/h200_partition; }
     CLUSTER="H200"
     CLUSTER_SRC="LOCK_JP_PARTITION(pin=$(tr -d '[:space:]' < restart/h200_partition))"
 fi
@@ -777,10 +785,20 @@ if [ "$MODE_COLD" -eq 1 ]; then
         echo "已取消."
         exit 0
     fi
+    # [LOCK_JP_PARTITION] 保存鎖定狀態, 跨 --force-cold 還原 (NCHC 政策獨立於模擬狀態, 應存活冷重置)。
+    _SAVED_LOCK=0; _SAVED_PIN=""
+    [ -e restart/LOCK_JP_PARTITION ] && _SAVED_LOCK=1
+    [ -s restart/h200_partition ] && _SAVED_PIN="$(tr -d '[:space:]' < restart/h200_partition)"
     rm -rf restart/ checkpoint/
     rm -f checkrho.dat Ustar_Force_record.dat timing_log.dat
     rm -rf statistics/
     mkdir -p restart/
+    # [LOCK_JP_PARTITION] 還原鎖定狀態 (政策存活冷重置, 避免 --force-cold 靜默解鎖)
+    if [ "$_SAVED_LOCK" = "1" ]; then
+        touch restart/LOCK_JP_PARTITION
+        echo "${_SAVED_PIN:-16gpus}" > restart/h200_partition
+        echo "    [LOCK] 還原 LOCK_JP_PARTITION + h200_partition=${_SAVED_PIN:-16gpus} (政策跨 --force-cold 存活)"
+    fi
     # 恢復 [2] ETA 選出的 partition override (剛被 rm -rf restart/ 刪掉)
     if [ -n "${_BEST_P:-}" ] && [ -n "${_BEST_C:-}" ]; then
         _fc_default="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.${_BEST_C}" 2>/dev/null)"
