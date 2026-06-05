@@ -181,7 +181,7 @@
 // ================================================================
 #define     loop        500000000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
-#define     NDTFRC      50        // 每 N 步更新外力項
+#define     NDTFRC      1000      // 每 N 步更新外力項
 #define     NDTBIN      100000   // 每 N 步輸出 binary checkpoint (注意: checkpoint 巢狀於 VTK 區塊 main.cu:2101, 真實間隔=lcm(NDTVTK,NDTBIN); 設為 NDTVTK 倍數使名實相符 → 100000=2×NDTVTK)
 #define     NDTVTK      50000     // 每 N 步輸出 VTK
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度

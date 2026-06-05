@@ -1,0 +1,31 @@
+monitor armed for job 79832 @ 2026-06-05 12:41:10
+2026-06-05 12:41:10 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:41:40 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:42:10 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:42:40 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:43:10 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:43:40 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:44:10 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:44:40 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:45:11 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:45:41 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:46:11 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:46:41 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:47:11 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:47:41 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:48:11 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:48:42 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:49:12 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:49:42 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:50:12 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:50:42 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:51:13 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:51:43 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:52:14 state=RUNNING | [5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+2026-06-05 12:52:44 state=RUNNING |       f_neq dilatational gate PASSED: max|tr(grad u*)| = 5.389656e-13 < 1e-12  (f_neq purely deviatoric)
+2026-06-05 12:53:14 state=RUNNING |       wrote f03_0..f03_31 (CE)
+2026-06-05 12:53:44 state=RUNNING |       wrote f07_0..f07_31 (CE)
+2026-06-05 12:54:14 state=RUNNING |       wrote f10_0..f10_31 (CE)
+2026-06-05 12:54:44 state=RUNNING |       wrote f14_0..f14_31 (CE)
+2026-06-05 12:55:15 state=COMPLETED | [gen] python exit RC=0  end=2026-06-05 12:55:13
+TERMINAL state=COMPLETED @ 2026-06-05 12:55:15
