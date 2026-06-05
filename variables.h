@@ -157,7 +157,7 @@
 //  §4. 物理參數
 // ================================================================
 #define     Re      5600       // Reynolds number (基於 H_HILL 和 Uref)
-#define     Uref    0.01       
+#define     Uref    0.015       
 #define     niu     (Uref/Re)   // 運動黏度
 
 // 數學常數
