@@ -132,7 +132,7 @@ static inline int ITB_NewtonSolveHost(
     for (it = 1; it <= 12; it++) {
         double Y, Z, Yr, Ys, Zr, Zs;
         ITB_EvaluateMapHost(y_h, z_h, j0, k0, r, s, &Y, &Z, &Yr, &Ys, &Zr, &Zs);
-        const double Ry = yd - Y; /*Y,Z為現在(r,s)映射點 | _d為departurePoint | 殘差=目標-現在，故更新用 + */
+        const double Ry = yd - Y; /*Y,Z為現在(r,s)的猜測點的相對應物理座標 | _d為departurePoint | 殘差=目標-現在，故更新用 + */
         const double Rz = zd - Z;
         const double det = Yr * Zs - Ys * Zr;
         const double abs_det = fabs(det);
@@ -164,10 +164,12 @@ static inline int ITB_NewtonSolveHost(
         s = best_s;
         last_update *= scale;
         res_norm = best_res;
-        if (last_update < 1.0e-12 || res_norm < 1.0e-11) {
+        if (last_update < 1.0e-12 || res_norm < 1.0e-11) { //相對應猜測點的物理空間殘插要夠小 
             converged = 1;
             break;
-        }
+        } /* 一句話:r,s 宣告在迴圈外 + 163–164 行寫回 = 跨迭代記憶;「重算」的是依賴 r,s 的暫存量,等於「在記住的新點上重求
+  Newton 方向」。所以不是「會過的一次過、不會過的永遠不過」,而是每多一輪就把 r 推近真值一截,實測平均 2
+  輪命中。*/
     }
 
     *r_out = r;
