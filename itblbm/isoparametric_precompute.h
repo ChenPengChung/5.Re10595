@@ -132,8 +132,8 @@ static inline int ITB_NewtonSolveHost(
     for (it = 1; it <= 12; it++) {
         double Y, Z, Yr, Ys, Zr, Zs;
         ITB_EvaluateMapHost(y_h, z_h, j0, k0, r, s, &Y, &Z, &Yr, &Ys, &Zr, &Zs);
-        const double Ry = Y - yd;
-        const double Rz = Z - zd;
+        const double Ry = yd - Y; /*Y,Z為現在(r,s)映射點 | _d為departurePoint | 殘差=目標-現在，故更新用 + */
+        const double Rz = zd - Z;
         const double det = Yr * Zs - Ys * Zr;
         const double abs_det = fabs(det);
         if (abs_det < min_det) min_det = abs_det;
@@ -146,8 +146,8 @@ static inline int ITB_NewtonSolveHost(
         last_update = fabs(dr) + fabs(ds);
         if (last_update > 1.0) scale = 0.5;
 
-        double best_r = r - scale * dr;
-        double best_s = s - scale * ds;
+        double best_r = r + scale * dr; /*r為departure_point的內插中心計算座標，以內插中心點起點*/
+        double best_s = s + scale * ds;
         double best_res = 1.0e300;
         for (int damp = 0; damp < 5; damp++) {
             double Yc, Zc, Yrc, Ysc, Zrc, Zsc;
@@ -156,8 +156,8 @@ static inline int ITB_NewtonSolveHost(
             best_res = fabs(Yc - yd) + fabs(Zc - zd);
             if (best_res <= res_norm || scale <= 0.0625) break;
             scale *= 0.5;
-            best_r = r - scale * dr;
-            best_s = s - scale * ds;
+            best_r = r + scale * dr;
+            best_s = s + scale * ds;
         }
 
         r = best_r;
