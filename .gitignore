@@ -61,3 +61,8 @@ DISPATCHER_ACTIVE
 meshX.DAT
 DISPATCHER_INTENT
 restart/dispatcher.heartbeat
+
+# slot-handoff sentinel (首位士兵) runtime artifacts
+slot_handoff.log
+restart/slot_handoff.heartbeat
+restart/slot_handoff.pid
