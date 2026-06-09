@@ -44,7 +44,9 @@ echo "[genseed] threads=$NTHREADS  cwd=$(pwd)"
 echo "[genseed] RAM: $(free -g | awk '/^Mem:/{print $2" GB total, "$7" GB avail"}')"
 echo "================================================================"
 
-python3 -u phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
+# [s0.95] --div-gate-tol 2e-12: 細網格 div-exact 浮點地板 ~1.2e-12 > 原 1e-12 gate (sqrt(N)*eps);
+#         放寬到 2e-12 (與 Layer-2 fneq_div_gate_tol 一致), 文件化理由見 interp_checkpoint.py:3957
+python3 -u phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1 --div-gate-tol 2e-12
 RC=$?
 
 echo "================================================================"
