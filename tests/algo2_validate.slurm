@@ -41,8 +41,10 @@ touch restart/STOP_CHAIN
 export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
 set +u; source "$HPCX_HOME/hpcx-init.sh"; hpcx_load; set -u 2>/dev/null || true
 
-LATEST_DIR=$(readlink -f restart/checkpoint/latest)
-[ -d "$LATEST_DIR" ] || { echo "[FATAL] no checkpoint at restart/checkpoint/latest" >&2; exit 1; }
+# ★ 相對路徑 (solver main.cu:309 對非絕對路徑加 ./ 前綴; 絕對路徑會變 .//home/... 開不了)
+#   對照 live chain: ARGS="--restart=restart/checkpoint/step_<latest>" (jobscript_chain.slurm:393)
+LATEST_DIR="restart/checkpoint/$(readlink restart/checkpoint/latest)"
+[ -d "$LATEST_DIR" ] || { echo "[FATAL] no checkpoint at $LATEST_DIR" >&2; exit 1; }
 echo "[A2val] cell=$CELL  restart=$LATEST_DIR  np=$SLURM_NTASKS"
 
 # mpirun 不受 set -e 影響: 失敗(coords gate MPI_Abort(92)/NaN/FATAL — 正是本 job 要抓的)
