@@ -46,7 +46,9 @@ to_sec(){
 
 num(){ local v; v=$(printf '%s' "${1:-}" | grep -oE '^[0-9]+' | head -1); echo "${v:-0}"; }
 
-binary_present(){ ls "$ROOT"/a.out "$ROOT"/a.out.H200 "$ROOT"/a.out.GB200 >/dev/null 2>&1; }
+# 任一 solver binary 存在即視為活;ls 多檔在缺一(如 H200-only 無 a.out.GB200)時會回非零,
+# 配 set -o pipefail 會誤觸死亡閘門 → 改用 [ -e ] OR(任一存在為真),死亡閘門只在「全部消失」時觸發。
+binary_present(){ [ -e "$ROOT"/a.out ] || [ -e "$ROOT"/a.out.H200 ] || [ -e "$ROOT"/a.out.GB200 ]; }
 
 # 唯讀分類:回傳 "STATE|PART|REASON"(squeue 空 → "NOJOB||")
 verdict_of(){

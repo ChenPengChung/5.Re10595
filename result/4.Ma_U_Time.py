@@ -901,25 +901,42 @@ def load_timing_log(filepath):
     """
     Load timing_log.dat for performance monitoring.
 
-    Expected columns (15-col with TIMING_DETAIL, whitespace-separated):
-      col 0: Step        col 1: FTT         col 2: GPU_min    col 3: Wall_min
-      col 4: MLUPS       col 5: MLUPS/GPU   col 6: MLUPS_avg  col 7: MLUPSa/GPU
-      col 8: GPU_int_s   col 9: S1_ms       col 10: S2_ms     col 11: MPI_ms
-      col 12: MPI_wt     col 13: Iter_ms    col 14: MC_ms
+    Column indices are resolved BY NAME from the '# Step FTT GPU_min ... MLUPS ...'
+    header legend, so the correct columns are read even if the timing format
+    drifts. If no legend is found, fall back to the current 16-col P0-v2 layout
+    (space-separated):
+      0:Step  1:FTT  2:GPU_min  3:Wall_min  4:MLUPS  5:MLUPS/GPU  6:MLUPS_avg
+      7:MLUPSa/GPU  8:GPU_int_s  9:Buf_ms  10:Int_ms  11:MPI_ms  12:PSW_ms
+      13:Iter_ms  14:Idle_ms  15:MC_ms
+    'MLUPS' is the 5th column (index 4) = instantaneous total MLUPS (64 GPUs);
+    'MLUPS/GPU' (index 5) and 'MLUPS_avg' (index 6) are deliberately NOT used.
 
-    Returns dict or None if file not found.
+    Returns dict or None if file not found / unreadable.
     """
     if not os.path.isfile(filepath):
         print(f"[WARN] timing_log.dat not found at {filepath} — skipping perf panel")
         return None
 
+    # Fixed fallback indices for the 16-col P0-v2 layout (used only if no legend).
+    col = {'FTT': 1, 'GPU_min': 2, 'MLUPS': 4, 'MPI_ms': 11}
+    hdr_ncol = None
     rows = []
     with open(filepath, 'r', encoding='utf-8') as f:
         for line in f:
-            line = line.strip()
-            if not line or line.startswith('#'):
+            s = line.strip()
+            if not s:
                 continue
-            vals = line.split()
+            if s.startswith('#'):
+                # The legend line names every column: 'Step FTT ... MLUPS MLUPS/GPU ...'
+                toks = s.lstrip('#').split()
+                if 'Step' in toks and 'FTT' in toks and 'MLUPS' in toks:
+                    idx = {name: i for i, name in enumerate(toks)}   # exact-name match
+                    for key in ('FTT', 'GPU_min', 'MLUPS', 'MPI_ms'):
+                        if key in idx:
+                            col[key] = idx[key]
+                    hdr_ncol = len(toks)
+                continue
+            vals = s.split()
             try:
                 rows.append([float(v) for v in vals])
             except ValueError:
@@ -929,16 +946,36 @@ def load_timing_log(filepath):
         print(f"[WARN] No valid data in timing_log.dat")
         return None
 
+    # Robust to format drift between sessions: keep only the modal-width rows.
+    widths = {}
+    for r in rows:
+        widths[len(r)] = widths.get(len(r), 0) + 1
+    modal_w = max(widths, key=widths.get)
+    rows = [r for r in rows if len(r) == modal_w]
     data = np.array(rows)
-    if data.shape[1] < 9:
-        print(f"[ERROR] timing_log.dat needs ≥9 columns, got {data.shape[1]}")
+    ncol = data.shape[1]
+
+    # If the legend's column count disagrees with the data width, the by-name
+    # indices can't be trusted → revert to the fixed 16-col layout.
+    if hdr_ncol is not None and hdr_ncol != ncol:
+        col = {'FTT': 1, 'GPU_min': 2, 'MLUPS': 4, 'MPI_ms': 11}
+
+    need = max(col['FTT'], col['GPU_min'], col['MLUPS'])
+    if ncol <= need:
+        print(f"[ERROR] timing_log.dat has {ncol} cols, MLUPS expected at index {col['MLUPS']}")
         return None
 
+    def _col(name, zero_if_missing=False):
+        j = col.get(name)
+        if j is not None and j < ncol:
+            return data[:, j]
+        return np.zeros(len(data)) if zero_if_missing else None
+
     result = {
-        'FTT':       data[:, 1],
-        'GPU_min':   data[:, 2],
-        'MLUPS_rec': data[:, 4],
-        'MPI_ms':    data[:, 11] if data.shape[1] > 11 else np.zeros(len(data)),
+        'FTT':       _col('FTT'),
+        'GPU_min':   _col('GPU_min'),
+        'MLUPS_rec': _col('MLUPS'),       # ← timing_log.dat col 5 (instantaneous total MLUPS)
+        'MPI_ms':    _col('MPI_ms', zero_if_missing=True),
     }
 
     # Skip the very first row (step=1) — cold-start outlier
@@ -947,8 +984,8 @@ def load_timing_log(filepath):
             result[k] = result[k][1:]
 
     print(f"[INFO] timing_log.dat: {len(result['FTT'])} rows, "
-          f"MLUPS ∈ [{result['MLUPS_rec'].min():.1f}, {result['MLUPS_rec'].max():.1f}], "
-          f"MPI ∈ [{result['MPI_ms'].min():.1f}, {result['MPI_ms'].max():.1f}] ms")
+          f"MLUPS(col{col['MLUPS']}) ∈ [{result['MLUPS_rec'].min():.1f}, {result['MLUPS_rec'].max():.1f}], "
+          f"MPI(col{col['MPI_ms']}) ∈ [{result['MPI_ms'].min():.1f}, {result['MPI_ms'].max():.1f}] ms")
     return result
 
 
