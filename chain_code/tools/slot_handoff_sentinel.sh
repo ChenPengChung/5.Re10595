@@ -22,7 +22,7 @@ ROOT=/home/s8313697/5.Re10595/Edit9_ITBISLBM5600
 cd "$ROOT" || { echo "FATAL: cannot cd $ROOT"; exit 1; }
 LOG="$ROOT/slot_handoff.log"
 HB="$ROOT/restart/slot_handoff.heartbeat"
-ACCOUNT=MST115169
+ACCOUNT=MST114348
 IMMINENT_SEC=${IMMINENT_SEC:-300}        # 剩餘 walltime < 此值 → 進警戒(SIGUSR1@120 留 3min lead)
 HANDOFF_VERDICT_SEC=${HANDOFF_VERDICT_SEC:-120}   # HANDOFF 後最多等多久判 LOST
 DRYRUN=${DRYRUN:-0}

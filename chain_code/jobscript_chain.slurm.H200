@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=Edit9_ITB5600
-#SBATCH --account=MST115169
-#SBATCH --partition=32gpus
+#SBATCH --account=MST114348
+#SBATCH --partition=16gpus
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY 2026-06-05 / MST115169] 預設 partition=32gpus (對應 jp=32; LOCK_COMBO 暫鎖 32gpus@32)。自由跳轉集 {8gpus@32,16gpus@32,32gpus@32,64gpus@64}; jp 不再等於 partition 名數字。
+# [POLICY 2026-06-10 / MST114348] 預設 partition=16gpus (對應 jp=32; LOCK_COMBO 暫鎖 16gpus@32)。計畫改 MST114348 (cap 與 Edit6/Edit8 的 MST115169 脫鉤)。自由跳轉集 {8gpus@32,16gpus@32,32gpus@32,64gpus@64}。
 #             walltime 上限隨 partition 而異: 64gpus/32gpus=1 天 / 16gpus=2 天 / dev=4 時。
 #             dispatcher / ./run partition 會於投遞時用對應 partition 的 --time= 覆寫;
 #             本 header 為非 dispatcher (直投/自我續投) 路徑的 fallback (self-resubmit 另以

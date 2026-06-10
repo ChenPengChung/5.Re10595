@@ -75,7 +75,7 @@ if [ "${DISPATCHER_SELFTEST:-0}" = "1" ]; then
     SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest.$$.sentinel)"
     STOP_SENTINEL="$(mktemp 2>/dev/null || echo /tmp/disp_selftest_stop.$$)"
 fi
-ACCOUNT="${ACCOUNT:-MST115169}"   # [2026-06-04 NCHC 政策] 計畫編號 MST115169 (原 MST114348 已停用)
+ACCOUNT="${ACCOUNT:-MST114348}"   # [2026-06-10] 計畫改 MST114348 (與 Edit6/Edit8 的 MST115169 cap 脫鉤; fairshare 較佳)
 
 # [P0 TRAP #2 FIX] 兩邊都忙時連續沒空位多少次後, 觸發明確停機 (避免隱形無限 sleep)
 # [never-idle] 放寬: 預設 480 次 × POLL_INTERVAL(30s) = 4 小時才放棄 (原 60=30 分太短)。
@@ -713,7 +713,7 @@ partition_account_gpu_inuse() {
     #   GRES; PENDING job 尚未占用任何 GPU. 共用帳號(mst115169 跨 teddyji0315/u8035407/本專案)時,
     #   別用戶在某 partition 排隊(PENDING)的 job 不該被算成「占用」而擋掉本專案 → 否則 dev 上
     #   u8035407 的 PENDING 會讓本專案誤判 dev 爆滿(已用 256GPU)而永遠跳過 dev.
-    squeue -A "${ACCOUNT:-MST115169}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
         { jid=$1; pj=$2; n=$3; g=$4
           if (pj != p) next
           if (me != "" && jid == me) next

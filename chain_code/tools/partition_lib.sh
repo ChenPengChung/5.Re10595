@@ -127,7 +127,7 @@ h200_sbatch_partition_args() {
 #   只算 RUNNING: MaxGRESPerAccount 只計已配置 GRES, PENDING 不占; 共用帳號別用戶 PENDING 不該擋本專案。
 partition_account_gpu_inuse() {
     local part="$1" myhead; myhead="$(cat restart/chain_jobid 2>/dev/null | tr -dc 0-9)"
-    squeue -A "${ACCOUNT:-MST115169}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
+    squeue -A "${ACCOUNT:-MST114348}" -h -t RUNNING -o '%i|%P|%D|%b' 2>/dev/null | awk -F'|' -v p="$part" -v me="$myhead" '
         { jid=$1; pj=$2; n=$3; g=$4
           if (pj != p) next
           if (me != "" && jid == me) next
