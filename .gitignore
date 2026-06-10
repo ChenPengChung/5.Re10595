@@ -54,3 +54,4 @@ checkrho.dat
 !timing_log.dat.gz
 !checkrho.dat.gz
 DISPATCHER_ACTIVE
+chain_code/health_watchdog_alerts.log
