@@ -1,0 +1,237 @@
+#ifndef GILBM_PRECOMPUTE2_H
+#define GILBM_PRECOMPUTE2_H
+// ════════════════════════════════════════════════════════════════════════════
+//  Algorithm2 precompute — ROUND A: GILBM departure-coordinate GENERATOR
+// ────────────────────────────────────────────────────────────────────────────
+//  Reproduces, EXACTLY, the departure coordinate (t_xi, t_zeta) that Algorithm1
+//  computes inside the fused kernel, but ONCE per (yz_class, j, k) instead of
+//  per (i,j,k,q,step). Time-invariant under GTS: depends only on
+//  (j, k, e_y, e_z, dt_global, the 4 fixed metric arrays, bk_precomp).
+//
+//  Faithful transcription of:
+//    gilbm/evolution_gilbm/1.algorithm1.h
+//      - gilbm_rk2_displacement()  (L16-58)   → (d_xi, delta_zeta)
+//      - t_xi / t_zeta derivation  (L304-321) → (t_xi, t_zeta)
+//
+//  STRICT STORAGE: the production table is exactly NCLASS*NYD6*NZ6 * 2 doubles
+//  (the "2*9*grid" target) — GILBM2_DepartCoords is 16 bytes, NO flags field.
+//  Clamp diagnostics are reported via an OPTIONAL out-param, never stored.
+//
+//  CRITICAL asymmetry preserved: t_xi IS clamped to [0,6]; t_zeta is
+//  up_k(clamped[3,NZ6-4]) - bk and is NOT clamped to [0,6].
+//
+//  Lagrange: a single local hardcoded-denominator helper (gilbm2_lagrange7),
+//  an EXACT copy of interpolation_gilbm.h:117, used by BOTH host and device:
+//    - DEVICE: byte-identical to Algorithm1's streaming-kernel lagrange →
+//      running the table build as a one-time DEVICE kernel gives diff=0.
+//    - HOST:   identical source; differs from device only by optional FMA
+//      contraction (~1 ULP), used for diagnostics/unit tests. For strict
+//      diff=0, build via the DEVICE kernel path.
+//
+//  SELF-CONTAINED: no #include of precompute.h (which pulls MPI/CHECK_MPI), so
+//  this header is unit-testable standalone with g++. NYD6/NZ6/jp must be
+//  provided by the includer (variables.h); bk is passed in (no dependency on
+//  PrecomputeGILBM_StencilBaseK here).
+//
+//  SCOPE (Round A): the 9-class map, the COORDS table struct + indexing, the
+//  generator, and the HOST build loop. The COORDS consumer kernel, the WEIGHTS
+//  fold, the ITB_NEWTON generator, the Algorithm1 coordinate-extraction hook,
+//  and all main.cu/evolution.h wiring are LATER rounds.
+// ════════════════════════════════════════════════════════════════════════════
+
+#include <cmath>
+#include <cstddef>   // size_t
+
+// ── 9 y-z projection classes (identical grouping to Algorithm1's GILBM_e) ──
+//   0:( 0, 0)  1:(+1, 0)  2:(-1, 0)  3:( 0,+1)  4:( 0,-1)
+//   5:(+1,+1)  6:(-1,+1)  7:(+1,-1)  8:(-1,-1)
+#define GILBM2_NCLASS 9
+
+// q → yz class. q=0 self, q=1,2 (ey=ez=0) eta-only 1D → class 0 (inert).
+// Matches the (e_y,e_z) of GILBM_e[19][3] (0.shared_code.h:23) byte-for-byte.
+__host__ __device__ __forceinline__ int gilbm2_yz_class_from_q(int q) {
+    switch (q) {
+        case 3: case 7:  case 8:   return 1;  // (+1, 0): q3 + xy-diagonals 7,8
+        case 4: case 9:  case 10:  return 2;  // (-1, 0)
+        case 5: case 11: case 12:  return 3;  // ( 0,+1)
+        case 6: case 13: case 14:  return 4;  // ( 0,-1)
+        case 15:                   return 5;  // (+1,+1)
+        case 16:                   return 6;  // (-1,+1)
+        case 17:                   return 7;  // (+1,-1)
+        case 18:                   return 8;  // (-1,-1)
+        default:                   return 0;  // q=0,1,2 → inert (0,0)
+    }
+}
+
+__host__ __device__ __forceinline__ void gilbm2_class_velocity(int cls, double *ey, double *ez) {
+    // 9-class (e_y, e_z) table
+    switch (cls) {
+        case 1: *ey =  1.0; *ez =  0.0; return;
+        case 2: *ey = -1.0; *ez =  0.0; return;
+        case 3: *ey =  0.0; *ez =  1.0; return;
+        case 4: *ey =  0.0; *ez = -1.0; return;
+        case 5: *ey =  1.0; *ez =  1.0; return;
+        case 6: *ey = -1.0; *ez =  1.0; return;
+        case 7: *ey =  1.0; *ez = -1.0; return;
+        case 8: *ey = -1.0; *ez = -1.0; return;
+        default: *ey = 0.0; *ez = 0.0; return;   // class 0 (inert)
+    }
+}
+
+// ── COORDS table (STORE = COORDS / cell "B") — STRICTLY 2 doubles = 16 bytes/entry ──
+//   Table footprint = NCLASS * NYD6 * NZ6 * 2 doubles (the "2*9*grid" target).
+//   NO flags field in the production struct (a flags byte would pad it to 24 B).
+struct GILBM2_DepartCoords {
+    double t_xi;     // ∈ [0,6] (clamped)   — xi-direction local Lagrange coordinate
+    double t_zeta;   // = up_k - bk; NOT clamped to [0,6] (Algorithm1 asymmetry)
+};
+
+// Diagnostic clamp flags — NOT stored in the table; reported only via the
+// generator's optional flag_out parameter (used by validation/unit tests).
+#define GILBM2_FLAG_TXI_CLAMPED   0x01u   // t_xi hit the [0,6] clamp
+#define GILBM2_FLAG_UPK_CLAMPED   0x02u   // up_k hit the [3,NZ6-4] clamp
+
+// Per-rank table index: [class][j][k], j∈[0,NYD6), k∈[0,NZ6).
+__host__ __device__ __forceinline__ size_t gilbm2_coord_index(int cls, int j, int k) {
+    return ((size_t)cls * (size_t)NYD6 + (size_t)j) * (size_t)NZ6 + (size_t)k;
+}
+
+// ── 7-point Lagrange — EXACT copy of interpolation_gilbm.h:117 ──
+//   Hardcoded denominators, division-free (performance-frozen 2026-04).
+//   Duplicated locally so this header is self-contained AND host & device use
+//   the IDENTICAL expression. KEEP IN SYNC with interpolation_gilbm.h:117.
+__host__ __device__ __forceinline__ void gilbm2_lagrange7(double t, double a[7]) {
+    const double t0 = t, t1 = t - 1.0, t2 = t - 2.0, t3 = t - 3.0;
+    const double t4 = t - 4.0, t5 = t - 5.0, t6 = t - 6.0;
+    const double p56     = t5 * t6;
+    const double p456    = t4 * p56;
+    const double p3456   = t3 * p456;
+    const double p23456  = t2 * p3456;
+    const double p123456 = t1 * p23456;   // t1*t2*t3*t4*t5*t6
+    const double p01     = t0 * t1;
+    const double p012    = p01 * t2;
+    const double p0123   = p012 * t3;
+    const double p01234  = p0123 * t4;
+    const double p012345 = p01234 * t5;   // t0*t1*t2*t3*t4*t5
+    a[0] = p123456        * ( 1.0 / 720.0);   // skip t0
+    a[1] = (t0 * p23456)  * (-1.0 / 120.0);   // skip t1
+    a[2] = (p01 * p3456)  * ( 1.0 /  48.0);   // skip t2
+    a[3] = (p012 * p456)  * (-1.0 /  36.0);   // skip t3
+    a[4] = (p0123 * p56)  * ( 1.0 /  48.0);   // skip t4
+    a[5] = (p01234 * t6)  * (-1.0 / 120.0);   // skip t5
+    a[6] = p012345        * ( 1.0 / 720.0);   // skip t6
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  GILBM departure-coordinate generator (the 12-step recipe, §4 of the prompt)
+//  Mirrors gilbm_rk2_displacement + the t_xi/t_zeta derivation EXACTLY.
+//    in : (j,k) cell, (ey,ez) class velocity, dt, 4 metric arrays [NYD6*NZ6],
+//         bk = bk_precomp[k]
+//    out: (t_xi, t_zeta) returned; clamp flags via optional flag_out (NOT stored)
+// ════════════════════════════════════════════════════════════════════════════
+__host__ __device__ inline GILBM2_DepartCoords gilbm2_gen_departure_coords(
+    int j, int k, double ey, double ez, double dt_val,
+    const double *xi_y, const double *xi_z,
+    const double *zeta_y, const double *zeta_z,
+    int bk, unsigned char *flag_out = nullptr)   // flag_out: optional diagnostic, NOT stored
+{
+    const int idx_jk = j * (int)NZ6 + k;
+    const double xi_y_val   = xi_y[idx_jk];
+    const double xi_z_val   = xi_z[idx_jk];
+    const double zeta_y_val = zeta_y[idx_jk];
+    const double zeta_z_val = zeta_z[idx_jk];
+
+    // ── RK2 midpoint (Imamura 2005 Eq.19-20) == gilbm_rk2_displacement L23-58 ──
+    double e_txi_0   = ey * xi_y_val   + ez * xi_z_val;
+    double e_tzeta_0 = ey * zeta_y_val + ez * zeta_z_val;
+    double j_half = (double)j - 0.5 * dt_val * e_txi_0;
+    double k_half = (double)k - 0.5 * dt_val * e_tzeta_0;
+    if (j_half < 0.0)                       j_half = 0.0;
+    if (j_half > (double)((int)NYD6 - 1))   j_half = (double)((int)NYD6 - 1);
+    if (k_half < 3.0)                       k_half = 3.0;
+    if (k_half > (double)((int)NZ6 - 4))    k_half = (double)((int)NZ6 - 4);
+
+    int sj_rk = (int)floor(j_half) - 3;
+    if (sj_rk < 0)                  sj_rk = 0;
+    if (sj_rk + 6 > (int)NYD6 - 1)  sj_rk = (int)NYD6 - 7;
+    double tj_rk = j_half - (double)sj_rk;
+    double aj_rk[7];
+    gilbm2_lagrange7(tj_rk, aj_rk);
+
+    int sk_rk = (int)floor(k_half) - 3;
+    if (sk_rk < 0)                 sk_rk = 0;
+    if (sk_rk + 6 > (int)NZ6 - 1)  sk_rk = (int)NZ6 - 7;
+    double tk_rk = k_half - (double)sk_rk;
+    double ak_rk[7];
+    gilbm2_lagrange7(tk_rk, ak_rk);
+
+    double e_txi_half = 0.0, e_tzeta_half = 0.0;
+    for (int mj = 0; mj < 7; mj++) {
+        int jj = sj_rk + mj;
+        double acc_xi = 0.0, acc_zeta = 0.0;
+        for (int mk = 0; mk < 7; mk++) {
+            int kk = sk_rk + mk;
+            int idx_rk = jj * (int)NZ6 + kk;
+            double w_mk = ak_rk[mk];
+            acc_xi   += w_mk * (ey * xi_y[idx_rk]   + ez * xi_z[idx_rk]);
+            acc_zeta += w_mk * (ey * zeta_y[idx_rk] + ez * zeta_z[idx_rk]);
+        }
+        e_txi_half   += aj_rk[mj] * acc_xi;
+        e_tzeta_half += aj_rk[mj] * acc_zeta;
+    }
+    double d_xi       = dt_val * e_txi_half;
+    double delta_zeta = dt_val * e_tzeta_half;
+
+    // ── t_xi / t_zeta derivation == algorithm1_step1_GTS L310-321 ──
+    //   bj = j-3 (UNCLAMPED, L187) → (j - bj) = 3 → t_xi = 3 - d_xi
+    unsigned char fl = 0;
+
+    double t_xi = 3.0 - d_xi;
+    if (t_xi < 0.0) { t_xi = 0.0; fl |= GILBM2_FLAG_TXI_CLAMPED; }
+    if (t_xi > 6.0) { t_xi = 6.0; fl |= GILBM2_FLAG_TXI_CLAMPED; }
+
+    double up_k = (double)k - delta_zeta;
+    if (up_k < 3.0)                     { up_k = 3.0;                     fl |= GILBM2_FLAG_UPK_CLAMPED; }
+    if (up_k > (double)((int)NZ6 - 4))  { up_k = (double)((int)NZ6 - 4);  fl |= GILBM2_FLAG_UPK_CLAMPED; }
+    double t_zeta = up_k - (double)bk;   // ★ NO [0,6] clamp — preserve Algorithm1 asymmetry
+
+    if (flag_out) *flag_out = fl;
+    GILBM2_DepartCoords c;
+    c.t_xi   = t_xi;
+    c.t_zeta = t_zeta;
+    return c;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  HOST build loop — fill the COORDS table for all (class, interior j, k).
+//  MUST be called AFTER: (1) the metric MPI ghost-exchange (so ghost rows of
+//  xi_y_h.. are valid — the RK2 7×7 stencil reaches them near the j-seam), and
+//  (2) dt_global finalization (MPI_Allreduce), and (3) PrecomputeGILBM_StencilBaseK.
+//  Interior range matches the kernel guard: j∈[3,NYD6-4], k∈[3,NZ6-4].
+//  (Diagnostic/host path — for bit-exact, run the equivalent DEVICE kernel.)
+// ════════════════════════════════════════════════════════════════════════════
+static inline void BuildGILBM2DepartureTableHost_Coords(
+    GILBM2_DepartCoords *table,                 // [GILBM2_NCLASS * NYD6 * NZ6]
+    const double *xi_y_h,  const double *xi_z_h,
+    const double *zeta_y_h, const double *zeta_z_h,
+    const int *bk_precomp_h, double dt_val)
+{
+    const size_t N = (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6;
+    for (size_t n = 0; n < N; n++) {            // inert default (class 0 + ghost/boundary)
+        table[n].t_xi = 3.0; table[n].t_zeta = 3.0;
+    }
+    for (int cls = 1; cls < GILBM2_NCLASS; cls++) {   // class 0 = (0,0) inert
+        double ey, ez;
+        gilbm2_class_velocity(cls, &ey, &ez);
+        for (int j = 3; j < (int)NYD6 - 3; j++) {     // j ∈ [3, NYD6-4]
+            for (int k = 3; k < (int)NZ6 - 3; k++) {  // k ∈ [3, NZ6-4]
+                int bk = bk_precomp_h[k];
+                table[gilbm2_coord_index(cls, j, k)] =
+                    gilbm2_gen_departure_coords(j, k, ey, ez, dt_val,
+                        xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk);
+            }
+        }
+    }
+}
+
+#endif // GILBM_PRECOMPUTE2_H
