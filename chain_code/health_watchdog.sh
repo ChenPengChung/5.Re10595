@@ -137,7 +137,7 @@ printf '%s' "$sig" > "$HASHF"
 } >> "$ALERTS"
 
 # best-effort 單檔 push (絕不 -A、絕不 --force; 任何失敗即放棄, 本地 commit 仍在, 下次 session 補推)
-if [ "${WATCHDOG_PUSH:-1}" = "1" ]; then
+if [ "${WATCHDOG_PUSH:-0}" = "1" ]; then
     # --only -- "$ALERTS": 只把這一檔的變更納入 commit, 隔離 index — 即使並行的 chain
     # 'auto commit' 此刻已暫存別檔, 也不會被掃進來誤推 (審查確認: 無 pathspec 會打包整個 index)。
     if git add "$ALERTS" 2>/dev/null && \
