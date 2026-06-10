@@ -51,13 +51,10 @@ result/*.dat
 # PDF files
 *.pdf
 
-# Three mandatory tracking files — keep .dat.gz, ignore raw .dat
-Ustar_Force_record.dat
-timing_log.dat
-checkrho.dat
-!Ustar_Force_record.dat.gz
-!timing_log.dat.gz
-!checkrho.dat.gz
+# Three sim record files — NOT tracked (2026-06-10 反轉): ignore BOTH .dat and .dat.gz
+Ustar_Force_record.dat*
+timing_log.dat*
+checkrho.dat*
 DISPATCHER_ACTIVE
 meshX.DAT
 DISPATCHER_INTENT
