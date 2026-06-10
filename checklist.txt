@@ -1,14 +1,13 @@
 # ============================================================================
 # Edit6_5600DNS 重要紀錄/狀態檔 checklist
 # ----------------------------------------------------------------------------
-# 生成時間: 2026-06-10 17:03 CST | chain head: 88688 (RUNNING)
+# 生成時間: 2026-06-10 18:19 CST | chain head: 88688 (RUNNING)
 # [Y]=存在  [N]=缺失
 # 格式: 四區 [log] / [pid] / [heartbeat] / [other]; owner 單例鎖檔列於 [other]。
 # 用途: 模擬生成期間快速檢查 daemon/chain 狀態檔是否齊全(有無空缺)。
 #       [N] 且非「預期缺」者 = 需查 (daemon 死 / 誤刪 / I/O 異常)。
-# 重新檢查: 對每行路徑 `[ -e <path> ] && echo Y || echo N`
-#           owner 窮舉:  find . -name owner -not -path '*/.git/*'
-# 驗證流程: workflow 4-掃描器+完整性 critic (COMPLETE) → codex 雙重檢視。
+# 重新生成: python3 checklist.py        (本檔即此 txt 的產生器)
+# 只看摘要: python3 checklist.py --check (有非預期缺漏 exit 1)
 # ============================================================================
 
 # -------------------------------------------------------------- [log] -------
@@ -22,7 +21,7 @@ live/handoff_scout.log                 [Y]  交棒哨兵稽核 (僅事件時寫,
 chain_code/health_watchdog_alerts.log  [Y]  watchdog 警報彙整 (本地; 已 gitignore 不追蹤)
 slurm_88688.log                        [Y]  ★當前 job solver stdout (正在寫=job 健康)
 slurm_88688.err                        [Y]  當前 job solver stderr (小=無錯誤輸出, 正常)
-J_Frohlich/gridgen_68601.log           [Y]  歷史一次性 gridgen log (06-01, 靜止, 非執行期)
+J_Frohlich/gridgen_68601.log           [Y]  歷史一次性 gridgen log (靜止, 非執行期)
 nan_monitor_log.txt                    [N]  預期缺: 僅偵測到 NaN 時才生成 (正常)
 animation/gif_render_loop.log          [N]  預期缺: 未開 GIF 渲染迴圈 (正常)
 # 註: 缺 .log 多為歷史遺失/自動重建, 非致命; slurm_<jid>.log 必須在且 mtime 新。
@@ -41,31 +40,31 @@ live/watcher.heartbeat                 [Y]  watcher 跨節點單例心跳 host:p
 
 # ------------------------------------------------------------ [other] -------
 # --- chain / partition / binary / checkpoint 關鍵狀態 (★絕不可刪) ---
-restart/chain_jobid                    [Y]  當前 head job ID (=88688)               ★絕不可刪
-restart/chain_count                    [Y]  chain 迭代次數 (=4)                      ★絕不可刪
+restart/chain_jobid                    [Y]  當前 head job ID (=88688)                        ★絕不可刪
+restart/chain_count                    [Y]  chain 迭代次數 (=4)                              ★絕不可刪
 restart/grid_provenance                [Y]  grid+variables.h mtime 一致性; Preflight C 閘門  ★絕不可刪
-restart/h200_partition                 [Y]  pinned partition (=16gpus); partition@jps 鎖  ★絕不可刪
-restart/throughput_by_jp.dat           [Y]  partition×jp 吞吐量表 (dispatcher 切換用)   ★絕不可刪
+restart/h200_partition                 [Y]  pinned partition (=16gpus); partition@jps 鎖     ★絕不可刪
+restart/throughput_by_jp.dat           [Y]  partition×jp 吞吐量表 (dispatcher 切換用)        ★絕不可刪
 restart/binary_manifest.dat            [Y]  a.out md5 manifest (jp32=0ff4bcf9; 防舊 binary 蓋回)  ★絕不可刪
-restart/checkpoint/latest              [Y]  最新 checkpoint 指針 symlink (->step_54900001)  ★絕不可刪
+restart/checkpoint/latest              [Y]  最新 checkpoint 指針 symlink (->step_55500001)   ★絕不可刪
 restart/gb200_partition                [N]  預期缺: 本專案跑 H200, 尚無 GB200 binary
 # --- STOP / active 哨兵 (鏈正常續跑時應缺) ---
 restart/STOP_CHAIN                     [N]  預期缺: 存在=已要求停鏈
 restart/STOP_DISPATCHER                [N]  預期缺: 存在=已停 dispatcher
-restart/STOP_NOCAPACITY                [N]  預期缺: 存在=GPU 容量不足回退 (曾因誤判出現過)
+restart/STOP_NOCAPACITY                [N]  預期缺: GPU 容量不足回退 (曾因誤判出現過)
 restart/DISPATCHER_ACTIVE              [N]  預期缺: 新架構用 nodelock 取代此舊哨兵
 DISPATCHER_ACTIVE                      [N]  預期缺: 同上 (root 路徑); 缺席=安全
-.run.lock                              [Y]  sbatch 互斥鎖 (job 運行中存在屬正常; 見下方⚠️)
-# --- owner 單例鎖 (find . -name owner 窮舉; 此 3 個為全部, 一個不漏) ---
-restart/dispatcher.nodelock/owner      [Y]  dispatcher 跨節點互斥鎖 owner (內容 host:pid; 防多節點重複 daemon)
+.run.lock                              [Y]  sbatch 互斥鎖 (job 運行中存在屬正常; 見下方註記)
+# --- owner 單例鎖 (find . -name owner 窮舉; 動態列舉, 一個不漏) ---
 live/watcher.nodelock/owner            [Y]  watcher 跨節點互斥鎖 owner (內容 host:pid)
 restart/HEAD.lockdir/owner             [Y]  HEAD 投遞鎖 owner (防重複投遞; 內容 state/jobid/cluster/host)
+restart/dispatcher.nodelock/owner      [Y]  dispatcher 跨節點互斥鎖 owner (內容 host:pid; 防多節點重複 daemon)
 
 # ============================================================================
 # ⚠️ 註記 (生成時快照):
 #  1. 標 ★絕不可刪 者: 刪除會導致 warm-resume FATAL / Preflight C FATAL / 斷鏈。
-#  2. .run.lock 存在: job 88688 RUNNING 中屬正常(防重投)。若未來 job 已離隊
-#     且無活躍 sbatch 仍殘留此鎖 → 下輪自投會被擋, 需手動 rm .run.lock。
+#  2. .run.lock 存在: job RUNNING 中屬正常(防重投)。若 job 已離隊且無活躍
+#     sbatch 仍殘留此鎖 → 下輪自投會被擋, 需手動 rm .run.lock。
 #  3. *.pid 記本節點已死 PID(跨節點單例正常); daemon 真實存活以 heartbeat 判。
 #  4. owner 缺失 = 對應單例鎖被清 → daemon 重啟會以原子 mkdir 重建; 通常自癒。
 #  5. 三大紀錄檔(Ustar_Force_record.dat / timing_log.dat / checkrho.dat)未列上
