@@ -143,6 +143,26 @@ __device__ void algorithm2_step1_GTS(
     g_weno_activation_count_zeta[k][j][i] = 0;
 #endif
 
+    // ── per-class 權重 cache: q-loop 前「建一次」, 同 class 的 q 共享, 不再 per-q 重算/重讀 ──
+    //   ★唯一 STORE-mode 差異 = cache 的「填法」; q-loop 消費端兩模式逐位元相同★
+    //   B/COORDS : 每 moving class 算一次 lagrange → 8 class × 2 = 16 lagrange = 7×2×8 coeff/point
+    //              (取代原 q-loop 內 16 moving q × 2 = 7×2×16 的重複計算)
+    //   A/WEIGHTS: 每 moving class 讀一次 wr/ws → 8 class × 2 讀 (取代原 per-q 32 讀)
+    //   index [cls=1..8][0..6]; cls=0 (靜止方向) 不填不用。權重只依 (cls,j,k) 不依 i/q。
+    double Lxi_cache[GILBM2_NCLASS][7];
+    double Lzeta_cache[GILBM2_NCLASS][7];
+    for (int cls = 1; cls < GILBM2_NCLASS; cls++) {
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+        const GILBM2_DepartWeights dw = table_d[gilbm2_coord_index(cls, j, k)];
+        #pragma unroll
+        for (int s = 0; s < 7; s++) { Lxi_cache[cls][s] = dw.wr[s]; Lzeta_cache[cls][s] = dw.ws[s]; }
+#else
+        const GILBM2_DepartCoords dc = table_d[gilbm2_coord_index(cls, j, k)];
+        lagrange_7point_coeffs(dc.t_xi,   Lxi_cache[cls]);
+        lagrange_7point_coeffs(dc.t_zeta, Lzeta_cache[cls]);
+#endif
+    }
+
     for (int q = 0; q < 19; q++) {
         double f_streamed;
 
@@ -183,21 +203,12 @@ __device__ void algorithm2_step1_GTS(
                     //   值，q 共 (e_y,e_z) 類者讀同一 entry (q3,7,8→class1...)
                     // ═══════════════════════════════════════════════════════
                     const int cls = gilbm2_yz_class_from_q(q);
-                    // ★★ 唯一 STORE-mode 差異點：取得 L_xi/L_zeta ★★
+                    // ★ per-class cache 查表 — 權重取得已移至 q-loop 前 (A/B 消費結構對齊) ★
+                    //   同 class 的 q (q3,7,8→class1 …) 共用同一組權重, 不在 q-loop 內重算/重讀。
                     //   下游 (interp2 gather / ghost / zeta_collapse / MAC) 兩模式逐位元相同。
-                    double L_xi[7], L_zeta[7], t_zeta;
-#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
-                    // WEIGHTS (GILBM-A, 仿 ITB): 純讀預存權重, kernel 零權重計算
-                    const GILBM2_DepartWeights dw = table_d[gilbm2_coord_index(cls, j, k)];
-                    for (int s = 0; s < 7; s++) { L_xi[s] = dw.wr[s]; L_zeta[s] = dw.ws[s]; }
-                    t_zeta = 3.0;   // unused (USE_WENO7=0 → zeta-collapse 線性路徑不讀 t_zeta)
-#else
-                    // COORDS (GILBM-B): 讀 (t_xi,t_zeta), 即時 lagrange 算 (同一 device lagrange)
-                    const GILBM2_DepartCoords dc = table_d[gilbm2_coord_index(cls, j, k)];
-                    lagrange_7point_coeffs(dc.t_xi, L_xi);
-                    t_zeta = dc.t_zeta;
-                    lagrange_7point_coeffs(t_zeta, L_zeta);
-#endif
+                    const double *L_xi   = Lxi_cache[cls];
+                    const double *L_zeta = Lzeta_cache[cls];
+                    const double  t_zeta = 3.0;   // unused (USE_WENO7=0 → zeta-collapse 線性不讀)
 
                     // ── f_post 插值: 2D vs 3D 路徑分離（與 Algorithm1 逐行相同） ──
                     double interp2[7];
