@@ -57,8 +57,26 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b2. Algorithm2: 預計算 departure 座標表 (factorial cell GILBM-B) ──
+//   0 = Algorithm1 (預設, in-kernel RK2 重算)
+//   1 = Algorithm2 (init 建 coords 表, kernel 查表; gilbm/precompute2.h + 2.algorithm2.h)
+//   #ifndef 包裹 → build_cell.sh 可用 -DUSE_GILBM_ALGORITHM2=1 覆寫, 不改本檔
+#ifndef     USE_GILBM_ALGORITHM2
+#define     USE_GILBM_ALGORITHM2    0
+#endif
+#ifndef     GILBM_ALGO2_VALIDATE
+#define     GILBM_ALGO2_VALIDATE    1   // ALGO2 時: init 跑 §B5 驗證 (bitwise+1e-12+classmap), 不過則 MPI_Abort
+#endif
+
 // ── §1c. 自動推導開關 (勿手動修改) ──
 #define     USE_MRT      (COLLISION_MODE >= 1)
+
+#if USE_GILBM_ALGORITHM2 && USE_WENO7
+#error "Algorithm2 requires USE_WENO7=0 (zeta collapse must be linear Lagrange-7; WENO blend is data-dependent)"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_SMEM_INTERIOR
+#error "Algorithm2 supports only the non-smem Buffer path (set USE_SMEM_INTERIOR=0); smem interior stays Algorithm1-only"
+#endif
 
 
 // ================================================================
