@@ -1,0 +1,89 @@
+# ============================================================================
+# checklist.txt — Re10595 模擬執行期狀態檔總清單
+# ----------------------------------------------------------------------------
+# 用途: 一覽模擬執行期 / chain 輪界 / daemon 產生的所有重要紀錄與狀態檔，
+#       並標記目前存在與否，便於一眼判斷 chain / daemon / 流場是否健康。
+# 專案: /home/s8313697/5.Re10595/Edit7_10595SNS
+# 分支: Edit7_10595SNS
+# 圖例: [Y]=存在   [N]=缺失
+# ============================================================================
+
+[log]
+'slurm_88931.log'              [Y]  # 當前 chain head job (88931) 的 SLURM 標準輸出：Step/FTT/Re/Ma_max/Error、MLUPS、收斂監控 (critical)
+'slurm_88931.err'              [Y]  # 當前 head job (88931) 的標準錯誤：[FATAL]/MPI_Abort/NaN/DIVERG；正常運行時 size=0 (critical)
+'slurm_88749.log'              [Y]  # 前一輪 chain job (88749) 的 SLURM 輸出，回溯上一輪續跑/收斂歷史
+'restart/chain.log'            [Y]  # 跨輪 chain 主記錄：續跑事件、GPU 資訊、輪界時間戳，檢視整條 chain 歷史核心 (critical)
+'restart/dispatcher.log'       [Y]  # login-node 續投 dispatcher 運行記錄：排程決策/partition 選擇/KEEP-SWITCH/鎖定路徑 (critical)
+'restart/blacklist.log'        [Y]  # 壞節點黑名單診斷記錄：拒絕加入壞 IB 節點事件，排除 MLUPS 腰斬問題除錯
+'live/watcher.log'             [Y]  # hill_watcher 運行記錄：monitor 圖更新、CONV/BENCH 事件、NaN 警報 (註: NaN ALERT 常為誤報)
+'live/jp_lock_heartbeat.log'   [Y]  # jp/partition 鎖定 (jp=32|16gpus) 靜態自檢心跳：每次 (cron */10) 附加 PASS/DRIFT 一行
+'nan_monitor_log.txt'          [Y]  # NaN 監控背景程序 (nan_monitor.py) 記錄：監看 solver 輸出是否 NaN/發散
+'restart/job_<jobid>.log'      [N]  # verify_mutex.sh 自測時各 job 的 per-job 鎖記錄；非正常 chain 產物，平時不存在屬正常
+# 缺失提醒: restart/job_<jobid>.log [N] — 僅手動跑 mutex 自測時生成，正常運行缺席屬預期
+
+[pid]
+'restart/dispatcher.pid'       [Y]  # dispatcher daemon 行程 PID 檔；跨 login node kill -0 會假死，判活以 dispatcher.heartbeat mtime 為準
+'live/watcher.pid'             [Y]  # hill_watcher daemon 行程 PID 檔；自寫自清＋dup-guard；判活以 watcher.heartbeat mtime 為準
+
+[heartbeat]
+'restart/dispatcher.heartbeat' [Y]  # dispatcher 存活信物：每輪 touch，age<180s=活 (不靠 kill -0)；現新鮮 (critical)
+'live/watcher.heartbeat'       [Y]  # watcher 存活信物：每輪 (~30s) touch，mtime 新鮮度判活；自死時主動清除 (critical)
+
+[owner]
+'restart/HEAD.lockdir/owner'                 [Y]  # Single-Head 鎖 owner 檔 (核心)：目前 state=RUNNING jobid=88931 cluster=H200 host=25a-hgpn002 (critical)
+'restart/RUNNING.lockdir/owner'              [N]  # Legacy 互斥鎖 owner 檔 (向後相容)；新架構改用 HEAD.lockdir/owner，目前不存在屬正常
+'live/watcher.nodelock/owner'                [N]  # watcher 節點鎖 owner 檔；本專案 watcher 不用 nodelock/owner 機制，改用純 PID 檔，故無此檔
+# 缺失提醒: restart/RUNNING.lockdir/owner [N] (legacy 已被 HEAD.lockdir 取代)、live/watcher.nodelock/owner [N] (本專案無此機制) — 兩者缺席皆屬正常設計
+
+[other]
+'DISPATCHER_ACTIVE'                       [Y]  # Dispatcher 啟用哨兵 (內含 daemon PID)：存在時 jobscript 不自投，交棒 dispatcher 續投
+'restart/DISPATCHER_INTENT'               [Y]  # Dispatcher 意圖旗標：配合 heartbeat 新鮮度判斷交棒 vs 自投
+'restart/LOCK_JP_PARTITION'               [Y]  # NCHC 政策臨時嚴格鎖：凍 jp 切換＋釘 partition (jp=32|16gpus)，跳過自由選擇
+'.run.lock'                               [Y]  # run.sh 互斥 flock：防兩個 run.sh 並行；stale lock 會擋續投 (已知陷阱)
+'restart/chain_count'                     [Y]  # Chain 輪次計數器 (每輪 +1)，供下一輪與 status 顯示 (critical)
+'restart/chain_jobid'                     [Y]  # 當前 chain head job 的 Slurm jobid，job-guard scancel/status 用它驗本專案 head (critical)
+'restart/h200_partition'                  [Y]  # H200 partition pin (內容=16gpus)：直投與嚴格鎖時回此 pin
+'live/jp_lock_status'                     [Y]  # jp/partition 鎖定靜態心跳狀態 (OK / OK(warn) / DRIFT)，crontab */10 寫入
+'restart/MANIFEST.txt'                    [Y]  # 建置＋續跑 journal：記錄編譯時 NX/NY/NZ/jp，核對 a.out 與 checkpoint 相容性
+'restart/SUMMARY.md'                      [Y]  # 人類可讀續鏈彙整摘要 (append-only)：每次 chain_status 追加 chain_count/jobid/checkpoint
+'restart/grid_provenance'                 [Y]  # grid 身份紀錄 (new_jp/new_chunk_j/variables_h_mtime)：Preflight C 比對，不符 FATAL 擋下續跑 (critical)
+'restart/bad_nodes'                       [Y]  # 專案本地壞節點黑名單：投遞時排除壞 IB 節點，避免 MLUPS 腰斬
+'Ustar_Force_record.dat'                  [Y]  # 壁面摩擦力/驅動力歷史 (三大紀錄檔之一，gitignore 不追蹤)；watcher 收斂分析讀取 (critical)
+'timing_log.dat'                          [Y]  # 每步計時/MLUPS 紀錄 (三大紀錄檔之一，gitignore 不追蹤)
+'checkrho.dat'                            [Y]  # 密度 (質量守恆) 收斂監控 (三大紀錄檔之一，gitignore 不追蹤)；ρ≈1.0，辨識 NaN 誤報 (critical)
+'gilbm_metrics_full.dat'                  [Y]  # GILBM 完整度量場輸出：初始化一次性建立，watchdog 列為監看檔
+'live/monitor_latest.png'                 [Y]  # 最新滾動收斂監控圖 (PNG)：watcher 每輪由 4.Ma_U_Time.py 產出後複製
+'live/monitor_latest.pdf'                 [Y]  # 最新滾動收斂監控圖 (PDF)：同 PNG 由 watcher 每輪複製更新
+'restart/checkpoint'                      [Y]  # Checkpoint 根目錄：各步 step_<N>/ per-rank 流場狀態，原子寫入保留最新約 5 份 (critical)
+'restart/checkpoint/latest'              [Y]  # 指向最新完整 checkpoint 的符號連結 (→ step_22100001)；warm-resume 依此載入 (critical)
+'restart/HEAD.lockdir'                    [Y]  # Chain head 單一互斥鎖目錄：防重複投遞 head job，具 self-heal (critical)
+'.claude/scheduled_tasks.lock'           [Y]  # Claude Code 排程任務 (Monitor/loop) 互斥鎖；屬監控工具側，非 solver 產物
+'restart/summary/latest.txt'             [Y]  # chain_status 最新一次續跑快照 (覆寫)，鏡像最近一次 snapshot
+'restart/summary/checkpoint_index.txt'   [Y]  # chain_status 已找到的 checkpoint 列表索引
+'restart/summary/snapshots'              [Y]  # 歷次續跑快照目錄 (<TS>_<mode>.txt：pre-submit/job-start/job-end)
+'restart/STOP_CHAIN'                      [N]  # 使用者刻意停鏈哨兵：solver 偵測後優雅停機 exit 0；不存在屬正常運行態
+'STOP_DISPATCHER'                         [N]  # Dispatcher 優雅停止哨兵：daemon 下一輪 poll 後 clean-exit；不存在屬正常 (運行中)
+'restart/STOP_JPSWITCH'                   [N]  # 單獨凍結 jp 切換旗標：已被 LOCK_JP_PARTITION 取代而冗餘清除；不存在屬正常
+'restart/STOP_NOCAPACITY'                 [N]  # 長時間無容量自動收工 backstop：連續無空位約 4h 才生成；不存在屬正常
+'live/jp_lock_DRIFT.alert'               [N]  # jp/partition 鎖定漂移告警：DRIFT 時生成、恢復自清；不存在＝鎖定狀態一致 (正常)
+'restart/gb200_partition'                [N]  # GB200 partition pin：僅 aarch64 登入節點生成；目前在 H200 運行故不存在 (正常)
+# 缺失提醒: restart/STOP_CHAIN [N]、STOP_DISPATCHER [N]、restart/STOP_JPSWITCH [N]、restart/STOP_NOCAPACITY [N]、live/jp_lock_DRIFT.alert [N]、restart/gb200_partition [N] — 皆為「停止/異常/別架構」哨兵，運行中本應缺席，N 屬預期非問題
+
+# ============================================================================
+# 缺失總覽 (所有 [N] 檔案彙整)
+# ----------------------------------------------------------------------------
+#   [log]   restart/job_<jobid>.log              — mutex 自測產物，平時不存在屬正常
+#   [owner] restart/RUNNING.lockdir/owner        — legacy 已被 HEAD.lockdir 取代屬正常
+#   [owner] live/watcher.nodelock/owner          — 本專案 watcher 無 nodelock 機制屬正常
+#   [other] restart/STOP_CHAIN                    — 停鏈哨兵，運行中缺席屬正常
+#   [other] STOP_DISPATCHER                       — dispatcher 停止哨兵，運行中缺席屬正常
+#   [other] restart/STOP_JPSWITCH                 — 已被 LOCK_JP_PARTITION 取代屬正常
+#   [other] restart/STOP_NOCAPACITY               — 無容量 backstop，未觸發屬正常
+#   [other] live/jp_lock_DRIFT.alert              — 鎖定無漂移屬正常 (jp_lock_status=OK)
+#   [other] restart/gb200_partition               — 在 H200 而非 GB200 故缺席屬正常
+#   => 以上 9 個 [N] 全部為「停止/異常/別架構/自測」哨兵或非當前架構檔，運行中缺席皆屬預期，無一代表異常。
+#
+# 重要 owner 檔案完整性: 核心 owner 檔 restart/HEAD.lockdir/owner [Y] 存在 (state=RUNNING jobid=88931)；
+#   legacy RUNNING.lockdir/owner [N] 與 watcher nodelock/owner [N] 為非當前架構產物，缺席屬正常設計，
+#   故當前架構所需的 owner 檔案完整 (PRESENT)。
+# ============================================================================
