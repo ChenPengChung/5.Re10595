@@ -21,9 +21,11 @@
 #        block (跳 warm-load + warmup)。Iter_ms/Interior_ms 由 cudaEvent 量 (對 IO 穩健)。
 #  安全: 無 chain 自投、無 dispatcher、不碰 Edit6_5600DNS live 目錄、各 cell 從同一 SEED
 #        warm-load (顯式 --restart=SEED, 不受前一 cell 寫的 checkpoint 影響)。
-#  用法 (使用者讓卡位後):  cd <worktree> && sbatch tests/algo2_benchmark.slurm ["cells"] [bench_sec]
-#    cells     預設 "algo1 gilbm_b gilbm_a"  (algo1=baseline; 只比兩格可傳 "gilbm_b gilbm_a")
-#    bench_sec 預設 180  (含 ~39G warm-load; 180s 確保 load 後仍有足夠穩態 block)
+#  用法 (使用者讓卡位後):  cd <worktree> && sbatch tests/algo2_benchmark.slurm ["cells"] [blocks]
+#    cells   預設 "gilbm_b gilbm_a"  (testing-1 核心; 加 algo1 多一份 ~7min warm-load 當 baseline)
+#    blocks  預設 5  (每 cell 在 warm-load 後再累積幾個 1000-step 計時 block 才停; 取後段穩態)
+#  ★ 關鍵: warm-load ~7min, 故 NOT 固定 sleep (會在 load 期間就 touch STOP_CHAIN → 0 timing)。
+#    改為輪詢 slurm log 的計時 block 數, 跨過 warm-load + 累積 blocks 後才 touch STOP_CHAIN。
 # ════════════════════════════════════════════════════════════════════════════
 set -eo pipefail
 cd "$SLURM_SUBMIT_DIR"
@@ -33,8 +35,9 @@ if [[ "$(pwd -P)" == */Edit6_5600DNS ]]; then
     exit 1
 fi
 
-CELLS="${1:-algo1 gilbm_b gilbm_a}"
-BENCH_SEC="${2:-180}"
+CELLS="${1:-gilbm_b gilbm_a}"
+TARGET_BLOCKS="${2:-5}"
+HARDLIMIT="${3:-1200}"          # 每 cell 硬上限秒 (warm-load ~7min + blocks; 防卡死)
 LOG="slurm_a2bench_${SLURM_JOB_ID}.log"
 
 export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
@@ -51,13 +54,23 @@ for CELL in $CELLS; do
     rm -f restart/STOP_CHAIN
     echo ""
     echo "===== BENCH CELL=$CELL ====="
+    MARK=$(grep -c 'MLUPS (instant)' "$LOG" 2>/dev/null || true); MARK=${MARK:-0}
     set +e
     mpirun -np "$SLURM_NTASKS" --map-by ppr:8:node --bind-to none \
            stdbuf -oL "$BIN" --restart="$SEED" &
     MPID=$!
-    sleep "$BENCH_SEC"
+    # 輪詢: 等本 cell 累積 TARGET_BLOCKS 個計時 block (跨過 ~7min warm-load), 才 touch STOP_CHAIN
+    T0=$SECONDS
+    while :; do
+        sleep 15
+        NOW=$(grep -c 'MLUPS (instant)' "$LOG" 2>/dev/null || true); NOW=${NOW:-0}
+        GOT=$(( NOW - MARK ))
+        if [ "$GOT" -ge "$TARGET_BLOCKS" ]; then echo "[bench] $CELL 累積 $GOT 個 timing block → 停"; break; fi
+        if ! kill -0 "$MPID" 2>/dev/null; then echo "[bench] $CELL mpirun 提早結束 (got $GOT blocks)"; break; fi
+        if [ $(( SECONDS - T0 )) -ge "$HARDLIMIT" ]; then echo "[bench] $CELL 達 HARDLIMIT ${HARDLIMIT}s (got $GOT blocks)"; break; fi
+    done
     touch restart/STOP_CHAIN          # solver ~100 步內偵測 → 優雅停機 + 寫 final checkpoint
-    wait $MPID
+    wait "$MPID"
     RC=$?
     set -e
     echo "===== END CELL=$CELL (RC=$RC) ====="
