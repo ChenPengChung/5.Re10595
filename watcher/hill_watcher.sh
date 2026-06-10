@@ -264,6 +264,10 @@ last_bench_step=""
 
 while :; do
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
+    # 每輪刷新 checklist.txt(daemon/chain 狀態檔即時清單); 唯讀掃描, 失敗不影響主循環。
+    # 非零退出 = 非預期缺漏或產生器錯誤 → 只記一行警告供巡檢, 不中斷 watcher。
+    python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
+        || log "checklist: 產生器非零退出(非預期缺漏或錯誤, 詳見 checklist.txt)"
     RE=$(_read_re)
 
     if ! check_nan_divergence; then

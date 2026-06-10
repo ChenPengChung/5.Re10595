@@ -225,10 +225,14 @@ def build(stats):
         "live/watcher.nodelock/owner": "watcher 跨節點互斥鎖 owner (內容 host:pid)",
         "restart/HEAD.lockdir/owner": "HEAD 投遞鎖 owner (防重複投遞; 內容 state/jobid/cluster/host)",
     }
+    # owner 鎖只住在 restart/ live/ 下的 *.nodelock / *.lockdir; 為了讓本檔可被
+    # watcher 每輪(~30s)呼叫, 剪掉重子樹(checkpoint 約 9000 entries 等)避免無謂 I/O。
+    prune = {".git", "checkpoint", "result", "statistics", "animation",
+             "J_Frohlich", "phase1_generategrid", "phase2_generatecheckpoint",
+             "__pycache__"}
     owners = []
-    for dirpath, _dirs, files in os.walk(ROOT):
-        if os.sep + ".git" in dirpath:
-            continue
+    for dirpath, dirs, files in os.walk(ROOT):
+        dirs[:] = [d for d in dirs if d not in prune]
         if "owner" in files:
             owners.append(os.path.relpath(os.path.join(dirpath, "owner"), ROOT))
     for rel in sorted(owners):

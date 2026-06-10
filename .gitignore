@@ -55,3 +55,8 @@ checkrho.dat
 !checkrho.dat.gz
 DISPATCHER_ACTIVE
 chain_code/health_watchdog_alerts.log
+
+# checklist.txt 由 checklist.py 每個 watcher 週期重新生成(時間戳/checkpoint 每輪變動),
+# 屬即時產物而非原始碼; 不追蹤以免 index-sweep 自動推送器頻繁 commit 造成 spam。
+# 來源(產生器)checklist.py 仍追蹤; 一次性快照已留在 commit 917d1df 歷史中。
+checklist.txt
