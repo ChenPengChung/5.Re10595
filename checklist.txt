@@ -4,7 +4,7 @@
 --------------------------------------------------------------------------------
  [Y] = 此刻存在於磁碟    [N] = 此刻不存在 (缺失 / 尚未生成 / legacy / transient)
  本檔為 checklist.py 自動生成 (勿手改); 要即時刷新請跑: python3 checklist.py
- 生成時間: 2026-06-10 18:22:48   ig = 已被 .gitignore 忽略 (執行期產物, 不進 git)
+ 生成時間: 2026-06-10 18:31:38   ig = 已被 .gitignore 忽略 (執行期產物, 不進 git)
 --------------------------------------------------------------------------------
  [N] 不一定代表壞掉: legacy(RUNNING.lockdir) 永久[N]; transient(.owner/.headstage/
    .WRITING/.part) 多數時間[N]; 事件觸發(STOP_*/*_partition/fig_*/fast_fail) 平時[N]
@@ -78,7 +78,7 @@
   [N] restart/HEAD.lockdir.healed.*                  ig self-heal 損毀 owner 備份           (chain_code/tools/head_lock_lib.sh:157)
  # checkpoint (rolling retention; 保留最新數份)
   [Y] restart/checkpoint/                            ig checkpoint 根目錄                   (fileIO.h:270)
-  [Y] restart/checkpoint/latest -> step_35300001     ig 最新完成 checkpoint 之 symlink      (fileIO.h:468)
+  [Y] restart/checkpoint/latest -> step_35400001     ig 最新完成 checkpoint 之 symlink      (fileIO.h:468)
   [Y] restart/checkpoint/step_<N>/ (現有 5 份)       ig 每份含 f00..f18/rho/metadata.dat    (fileIO.h:270)
   [N] restart/checkpoint/step_<N>.WRITING/           ig checkpoint 原子寫入 staging (transient)  (fileIO.h:266,276)
   [N] restart/ckpt_bak/                              ig changejp 切 jp 舊 checkpoint 備份   (chain_code/changejp.sh:338)
