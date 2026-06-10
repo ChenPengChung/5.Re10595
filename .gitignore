@@ -64,3 +64,6 @@ restart/dispatcher.heartbeat
 slot_handoff.log
 restart/slot_handoff.heartbeat
 restart/slot_handoff.pid
+
+# checklist.txt 由 checklist.py 即時生成 (watcher 每輪重寫) — 只追蹤生成器, 不追蹤產物
+checklist.txt
