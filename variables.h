@@ -92,10 +92,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      449         // 展向格點
-#define     NY      897         // 流向格點 (需 (NY-1)%jp==0; 896%64==0 → 896/64=14)
-#define     NZ      449         // 法向格點
-#define     jp      64         //  GPU 數量 (流向分割) [2026-06-05 NCHC 政策 MST115169: 暫鎖 64gpus@64; 自由跳轉 jp∈{32,64} — 8gpus/16gpus/32gpus 皆跑 jp=32(MaxTRESPA=32), 64gpus 跑 jp=64]
+#define     NX      321         // 展向格點 [2026-06-10 對齊 Edit6_5600DNS 對照實驗]
+#define     NY      641         // 流向格點 (需 (NY-1)%jp==0; 640%32==0 → 640/32=20)
+#define     NZ      321         // 法向格點 [2026-06-10 對齊 Edit6_5600DNS 對照實驗]
+#define     jp      32         //  GPU 數量 (流向分割) [2026-06-10 對齊 Edit6 checkpoint mpi_rank_count=32; LOCK_COMBO 鎖 32 H200@32gpus]
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -149,7 +149,7 @@
 //   全場全域搜索，超出範圍則自動調整 GAMMA 後才生成網格
 //   --auto 模式讀取此值; 互動模式可另行輸入
 #define     RATIO_LO    0.0    // 網格間距比率下限
-#define     RATIO_HI    25.0    // 網格間距比率上限
+#define     RATIO_HI    20.0    // 網格間距比率上限 [2026-06-10 對齊 Edit6; 網格檔已 bit-copy 不重生, 僅一致性]
 
 // ── 展向映射參數 ──
 #define     LXi     (10.0)
@@ -172,8 +172,8 @@
 // ================================================================
 //  §4. 物理參數
 // ================================================================
-#define     Re      10595       // Reynolds number (基於 H_HILL 和 Uref)
-#define     Uref    0.015      // 參考速度 (bulk velocity) [2026-06-05 對齊 Edit7 源場 Ub=0.015 → U*=1.0, Re=10595]
+#define     Re      5600       // Reynolds number (基於 H_HILL 和 Uref) [2026-06-10 對齊 Edit6_5600DNS 對照實驗]
+#define     Uref    0.015      // 參考速度 (bulk velocity) [與 Edit6 相同: Ub=0.015 → U*=1.0]
                                 // Re700:0.0583, Re1400/2800:0.0776
                                 // Re5600:0.0464, Re10595:0.0878
                                 // 限制: Uref <= cs = 0.1732 (Ma < 1)
@@ -198,7 +198,7 @@
 // ================================================================
 //  §5. 模擬控制
 // ================================================================
-#define     loop        50000000  // 最大時間步數
+#define     loop        500000000000  // 每輪相對步數預算 (main.cu:1575 step<loop_start+loop) [2026-06-10 對齊 Edit6 5e11, 讓 FTT_STOP 主導停止]
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
 #define     NDTFRC      1000      // 每 N 步更新外力項 [2026-06-05 50→1000]
 // ── 生產統計跑 (FTT 10→70) I/O 節流: 原 1000/1000 每步攤提 50ms I/O (~93% wall) ──
@@ -208,7 +208,7 @@
 //    崩潰最多損失 2 萬步 (~70s 計算量); 60 FTT 估 ~14 天 (vs 原 1000/1000 的 ~130 天)。
 //    回到密集輸出 (除錯/觀察暫態) 改回 1000/1000 即可。
 #define     NDTBIN      100000    // 每 N 步輸出 binary checkpoint  [2026-06-09 50000→100000: NFS I/O競爭拖慢吞吐~5x, 降VTK/checkpoint寫入頻率使I/O減半~2x加速; 仍=1×NDTVTK, checkpoint每個VTK step都寫; 穩定64gpus崩潰風險低] (注意: checkpoint 巢狀於 VTK 區塊 main.cu:2101, 真實間隔=lcm(NDTVTK,NDTBIN); 設為 NDTVTK 倍數使名實相符 → 50000=1×NDTVTK; 2026-06-04 100000→50000 降低 dev 每輪近末崩潰(RC=205)重算量 ~62k→~12k 步, checkpoint 改每個 VTK step 都寫)
-#define     NDTVTK      100000     // 每 N 步輸出 VTK  [2026-06-09 50000→100000: 降NFS I/O競爭→~2x加速]
+#define     NDTVTK      50000     // 每 N 步輸出 VTK  [2026-06-10 對齊 Edit6: 50000; NDTBIN=100000=2×NDTVTK 與 Edit6 完全相同]
 #if (NDTBIN % NDTVTK != 0)
 #error "FATAL: NDTBIN 必須為 NDTVTK 的整數倍 — checkpoint piggyback 在 VTK 區塊內 (main.cu:2101 巢狀於 step%NDTVTK==1)。否則 checkpoint 實際週期 = lcm(NDTVTK,NDTBIN), 不等於 NDTBIN。"
 #endif
@@ -218,7 +218,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START      25.0    // 統計量開始累積 [2026-06-05 10→25 延後取樣]
+#define     FTT_STATS_START      57.2    // 統計量開始累積 [2026-06-10 = Edit6 ckpt step_55800001 FTT 47.1801 + 10 FTT 發展期; warm-start FTT_restart<此值 → FTT-GATE 丟棄 Edit6 舊統計重新累積]
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級

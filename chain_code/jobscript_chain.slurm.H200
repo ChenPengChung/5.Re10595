@@ -1,12 +1,12 @@
 #!/bin/bash
-#SBATCH --job-name=Edit8_ITB10595
+#SBATCH --job-name=Edit9_ITB5600
 #SBATCH --account=MST115169
-#SBATCH --partition=64gpus
-#SBATCH --nodes=8
+#SBATCH --partition=32gpus
+#SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY 2026-06-05 / MST115169] 預設 partition=64gpus (對應 jp=64; 暫鎖 64gpus@64)。自由跳轉集 {8gpus@32,16gpus@32,32gpus@32,64gpus@64}; jp 不再等於 partition 名數字。
+# [POLICY 2026-06-05 / MST115169] 預設 partition=32gpus (對應 jp=32; LOCK_COMBO 暫鎖 32gpus@32)。自由跳轉集 {8gpus@32,16gpus@32,32gpus@32,64gpus@64}; jp 不再等於 partition 名數字。
 #             walltime 上限隨 partition 而異: 64gpus/32gpus=1 天 / 16gpus=2 天 / dev=4 時。
 #             dispatcher / ./run partition 會於投遞時用對應 partition 的 --time= 覆寫;
 #             本 header 為非 dispatcher (直投/自我續投) 路徑的 fallback (self-resubmit 另以
@@ -25,12 +25,12 @@
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
 #   (1) partition/nodes/gres — 64gpus / 8 nodes / 8 GPU×8=64  (GB200: gb200 / 16 nodes / 4)
-#       對應 variables.h jp=64 (64 streamwise MPI ranks)
+#       對應 variables.h jp=32 (32 streamwise MPI ranks)
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
 #                              (GB200: /usr/local/cuda-13.0 on compute node)
-#   (4) mpirun 對映          — -np 64 --map-by ppr:8:node (8 nodes 64 GPU)
-#                              (GB200: -np 64 --map-by ppr:4:node on 16 nodes)
+#   (4) mpirun 對映          — -np 32 --map-by ppr:8:node (4 nodes 32 GPU)
+#                              (GB200: -np 32 --map-by ppr:4:node on 8 nodes)
 #   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
 #
 # 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.
@@ -268,8 +268,8 @@ fi
 
 # ===== 4. Checkpoint 驗證 =====
 # NP = MPI ranks = jp(GPU 數). SLURM 由 --nodes×--ntasks-per-node 給 SLURM_NTASKS;
-#   fallback :-64 對應 variables.h jp=64 (8 節點×8). changejp.sh 會同步改 --nodes 與此 fallback。
-NP=${SLURM_NTASKS:-64}
+#   fallback :-32 對應 variables.h jp=32 (4 節點×8). changejp.sh 會同步改 --nodes 與此 fallback。
+NP=${SLURM_NTASKS:-32}
 
 STAT_NAMES=(
     sum_u sum_v sum_w

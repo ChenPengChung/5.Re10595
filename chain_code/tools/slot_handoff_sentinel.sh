@@ -18,7 +18,7 @@
 # =============================================================================
 set -uo pipefail
 
-ROOT=/home/s8313697/5.Re10595/Edit8_NewInterpolation
+ROOT=/home/s8313697/5.Re10595/Edit9_ITBISLBM5600
 cd "$ROOT" || { echo "FATAL: cannot cd $ROOT"; exit 1; }
 LOG="$ROOT/slot_handoff.log"
 HB="$ROOT/restart/slot_handoff.heartbeat"

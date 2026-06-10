@@ -1,8 +1,8 @@
 #!/bin/bash
-#SBATCH --job-name=Edit8_ITB10595
+#SBATCH --job-name=Edit9_ITB5600
 #SBATCH --account=MST115169
 #SBATCH --partition=gb200
-#SBATCH --nodes=16
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=1
@@ -10,7 +10,7 @@
 #             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-# [jp=64] GB200=4 GPU/node, 故 64 ranks 需 16 nodes (16×4=64)。
+# [jp=32] GB200=4 GPU/node, 故 32 ranks 需 8 nodes (8×4=32)。
 #          gb200 / gb200-full(36) / gb200-rack1(18) / gb200-rack2(18) 節點數皆足夠; gb200-dev(10) 不足。
 #          (本專案目前鎖 H200 64gpus@64; GB200 為跨架構備援, 預設不在 dispatcher 候選內。)
 #SBATCH --time=12:00:00
@@ -24,7 +24,7 @@
 # ==============================================================================
 # jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
 # 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes(16) / ntasks(4/node) / mpirun ppr(4:node)
-# 對應 variables.h jp=64 (64 streamwise MPI ranks): 16 nodes × 4 GPU/node = 64 ranks
+# 對應 variables.h jp=32 (32 streamwise MPI ranks): 8 nodes × 4 GPU/node = 32 ranks
 # (H200 是 8 nodes × 8 GPU/node = 64 ranks; GB200 每 node 只有 4 GPU 故需 16 nodes)
 #
 # Round 1      -> ./a.out --cold
@@ -256,7 +256,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-64}
+NP=${SLURM_NTASKS:-32}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
