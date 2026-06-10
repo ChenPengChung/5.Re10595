@@ -41,12 +41,12 @@ HARDLIMIT="${3:-1200}"          # 每 cell 硬上限秒 (warm-load ~7min + block
 LOG="slurm_a2bench_${SLURM_JOB_ID}.log"
 
 export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
-set +u; source "$HPCX_HOME/hpcx-init.sh"; hpcx_load; set -u 2>/dev/null || true
+set +u; source "$HPCX_HOME/hpcx-init.sh"; hpcx_load    # 不重啟 set -u (poll 邏輯變數多, 避免誤觸 unbound)
 
 # ★ 相對路徑 (solver 對非絕對 restart 路徑加 ./ 前綴; 絕對路徑會 .//home/... 開不了 metadata.dat)
 SEED="restart/checkpoint/$(readlink restart/checkpoint/latest)"
 [ -d "$SEED" ] || { echo "[FATAL] no seed checkpoint at $SEED" >&2; exit 1; }
-echo "[bench] SEED=$SEED  np=$SLURM_NTASKS  cells='$CELLS'  bench_sec=$BENCH_SEC"
+echo "[bench] SEED=$SEED  np=$SLURM_NTASKS  cells='$CELLS'  blocks=$TARGET_BLOCKS  hardlimit=${HARDLIMIT}s"
 
 for CELL in $CELLS; do
     BIN="./a.out.$CELL"
