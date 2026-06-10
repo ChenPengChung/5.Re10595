@@ -321,6 +321,9 @@ while :; do
             last_mtime="$cur_mtime"
         fi
     fi
+    # [checklist 即時刷新] 每輪重生 checklist.txt（純 stat 探測，唯讀於 job/daemon；
+    # 失敗絕不中斷 watcher）。輸出抑制以免每 30s 灌爆 watcher.log。
+    python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 || true
     _write_hb           # refresh heartbeat again before sleeping (bounds staleness)
     sleep "$POLL_SEC"
 done
