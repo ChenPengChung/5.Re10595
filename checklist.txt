@@ -1,0 +1,72 @@
+# ============================================================================
+# Edit6_5600DNS 重要紀錄/狀態檔 checklist
+# ----------------------------------------------------------------------------
+# 生成時間: 2026-06-10 15:31 CST | chain head: 88688 (RUNNING, FTT≈45.8)
+# [Y]=存在  [N]=缺失
+# 用途: 模擬生成期間快速檢查 daemon/chain 狀態檔是否齊全。
+#       [N] 且非「預期缺」者 = 需查 (daemon 死 / 誤刪 / I/O 異常)。
+# 重新檢查指令: 對每行路徑 `[ -e <path> ] && echo Y || echo N`
+#               owner 檔窮舉: find . -name owner -not -path '*/.git/*'
+# ============================================================================
+
+# ---------------------------------------------------------------- [log] -----
+restart/dispatcher.log                 [Y]  dispatcher 輪詢/切換日誌 (append, 持續寫)
+restart/dispatcher_watchdog.log        [Y]  crontab dispatcher_watchdog 看守日誌
+restart/chain.log                      [Y]  chain sbatch 歷史 (每輪續投紀錄)
+restart/blacklist.log                  [Y]  partition 壞節點黑名單 TTL
+live/watcher.log                       [Y]  watcher 收斂/benchmark 事件 (持續寫)
+live/health_watchdog.log               [Y]  Route B systemd watchdog 每10分巡檢
+live/handoff_scout.log                 [Y]  交棒哨兵稽核 (僅事件時寫)
+chain_code/health_watchdog_alerts.log  [Y]  watchdog 警報彙整 (本地; 已 gitignore 不追蹤)
+slurm_88688.log                        [Y]  ★當前 job solver 輸出 (正在寫=job 健康)
+nan_monitor_log.txt                    [N]  預期缺: 僅偵測到 NaN 時才生成 (正常)
+animation/gif_render_loop.log          [N]  預期缺: 未開 GIF 渲染迴圈 (正常)
+# 註: 缺 .log 多為歷史遺失/自動重建, 非致命; slurm_<jid>.log 必須在且 mtime 新。
+
+# ---------------------------------------------------------------- [pid] -----
+restart/dispatcher.pid                 [Y]  dispatcher PID 檔 (daemon 自寫)
+live/watcher.pid                        [Y]  watcher PID 檔 (daemon 自寫)
+# 註: 跨登入節點單例架構下, pid 檔可能記本節點已死 PID — 屬正常。
+#     判 daemon 是否真活, 以 *.heartbeat 新鮮度(<120s)為準, 非 kill -0 此 pid。
+#     缺 pid 不致命: daemon 重啟會自寫。
+
+# ---------------------------------------------------------- [heartbeat] -----
+restart/dispatcher.heartbeat           [Y]  dispatcher 跨節點單例心跳 host:pid:epoch (應<120s 新鮮)
+live/watcher.heartbeat                 [Y]  watcher 跨節點單例心跳 host:pid:epoch (應<120s 新鮮)
+# 註: heartbeat 是「daemon 是否活」的唯一可靠判據(跨節點)。
+#     若存在但 epoch 過期(>120s) = owner daemon 可能死 → 查; 缺 = daemon 重啟自建。
+
+# -------------------------------------------------------------- [owner] -----
+# (find . -name owner 窮舉; 此 3 個為全部, 一個不漏)
+restart/dispatcher.nodelock/owner      [Y]  dispatcher 跨節點互斥鎖 (內容 host:pid; 防多節點重複 daemon)
+live/watcher.nodelock/owner            [Y]  watcher 跨節點互斥鎖 (內容 host:pid)
+restart/HEAD.lockdir/owner             [Y]  HEAD 投遞鎖 (防重複投遞; 內容 state/jobid/cluster/host)
+# 註: owner 缺失 = 對應單例鎖被清 → daemon 重啟會以原子 mkdir 重建; 通常自癒。
+
+# -------------------------------------------------------------- [other] -----
+restart/chain_jobid                    [Y]  當前 head job ID (=88688)  ★絕不可刪
+restart/chain_count                    [Y]  chain 迭代次數 (=4)         ★絕不可刪
+restart/grid_provenance                [Y]  grid+variables.h mtime 一致性; Preflight C 閘門  ★絕不可刪
+restart/h200_partition                 [Y]  pinned partition (=16gpus); partition@jps 鎖  ★絕不可刪
+restart/throughput_by_jp.dat           [Y]  partition×jp 吞吐量表 (dispatcher 切換用)  ★絕不可刪
+restart/binary_manifest.dat            [Y]  a.out md5 manifest (=jp32=0ff4bcf9; 防舊 binary 蓋回)  ★絕不可刪
+restart/checkpoint/latest              [Y]  最新 checkpoint 指針 symlink (->step_54100001)  ★絕不可刪
+restart/STOP_CHAIN                     [N]  預期缺: 鏈正常續跑時不該有 (存在=已要求停鏈)
+restart/STOP_DISPATCHER                [N]  預期缺: dispatcher 正常運行時不該有
+restart/STOP_NOCAPACITY                [N]  預期缺: GPU 容量充足時不該有 (出現過=投遞失敗誤判)
+restart/DISPATCHER_ACTIVE              [N]  預期缺: 新架構用 nodelock 取代此舊哨兵
+DISPATCHER_ACTIVE                      [N]  預期缺: 同上 (root 路徑)
+.run.lock                              [Y]  sbatch 互斥鎖 (job 運行中存在屬正常; 見下方⚠️)
+
+# ============================================================================
+# ⚠️ 需注意 (生成時快照):
+#  1. .run.lock 存在: job 88688 RUNNING 中屬正常(防重投)。若未來 job 已離隊
+#     且無活躍 sbatch 仍殘留此鎖 → 下輪自投會被擋, 需手動 rm .run.lock。
+#  2. *.pid 記本節點已死 PID(跨節點單例正常); daemon 真實存活以 heartbeat 判。
+#  3. 生成時所有關鍵 log 在 15:30~15:31 活躍寫入、heartbeat 新鮮、owner 3/3 齊全
+#     → 鏈狀態正常, 無⚠️級缺失。
+#
+# 標 ★絕不可刪 者: 刪除會導致 warm-resume FATAL / Preflight FATAL / 斷鏈。
+# 三大紀錄檔(Ustar_Force_record.dat/timing_log.dat/checkrho.dat)雖未列上(非 daemon
+# 狀態檔), 但運行中 solver 持續 append, 同樣絕不可刪。
+# ============================================================================
