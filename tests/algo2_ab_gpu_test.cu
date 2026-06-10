@@ -236,8 +236,11 @@ int main() {
             for (int k = 3; k < (int)NZ6 - 3; k++)
                 for (int i = 3; i < (int)NX6 - 3; i++) {
                     size_t idx = (size_t)q * GRID + (size_t)j * NX6 * NZ6 + (size_t)k * NX6 + i;
-                    if (memcmp(&fA[idx], &fA2[idx], 8) != 0) floor_mm++;
                     const bool wall = (k == 3 || k == (int)NZ6 - 4);
+                    // 決定性地板只算非 wall 域 (與硬閘同域): wall row 有 Algo1 既有
+                    // 良性 BC race, 把它計入 floor 會在非 wall 本就 bit-identical 時逼出假
+                    // INCONCLUSIVE 並蓋掉下方 non-wall PASS fallback
+                    if (!wall && memcmp(&fA[idx], &fA2[idx], 8) != 0) floor_mm++;
                     if (memcmp(&fA[idx], &fB[idx], 8) != 0) {
                         const double d = fabs(fA[idx] - fB[idx]);
                         if (wall) { wall_mm++;    if (d > max_wall)    max_wall = d; }

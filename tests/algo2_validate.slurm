@@ -45,9 +45,13 @@ LATEST_DIR=$(readlink -f restart/checkpoint/latest)
 [ -d "$LATEST_DIR" ] || { echo "[FATAL] no checkpoint at restart/checkpoint/latest" >&2; exit 1; }
 echo "[A2val] cell=$CELL  restart=$LATEST_DIR  np=$SLURM_NTASKS"
 
+# mpirun 不受 set -e 影響: 失敗(coords gate MPI_Abort(92)/NaN/FATAL — 正是本 job 要抓的)
+# 時仍要跑到下方 summary grep + exit $RC
+set +e
 mpirun -np "$SLURM_NTASKS" --map-by ppr:8:node --bind-to none \
        stdbuf -oL "$BIN" --restart="$LATEST_DIR"
 RC=$?
+set -e
 echo "[A2val] mpirun RC=$RC"
 
 echo "[A2val] ===== validation summary ====="
