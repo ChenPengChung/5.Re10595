@@ -123,17 +123,19 @@ int main() {
     ABCHK(cudaMemcpy(zeta_z_d, zeta_z_h, NJK * 8, cudaMemcpyHostToDevice));
     ABCHK(cudaMemcpy(bk_d, bk_h, NZ6 * sizeof(int), cudaMemcpyHostToDevice));
 
-    // ── Algorithm2 coords table: device build + §B5 gate on this metric ──
-    GILBM2_DepartCoords *coords_d;
+    // ── Algorithm2 departure table (COORDS 或 WEIGHTS): device build + §B5 gate ──
+    printf("[AB] STORE mode = %s (%zu B/entry)\n",
+           (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS ? "WEIGHTS" : "COORDS"), sizeof(GILBM2_Table));
+    GILBM2_Table *coords_d;
     const size_t NTAB = (size_t)GILBM2_NCLASS * NYD6 * NZ6;
-    ABCHK(cudaMalloc(&coords_d, NTAB * sizeof(GILBM2_DepartCoords)));
+    ABCHK(cudaMalloc(&coords_d, NTAB * sizeof(GILBM2_Table)));
     {
         const int nb = (int)((NTAB + 255) / 256);
         Algorithm2_BuildCoordsTable_Device<<<nb, 256>>>(coords_d,
             xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_d);
         ABCHK(cudaDeviceSynchronize());
-        GILBM2_DepartCoords *tab_h = (GILBM2_DepartCoords*)malloc(NTAB * sizeof(GILBM2_DepartCoords));
-        BuildGILBM2DepartureTableHost_Coords(tab_h, xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk_h, dt_val);
+        GILBM2_Table *tab_h = (GILBM2_Table*)malloc(NTAB * sizeof(GILBM2_Table));
+        BuildGILBM2DepartureTableHost(tab_h, xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk_h, dt_val);
         GILBM2_ValidationResult vr;
         int rc = Algorithm2_ValidateCoordsTable(coords_d, xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
                                                 bk_d, tab_h, &vr, 0);

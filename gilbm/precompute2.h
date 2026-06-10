@@ -47,6 +47,17 @@
 //   5:(+1,+1)  6:(-1,+1)  7:(+1,-1)  8:(-1,-1)
 #define GILBM2_NCLASS 9
 
+// ── factorial STORE mode (testing-1: precompute r,s vs precompute weights) ──
+//   COORDS  : 表存 (t_xi,t_zeta), kernel 即時 lagrange 算 L_xi/L_zeta   (GILBM-B)
+//   WEIGHTS : 表存 L_xi[7]/L_zeta[7] (= 同一 RK2→lagrange 路徑算好), kernel 純讀 (GILBM-A, 仿 ITB)
+//   兩模式共用下游 (f-gather/ghost/MAC/per-q 結構) → 唯一差別 = compute vs read weights。
+//   build_cell.sh 可 -DGILBM_ALGO2_STORE=1 覆寫; #ifndef 讓 precompute2.h 仍可 standalone 編。
+#define GILBM2_STORE_COORDS  0
+#define GILBM2_STORE_WEIGHTS 1
+#ifndef GILBM_ALGO2_STORE
+#define GILBM_ALGO2_STORE GILBM2_STORE_COORDS
+#endif
+
 // q → yz class. q=0 self, q=1,2 (ey=ez=0) eta-only 1D → class 0 (inert).
 // Matches the (e_y,e_z) of GILBM_e[19][3] (0.shared_code.h:23) byte-for-byte.
 __host__ __device__ __forceinline__ int gilbm2_yz_class_from_q(int q) {
@@ -90,6 +101,22 @@ struct GILBM2_DepartCoords {
 // generator's optional flag_out parameter (used by validation/unit tests).
 #define GILBM2_FLAG_TXI_CLAMPED   0x01u   // t_xi hit the [0,6] clamp
 #define GILBM2_FLAG_UPK_CLAMPED   0x02u   // up_k hit the [3,NZ6-4] clamp
+
+// ── WEIGHTS table (STORE = WEIGHTS / cell "A", ITB-style) — 14 doubles = 112 B/entry ──
+//   存 RAW L_xi/L_zeta (= COORDS 模式 kernel 會即時算的同一組), NO ghost fold
+//   (下游 ghost 仍在 kernel, 與 COORDS 完全一致 → 公平比較)。t_zeta 不存
+//   (USE_WENO7=0 下 zeta-collapse 線性路徑不用 t_zeta)。
+struct GILBM2_DepartWeights {
+    double wr[7];    // L_xi   (= lagrange_7point_coeffs(t_xi))
+    double ws[7];    // L_zeta (= lagrange_7point_coeffs(t_zeta))
+};
+
+// ── unified table type: 同一個型別名貫穿 struct/alloc/kernel-param/validator ──
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+typedef GILBM2_DepartWeights GILBM2_Table;
+#else
+typedef GILBM2_DepartCoords  GILBM2_Table;
+#endif
 
 // Per-rank table index: [class][j][k], j∈[0,NYD6), k∈[0,NZ6).
 __host__ __device__ __forceinline__ size_t gilbm2_coord_index(int cls, int j, int k) {
@@ -200,6 +227,74 @@ __host__ __device__ inline GILBM2_DepartCoords gilbm2_gen_departure_coords(
     c.t_xi   = t_xi;
     c.t_zeta = t_zeta;
     return c;
+}
+
+// ── WEIGHTS generator: 同一 RK2→(t_xi,t_zeta) 路徑, 再 lagrange 折成權重 ──
+//   = COORDS 生成器 + COORDS 模式 kernel 會做的兩次 lagrange, 預先算好。
+__host__ __device__ inline GILBM2_DepartWeights gilbm2_gen_departure_weights(
+    int j, int k, double ey, double ez, double dt_val,
+    const double *xi_y, const double *xi_z,
+    const double *zeta_y, const double *zeta_z,
+    int bk, unsigned char *flag_out = nullptr)
+{
+    GILBM2_DepartCoords c = gilbm2_gen_departure_coords(
+        j, k, ey, ez, dt_val, xi_y, xi_z, zeta_y, zeta_z, bk, flag_out);
+    GILBM2_DepartWeights w;
+    gilbm2_lagrange7(c.t_xi,   w.wr);
+    gilbm2_lagrange7(c.t_zeta, w.ws);
+    return w;
+}
+
+// ── mode-generic table-entry generator + inert default ──
+//   build / reference kernels 都呼叫這兩個, 故 STORE 切換只需改一處。
+__host__ __device__ inline GILBM2_Table gilbm2_gen_table_entry(
+    int j, int k, double ey, double ez, double dt_val,
+    const double *xi_y, const double *xi_z,
+    const double *zeta_y, const double *zeta_z,
+    int bk)
+{
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+    return gilbm2_gen_departure_weights(j, k, ey, ez, dt_val, xi_y, xi_z, zeta_y, zeta_z, bk);
+#else
+    return gilbm2_gen_departure_coords (j, k, ey, ez, dt_val, xi_y, xi_z, zeta_y, zeta_z, bk);
+#endif
+}
+
+// inert default for class-0 / ghost rows (never streamed; build & ref 用同一份 → bitwise 一致)
+__host__ __device__ inline GILBM2_Table gilbm2_inert_entry()
+{
+    GILBM2_Table e;
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+    gilbm2_lagrange7(3.0, e.wr);   // 任意一致值; 不被消費
+    gilbm2_lagrange7(3.0, e.ws);
+#else
+    e.t_xi = 3.0; e.t_zeta = 3.0;
+#endif
+    return e;
+}
+
+// ── HOST build loop (mode-generic GILBM2_Table) — diagnostic / 1e-12 比對用 ──
+//   時序前置同 COORDS 版: 須在 metric MPI exchange + dt_global Allreduce + bk_precomp 之後。
+static inline void BuildGILBM2DepartureTableHost(
+    GILBM2_Table *table,
+    const double *xi_y_h,  const double *xi_z_h,
+    const double *zeta_y_h, const double *zeta_z_h,
+    const int *bk_precomp_h, double dt_val)
+{
+    const size_t N = (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6;
+    const GILBM2_Table inert = gilbm2_inert_entry();
+    for (size_t n = 0; n < N; n++) table[n] = inert;
+    for (int cls = 1; cls < GILBM2_NCLASS; cls++) {
+        double ey, ez;
+        gilbm2_class_velocity(cls, &ey, &ez);
+        for (int j = 3; j < (int)NYD6 - 3; j++) {
+            for (int k = 3; k < (int)NZ6 - 3; k++) {
+                table[gilbm2_coord_index(cls, j, k)] =
+                    gilbm2_gen_table_entry(j, k, ey, ez, dt_val,
+                        xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk_precomp_h[k]);
+            }
+        }
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════════════

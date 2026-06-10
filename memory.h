@@ -131,10 +131,10 @@ void AllocateMemory() {
     CHECK_CUDA( cudaMalloc(&bk_precomp_d, NZ6 * sizeof(int)) );
 
 #if USE_GILBM_ALGORITHM2
-    // Algorithm2 departure 座標表 [GILBM2_NCLASS*NYD6*NZ6] (~1.27 MiB/rank)
+    // Algorithm2 departure 表 [GILBM2_NCLASS*NYD6*NZ6] (COORDS 16B/entry 或 WEIGHTS 112B/entry)
     // 必須 device global (cudaMalloc) — 遠超 64KB __constant__ 上限
     {
-        const size_t algo2_bytes = (size_t)GILBM2_NCLASS * NYD6 * NZ6 * sizeof(GILBM2_DepartCoords);
+        const size_t algo2_bytes = (size_t)GILBM2_NCLASS * NYD6 * NZ6 * sizeof(GILBM2_Table);
         CHECK_CUDA( cudaMallocHost((void**)&gilbm2_coords_h, algo2_bytes) );
         CHECK_CUDA( cudaMalloc(&gilbm2_coords_d, algo2_bytes) );
     }

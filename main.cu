@@ -73,9 +73,10 @@ double *zeta_z_h, *zeta_z_d;     // [NYD6*NZ6]
 int *bk_precomp_h, *bk_precomp_d;
 
 #if USE_GILBM_ALGORITHM2
-// Algorithm2: 預計算 departure 座標表 [GILBM2_NCLASS*NYD6*NZ6] (~1.27 MiB/rank)
+// Algorithm2: 預計算 departure 表 [GILBM2_NCLASS*NYD6*NZ6]
+//   COORDS: 16 B/entry ~1.27 MiB/rank | WEIGHTS: 112 B/entry ~8.9 MiB/rank
 // device 表為 production 消費來源 (bit-exact); host 表僅供 §B5 1e-12 診斷比對
-GILBM2_DepartCoords *gilbm2_coords_h, *gilbm2_coords_d;
+GILBM2_Table *gilbm2_coords_h, *gilbm2_coords_d;
 #endif
 
 // Phase 3: Curvilinear global time step (runtime, from CFL on contravariant velocities)
@@ -835,7 +836,7 @@ int main(int argc, char *argv[])
             xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d);
         CHECK_CUDA( cudaDeviceSynchronize() );
 
-        BuildGILBM2DepartureTableHost_Coords(gilbm2_coords_h,
+        BuildGILBM2DepartureTableHost(gilbm2_coords_h,
             xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk_precomp_h, dt_global);
 
 #if GILBM_ALGO2_VALIDATE
@@ -853,8 +854,10 @@ int main(int argc, char *argv[])
         }
 #endif
         if (myid == 0)
-            printf("GILBM Algorithm2: coords table built on DEVICE + validated, %zu entries (%.2f MiB/rank).\n",
-                   algo2_n, (double)(algo2_n * sizeof(GILBM2_DepartCoords)) / 1048576.0);
+            printf("GILBM Algorithm2: %s table built on DEVICE + validated, %zu entries (%zu B/entry, %.2f MiB/rank).\n",
+                   (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS ? "WEIGHTS" : "COORDS"),
+                   algo2_n, sizeof(GILBM2_Table),
+                   (double)(algo2_n * sizeof(GILBM2_Table)) / 1048576.0);
     }
 #endif  // USE_GILBM_ALGORITHM2
 

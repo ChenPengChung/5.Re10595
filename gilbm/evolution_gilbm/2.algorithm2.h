@@ -74,7 +74,7 @@ __device__ void algorithm2_step1_GTS(
     double *u_out, double *v_out, double *w_out, double *rho_out_arr,
     double *rho_modify,
     const double *Force,     // body force (streamwise, device pointer)
-    const GILBM2_DepartCoords * __restrict__ coords_d  // ★ Algorithm2: 預計算 departure 座標表
+    const GILBM2_Table * __restrict__ table_d  // ★ Algorithm2: 預計算 departure 表 (COORDS 或 WEIGHTS)
 ) {
     const int nface = NX6 * NZ6;
     const int index = j * nface + k * NX6 + i;
@@ -183,13 +183,21 @@ __device__ void algorithm2_step1_GTS(
                     //   值，q 共 (e_y,e_z) 類者讀同一 entry (q3,7,8→class1...)
                     // ═══════════════════════════════════════════════════════
                     const int cls = gilbm2_yz_class_from_q(q);
-                    const GILBM2_DepartCoords dc = coords_d[gilbm2_coord_index(cls, j, k)];
-
-                    double L_xi[7];
-                    lagrange_7point_coeffs(dc.t_xi, L_xi);       // 同一 device lagrange
-                    double t_zeta = dc.t_zeta;
-                    double L_zeta[7];
+                    // ★★ 唯一 STORE-mode 差異點：取得 L_xi/L_zeta ★★
+                    //   下游 (interp2 gather / ghost / zeta_collapse / MAC) 兩模式逐位元相同。
+                    double L_xi[7], L_zeta[7], t_zeta;
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+                    // WEIGHTS (GILBM-A, 仿 ITB): 純讀預存權重, kernel 零權重計算
+                    const GILBM2_DepartWeights dw = table_d[gilbm2_coord_index(cls, j, k)];
+                    for (int s = 0; s < 7; s++) { L_xi[s] = dw.wr[s]; L_zeta[s] = dw.ws[s]; }
+                    t_zeta = 3.0;   // unused (USE_WENO7=0 → zeta-collapse 線性路徑不讀 t_zeta)
+#else
+                    // COORDS (GILBM-B): 讀 (t_xi,t_zeta), 即時 lagrange 算 (同一 device lagrange)
+                    const GILBM2_DepartCoords dc = table_d[gilbm2_coord_index(cls, j, k)];
+                    lagrange_7point_coeffs(dc.t_xi, L_xi);
+                    t_zeta = dc.t_zeta;
                     lagrange_7point_coeffs(t_zeta, L_zeta);
+#endif
 
                     // ── f_post 插值: 2D vs 3D 路徑分離（與 Algorithm1 逐行相同） ──
                     double interp2[7];
@@ -293,7 +301,7 @@ __global__ void Algorithm2_FusedKernel_GTS_Buffer(
     const double *z_zeta_d,
     double *u_out, double *v_out, double *w_out, double *rho_out,
     double *rho_modify, const double *Force,
-    const GILBM2_DepartCoords * __restrict__ coords_d,
+    const GILBM2_Table * __restrict__ table_d,
     int start_j)
 {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -303,7 +311,7 @@ __global__ void Algorithm2_FusedKernel_GTS_Buffer(
     algorithm2_step1_GTS(i, j, k,
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
-        u_out, v_out, w_out, rho_out, rho_modify, Force, coords_d);
+        u_out, v_out, w_out, rho_out, rho_modify, Force, table_d);
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -313,7 +321,7 @@ __global__ void Algorithm2_FusedKernel_GTS_Buffer(
 //  非 interior / class 0 → inert (3.0, 3.0)，與 host build loop 相同。
 // ════════════════════════════════════════════════════════════════════════════
 __global__ void Algorithm2_BuildCoordsTable_Device(
-    GILBM2_DepartCoords *table_d,            // [GILBM2_NCLASS * NYD6 * NZ6]
+    GILBM2_Table *table_d,                   // [GILBM2_NCLASS * NYD6 * NZ6] (COORDS 或 WEIGHTS)
     const double *xi_y_d,  const double *xi_z_d,
     const double *zeta_y_d, const double *zeta_z_d,
     const int *bk_precomp_d)
@@ -327,12 +335,11 @@ __global__ void Algorithm2_BuildCoordsTable_Device(
     const int j   = rem / (int)NZ6;
     const int k   = rem % (int)NZ6;
 
-    GILBM2_DepartCoords c;
-    c.t_xi = 3.0; c.t_zeta = 3.0;                       // inert default
+    GILBM2_Table c = gilbm2_inert_entry();             // inert default (class0 / ghost)
     if (cls >= 1 && j >= 3 && j < (int)NYD6 - 3 && k >= 3 && k < (int)NZ6 - 3) {
         double ey, ez;
         gilbm2_class_velocity(cls, &ey, &ez);
-        c = gilbm2_gen_departure_coords(j, k, ey, ez, GILBM_dt,
+        c = gilbm2_gen_table_entry(j, k, ey, ez, GILBM_dt,
                 xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d[k]);
     }
     table_d[n] = c;
@@ -345,7 +352,7 @@ __global__ void Algorithm2_BuildCoordsTable_Device(
 //  與 §B3 比對 = 原函式 vs 轉寫的真交叉驗證，要求逐位元 diff = 0。
 // ════════════════════════════════════════════════════════════════════════════
 __global__ void Algorithm2_RefCoords_Algo1Path(
-    GILBM2_DepartCoords *ref_d,              // [GILBM2_NCLASS * NYD6 * NZ6]
+    GILBM2_Table *ref_d,                     // [GILBM2_NCLASS * NYD6 * NZ6]
     const double *xi_y_d,  const double *xi_z_d,
     const double *zeta_y_d, const double *zeta_z_d,
     const int *bk_precomp_d)
@@ -359,8 +366,7 @@ __global__ void Algorithm2_RefCoords_Algo1Path(
     const int j   = rem / (int)NZ6;
     const int k   = rem % (int)NZ6;
 
-    GILBM2_DepartCoords r;
-    r.t_xi = 3.0; r.t_zeta = 3.0;                       // inert default（同 §B3）
+    GILBM2_Table r = gilbm2_inert_entry();             // inert default (同 §B3)
     if (cls >= 1 && j >= 3 && j < (int)NYD6 - 3 && k >= 3 && k < (int)NZ6 - 3) {
         double ey, ez;
         gilbm2_class_velocity(cls, &ey, &ez);
@@ -389,8 +395,15 @@ __global__ void Algorithm2_RefCoords_Algo1Path(
         if (up_k > (double)(NZ6 - 4)) up_k = (double)(NZ6 - 4);       // L318
         double t_zeta = up_k - (double)bk;               // L319 — 無 [0,6] clamp
 
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+        // WEIGHTS 參照 = lagrange(Algo1 原版 RK2 座標) — 與 §B3 build 的
+        // lagrange(generator 座標) 比對: 座標位元相同(Round A 已證) → 權重位元相同
+        gilbm2_lagrange7(t_xi,   r.wr);
+        gilbm2_lagrange7(t_zeta, r.ws);
+#else
         r.t_xi = t_xi;
         r.t_zeta = t_zeta;
+#endif
     }
     ref_d[n] = r;
 }
@@ -439,15 +452,15 @@ struct GILBM2_ValidationResult {
 };
 
 static inline int Algorithm2_ValidateCoordsTable(
-    const GILBM2_DepartCoords *table_dev_d,   // device ptr — §B3 建好的表
+    const GILBM2_Table *table_dev_d,          // device ptr — §B3 建好的表 (COORDS 或 WEIGHTS)
     const double *xi_y_d,  const double *xi_z_d,
     const double *zeta_y_d, const double *zeta_z_d,
     const int *bk_precomp_d,
-    const GILBM2_DepartCoords *table_host_h,  // host 建表 (可 NULL 跳過 (b))
+    const GILBM2_Table *table_host_h,         // host 建表 (可 NULL 跳過 (b))
     GILBM2_ValidationResult *out, int myid)
 {
     const size_t N = (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6;
-    const size_t bytes = N * sizeof(GILBM2_DepartCoords);
+    const size_t bytes = N * sizeof(GILBM2_Table);
     GILBM2_ValidationResult R;
     R.bitwise_mismatch = 0; R.max_abs_txi = 0.0; R.max_abs_tzeta = 0.0;
     R.rms_txi = 0.0; R.rms_tzeta = 0.0;
@@ -455,9 +468,9 @@ static inline int Algorithm2_ValidateCoordsTable(
     R.class_map_mismatch = 0;
     R.worst_cls = -1; R.worst_j = -1; R.worst_k = -1;
 
-    GILBM2_DepartCoords *ref_d = nullptr;
-    GILBM2_DepartCoords *h_dev = (GILBM2_DepartCoords*)malloc(bytes);
-    GILBM2_DepartCoords *h_ref = (GILBM2_DepartCoords*)malloc(bytes);
+    GILBM2_Table *ref_d = nullptr;
+    GILBM2_Table *h_dev = (GILBM2_Table*)malloc(bytes);
+    GILBM2_Table *h_ref = (GILBM2_Table*)malloc(bytes);
     if (!h_dev || !h_ref) {
         fprintf(stderr, "[ALGO2][rank %d] FATAL: validation host alloc failed\n", myid);
         free(h_dev); free(h_ref);
@@ -505,51 +518,57 @@ static inline int Algorithm2_ValidateCoordsTable(
     }
     cudaFree(ref_d);
 
-    // interior-domain entry count（非 interior entries 兩側皆 inert (3,3)，diff 恆 0，
-    // sum-sq 不受影響；RMS 以 interior 數正規化才有意義）
+    // mode-generic 逐 double 比對 (COORDS=2 doubles/entry, WEIGHTS=14; 兩 struct 皆無 padding)
+    //   non-interior entries 兩側皆 inert → diff 恆 0 → 不影響 max/sum-sq。
+    const int    NDBL       = (int)(sizeof(GILBM2_Table) / sizeof(double));
     const double M_interior = 8.0 * (double)((int)NYD6 - 6) * (double)((int)NZ6 - 6);
-    double ssq_txi = 0.0, ssq_tzeta = 0.0, ssq_host = 0.0;
+    double ssq_dev = 0.0, ssq_host = 0.0, worst_diff = -1.0;
 
     for (size_t n = 0; n < N; n++) {
-        const double dx = fabs(h_dev[n].t_xi   - h_ref[n].t_xi);
-        const double dz = fabs(h_dev[n].t_zeta - h_ref[n].t_zeta);
-        const bool bit_eq =
-            (memcmp(&h_dev[n].t_xi,   &h_ref[n].t_xi,   sizeof(double)) == 0) &&
-            (memcmp(&h_dev[n].t_zeta, &h_ref[n].t_zeta, sizeof(double)) == 0);
+        const double *dv = (const double*)&h_dev[n];
+        const double *rf = (const double*)&h_ref[n];
+        bool   bit_eq = true;
+        double emax   = 0.0;
+        for (int d = 0; d < NDBL; d++) {
+            const double diff = fabs(dv[d] - rf[d]);
+            if (memcmp(&dv[d], &rf[d], sizeof(double)) != 0) bit_eq = false;
+            if (diff > emax) emax = diff;
+            ssq_dev += diff * diff;
+        }
+        if (emax > R.max_abs_txi) R.max_abs_txi = emax;
         if (!bit_eq) {
             R.bitwise_mismatch++;
-            if (dx > R.max_abs_txi || dz > R.max_abs_tzeta) {
+            if (emax > worst_diff) {
+                worst_diff = emax;
                 R.worst_cls = (int)(n / ((size_t)NYD6 * NZ6));
                 const int rem = (int)(n % ((size_t)NYD6 * NZ6));
                 R.worst_j = rem / (int)NZ6;
                 R.worst_k = rem % (int)NZ6;
             }
         }
-        if (dx > R.max_abs_txi)   R.max_abs_txi   = dx;
-        if (dz > R.max_abs_tzeta) R.max_abs_tzeta = dz;
-        ssq_txi   += dx * dx;
-        ssq_tzeta += dz * dz;
-
         if (table_host_h) {
-            const double hx = fabs(h_dev[n].t_xi   - table_host_h[n].t_xi);
-            const double hz = fabs(h_dev[n].t_zeta - table_host_h[n].t_zeta);
-            const double hm = (hx > hz) ? hx : hz;
+            const double *ht = (const double*)&table_host_h[n];
+            double hm = 0.0;
+            for (int d = 0; d < NDBL; d++) {
+                const double hd = fabs(dv[d] - ht[d]);
+                if (hd > hm) hm = hd;
+                ssq_host += hd * hd;
+            }
             if (hm > R.host_max_abs) R.host_max_abs = hm;
             if (hm > 1.0e-12) R.host_tol_fail++;
-            ssq_host += hx * hx + hz * hz;
         }
     }
     free(h_dev); free(h_ref);
 
-    R.rms_txi   = sqrt(ssq_txi   / M_interior);
-    R.rms_tzeta = sqrt(ssq_tzeta / M_interior);
-    R.host_rms  = table_host_h ? sqrt(ssq_host / (2.0 * M_interior)) : 0.0;
+    R.max_abs_tzeta = 0.0;   // generalized: 合併進 max_abs_txi (over all stored doubles)
+    R.rms_txi   = sqrt(ssq_dev  / ((double)NDBL * M_interior));
+    R.rms_tzeta = 0.0;
+    R.host_rms  = table_host_h ? sqrt(ssq_host / ((double)NDBL * M_interior)) : 0.0;
 
-    printf("[ALGO2][rank %d] coords validation: dev-vs-Algo1ref bitwise mismatch = %lld "
-           "(max|dt_xi|=%.3e, max|dt_zeta|=%.3e, rms_txi=%.3e, rms_tzeta=%.3e)%s; "
-           "dev-vs-host max=%.3e rms=%.3e tol_fail=%lld; class-map mismatch=%d%s\n",
-           myid, R.bitwise_mismatch, R.max_abs_txi, R.max_abs_tzeta,
-           R.rms_txi, R.rms_tzeta,
+    printf("[ALGO2][rank %d] table validation (%d doubles/entry): dev-vs-Algo1ref bitwise "
+           "mismatch = %lld (max|d|=%.3e, rms=%.3e)%s; dev-vs-host max=%.3e rms=%.3e "
+           "tol_fail=%lld; class-map mismatch=%d%s\n",
+           myid, NDBL, R.bitwise_mismatch, R.max_abs_txi, R.rms_txi,
            (R.bitwise_mismatch == 0 ? " [BIT-EXACT OK]" : " [FAIL]"),
            R.host_max_abs, R.host_rms, R.host_tol_fail,
            R.class_map_mismatch,
