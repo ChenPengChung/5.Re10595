@@ -6,8 +6,9 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-#SBATCH --exclusive
 #SBATCH --time=01:00:00
+# 註: 不用 --exclusive (與 mpirun --map-by ppr:8:node 衝突→ "not enough slots")。
+#     節點品質改用 gilbm_a≈4.489ms 當 sanity gate: 若 gilbm_a 嚴重偏離 = 壞/共享節點, 重投。
 #SBATCH --output=slurm_a2bench_%j.log
 #SBATCH --error=slurm_a2bench_%j.err
 # ════════════════════════════════════════════════════════════════════════════
