@@ -59,6 +59,38 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b2. Algorithm2: GILBM RK2 預計算表 (production fast path) ──
+//   0 = Algorithm1 baseline (預設)
+//   1 = Algorithm2: init 建表，runtime kernel 查表
+//
+//   production default when enabled:
+//     GILBM_ALGO2_STORE = GILBM2_STORE_WEIGHTS_FOLDED
+//   由 gilbm/precompute2.h 依 USE_GILBM_ALGORITHM2 自動選定；仍可用
+//   -DGILBM_ALGO2_STORE=0/1/2 顯式覆寫做診斷。
+//
+//   GILBM_ALGO2_VALIDATE:
+//     0 = skip Algorithm2 init validation
+//     1 = table vs Algorithm1 reference + class-map + host tolerance
+//     2 = strict: level 1 + folded k_idx shape + folded weight-sum checks
+#ifndef     USE_GILBM_ALGORITHM2
+#define     USE_GILBM_ALGORITHM2    1
+#endif
+#ifndef     GILBM_ALGO2_VALIDATE
+#define     GILBM_ALGO2_VALIDATE    2
+#endif
+#if GILBM_ALGO2_VALIDATE < 0 || GILBM_ALGO2_VALIDATE > 2
+#error "GILBM_ALGO2_VALIDATE must be 0, 1, or 2"
+#endif
+#if defined(GILBM_ALGO2_STORE) && (GILBM_ALGO2_STORE < 0 || GILBM_ALGO2_STORE > 2)
+#error "GILBM_ALGO2_STORE must be 0(COORDS), 1(WEIGHTS), or 2(WEIGHTS_FOLDED)"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_WENO7
+#error "Algorithm2 WEIGHTS_FOLDED requires USE_WENO7=0; zeta folding assumes linear Lagrange-7"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_SMEM_INTERIOR
+#error "Algorithm2 supports only the non-smem Buffer path; set USE_SMEM_INTERIOR=0"
+#endif
+
 // ── §1c. 自動推導開關 (勿手動修改) ──
 #define     USE_MRT      (COLLISION_MODE >= 1)
 

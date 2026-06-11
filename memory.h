@@ -130,6 +130,17 @@ void AllocateMemory() {
     CHECK_CUDA( cudaMallocHost((void**)&bk_precomp_h, NZ6 * sizeof(int)) );
     CHECK_CUDA( cudaMalloc(&bk_precomp_d, NZ6 * sizeof(int)) );
 
+#if USE_GILBM_ALGORITHM2
+    // Algorithm2 departure table [GILBM2_NCLASS*NYD6*NZ6].
+    // WEIGHTS_FOLDED is global memory, not __constant__ memory.
+    {
+        const size_t algo2_bytes =
+            (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6 * sizeof(GILBM2_Table);
+        CHECK_CUDA( cudaMallocHost((void**)&gilbm2_coords_h, algo2_bytes) );
+        CHECK_CUDA( cudaMalloc(&gilbm2_coords_d, algo2_bytes) );
+    }
+#endif
+
     // GILBM architecture arrays: f_post 雙緩衝 (一點一值)
     // [方案A] feq_d 已移除 — collision 自行計算 feq
     // [方案B] f_post_d + f_post_d2 雙緩衝: FusedKernel 讀 f_post_read、寫 f_post_write
@@ -290,6 +301,12 @@ void FreeSource() {
     // Precomputed stencil base k
     CHECK_CUDA( cudaFreeHost(bk_precomp_h) );
     CHECK_CUDA( cudaFree(bk_precomp_d) );
+
+#if USE_GILBM_ALGORITHM2
+    CHECK_CUDA( cudaFreeHost(gilbm2_coords_h) );
+    CHECK_CUDA( cudaFree(gilbm2_coords_d) );
+#endif
+
     // GILBM architecture arrays (GTS, 雙緩衝)
     CHECK_CUDA( cudaFree(f_post_d) );
     CHECK_CUDA( cudaFree(f_post_d2) );
