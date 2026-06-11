@@ -22,9 +22,10 @@ fi
 CELL="${1:-algo1}"
 case "$CELL" in
   algo1)   DEFS="-DUSE_GILBM_ALGORITHM2=0" ;;
-  gilbm_b) DEFS="-DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=0" ;;  # COORDS (precompute r,s)
-  gilbm_a) DEFS="-DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=1" ;;  # WEIGHTS (precompute weights, 仿 ITB)
-  *) echo "unknown cell: $CELL (expected: algo1 | gilbm_b | gilbm_a)" >&2; exit 1 ;;
+  gilbm_b)       DEFS="-DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=0" ;;  # COORDS (predict r,s)
+  gilbm_a)       DEFS="-DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=1" ;;  # WEIGHTS raw (legacy consumer)
+  gilbm_a_fold)  DEFS="-DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=2" ;;  # WEIGHTS_FOLDED (ITB-style pure MAC, 對標 ITBLBM)
+  *) echo "unknown cell: $CELL (expected: algo1 | gilbm_b | gilbm_a | gilbm_a_fold)" >&2; exit 1 ;;
 esac
 
 # ── H200 toolchain env (鏡像 chain_code/build_and_submit.sh.H200) ──

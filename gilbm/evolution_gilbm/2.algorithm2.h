@@ -86,6 +86,9 @@ __device__ void algorithm2_step1_GTS(
 
     const int bi = i - 3;
     const int bk = bk_precomp_d[k];
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED
+    (void)bk;   // FOLDED consumer 用 c.k_idx (絕對索引), 不再用 bk
+#endif
 
     // ── Wall BC pre-computation (6th-order one-sided FD) ──
     bool is_bottom = (k == 3);
@@ -143,12 +146,12 @@ __device__ void algorithm2_step1_GTS(
     g_weno_activation_count_zeta[k][j][i] = 0;
 #endif
 
+#if GILBM_ALGO2_STORE != GILBM2_STORE_WEIGHTS_FOLDED
     // ── per-class 權重 cache: q-loop 前「建一次」, 同 class 的 q 共享, 不再 per-q 重算/重讀 ──
     //   ★唯一 STORE-mode 差異 = cache 的「填法」; q-loop 消費端兩模式逐位元相同★
     //   B/COORDS : 每 moving class 算一次 lagrange → 8 class × 2 = 16 lagrange = 7×2×8 coeff/point
-    //              (取代原 q-loop 內 16 moving q × 2 = 7×2×16 的重複計算)
     //   A/WEIGHTS: 每 moving class 讀一次 wr/ws → 8 class × 2 讀 (取代原 per-q 32 讀)
-    //   index [cls=1..8][0..6]; cls=0 (靜止方向) 不填不用。權重只依 (cls,j,k) 不依 i/q。
+    //   FOLDED 不用 cache (per-q 讀折疊 struct, 仿 ITB)。
     double Lxi_cache[GILBM2_NCLASS][7];
     double Lzeta_cache[GILBM2_NCLASS][7];
     for (int cls = 1; cls < GILBM2_NCLASS; cls++) {
@@ -162,6 +165,7 @@ __device__ void algorithm2_step1_GTS(
         lagrange_7point_coeffs(dc.t_zeta, Lzeta_cache[cls]);
 #endif
     }
+#endif
 
     for (int q = 0; q < 19; q++) {
         double f_streamed;
@@ -203,18 +207,48 @@ __device__ void algorithm2_step1_GTS(
                     //   值，q 共 (e_y,e_z) 類者讀同一 entry (q3,7,8→class1...)
                     // ═══════════════════════════════════════════════════════
                     const int cls = gilbm2_yz_class_from_q(q);
-                    // ★ per-class cache 查表 — 權重取得已移至 q-loop 前 (A/B 消費結構對齊) ★
-                    //   同 class 的 q (q3,7,8→class1 …) 共用同一組權重, 不在 q-loop 內重算/重讀。
-                    //   下游 (interp2 gather / ghost / zeta_collapse / MAC) 兩模式逐位元相同。
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED
+                    // ★★ FOLDED (A-fast, 仿 ITB): ghost 已折進 ws_eff + 絕對 k_idx ★★
+                    //   → 純 flat nested MAC, 無 interp2 / ghost_extrapolate / zeta_collapse。
+                    //   1e-12-equivalent (非 bit-exact): folding 重結合 FP。
+                    const GILBM2_DepartWeightsFolded c = table_d[gilbm2_coord_index(cls, j, k)];
+                    double out = 0.0;
+                    if (ex == 0.0) {
+                        // 2D: ξ×ζ flat MAC (49-term)
+                        for (int sj = 0; sj < 7; sj++) {
+                            const int gj = c.j0 + sj;
+                            const double wj = c.wr[sj];
+                            for (int sk = 0; sk < 7; sk++) {
+                                out += wj * c.ws[sk] *
+                                       f_post_read[q_off + gj * nface + c.k_idx[sk] * NX6 + i];
+                            }
+                        }
+                    } else {
+                        // 3D: η×ξ×ζ flat MAC (343-term), η 仍用 GILBM_L_eta_shared (無 ghost)
+                        const int eta_sign = (ex > 0.0) ? 0 : 1;
+                        for (int sj = 0; sj < 7; sj++) {
+                            const int gj = c.j0 + sj;
+                            const double wj = c.wr[sj];
+                            for (int sk = 0; sk < 7; sk++) {
+                                const int base = q_off + gj * nface + c.k_idx[sk] * NX6 + bi;
+                                const double wjk = wj * c.ws[sk];
+                                double row = 0.0;
+                                for (int si = 0; si < 7; si++)
+                                    row += GILBM_L_eta_shared[eta_sign][si] * f_post_read[base + si];
+                                out += wjk * row;
+                            }
+                        }
+                    }
+                    f_streamed = out;
+#else
+                    // ★ legacy (COORDS/WEIGHTS): per-class cache → interp2 → ghost → zeta_collapse ★
+                    //   同 class 的 q 共用 cache; 下游兩模式逐位元相同 (bit-exact vs Algorithm1)。
                     const double *L_xi   = Lxi_cache[cls];
                     const double *L_zeta = Lzeta_cache[cls];
                     const double  t_zeta = 3.0;   // unused (USE_WENO7=0 → zeta-collapse 線性不讀)
 
-                    // ── f_post 插值: 2D vs 3D 路徑分離（與 Algorithm1 逐行相同） ──
                     double interp2[7];
-
                     if (ex == 0.0) {
-                        // 2D: q=3-6, 15-18 — ξ×ζ 插值, 跳過 η 方向
                         for (int sk = 0; sk < 7; sk++) {
                             double acc = 0.0;
                             for (int sj = 0; sj < 7; sj++) {
@@ -223,9 +257,7 @@ __device__ void algorithm2_step1_GTS(
                             interp2[sk] = acc;
                         }
                     } else {
-                        // 3D: q=7-14 — 完整 η→ξ 維度分離, 7×7×7
                         const int eta_sign = (ex > 0.0) ? 0 : 1;
-
                         for (int sk = 0; sk < 7; sk++) {
                             double acc = 0.0;
                             for (int sj = 0; sj < 7; sj++) {
@@ -244,6 +276,7 @@ __device__ void algorithm2_step1_GTS(
 
                     f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
                         t_zeta, bk, i, j, k, z_zeta_d, q);
+#endif
                 }  // end 2D/3D branch
             }
         }
@@ -406,7 +439,24 @@ __global__ void Algorithm2_RefCoords_Algo1Path(
         if (up_k > (double)(NZ6 - 4)) up_k = (double)(NZ6 - 4);       // L318
         double t_zeta = up_k - (double)bk;               // L319 — 無 [0,6] clamp
 
-#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
+#if   GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED
+        // FOLDED 參照 = fold(lagrange(Algo1 原版 RK2 座標)) — 與 §B3 build (fold(lagrange(generator)))
+        // 比對: 座標位元相同(Round A) → L_xi/L_zeta 位元相同 → 折疊 ws_eff/k_idx 位元相同。
+        {
+            double Lxi_r[7], Lzeta_r[7];
+            gilbm2_lagrange7(t_xi,   Lxi_r);
+            gilbm2_lagrange7(t_zeta, Lzeta_r);
+            r.j0 = j - 3;
+            gilbm2_fold_zeta_ghost(bk, Lzeta_r, r.ws);
+            for (int s = 0; s < 7; s++) {
+                r.wr[s] = Lxi_r[s];
+                int gk = bk + s;
+                if (gk < 3)                gk = 3;
+                else if (gk > (int)NZ6 - 4) gk = (int)NZ6 - 4;
+                r.k_idx[s] = gk;
+            }
+        }
+#elif GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS
         // WEIGHTS 參照 = lagrange(Algo1 原版 RK2 座標) — 與 §B3 build 的
         // lagrange(generator 座標) 比對: 座標位元相同(Round A 已證) → 權重位元相同
         gilbm2_lagrange7(t_xi,   r.wr);

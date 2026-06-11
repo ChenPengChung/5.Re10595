@@ -125,7 +125,9 @@ int main() {
 
     // ── Algorithm2 departure table (COORDS 或 WEIGHTS): device build + §B5 gate ──
     printf("[AB] STORE mode = %s (%zu B/entry)\n",
-           (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS ? "WEIGHTS" : "COORDS"), sizeof(GILBM2_Table));
+           (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED ? "WEIGHTS_FOLDED" :
+            GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS        ? "WEIGHTS" : "COORDS"),
+           sizeof(GILBM2_Table));
     GILBM2_Table *coords_d;
     const size_t NTAB = (size_t)GILBM2_NCLASS * NYD6 * NZ6;
     ABCHK(cudaMalloc(&coords_d, NTAB * sizeof(GILBM2_Table)));
@@ -231,6 +233,11 @@ int main() {
     fetch(fB, mB);
 
     // ── comparison ──
+    //   COORDS/WEIGHTS: 期望 bit-exact → TOL=0 (memcmp)。
+    //   WEIGHTS_FOLDED: ghost 折疊重結合 FP → 期望 1e-12-equivalent → TOL=1e-12 (Efficiency Rule #2)。
+    const double TOL = (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED) ? 1.0e-12 : 0.0;
+    printf("[AB] A2-vs-A1 gate: %s (TOL=%.0e)\n",
+           (TOL > 0.0 ? "1e-12 tolerance (FOLDED)" : "bit-exact (memcmp)"), TOL);
     long long floor_mm = 0, nonwall_mm = 0, wall_mm = 0, macro_mm = 0;
     double max_nonwall = 0.0, max_wall = 0.0;
     for (int q = 0; q < 19; q++)
@@ -239,12 +246,11 @@ int main() {
                 for (int i = 3; i < (int)NX6 - 3; i++) {
                     size_t idx = (size_t)q * GRID + (size_t)j * NX6 * NZ6 + (size_t)k * NX6 + i;
                     const bool wall = (k == 3 || k == (int)NZ6 - 4);
-                    // 決定性地板只算非 wall 域 (與硬閘同域): wall row 有 Algo1 既有
-                    // 良性 BC race, 把它計入 floor 會在非 wall 本就 bit-identical 時逼出假
-                    // INCONCLUSIVE 並蓋掉下方 non-wall PASS fallback
+                    // 地板永遠 bitwise (A1 自身決定性, 與 TOL 無關), 只算非 wall 域
                     if (!wall && memcmp(&fA[idx], &fA2[idx], 8) != 0) floor_mm++;
-                    if (memcmp(&fA[idx], &fB[idx], 8) != 0) {
-                        const double d = fabs(fA[idx] - fB[idx]);
+                    const double d = fabs(fA[idx] - fB[idx]);
+                    const bool mism = (TOL > 0.0) ? (d > TOL) : (memcmp(&fA[idx], &fB[idx], 8) != 0);
+                    if (mism) {
                         if (wall) { wall_mm++;    if (d > max_wall)    max_wall = d; }
                         else      { nonwall_mm++; if (d > max_nonwall) max_nonwall = d; }
                     }
@@ -254,7 +260,9 @@ int main() {
             for (int k = 4; k < (int)NZ6 - 4; k++)   // non-wall only (wall rows force u=v=w=0 both sides)
                 for (int i = 3; i < (int)NX6 - 3; i++) {
                     size_t idx = (size_t)m * GRID + (size_t)j * NX6 * NZ6 + (size_t)k * NX6 + i;
-                    if (memcmp(&mA[idx], &mB[idx], 8) != 0) macro_mm++;
+                    const double dm = fabs(mA[idx] - mB[idx]);
+                    const bool mm = (TOL > 0.0) ? (dm > TOL) : (memcmp(&mA[idx], &mB[idx], 8) != 0);
+                    if (mm) macro_mm++;
                 }
 
     printf("[AB] A1-vs-A1 determinism floor : %lld mismatches (expect 0)\n", floor_mm);
@@ -268,13 +276,16 @@ int main() {
         printf("[AB] RESULT: INCONCLUSIVE — Algorithm1 itself nondeterministic on this device (race floor != 0)\n");
         rc = 2;
     } else if (nonwall_mm == 0 && macro_mm == 0 && wall_mm == 0) {
-        printf("[AB] RESULT: PASS — Algorithm2 bit-identical to Algorithm1 (full domain incl wall rows)\n");
+        printf("[AB] RESULT: PASS — Algorithm2 %s to Algorithm1 (full domain incl wall rows)\n",
+               (TOL > 0.0 ? "1e-12-equivalent" : "bit-identical"));
         rc = 0;
     } else if (nonwall_mm == 0 && macro_mm == 0) {
-        printf("[AB] RESULT: PASS (non-wall hard gate) — wall-row diffs within the documented BC race\n");
+        printf("[AB] RESULT: PASS (non-wall hard gate, %s) — wall-row diffs within the documented BC race\n",
+               (TOL > 0.0 ? "1e-12 tol" : "bit-exact"));
         rc = 0;
     } else {
-        printf("[AB] RESULT: FAIL — Algorithm2 diverges from Algorithm1 outside the race domain\n");
+        printf("[AB] RESULT: FAIL — Algorithm2 diverges from Algorithm1 beyond %s outside the race domain\n",
+               (TOL > 0.0 ? "1e-12" : "bit-exact"));
         rc = 1;
     }
     return rc;
