@@ -162,7 +162,7 @@ __device__ __forceinline__ double gilbm_zeta_collapse(
 // ★ 方案B: Step1+Step3 融合 — interpolation + collision 一氣呵成
 //   f_post_read  → 插值 → f_streamed[19] in register → 碰撞 → f_post_write
 //   省掉: 19 f_new writes + 19 f_new reads + 重複巨觀量計算
-//   Wall BC: 改讀 u_out/v_out/w_out/rho_out (前一步值), 省 4×19=76 → 4×4=16 reads
+//   Wall BC: 讀 read-only macro snapshot (前一步值), 避免同 launch 讀/寫同一 macro array
 __device__ void algorithm1_step1_GTS(
     int i, int j, int k,
     const double *f_post_read,   // [19 * GRID_SIZE] — 碰後分佈 (input, 上一步)
@@ -171,6 +171,7 @@ __device__ void algorithm1_step1_GTS(
     const double *xi_y_d,   const double *xi_z_d,   // ★ 優化1: Jacobian 陣列
     const int *bk_precomp_d,
     const double *z_zeta_d, // ∂z/∂ζ for stretch_factor (WENO7 only, NULL when USE_WENO7=0)
+    const double *u_bc, const double *v_bc, const double *w_bc, const double *rho_bc,
     double *u_out, double *v_out, double *w_out, double *rho_out_arr,
     double *rho_modify,
     const double *Force      // body force (streamwise, device pointer)
@@ -215,9 +216,9 @@ __device__ void algorithm1_step1_GTS(
     double zeta_z_val = zeta_z_d[idx_jk];
 
     // ── Wall BC: 6th-order one-sided FD for velocity gradient ──
-    // ★ 方案B: 改讀 u_out/v_out/w_out/rho_out_arr (前一步值)
+    // ★ 方案B: 讀 read-only macro snapshot (前一步值)
     //   取代 compute_macroscopic_at(f_new_ptrs, ...) → 省 4×19=76 reads → 4×4=16 reads
-    //   時間精度不變: 原代碼也是讀前一步的 f_new (CUDA race → 實際讀 stale data)
+    //   snapshot 與本 kernel 寫入目標分離，壁面 BC 不再有同 launch macro race。
     double rho_wall = 0.0, du_dk = 0.0, dv_dk = 0.0, dw_dk = 0.0;
     if (is_bottom) {
         int idx3 = j * nface + 4 * NX6 + i;
@@ -226,17 +227,17 @@ __device__ void algorithm1_step1_GTS(
         int idx6 = j * nface + 7 * NX6 + i;
         int idx7 = j * nface + 8 * NX6 + i;
         int idx8 = j * nface + 9 * NX6 + i;
-        double u3 = u_out[idx3], u4 = u_out[idx4], u5 = u_out[idx5], u6 = u_out[idx6];
-        double u7 = u_out[idx7], u8 = u_out[idx8];
-        double v3 = v_out[idx3], v4 = v_out[idx4], v5 = v_out[idx5], v6 = v_out[idx6];
-        double v7 = v_out[idx7], v8 = v_out[idx8];
-        double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
-        double w7 = w_out[idx7], w8 = w_out[idx8];
+        double u3 = u_bc[idx3], u4 = u_bc[idx4], u5 = u_bc[idx5], u6 = u_bc[idx6];
+        double u7 = u_bc[idx7], u8 = u_bc[idx8];
+        double v3 = v_bc[idx3], v4 = v_bc[idx4], v5 = v_bc[idx5], v6 = v_bc[idx6];
+        double v7 = v_bc[idx7], v8 = v_bc[idx8];
+        double w3 = w_bc[idx3], w4 = w_bc[idx4], w5 = w_bc[idx5], w6 = w_bc[idx6];
+        double w7 = w_bc[idx7], w8 = w_bc[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
-        rho_wall = rho_out_arr[idx3];
+        rho_wall = rho_bc[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
         int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
@@ -244,17 +245,17 @@ __device__ void algorithm1_step1_GTS(
         int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
         int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
         int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
-        double um1 = u_out[idxm1], um2 = u_out[idxm2], um3 = u_out[idxm3], um4 = u_out[idxm4];
-        double um5 = u_out[idxm5], um6 = u_out[idxm6];
-        double vm1 = v_out[idxm1], vm2 = v_out[idxm2], vm3 = v_out[idxm3], vm4 = v_out[idxm4];
-        double vm5 = v_out[idxm5], vm6 = v_out[idxm6];
-        double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
-        double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
+        double um1 = u_bc[idxm1], um2 = u_bc[idxm2], um3 = u_bc[idxm3], um4 = u_bc[idxm4];
+        double um5 = u_bc[idxm5], um6 = u_bc[idxm6];
+        double vm1 = v_bc[idxm1], vm2 = v_bc[idxm2], vm3 = v_bc[idxm3], vm4 = v_bc[idxm4];
+        double vm5 = v_bc[idxm5], vm6 = v_bc[idxm6];
+        double wm1 = w_bc[idxm1], wm2 = w_bc[idxm2], wm3 = w_bc[idxm3], wm4 = w_bc[idxm4];
+        double wm5 = w_bc[idxm5], wm6 = w_bc[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
-        rho_wall = rho_out_arr[idxm1];
+        rho_wall = rho_bc[idxm1];
     }
 
     // ── STEP 1: Interpolation + Streaming ──
@@ -471,6 +472,7 @@ __device__ void algorithm1_step1_GTS_smem(
     const double *xi_y_d,   const double *xi_z_d,
     const int *bk_precomp_d,
     const double *z_zeta_d,
+    const double *u_bc, const double *v_bc, const double *w_bc, const double *rho_bc,
     double *u_out, double *v_out, double *w_out, double *rho_out_arr,
     double *rho_modify,
     const double *Force
@@ -515,17 +517,17 @@ __device__ void algorithm1_step1_GTS_smem(
         int idx6 = j * nface + 7 * NX6 + i;
         int idx7 = j * nface + 8 * NX6 + i;
         int idx8 = j * nface + 9 * NX6 + i;
-        double u3 = u_out[idx3], u4 = u_out[idx4], u5 = u_out[idx5], u6 = u_out[idx6];
-        double u7 = u_out[idx7], u8 = u_out[idx8];
-        double v3 = v_out[idx3], v4 = v_out[idx4], v5 = v_out[idx5], v6 = v_out[idx6];
-        double v7 = v_out[idx7], v8 = v_out[idx8];
-        double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
-        double w7 = w_out[idx7], w8 = w_out[idx8];
+        double u3 = u_bc[idx3], u4 = u_bc[idx4], u5 = u_bc[idx5], u6 = u_bc[idx6];
+        double u7 = u_bc[idx7], u8 = u_bc[idx8];
+        double v3 = v_bc[idx3], v4 = v_bc[idx4], v5 = v_bc[idx5], v6 = v_bc[idx6];
+        double v7 = v_bc[idx7], v8 = v_bc[idx8];
+        double w3 = w_bc[idx3], w4 = w_bc[idx4], w5 = w_bc[idx5], w6 = w_bc[idx6];
+        double w7 = w_bc[idx7], w8 = w_bc[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
-        rho_wall = rho_out_arr[idx3];
+        rho_wall = rho_bc[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
         int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
@@ -533,17 +535,17 @@ __device__ void algorithm1_step1_GTS_smem(
         int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
         int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
         int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
-        double um1 = u_out[idxm1], um2 = u_out[idxm2], um3 = u_out[idxm3], um4 = u_out[idxm4];
-        double um5 = u_out[idxm5], um6 = u_out[idxm6];
-        double vm1 = v_out[idxm1], vm2 = v_out[idxm2], vm3 = v_out[idxm3], vm4 = v_out[idxm4];
-        double vm5 = v_out[idxm5], vm6 = v_out[idxm6];
-        double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
-        double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
+        double um1 = u_bc[idxm1], um2 = u_bc[idxm2], um3 = u_bc[idxm3], um4 = u_bc[idxm4];
+        double um5 = u_bc[idxm5], um6 = u_bc[idxm6];
+        double vm1 = v_bc[idxm1], vm2 = v_bc[idxm2], vm3 = v_bc[idxm3], vm4 = v_bc[idxm4];
+        double vm5 = v_bc[idxm5], vm6 = v_bc[idxm6];
+        double wm1 = w_bc[idxm1], wm2 = w_bc[idxm2], wm3 = w_bc[idxm3], wm4 = w_bc[idxm4];
+        double wm5 = w_bc[idxm5], wm6 = w_bc[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
-        rho_wall = rho_out_arr[idxm1];
+        rho_wall = rho_bc[idxm1];
     }
 
     double rho_stream = 0.0, mx_stream = 0.0, my_stream = 0.0, mz_stream = 0.0;
@@ -793,6 +795,7 @@ __global__ void Algorithm1_FusedKernel_GTS_Buffer(
     const double *xi_y_d,   const double *xi_z_d,
     const int    *bk_precomp_d,
     const double *z_zeta_d,
+    const double *u_bc, const double *v_bc, const double *w_bc, const double *rho_bc,
     double *u_out, double *v_out, double *w_out, double *rho_out,
     double *rho_modify, const double *Force,
 #if USE_ITBLBM_STREAMING
@@ -807,6 +810,7 @@ __global__ void Algorithm1_FusedKernel_GTS_Buffer(
     algorithm1_step1_GTS(i, j, k,
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
+        u_bc, v_bc, w_bc, rho_bc,
         u_out, v_out, w_out, rho_out, rho_modify, Force
 #if USE_ITBLBM_STREAMING
         , itb_yz_coeff_d
@@ -824,6 +828,7 @@ __global__ void Algorithm1_FusedKernel_GTS_Interior_SMEM(
     const double *xi_y_d,   const double *xi_z_d,
     const int    *bk_precomp_d,
     const double *z_zeta_d,
+    const double *u_bc, const double *v_bc, const double *w_bc, const double *rho_bc,
     double *u_out, double *v_out, double *w_out, double *rho_out,
     double *rho_modify, const double *Force,
     int start_j)
@@ -840,6 +845,7 @@ __global__ void Algorithm1_FusedKernel_GTS_Interior_SMEM(
     algorithm1_step1_GTS_smem(i, j, k, valid, smem_eta,
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
+        u_bc, v_bc, w_bc, rho_bc,
         u_out, v_out, w_out, rho_out, rho_modify, Force);
 }
 
