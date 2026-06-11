@@ -12,11 +12,12 @@
 #SBATCH --output=slurm_a2bench_%j.log
 #SBATCH --error=slurm_a2bench_%j.err
 # ════════════════════════════════════════════════════════════════════════════
-#  Algorithm2 factorial benchmark — COORDS(gilbm_b) vs WEIGHTS(gilbm_a) [vs algo1]
+#  Algorithm2 factorial benchmark — COORDS(gilbm_b) vs raw/folded WEIGHTS(gilbm_a/gilbm_a_fold) [vs algo1]
 #
-#  testing-1 核心: 「預存 r,s + kernel 算權重」 vs 「預存 weight + kernel 讀」誰快。
-#  per-class cache 後兩模式消費結構已對齊 (7×2×8), 唯一差別 = cache 填法 → 此量測
-#  乾淨隔離 compute-fill vs read-fill (+ 表記憶體 1.27MiB vs 8.5MiB) 的 runtime 差。
+#  testing-1 核心:
+#    gilbm_b      = 預存 r,s + kernel 算權重
+#    gilbm_a      = 預存 raw weights + legacy consumer
+#    gilbm_a_fold = 預存 folded weights + ITB-style pure MAC consumer
 #
 #  方法: 同一 seed checkpoint、同網格(已備不重生)、同 32 GPU, 依序跑各 cell;
 #        每 cell 跑 BENCH_SEC 秒 (延遲 touch STOP_CHAIN 優雅停), 取後段穩態 timing
@@ -24,7 +25,7 @@
 #  安全: 無 chain 自投、無 dispatcher、不碰 Edit6_5600DNS live 目錄、各 cell 從同一 SEED
 #        warm-load (顯式 --restart=SEED, 不受前一 cell 寫的 checkpoint 影響)。
 #  用法 (使用者讓卡位後):  cd <worktree> && sbatch tests/algo2_benchmark.slurm ["cells"] [blocks]
-#    cells   預設 "gilbm_b gilbm_a"  (testing-1 核心; 加 algo1 多一份 ~7min warm-load 當 baseline)
+#    cells   預設 "gilbm_b gilbm_a gilbm_a_fold"  (加 algo1 多一份 ~7min warm-load 當 baseline)
 #    blocks  預設 5  (每 cell 在 warm-load 後再累積幾個 1000-step 計時 block 才停; 取後段穩態)
 #  ★ 關鍵: warm-load ~7min, 故 NOT 固定 sleep (會在 load 期間就 touch STOP_CHAIN → 0 timing)。
 #    改為輪詢 slurm log 的計時 block 數, 跨過 warm-load + 累積 blocks 後才 touch STOP_CHAIN。
@@ -37,7 +38,7 @@ if [[ "$(pwd -P)" == */Edit6_5600DNS ]]; then
     exit 1
 fi
 
-CELLS="${1:-gilbm_b gilbm_a}"
+CELLS="${1:-gilbm_b gilbm_a gilbm_a_fold}"
 TARGET_BLOCKS="${2:-5}"
 HARDLIMIT="${3:-1200}"          # 每 cell 硬上限秒 (warm-load ~7min + blocks; 防卡死)
 LOG="slurm_a2bench_${SLURM_JOB_ID}.log"
@@ -115,6 +116,16 @@ awk '
               ia=0;ka=0; for(b=la;b<=ca;b++){ia+=ITER["gilbm_a",b];ka++}
               printf "\n  >>> testing-1: COORDS(gilbm_b)=%.3f ms  vs  WEIGHTS(gilbm_a)=%.3f ms  ->  WEIGHTS %s by %.2f%%\n",
                      ib/kb, ia/ka, (ia/ka < ib/kb ? "FASTER":"SLOWER"), 100.0*( (ib/kb)-(ia/ka) )/(ib/kb);
+          }
+      }
+      if (("gilbm_a" in seen) && ("gilbm_a_fold" in seen)) {
+          ca=n["gilbm_a"]; cf=n["gilbm_a_fold"];
+          if (ca>0 && cf>0) {
+              la=ca-2; if(la<1)la=1; lf=cf-2; if(lf<1)lf=1;
+              ia=0;ka=0; for(b=la;b<=ca;b++){ia+=ITER["gilbm_a",b];ka++}
+              ff=0;kf=0; for(b=lf;b<=cf;b++){ff+=ITER["gilbm_a_fold",b];kf++}
+              printf "  >>> folded: raw WEIGHTS(gilbm_a)=%.3f ms  vs  FOLDED(gilbm_a_fold)=%.3f ms  ->  FOLDED %s by %.2f%%\n",
+                     ia/ka, ff/kf, (ff/kf < ia/ka ? "FASTER":"SLOWER"), 100.0*((ia/ka)-(ff/kf))/(ia/ka);
           }
       }
   }

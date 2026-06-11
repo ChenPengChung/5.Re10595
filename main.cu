@@ -855,7 +855,8 @@ int main(int argc, char *argv[])
 #endif
         if (myid == 0)
             printf("GILBM Algorithm2: %s table built on DEVICE + validated, %zu entries (%zu B/entry, %.2f MiB/rank).\n",
-                   (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS ? "WEIGHTS" : "COORDS"),
+                   (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED ? "WEIGHTS_FOLDED" :
+                    GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS        ? "WEIGHTS" : "COORDS"),
                    algo2_n, sizeof(GILBM2_Table),
                    (double)(algo2_n * sizeof(GILBM2_Table)) / 1048576.0);
     }

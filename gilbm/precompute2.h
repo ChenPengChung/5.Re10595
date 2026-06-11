@@ -113,12 +113,12 @@ struct GILBM2_DepartWeights {
 };
 
 // ── FOLDED table (STORE = WEIGHTS_FOLDED / cell "A-fast", 仿 ITB) — 144 B/entry ──
-//   ζ 方向 ghost 外插「預先折進」ws_eff + 絕對 k_idx → consumer 純 flat MAC,
+//   ζ 方向 ghost 外插「預先折進」連續 physical k_idx/ws_eff → consumer 純 flat MAC,
 //   不再有 interp2/ghost_extrapolate/zeta_collapse (對標 ITBLBM 的 2.37ms Interior)。
 //   ξ(wr=L_xi) 與 η(L_eta_shared) 無 ghost, 不折。j0 = j-3 (ξ stencil base)。
 struct GILBM2_DepartWeightsFolded {
     int    j0;          // ξ (j) stencil base = j-3
-    int    k_idx[7];    // ζ (k) 絕對索引 (= bk+s; ghost s 夾到 interior, ws=0 不影響)
+    int    k_idx[7];    // ζ (k) 絕對索引: ITB-style 連續 7 點 physical window
     double wr[7];       // ξ weights = L_xi (不折)
     double ws[7];       // ζ folded weights = ws_eff (ghost 已折入 interior)
 };
@@ -260,56 +260,53 @@ __host__ __device__ inline GILBM2_DepartWeights gilbm2_gen_departure_weights(
 }
 
 // ── ζ ghost 折疊 (逐項對齊 1.algorithm1.h:67 gilbm_ghost_zone_extrapolate) ──
-//   ws_eff[p] = L_zeta[p] + Σ_{ghost g} L_zeta[g]·c_g[p]; ghost g 自身歸零。
-//   ★必須用 bk = bk_precomp[k] 當 raw ζ base (非 ITB 的 k-3); 近壁 bk 被 clamp 到 0/NZ6-7。
+//   raw_bk = bk_precomp[k] 是 Algorithm1 使用的原始 ζ stencil base。
+//   k_idx/ws_eff 採 ITB 同款表示: 先選連續 7 點 physical window, 再把 raw
+//   ghost 權重折入該 window。這避免近壁 table 出現重複 k_idx + 乘零項。
 //   coeff 同 GHOST_EXTRAP_ORDER (預設 2=quadratic 3-point; 3=cubic 4-point)。
-__host__ __device__ inline void gilbm2_fold_zeta_ghost(int bk, const double L_zeta[7], double ws_eff[7])
+__host__ __device__ inline void gilbm2_fold_zeta_ghost(
+    int raw_bk, const double L_zeta[7], int k_idx[7], double ws_eff[7])
 {
-    for (int s = 0; s < 7; s++) ws_eff[s] = L_zeta[s];
-    const int n_ghost_bot = (3 - bk > 0) ? (3 - bk) : 0;
-    const int n_ghost_top = (bk + 6 > (int)NZ6 - 4) ? (bk + 6 - ((int)NZ6 - 4)) : 0;
-    if (n_ghost_bot > 0) {
-        const int p0 = n_ghost_bot, p1 = n_ghost_bot + 1, p2 = n_ghost_bot + 2;
-#if GHOST_EXTRAP_ORDER >= 3
-        const int p3 = n_ghost_bot + 3;
-#endif
-        for (int g = n_ghost_bot - 1; g >= 0; g--) {
-            const double d = (double)(p0 - g);            // = 3 - (bk+g)
-            const double w = L_zeta[g];                   // ghost 行權重折出
-#if GHOST_EXTRAP_ORDER >= 3
-            const double d1 = d+1.0, d2 = d+2.0, d3 = d+3.0;
-            ws_eff[p0] += w * ( d1*d2*d3/6.0);
-            ws_eff[p1] += w * (-d *d2*d3/2.0);
-            ws_eff[p2] += w * ( d *d1*d3/2.0);
-            ws_eff[p3] += w * (-d *d1*d2/6.0);
-#else
-            ws_eff[p0] += w * ((d+1.0)*(d+2.0)*0.5);
-            ws_eff[p1] += w * (-d*(d+2.0));
-            ws_eff[p2] += w * (d*(d+1.0)*0.5);
-#endif
-            ws_eff[g] = 0.0;
-        }
+    int phys_bk = raw_bk;
+    if (phys_bk < 3) phys_bk = 3;
+    if (phys_bk > (int)NZ6 - 10) phys_bk = (int)NZ6 - 10;
+
+    for (int s = 0; s < 7; s++) {
+        k_idx[s] = phys_bk + s;
+        ws_eff[s] = 0.0;
     }
-    if (n_ghost_top > 0) {
-        const int pN = 6 - n_ghost_top, pN1 = 6 - n_ghost_top - 1, pN2 = 6 - n_ghost_top - 2;
+
+    for (int s = 0; s < 7; s++) {
+        const int kg = raw_bk + s;
+        const double w = L_zeta[s];
+        if (kg < 3) {
+            const double d = (double)(3 - kg);
 #if GHOST_EXTRAP_ORDER >= 3
-        const int pN3 = 6 - n_ghost_top - 3;
-#endif
-        for (int g = pN + 1; g <= 6; g++) {
-            const double d = (double)(g - pN);
-            const double w = L_zeta[g];
-#if GHOST_EXTRAP_ORDER >= 3
-            const double d1 = d+1.0, d2 = d+2.0, d3 = d+3.0;
-            ws_eff[pN]  += w * ( d1*d2*d3/6.0);
-            ws_eff[pN1] += w * (-d *d2*d3/2.0);
-            ws_eff[pN2] += w * ( d *d1*d3/2.0);
-            ws_eff[pN3] += w * (-d *d1*d2/6.0);
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            ws_eff[3 - phys_bk] += w * ( d1 * d2 * d3 / 6.0);
+            ws_eff[4 - phys_bk] += w * (-d  * d2 * d3 / 2.0);
+            ws_eff[5 - phys_bk] += w * ( d  * d1 * d3 / 2.0);
+            ws_eff[6 - phys_bk] += w * (-d  * d1 * d2 / 6.0);
 #else
-            ws_eff[pN]  += w * ((d+1.0)*(d+2.0)*0.5);
-            ws_eff[pN1] += w * (-d*(d+2.0));
-            ws_eff[pN2] += w * (d*(d+1.0)*0.5);
+            ws_eff[3 - phys_bk] += w * ((d + 1.0) * (d + 2.0) * 0.5);
+            ws_eff[4 - phys_bk] += w * (-d * (d + 2.0));
+            ws_eff[5 - phys_bk] += w * (d * (d + 1.0) * 0.5);
 #endif
-            ws_eff[g] = 0.0;
+        } else if (kg > (int)NZ6 - 4) {
+            const double d = (double)(kg - ((int)NZ6 - 4));
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            ws_eff[((int)NZ6 - 4) - phys_bk] += w * ( d1 * d2 * d3 / 6.0);
+            ws_eff[((int)NZ6 - 5) - phys_bk] += w * (-d  * d2 * d3 / 2.0);
+            ws_eff[((int)NZ6 - 6) - phys_bk] += w * ( d  * d1 * d3 / 2.0);
+            ws_eff[((int)NZ6 - 7) - phys_bk] += w * (-d  * d1 * d2 / 6.0);
+#else
+            ws_eff[((int)NZ6 - 4) - phys_bk] += w * ((d + 1.0) * (d + 2.0) * 0.5);
+            ws_eff[((int)NZ6 - 5) - phys_bk] += w * (-d * (d + 2.0));
+            ws_eff[((int)NZ6 - 6) - phys_bk] += w * (d * (d + 1.0) * 0.5);
+#endif
+        } else {
+            ws_eff[kg - phys_bk] += w;
         }
     }
 }
@@ -327,13 +324,9 @@ __host__ __device__ inline GILBM2_DepartWeightsFolded gilbm2_gen_departure_weigh
     gilbm2_lagrange7(c.t_zeta, L_zeta);
     GILBM2_DepartWeightsFolded f;
     f.j0 = j - 3;                                  // ξ stencil base (= bj, 同 legacy)
-    gilbm2_fold_zeta_ghost(bk, L_zeta, f.ws);      // ws = ws_eff (ghost 折入)
+    gilbm2_fold_zeta_ghost(bk, L_zeta, f.k_idx, f.ws);
     for (int s = 0; s < 7; s++) {
         f.wr[s] = L_xi[s];
-        int gk = bk + s;                            // 絕對 ζ 索引
-        if (gk < 3)                gk = 3;          // ghost s (ws=0) 夾到 interior, 避免讀 ghost cell
-        else if (gk > (int)NZ6 - 4) gk = (int)NZ6 - 4;
-        f.k_idx[s] = gk;
     }
     return f;
 }

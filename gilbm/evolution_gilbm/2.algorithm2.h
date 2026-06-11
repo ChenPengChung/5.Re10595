@@ -224,18 +224,19 @@ __device__ void algorithm2_step1_GTS(
                             }
                         }
                     } else {
-                        // 3D: η×ξ×ζ flat MAC (343-term), η 仍用 GILBM_L_eta_shared (無 ghost)
+                        // 3D: η×ξ×ζ flat MAC (343-term), loop order intentionally mirrors ITB.
                         const int eta_sign = (ex > 0.0) ? 0 : 1;
-                        for (int sj = 0; sj < 7; sj++) {
-                            const int gj = c.j0 + sj;
-                            const double wj = c.wr[sj];
-                            for (int sk = 0; sk < 7; sk++) {
-                                const int base = q_off + gj * nface + c.k_idx[sk] * NX6 + bi;
-                                const double wjk = wj * c.ws[sk];
-                                double row = 0.0;
-                                for (int si = 0; si < 7; si++)
-                                    row += GILBM_L_eta_shared[eta_sign][si] * f_post_read[base + si];
-                                out += wjk * row;
+                        const int i0 = i - 3;
+                        for (int sx = 0; sx < 7; sx++) {
+                            const double wx = GILBM_L_eta_shared[eta_sign][sx];
+                            const int gi = i0 + sx;
+                            for (int sj = 0; sj < 7; sj++) {
+                                const int gj = c.j0 + sj;
+                                const double wj = c.wr[sj];
+                                for (int sk = 0; sk < 7; sk++) {
+                                    out += wx * wj * c.ws[sk] *
+                                           f_post_read[q_off + gj * nface + c.k_idx[sk] * NX6 + gi];
+                                }
                             }
                         }
                     }
@@ -447,13 +448,9 @@ __global__ void Algorithm2_RefCoords_Algo1Path(
             gilbm2_lagrange7(t_xi,   Lxi_r);
             gilbm2_lagrange7(t_zeta, Lzeta_r);
             r.j0 = j - 3;
-            gilbm2_fold_zeta_ghost(bk, Lzeta_r, r.ws);
+            gilbm2_fold_zeta_ghost(bk, Lzeta_r, r.k_idx, r.ws);
             for (int s = 0; s < 7; s++) {
                 r.wr[s] = Lxi_r[s];
-                int gk = bk + s;
-                if (gk < 3)                gk = 3;
-                else if (gk > (int)NZ6 - 4) gk = (int)NZ6 - 4;
-                r.k_idx[s] = gk;
             }
         }
 #elif GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS

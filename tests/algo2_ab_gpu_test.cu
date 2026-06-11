@@ -141,6 +141,32 @@ int main() {
         GILBM2_ValidationResult vr;
         int rc = Algorithm2_ValidateCoordsTable(coords_d, xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
                                                 bk_d, tab_h, &vr, 0);
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED
+        long long folded_shape_bad = 0;
+        int bad_cls = -1, bad_j = -1, bad_k = -1;
+        for (int cls = 1; cls < GILBM2_NCLASS; cls++)
+            for (int j = 3; j < (int)NYD6 - 3; j++)
+                for (int k = 3; k < (int)NZ6 - 3; k++) {
+                    const GILBM2_Table &c = tab_h[gilbm2_coord_index(cls, j, k)];
+                    bool ok = (c.k_idx[0] >= 3 && c.k_idx[6] <= (int)NZ6 - 4);
+                    for (int s = 1; s < 7; s++) {
+                        if (c.k_idx[s] != c.k_idx[0] + s) ok = false;
+                    }
+                    if (!ok) {
+                        folded_shape_bad++;
+                        if (bad_cls < 0) { bad_cls = cls; bad_j = j; bad_k = k; }
+                    }
+                }
+        printf("[AB] folded table shape: contiguous physical k_idx bad=%lld", folded_shape_bad);
+        if (folded_shape_bad)
+            printf(" (first cls=%d j=%d k=%d)", bad_cls, bad_j, bad_k);
+        printf("\n");
+        if (folded_shape_bad != 0) {
+            free(tab_h);
+            fprintf(stderr, "[AB] FATAL: folded table k_idx is not ITB-style contiguous physical window\n");
+            return 5;
+        }
+#endif
         free(tab_h);
         if (rc != 0) { fprintf(stderr, "[AB] FATAL: coords-table gate failed (rc=%d)\n", rc); return 4; }
     }

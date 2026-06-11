@@ -6,8 +6,9 @@
 #
 #  用法:  bash build_cell.sh <cell>
 #    algo1    → -DUSE_GILBM_ALGORITHM2=0  (Algorithm1 baseline)
-#    gilbm_b  → -DUSE_GILBM_ALGORITHM2=1  (GEN=GILBM_RK2, STORE=COORDS)
-#    (gilbm_a / itb_b / itb_a 於後續 Stage 加入)
+#    gilbm_b      → -DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=0  (COORDS)
+#    gilbm_a      → -DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=1  (raw WEIGHTS)
+#    gilbm_a_fold → -DUSE_GILBM_ALGORITHM2=1 -DGILBM_ALGO2_STORE=2  (folded WEIGHTS, ITB-style)
 #
 #  開關注入靠 variables.h 的 #ifndef 包裹 — 不改動任何 source 檔。
 # ════════════════════════════════════════════════════════════════════════════
