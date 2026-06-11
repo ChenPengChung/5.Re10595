@@ -8,12 +8,10 @@
 //  textually identical downstream of the table read, but are separately
 //  compiled __global__ functions).
 //
-//  Race note: wall rows (k=3, NZ6-4) read u/v/w/rho written by interior
-//  threads of the SAME launch (Algorithm1's documented benign race,
-//  1.algorithm1.h:201-203). Outputs there are not strictly deterministic for
-//  EITHER kernel, so the HARD bitwise gate is the non-wall domain
-//  k ∈ [4, NZ6-5] (whose threads never read u/v/w/rho). Wall rows are
-//  reported separately, and an A1-vs-A1 rerun measures the determinism floor.
+//  Wall-BC race fix: wall rows (k=3, NZ6-4) read a read-only macro snapshot
+//  and write a separate macro output buffer. Therefore the HARD gate covers
+//  the full domain, including wall rows. A1-vs-A1 rerun measures the full
+//  determinism floor.
 //
 //  The MRT __constant__ tables are deliberately left zero-initialized:
 //  both kernels read the SAME constants, so collision degenerates to an
@@ -198,10 +196,15 @@ int main() {
                 r0_h[idx] = 1.0 + 0.002 * cos(0.06 * i) * sin(0.07 * j);
             }
 
-    double *f_in_d, *f_out_d, *u_d, *v_d, *w_d, *r_d, *rho_mod_d, *force_d;
+    double *f_in_d, *f_out_d;
+    double *u_d, *v_d, *w_d, *r_d;
+    double *u_out_d, *v_out_d, *w_out_d, *r_out_d;
+    double *rho_mod_d, *force_d;
     ABCHK(cudaMalloc(&f_in_d, FSZ * 8));  ABCHK(cudaMalloc(&f_out_d, FSZ * 8));
     ABCHK(cudaMalloc(&u_d, GRID * 8));    ABCHK(cudaMalloc(&v_d, GRID * 8));
     ABCHK(cudaMalloc(&w_d, GRID * 8));    ABCHK(cudaMalloc(&r_d, GRID * 8));
+    ABCHK(cudaMalloc(&u_out_d, GRID * 8)); ABCHK(cudaMalloc(&v_out_d, GRID * 8));
+    ABCHK(cudaMalloc(&w_out_d, GRID * 8)); ABCHK(cudaMalloc(&r_out_d, GRID * 8));
     ABCHK(cudaMalloc(&rho_mod_d, 8));     ABCHK(cudaMalloc(&force_d, 8));
     ABCHK(cudaMemcpy(f_in_d, f_in_h, FSZ * 8, cudaMemcpyHostToDevice));
     { double z = 0.0, frc = 1.0e-6;
@@ -218,6 +221,10 @@ int main() {
         ABCHK(cudaMemcpy(v_d, v0_h, GRID * 8, cudaMemcpyHostToDevice));
         ABCHK(cudaMemcpy(w_d, w0_h, GRID * 8, cudaMemcpyHostToDevice));
         ABCHK(cudaMemcpy(r_d, r0_h, GRID * 8, cudaMemcpyHostToDevice));
+        ABCHK(cudaMemcpy(u_out_d, u0_h, GRID * 8, cudaMemcpyHostToDevice));
+        ABCHK(cudaMemcpy(v_out_d, v0_h, GRID * 8, cudaMemcpyHostToDevice));
+        ABCHK(cudaMemcpy(w_out_d, w0_h, GRID * 8, cudaMemcpyHostToDevice));
+        ABCHK(cudaMemcpy(r_out_d, r0_h, GRID * 8, cudaMemcpyHostToDevice));
         ABCHK(cudaMemset(f_out_d, 0, FSZ * 8));
     };
 
@@ -227,10 +234,10 @@ int main() {
     auto fetch = [&](double *fdst, double *mdst) {
         ABCHK(cudaMemcpy(fdst, f_out_d, FSZ * 8, cudaMemcpyDeviceToHost));
         if (mdst) {
-            ABCHK(cudaMemcpy(mdst + 0 * GRID, u_d, GRID * 8, cudaMemcpyDeviceToHost));
-            ABCHK(cudaMemcpy(mdst + 1 * GRID, v_d, GRID * 8, cudaMemcpyDeviceToHost));
-            ABCHK(cudaMemcpy(mdst + 2 * GRID, w_d, GRID * 8, cudaMemcpyDeviceToHost));
-            ABCHK(cudaMemcpy(mdst + 3 * GRID, r_d, GRID * 8, cudaMemcpyDeviceToHost));
+            ABCHK(cudaMemcpy(mdst + 0 * GRID, u_out_d, GRID * 8, cudaMemcpyDeviceToHost));
+            ABCHK(cudaMemcpy(mdst + 1 * GRID, v_out_d, GRID * 8, cudaMemcpyDeviceToHost));
+            ABCHK(cudaMemcpy(mdst + 2 * GRID, w_out_d, GRID * 8, cudaMemcpyDeviceToHost));
+            ABCHK(cudaMemcpy(mdst + 3 * GRID, r_out_d, GRID * 8, cudaMemcpyDeviceToHost));
         }
     };
 
@@ -238,7 +245,9 @@ int main() {
     reset_state();
     Algorithm1_FusedKernel_GTS_Buffer<<<grid_all, block_all>>>(f_in_d, f_out_d,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_d, nullptr,
-        u_d, v_d, w_d, r_d, rho_mod_d, force_d, 3);
+        u_d, v_d, w_d, r_d,
+        u_out_d, v_out_d, w_out_d, r_out_d,
+        rho_mod_d, force_d, 3);
     ABCHK(cudaDeviceSynchronize());
     fetch(fA, mA);
 
@@ -246,7 +255,9 @@ int main() {
     reset_state();
     Algorithm1_FusedKernel_GTS_Buffer<<<grid_all, block_all>>>(f_in_d, f_out_d,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_d, nullptr,
-        u_d, v_d, w_d, r_d, rho_mod_d, force_d, 3);
+        u_d, v_d, w_d, r_d,
+        u_out_d, v_out_d, w_out_d, r_out_d,
+        rho_mod_d, force_d, 3);
     ABCHK(cudaDeviceSynchronize());
     fetch(fA2, nullptr);
 
@@ -254,7 +265,9 @@ int main() {
     reset_state();
     Algorithm2_FusedKernel_GTS_Buffer<<<grid_all, block_all>>>(f_in_d, f_out_d,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_d, nullptr,
-        u_d, v_d, w_d, r_d, rho_mod_d, force_d, coords_d, 3);
+        u_d, v_d, w_d, r_d,
+        u_out_d, v_out_d, w_out_d, r_out_d,
+        rho_mod_d, force_d, coords_d, 3);
     ABCHK(cudaDeviceSynchronize());
     fetch(fB, mB);
 
@@ -272,8 +285,8 @@ int main() {
                 for (int i = 3; i < (int)NX6 - 3; i++) {
                     size_t idx = (size_t)q * GRID + (size_t)j * NX6 * NZ6 + (size_t)k * NX6 + i;
                     const bool wall = (k == 3 || k == (int)NZ6 - 4);
-                    // 地板永遠 bitwise (A1 自身決定性, 與 TOL 無關), 只算非 wall 域
-                    if (!wall && memcmp(&fA[idx], &fA2[idx], 8) != 0) floor_mm++;
+                    // 地板永遠 bitwise (A1 自身決定性, 與 TOL 無關), 全域含 wall。
+                    if (memcmp(&fA[idx], &fA2[idx], 8) != 0) floor_mm++;
                     const double d = fabs(fA[idx] - fB[idx]);
                     const bool mism = (TOL > 0.0) ? (d > TOL) : (memcmp(&fA[idx], &fB[idx], 8) != 0);
                     if (mism) {
@@ -283,7 +296,7 @@ int main() {
                 }
     for (int m = 0; m < 4; m++)
         for (int j = 3; j < (int)NYD6 - 3; j++)
-            for (int k = 4; k < (int)NZ6 - 4; k++)   // non-wall only (wall rows force u=v=w=0 both sides)
+            for (int k = 3; k < (int)NZ6 - 3; k++)   // full domain incl wall rows
                 for (int i = 3; i < (int)NX6 - 3; i++) {
                     size_t idx = (size_t)m * GRID + (size_t)j * NX6 * NZ6 + (size_t)k * NX6 + i;
                     const double dm = fabs(mA[idx] - mB[idx]);
@@ -292,10 +305,10 @@ int main() {
                 }
 
     printf("[AB] A1-vs-A1 determinism floor : %lld mismatches (expect 0)\n", floor_mm);
-    printf("[AB] A1-vs-A2 f NON-WALL (hard gate): %lld mismatches, max|d|=%.3e (expect 0)\n",
+    printf("[AB] A1-vs-A2 f non-wall           : %lld mismatches, max|d|=%.3e (expect 0)\n",
            nonwall_mm, max_nonwall);
-    printf("[AB] A1-vs-A2 f wall rows (report)  : %lld mismatches, max|d|=%.3e\n", wall_mm, max_wall);
-    printf("[AB] A1-vs-A2 u/v/w/rho non-wall    : %lld mismatches (expect 0)\n", macro_mm);
+    printf("[AB] A1-vs-A2 f wall rows (hard gate): %lld mismatches, max|d|=%.3e (expect 0)\n", wall_mm, max_wall);
+    printf("[AB] A1-vs-A2 u/v/w/rho full-domain : %lld mismatches (expect 0)\n", macro_mm);
 
     int rc;
     if (floor_mm != 0) {
@@ -305,12 +318,8 @@ int main() {
         printf("[AB] RESULT: PASS — Algorithm2 %s to Algorithm1 (full domain incl wall rows)\n",
                (TOL > 0.0 ? "1e-12-equivalent" : "bit-identical"));
         rc = 0;
-    } else if (nonwall_mm == 0 && macro_mm == 0) {
-        printf("[AB] RESULT: PASS (non-wall hard gate, %s) — wall-row diffs within the documented BC race\n",
-               (TOL > 0.0 ? "1e-12 tol" : "bit-exact"));
-        rc = 0;
     } else {
-        printf("[AB] RESULT: FAIL — Algorithm2 diverges from Algorithm1 beyond %s outside the race domain\n",
+        printf("[AB] RESULT: FAIL — Algorithm2 diverges from Algorithm1 beyond %s\n",
                (TOL > 0.0 ? "1e-12" : "bit-exact"));
         rc = 1;
     }

@@ -13,10 +13,10 @@
 // ║                                                                    ║
 // ║  主迴圈流程 (Launch_CollisionStreaming, 方案B 融合版):              ║
 // ║    FusedKernel: f_post_read → 3D interp → register → collision    ║
-// ║                 → f_post_write + u/v/w/rho                        ║
+// ║                 → f_post_write + macro write buffer               ║
 // ║    MPI:         f_post_write y-halo 交換 (19 方向)                ║
 // ║    periodicSW:  f_post_write x-週期 BC                            ║
-// ║    Swap:        f_post_read ↔ f_post_write                       ║
+// ║    Swap:        f_post_read ↔ f_post_write, macro read ↔ write    ║
 // ║                                                                    ║
 // ║  記憶體佈局:                                                       ║
 // ║    f_post_d  [19 × GRID_SIZE] — 碰後分佈 buffer A (雙緩衝)       ║

@@ -46,8 +46,10 @@ LOG="slurm_a2bench_${SLURM_JOB_ID}.log"
 export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
 set +u; source "$HPCX_HOME/hpcx-init.sh"; hpcx_load    # 不重啟 set -u (poll 邏輯變數多, 避免誤觸 unbound)
 
-# ★ 相對路徑 (solver 對非絕對 restart 路徑加 ./ 前綴; 絕對路徑會 .//home/... 開不了 metadata.dat)
-SEED="restart/checkpoint/$(readlink restart/checkpoint/latest)"
+# ★ 固定 seed (嚴格比較): 預設 step_58717800 (90755 快測基準); 可用 env SEED_STEP 覆寫。
+#   不再用 readlink latest (每跑會推進 latest, 破壞嚴格比較)。相對路徑 (solver 對非絕對加 ./)。
+#   robust: 預設用 latest (永遠存在; run 內兩 cell 同 seed 即公平比較); 可用 env SEED_STEP 釘死。
+SEED="restart/checkpoint/${SEED_STEP:-$(readlink restart/checkpoint/latest)}"
 [ -d "$SEED" ] || { echo "[FATAL] no seed checkpoint at $SEED" >&2; exit 1; }
 echo "[bench] SEED=$SEED  np=$SLURM_NTASKS  cells='$CELLS'  blocks=$TARGET_BLOCKS  hardlimit=${HARDLIMIT}s"
 
@@ -59,7 +61,9 @@ for CELL in $CELLS; do
     echo "===== BENCH CELL=$CELL ====="
     MARK=$(grep -c 'MLUPS (instant)' "$LOG" 2>/dev/null || true); MARK=${MARK:-0}
     set +e
-    mpirun -np "$SLURM_NTASKS" --map-by ppr:8:node --bind-to none \
+    # --oversubscribe: 解 --exclusive 時 Open MPI 誤判 slot 數 ("not enough slots")。
+    #   非 --exclusive 時無害 (slot 足夠時 oversubscribe 不改變放置)。獨佔節點=零 host 競爭=乾淨計時。
+    mpirun -np "$SLURM_NTASKS" --map-by ppr:8:node --bind-to none --oversubscribe \
            stdbuf -oL "$BIN" --restart="$SEED" &
     MPID=$!
     # 輪詢: 等本 cell 累積 TARGET_BLOCKS 個計時 block (跨過 ~7min warm-load), 才 touch STOP_CHAIN
