@@ -275,8 +275,19 @@ int main() {
     //   COORDS/WEIGHTS: 期望 bit-exact → TOL=0 (memcmp)。
     //   WEIGHTS_FOLDED: ghost 折疊重結合 FP → 期望 1e-12-equivalent → TOL=1e-12 (Efficiency Rule #2)。
     const double TOL = (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED) ? 1.0e-12 : 0.0;
+#if GILBM2_DEPARTURE_RK4
+    //   RK4: A2(RK4 departure) 故意偏離 A1(in-kernel RK2) → 等效性僅 RK2(-DGILBM2_DEPARTURE_RK4=0) 模式成立。
+    //   此 A/B 對 RK4 = bounded-delta: TOL 仍小(量到真實 max gap), verdict 接受 max gap < RK4_GAP_SANITY 的
+    //   預期 departure gap, 只抓 gross 發散 (NaN / O(0.1) garbage = 壞 RK4 consumer)。SANITY 可依實機量測收緊。
+    const bool   RK4_MODE = true;
+    const double RK4_GAP_SANITY = 1.0e-2;
+#else
+    const bool   RK4_MODE = false;
+    const double RK4_GAP_SANITY = 0.0;
+#endif
     printf("[AB] A2-vs-A1 gate: %s (TOL=%.0e)\n",
-           (TOL > 0.0 ? "1e-12 tolerance (FOLDED)" : "bit-exact (memcmp)"), TOL);
+           (RK4_MODE ? "RK4 bounded-delta (A2=RK4 故意≠A1=RK2; verdict 用 GAP_SANITY)" :
+            TOL > 0.0 ? "1e-12 tolerance (FOLDED)" : "bit-exact (memcmp)"), TOL);
     long long floor_mm = 0, nonwall_mm = 0, wall_mm = 0, macro_mm = 0;
     double max_nonwall = 0.0, max_wall = 0.0;
     for (int q = 0; q < 19; q++)
@@ -318,9 +329,17 @@ int main() {
         printf("[AB] RESULT: PASS — Algorithm2 %s to Algorithm1 (full domain incl wall rows)\n",
                (TOL > 0.0 ? "1e-12-equivalent" : "bit-identical"));
         rc = 0;
+    } else if (RK4_MODE && isfinite(max_nonwall) && isfinite(max_wall) &&
+               max_nonwall < RK4_GAP_SANITY && max_wall < RK4_GAP_SANITY) {
+        printf("[AB] RESULT: PASS (RK4 bounded-delta) — A2(RK4) 故意偏離 A1(RK2) ~departure gap "
+               "(max non-wall=%.3e, wall=%.3e < %.0e); 等效性僅 RK2(-DGILBM2_DEPARTURE_RK4=0) 模式成立, "
+               "RK4 consumer 未 gross 發散\n",
+               max_nonwall, max_wall, RK4_GAP_SANITY);
+        rc = 0;
     } else {
         printf("[AB] RESULT: FAIL — Algorithm2 diverges from Algorithm1 beyond %s\n",
-               (TOL > 0.0 ? "1e-12" : "bit-exact"));
+               (RK4_MODE ? "RK4 bounded-delta (gross departure error / NaN?)" :
+                TOL > 0.0 ? "1e-12" : "bit-exact"));
         rc = 1;
     }
     return rc;
