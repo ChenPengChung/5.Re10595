@@ -220,7 +220,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START      25.0    // 統計量開始累積 [2026-06-05 10→25 延後取樣]
+#define     FTT_STATS_START      28.0    // 統計量開始累積 [2026-06-05 10→25; 2026-06-12 25→28: WallRace 修復後留 ~3-4 FTT 壁面再平衡, 避免 Cf/Cp 取樣含瞬態]
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
