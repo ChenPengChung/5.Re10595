@@ -13,16 +13,14 @@
 // ║                                                                    ║
 // ║  主迴圈流程 (Launch_CollisionStreaming, 方案B 融合版):              ║
 // ║    FusedKernel: f_post_read → 3D interp → register → collision    ║
-// ║                 → f_post_write + u2/v2/w2/rho_d2                  ║
+// ║                 → f_post_write + u/v/w/rho                        ║
 // ║    MPI:         f_post_write y-halo 交換 (19 方向)                ║
 // ║    periodicSW:  f_post_write x-週期 BC                            ║
-// ║    Swap:        f_post_read ↔ f_post_write, macro read ↔ write    ║
+// ║    Swap:        f_post_read ↔ f_post_write                       ║
 // ║                                                                    ║
 // ║  記憶體佈局:                                                       ║
 // ║    f_post_d  [19 × GRID_SIZE] — 碰後分佈 buffer A (雙緩衝)       ║
 // ║    f_post_d2 [19 × GRID_SIZE] — 碰後分佈 buffer B (雙緩衝)       ║
-// ║    rho/u/v/w              — t^n macro snapshot for wall BC reads  ║
-// ║    rho_d2/u2/v2/w2        — t^{n+1} macro output write buffer     ║
 // ║    [已移除] feq_d — collision 自算 feq，不需獨立陣列              ║
 // ║    [方案B] f_new[19] 不再使用於主迴圈 — register 取代             ║
 // ║    dt/omega/s_visc             — __constant__ scalar (非陣列)      ║
@@ -220,7 +218,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START      28.0    // 統計量開始累積 [2026-06-05 10→25; 2026-06-12 25→28: WallRace 修復後留 ~3-4 FTT 壁面再平衡, 避免 Cf/Cp 取樣含瞬態]
+#define     FTT_STATS_START      25.0    // 統計量開始累積 [2026-06-05 10→25 延後取樣]
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
