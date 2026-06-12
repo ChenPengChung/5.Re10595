@@ -706,6 +706,7 @@ static inline int Algorithm2_ValidateCoordsTable(
         const double *rf = (const double*)&h_ref[n];
         for (int d = 0; d < NDBL; d++) {
             const double diff = fabs(dv[d] - rf[d]);
+            if (!isfinite(dv[d])) R.nonfinite_count++;   // NaN/Inf 守衛 (COORDS/WEIGHTS 診斷模式; RK4 gate 丟 bitwise 後仍須抓 NaN)
             if (memcmp(&dv[d], &rf[d], sizeof(double)) != 0) bit_eq = false;
             if (diff > emax) emax = diff;
             ssq_dev += diff * diff;
@@ -769,11 +770,17 @@ static inline int Algorithm2_ValidateCoordsTable(
     }
 #endif
 
+#if GILBM2_DEPARTURE_RK4
+    // RK4: bitwise_mismatch 計的是 float 權重 RK4-vs-Algo1RK2 的預期 gap (非失敗); 過閘看下方 RK4 行。
+    const char *bit_status = " [= RK4-vs-Algo1RK2 weight gap (預期, 非失敗); 過閘判定見 RK4 行]";
+#else
+    const char *bit_status = (R.bitwise_mismatch == 0 ? " [BIT-EXACT OK]" : " [FAIL]");
+#endif
     printf("[ALGO2][rank %d] table validation (%d double fields/entry): dev-vs-Algo1ref bitwise "
            "mismatch = %lld (max|d|=%.3e, rms=%.3e)%s; dev-vs-host max=%.3e rms=%.3e "
            "tol_fail=%lld; class-map mismatch=%d%s\n",
            myid, NDBL, R.bitwise_mismatch, R.max_abs_txi, R.rms_txi,
-           (R.bitwise_mismatch == 0 ? " [BIT-EXACT OK]" : " [FAIL]"),
+           bit_status,
            R.host_max_abs, R.host_rms, R.host_tol_fail,
            R.class_map_mismatch,
            (R.class_map_mismatch == 0 ? " [MAP OK]" : " [MAP FAIL]"));
