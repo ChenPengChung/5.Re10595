@@ -64,6 +64,23 @@
 #endif
 #endif
 
+// ── departure 積分階數 (RK2 legacy vs RK4 step-doubling + 嵌入式誤差自我認證) ──
+//   0 = legacy RK2 midpoint (逐位元同 Algorithm1 gilbm_rk2_displacement)
+//   1 = RK4 + step-doubling 自適應到 ERRTOL; 嵌入式誤差 = 自我認證證書 (precompute 一次, GPU 零成本)
+//   預設 1 (RK4; 驗證閘翻轉為嵌入式自我認證 + gap + int-field); -DGILBM2_DEPARTURE_RK4=0 回退 RK2。
+#ifndef GILBM2_DEPARTURE_RK4
+#define GILBM2_DEPARTURE_RK4 1
+#endif
+#ifndef GILBM2_DEPARTURE_ERRTOL
+#define GILBM2_DEPARTURE_ERRTOL 1e-10
+#endif
+#ifndef GILBM2_DEPARTURE_MAXDEPTH
+#define GILBM2_DEPARTURE_MAXDEPTH 6
+#endif
+#if GILBM2_DEPARTURE_RK4 != 0 && GILBM2_DEPARTURE_RK4 != 1
+#error "GILBM2_DEPARTURE_RK4 must be 0 (legacy RK2) or 1 (RK4 step-doubling)"
+#endif
+
 // q → yz class. q=0 self, q=1,2 (ey=ez=0) eta-only 1D → class 0 (inert).
 // Matches the (e_y,e_z) of GILBM_e[19][3] (0.shared_code.h:23) byte-for-byte.
 __host__ __device__ __forceinline__ int gilbm2_yz_class_from_q(int q) {
@@ -169,6 +186,91 @@ __host__ __device__ __forceinline__ void gilbm2_lagrange7(double t, double a[7])
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+//  RK4 step-doubling departure 位移 (GILBM2_DEPARTURE_RK4=1)
+//  ODE: index-space 位置 p=(j,k), dp/dτ = −V(p), 積 [0,dt] backward;
+//       位移 D = p(0)−p(dt)。V=(ey·ξ_y+ez·ξ_z, ey·ζ_y+ez·ζ_z) 7×7 Lagrange 取 (= 原 RK2 取樣)。
+//  step-doubling: 比較 N 與 2N 子步, Richardson 局部誤差 |D_2N−D_N|/15, 自適應細分到 ERRTOL。
+//  安全: stage 位置同原 RK2 clamp 到 [0,NYD6-1]×[3,NZ6-4]; 壁面 BC 由 t_xi/t_zeta 最終 clamp 處理。
+// ════════════════════════════════════════════════════════════════════════════
+__host__ __device__ inline void gilbm2_sample_contravariant(
+    double pj, double pk, double ey, double ez,
+    const double *xi_y, const double *xi_z, const double *zeta_y, const double *zeta_z,
+    double *Vxi, double *Vzeta)
+{
+    if (pj < 0.0)                     pj = 0.0;                           // = 原 j_half clamp
+    if (pj > (double)((int)NYD6 - 1)) pj = (double)((int)NYD6 - 1);
+    if (pk < 3.0)                     pk = 3.0;                           // = 原 k_half clamp (壁面安全)
+    if (pk > (double)((int)NZ6 - 4))  pk = (double)((int)NZ6 - 4);
+    int sj = (int)floor(pj) - 3; if (sj < 0) sj = 0; if (sj + 6 > (int)NYD6 - 1) sj = (int)NYD6 - 7;
+    int sk = (int)floor(pk) - 3; if (sk < 0) sk = 0; if (sk + 6 > (int)NZ6  - 1) sk = (int)NZ6  - 7;
+    double aj[7], ak[7];
+    gilbm2_lagrange7(pj - (double)sj, aj);
+    gilbm2_lagrange7(pk - (double)sk, ak);
+    double vxi = 0.0, vze = 0.0;
+    for (int mj = 0; mj < 7; mj++) {
+        int jj = sj + mj;
+        double axi = 0.0, aze = 0.0;
+        for (int mk = 0; mk < 7; mk++) {
+            int kk = sk + mk;
+            int id = jj * (int)NZ6 + kk;
+            double w = ak[mk];
+            axi += w * (ey * xi_y[id]   + ez * xi_z[id]);
+            aze += w * (ey * zeta_y[id] + ez * zeta_z[id]);
+        }
+        vxi += aj[mj] * axi;
+        vze += aj[mj] * aze;
+    }
+    *Vxi = vxi; *Vzeta = vze;
+}
+
+// 一步 RK4: 從 (pj,pk) 步長 h 的 backward 位移 (dx,dz)。stage2 = 原 RK2 中點。
+__host__ __device__ inline void gilbm2_rk4_step(
+    double pj, double pk, double h, double ey, double ez,
+    const double *xi_y, const double *xi_z, const double *zeta_y, const double *zeta_z,
+    double *dx, double *dz)
+{
+    double v1x, v1z, v2x, v2z, v3x, v3z, v4x, v4z;
+    gilbm2_sample_contravariant(pj,             pk,             ey, ez, xi_y, xi_z, zeta_y, zeta_z, &v1x, &v1z);
+    gilbm2_sample_contravariant(pj - 0.5*h*v1x, pk - 0.5*h*v1z, ey, ez, xi_y, xi_z, zeta_y, zeta_z, &v2x, &v2z);
+    gilbm2_sample_contravariant(pj - 0.5*h*v2x, pk - 0.5*h*v2z, ey, ez, xi_y, xi_z, zeta_y, zeta_z, &v3x, &v3z);
+    gilbm2_sample_contravariant(pj -     h*v3x, pk -     h*v3z, ey, ez, xi_y, xi_z, zeta_y, zeta_z, &v4x, &v4z);
+    *dx = (h / 6.0) * (v1x + 2.0*v2x + 2.0*v3x + v4x);
+    *dz = (h / 6.0) * (v1z + 2.0*v2z + 2.0*v3z + v4z);
+}
+
+// 自適應 step-doubling: 從 N=1 起逐次倍增子步, Richardson |D_2N−D_N|/15 < ERRTOL 即收斂。
+// 回傳 order-5 外推位移 (d_xi, delta_zeta) + 嵌入式誤差 e_local (cells, = 「每輪 RK 迭代誤差」)。
+__host__ __device__ inline void gilbm2_departure_displacement_rk4(
+    int j, int k, double ey, double ez, double dt_val,
+    const double *xi_y, const double *xi_z, const double *zeta_y, const double *zeta_z,
+    double *d_xi, double *delta_zeta, double *e_local)
+{
+    double coarsex, coarsez;
+    gilbm2_rk4_step((double)j, (double)k, dt_val, ey, ez, xi_y, xi_z, zeta_y, zeta_z, &coarsex, &coarsez);  // N=1 baseline (D_N)
+    double finex = coarsex, finez = coarsez, emax = 1.0e300;
+    for (int level = 1; level <= GILBM2_DEPARTURE_MAXDEPTH; level++) {
+        int N = 1 << level;
+        double h = dt_val / (double)N;
+        double qj = (double)j, qk = (double)k, sx = 0.0, sz = 0.0;
+        for (int s = 0; s < N; s++) {
+            double dx, dz;
+            gilbm2_rk4_step(qj, qk, h, ey, ez, xi_y, xi_z, zeta_y, zeta_z, &dx, &dz);
+            sx += dx; sz += dz;
+            qj -= dx; qk -= dz;                    // 下一子步起點 = 目前累積落點 (backward)
+        }
+        // Richardson (RK4 order-4→5): 局部誤差 = |D_2N − D_N|/(2^4−1); 外推值 = D_2N + (D_2N−D_N)/15
+        double ex = fabs(sx - coarsex), ez2 = fabs(sz - coarsez);
+        emax  = ((ex > ez2) ? ex : ez2) / 15.0;
+        finex = sx + (sx - coarsex) / 15.0;
+        finez = sz + (sz - coarsez) / 15.0;
+        coarsex = sx; coarsez = sz;
+        if (emax < GILBM2_DEPARTURE_ERRTOL) break;
+    }
+    *d_xi = finex; *delta_zeta = finez;            // order-5 外推位移
+    if (e_local) *e_local = emax;                  // 真 Richardson 局部誤差 (cells)
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  GILBM departure-coordinate generator (the 12-step recipe, §4 of the prompt)
 //  Mirrors gilbm_rk2_displacement + the t_xi/t_zeta derivation EXACTLY.
 //    in : (j,k) cell, (ey,ez) class velocity, dt, 4 metric arrays [NYD6*NZ6],
@@ -179,15 +281,28 @@ __host__ __device__ inline GILBM2_DepartCoords gilbm2_gen_departure_coords(
     int j, int k, double ey, double ez, double dt_val,
     const double *xi_y, const double *xi_z,
     const double *zeta_y, const double *zeta_z,
-    int bk, unsigned char *flag_out = nullptr)   // flag_out: optional diagnostic, NOT stored
+    int bk, unsigned char *flag_out = nullptr,   // flag_out: optional diagnostic, NOT stored
+    double *err_out = nullptr)                    // err_out: RK4 嵌入式 step-doubling 誤差 (cells), 供驗證; NOT stored
 {
+    double d_xi, delta_zeta;
+#if GILBM2_DEPARTURE_RK4
+    // ── RK4 + step-doubling 自適應 (嵌入式誤差到 GILBM2_DEPARTURE_ERRTOL) ──
+    //   只改位移計算; 下方 t_xi/t_zeta 推導 + 壁面 clamp 與 RK2 路徑共用、不變。
+    //   stage-2 = 原 RK2 中點 → RK4 為其嚴格超集。
+    {
+        double e_local = 0.0;
+        gilbm2_departure_displacement_rk4(j, k, ey, ez, dt_val,
+            xi_y, xi_z, zeta_y, zeta_z, &d_xi, &delta_zeta, &e_local);
+        if (err_out) *err_out = e_local;
+    }
+#else
+    // ── RK2 midpoint (Imamura 2005 Eq.19-20) == gilbm_rk2_displacement L23-58 ──
     const int idx_jk = j * (int)NZ6 + k;
     const double xi_y_val   = xi_y[idx_jk];
     const double xi_z_val   = xi_z[idx_jk];
     const double zeta_y_val = zeta_y[idx_jk];
     const double zeta_z_val = zeta_z[idx_jk];
 
-    // ── RK2 midpoint (Imamura 2005 Eq.19-20) == gilbm_rk2_displacement L23-58 ──
     double e_txi_0   = ey * xi_y_val   + ez * xi_z_val;
     double e_tzeta_0 = ey * zeta_y_val + ez * zeta_z_val;
     double j_half = (double)j - 0.5 * dt_val * e_txi_0;
@@ -225,8 +340,10 @@ __host__ __device__ inline GILBM2_DepartCoords gilbm2_gen_departure_coords(
         e_txi_half   += aj_rk[mj] * acc_xi;
         e_tzeta_half += aj_rk[mj] * acc_zeta;
     }
-    double d_xi       = dt_val * e_txi_half;
-    double delta_zeta = dt_val * e_tzeta_half;
+    d_xi       = dt_val * e_txi_half;
+    delta_zeta = dt_val * e_tzeta_half;
+    if (err_out) *err_out = 0.0;
+#endif
 
     // ── t_xi / t_zeta derivation == algorithm1_step1_GTS L310-321 ──
     //   bj = j-3 (UNCLAMPED, L187) → (j - bj) = 3 → t_xi = 3 - d_xi
