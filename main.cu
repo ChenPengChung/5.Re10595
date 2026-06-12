@@ -767,6 +767,30 @@ int main(int argc, char *argv[])
         printf("  =============================================================\n\n");
     }
 
+    // ── Optional full host-metric dump for the standalone (r,s) error tool ──
+    //   env-guarded (export GILBM_DUMP_METRIC=1); host-side, ZERO effect on the run otherwise.
+    //   Each rank writes its slab; tools/rk2_rk4_rs_error.py --metric-file reads them for the
+    //   full 2D x 9-direction RK2-vs-RK4 departure (r,s) comparison on the real FD6 metric.
+    if (getenv("GILBM_DUMP_METRIC")) {
+        char mfn[80];
+        snprintf(mfn, sizeof(mfn), "gilbm_metric_full_r%d.bin", myid);
+        FILE *mf = fopen(mfn, "wb");
+        if (mf) {
+            int dims[3] = { (int)NYD6, (int)NZ6, myid };
+            const size_t n2d = (size_t)NYD6 * NZ6;
+            fwrite(dims, sizeof(int), 3, mf);
+            fwrite(&dt_global, sizeof(double), 1, mf);
+            fwrite(xi_y_h,   sizeof(double), n2d, mf);
+            fwrite(xi_z_h,   sizeof(double), n2d, mf);
+            fwrite(zeta_y_h, sizeof(double), n2d, mf);
+            fwrite(zeta_z_h, sizeof(double), n2d, mf);
+            fclose(mf);
+            if (myid == 0)
+                printf("GILBM_DUMP_METRIC: rank %d wrote %s (NYD6=%d NZ6=%d dt=%.6e)\n",
+                       myid, mfn, (int)NYD6, (int)NZ6, dt_global);
+        }
+    }
+
     // [REMOVED] PrecomputeGILBM_DeltaAll + MPI delta_xi exchange + ValidateDepartureCFL
     // 2026-04 重構: δη, δξ, δζ 全部移至 Step1 kernel 即時計算。
     // CFL 驗證由 ComputeGlobalTimeStep 本身保證 (dt = λ/max|c̃|)。

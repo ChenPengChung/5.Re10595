@@ -540,6 +540,7 @@ struct GILBM2_ValidationResult {
     int       worst_cls, worst_j, worst_k;
     double    max_embedded_err;   // RK4 嵌入式 step-doubling 最大局部誤差 (cells) — 必須 < ERRTOL
     long long nonfinite_count;    // RK4: table 值 / E_local 出現 NaN/Inf 的數量 — 必須 0 (補 fabs(NaN)>tol=false 漏洞)
+    long long int_field_mismatch; // FOLDED: 整數索引 j0/k_idx vs 解析 ground truth 不符數 — 必須 0 (RK4 float 容差不可掩蓋)
 };
 
 static inline int Algorithm2_ValidateCoordsTable(
@@ -560,6 +561,7 @@ static inline int Algorithm2_ValidateCoordsTable(
     R.worst_cls = -1; R.worst_j = -1; R.worst_k = -1;
     R.max_embedded_err = 0.0;
     R.nonfinite_count = 0;
+    R.int_field_mismatch = 0;
 
     GILBM2_Table *ref_d = nullptr;
     GILBM2_Table *h_dev = (GILBM2_Table*)malloc(bytes);
@@ -656,6 +658,39 @@ static inline int Algorithm2_ValidateCoordsTable(
 #endif
         }
     }
+
+#if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED
+    // ── folded 整數索引欄位 (j0, k_idx) 獨立逐項驗證: 必須 = 解析 ground truth (整數完全相等) ──
+    //   j0/k_idx RK-independent (僅由 j, bk_precomp 決定), 直接定 consumer 讀 f_post_read 的位置
+    //   (2.algorithm2.h: gj=c.j0+sj, c.k_idx[sk])。不可被 RK4 float 容差掩蓋。
+    //   對標解析 ground truth (j0=j-3, k_idx[s]=clamp(bk,3,NZ6-10)+s) 而非僅比 ref → 連共用 fold bug 也抓。
+    {
+        int *bk_h = (int*)malloc((size_t)NZ6 * sizeof(int));
+        if (bk_h && cudaMemcpy(bk_h, bk_precomp_d, (size_t)NZ6 * sizeof(int),
+                               cudaMemcpyDeviceToHost) == cudaSuccess) {
+            const GILBM2_DepartWeightsFolded *dvf = (const GILBM2_DepartWeightsFolded*)h_dev;
+            for (size_t n = 0; n < N; n++) {
+                const int cls = (int)(n / ((size_t)NYD6 * NZ6));
+                const int rem = (int)(n % ((size_t)NYD6 * NZ6));
+                const int j   = rem / (int)NZ6;
+                const int k   = rem % (int)NZ6;
+                if (cls < 1 || j < 3 || j >= (int)NYD6 - 3 || k < 3 || k >= (int)NZ6 - 3)
+                    continue;                                       // 非 interior → inert, 跳過
+                int phys_bk = bk_h[k];
+                if (phys_bk < 3)             phys_bk = 3;
+                if (phys_bk > (int)NZ6 - 10) phys_bk = (int)NZ6 - 10;
+                if (dvf[n].j0 != j - 3) R.int_field_mismatch++;
+                for (int s = 0; s < 7; s++)
+                    if (dvf[n].k_idx[s] != phys_bk + s) R.int_field_mismatch++;
+            }
+        } else {
+            fprintf(stderr, "[ALGO2][rank %d] FATAL: folded int-field check alloc/copy failed\n", myid);
+            R.int_field_mismatch = (long long)N;   // 無法驗 → 視為失敗, 過不了 gate
+        }
+        free(bk_h);
+    }
+#endif
+
     free(h_dev); free(h_ref);
 
     R.max_abs_tzeta = 0.0;   // generalized: 合併進 max_abs_txi (over all stored doubles)
@@ -697,28 +732,31 @@ static inline int Algorithm2_ValidateCoordsTable(
     //   (self-cert/dev-vs-host 兩側同 RK4 generator, 對共用 sampling 偏差盲視)。
     printf("[ALGO2][rank %d] RK4 departure validation (%d doubles/entry): embedded max E_local=%.3e "
            "(tol %.1e)%s; weight-space gap vs Algorithm1-RK2 max=%.3e (預期~6e-6, bound 1e-3); "
-           "dev-vs-host max=%.3e tol_fail=%lld; nonfinite=%lld; class-map mismatch=%d%s\n",
+           "dev-vs-host max=%.3e tol_fail=%lld; nonfinite=%lld; int-field=%lld%s; class-map mismatch=%d%s\n",
            myid, NDBL, R.max_embedded_err, (double)GILBM2_DEPARTURE_ERRTOL,
            (R.max_embedded_err < GILBM2_DEPARTURE_ERRTOL ? " [CONVERGED OK]" : " [NOT CONVERGED]"),
            R.max_abs_txi, R.host_max_abs, R.host_tol_fail, R.nonfinite_count,
+           R.int_field_mismatch, (R.int_field_mismatch == 0 ? " [INT OK]" : " [INT FAIL]"),
            R.class_map_mismatch,
            (R.class_map_mismatch == 0 ? " [MAP OK]" : " [MAP FAIL]"));
 
     if (out) *out = R;
-    //  RK4 過閘: 嵌入式收斂(<ERRTOL) + 獨立 gap 未爆(<1e-3, 對標 doc 預期 ~6e-6) + dev==host
-    //  + class-map + 無 NaN/Inf (nonfinite==0; 補 codex 指出的 fabs(NaN)>tol=false 漏洞)。
+    //  RK4 過閘: 嵌入式收斂(<ERRTOL) + 獨立 gap 未爆(<1e-3) + dev==host + 無 NaN/Inf(nonfinite==0)
+    //  + 整數索引 j0/k_idx 對標 ground truth 完全相等(int_field==0; 補整數欄位被 float 容差掩蓋的盲點) + class-map。
     return (R.max_embedded_err < GILBM2_DEPARTURE_ERRTOL
             && R.max_abs_txi < 1.0e-3
             && R.host_tol_fail == 0
             && R.nonfinite_count == 0
+            && R.int_field_mismatch == 0
             && R.class_map_mismatch == 0) ? 0 : 1;
 #else
     printf("[ALGO2][rank %d] table validation (%d doubles/entry): dev-vs-Algo1ref bitwise "
            "mismatch = %lld (max|d|=%.3e, rms=%.3e)%s; dev-vs-host max=%.3e rms=%.3e "
-           "tol_fail=%lld; class-map mismatch=%d%s\n",
+           "tol_fail=%lld; int-field=%lld%s; class-map mismatch=%d%s\n",
            myid, NDBL, R.bitwise_mismatch, R.max_abs_txi, R.rms_txi,
            (R.bitwise_mismatch == 0 ? " [BIT-EXACT OK]" : " [FAIL]"),
            R.host_max_abs, R.host_rms, R.host_tol_fail,
+           R.int_field_mismatch, (R.int_field_mismatch == 0 ? " [INT OK]" : " [INT FAIL]"),
            R.class_map_mismatch,
            (R.class_map_mismatch == 0 ? " [MAP OK]" : " [MAP FAIL]"));
     if (R.bitwise_mismatch != 0 && R.worst_cls >= 0) {
@@ -727,7 +765,7 @@ static inline int Algorithm2_ValidateCoordsTable(
     }
 
     if (out) *out = R;
-    return (R.bitwise_mismatch == 0 && R.host_tol_fail == 0 && R.class_map_mismatch == 0) ? 0 : 1;
+    return (R.bitwise_mismatch == 0 && R.host_tol_fail == 0 && R.int_field_mismatch == 0 && R.class_map_mismatch == 0) ? 0 : 1;
 #endif
 }
 
