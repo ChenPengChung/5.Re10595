@@ -628,9 +628,7 @@ __global__ void AccumulateUbulk(double *Ub_avg, double *v)
 //   buffer zone (i=0,1,2 或 NX6-3..NX6-1) 的 weight=0 → stale 值不影響結果
 //   與 MPI P1 (δξ≠0 → 16/19 方向) 相同邏輯
 //
-// 只處理 f_post_write 的 η-periodic halo。Macro fields 使用雙緩衝:
-// wall BC 讀 t^n interior snapshot，kernel 寫 t^{n+1} output；
-// 需要 macro ghost 的統計/渦量路徑會另外呼叫 periodicSW_macro。
+// 不搬 u/v/w/rho — Step1 會從正確的 f_post 重新計算
 // ────────────────────────────────────────────────────────────────────────────
 
 // δη≠0 directions: e_x ≠ 0 → q=1,2,7,8,9,10,11,12,13,14
@@ -744,9 +742,8 @@ __global__ void periodicSW_macro(
 // Interior-only: Buffer 已算完 MPI 需要的 6 rows → Interior 算剩餘 11 rows
 //   (j=3 + j=7..15 + j=NYD6-4，3 launches 背靠背)
 //
-// 碰撞後 f_post_write 完成 MPI/periodic halo，再與 f_post_read 交換。
-// Macro fields 同步雙緩衝: u/v/w/rho_d 是 wall-BC read snapshot，
-// u2/v2/w2/rho_d2 是本 sub-step write target，kernel 完成後一起交換。
+// 碰撞後直接交換 f_post_write → ghost zone 被鄰居正確 interior 覆蓋。
+// u/v/w/rho 不交換 — 下一次 kernel 從正確的 f_post 重新計算。
 // ════════════════════════════════════════════════════════════════════════════
 
 void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
@@ -797,7 +794,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
 	        z_zeta_d,
 	        u, v, w, rho_d,
-	        u2, v2, w2, rho_d2,
 	        rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
 	        itb_yz_coeff_d,
@@ -815,7 +811,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
 	        z_zeta_d,
 	        u, v, w, rho_d,
-	        u2, v2, w2, rho_d2,
 	        rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
 	        itb_yz_coeff_d,
@@ -859,7 +854,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
 	        z_zeta_d,
 	        u, v, w, rho_d,
-	        u2, v2, w2, rho_d2,
 	        rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
 	        itb_yz_coeff_d,
@@ -880,7 +874,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
 	        z_zeta_d,
 	        u, v, w, rho_d,
-	        u2, v2, w2, rho_d2,
 	        rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
 	        itb_yz_coeff_d,
@@ -897,7 +890,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
 	        z_zeta_d,
 	        u, v, w, rho_d,
-	        u2, v2, w2, rho_d2,
 	        rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
 	        itb_yz_coeff_d,
@@ -914,7 +906,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
 	        z_zeta_d,
 	        u, v, w, rho_d,
-	        u2, v2, w2, rho_d2,
 	        rho_modify_d, Force_d,
 #if USE_ITBLBM_STREAMING
 	        itb_yz_coeff_d,
@@ -973,8 +964,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     if (g_timing_sample) cudaEventRecord(g_timing.ev_mpi_stop, stream0);
     if (g_timing_sample) cudaEventRecord(g_timing.ev_iter_stop, stream0);
 #endif
-
-    CHECK_CUDA( cudaStreamSynchronize(stream0) );
 
 }
 

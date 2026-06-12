@@ -21,8 +21,7 @@ double  *rho_h_p,  *u_h_p,  *v_h_p,  *w_h_p;
 
 /************************** Device Variables **************************/
 double  *ft[19], *fd[19];
-double  *rho_d,  *u,  *v,  *w;      // current macro read buffer
-double  *rho_d2, *u2, *v2, *w2;     // alternate macro write buffer
+double  *rho_d,  *u,  *v,  *w;
 
 /* double  *KT,    *DISS,
         *DUDX2, *DUDY2, *DUDZ2,
@@ -92,9 +91,6 @@ double *f_post_read;      // 方案B: 指向本步讀取的 buffer (swap after e
 double *f_post_write;     // 方案B: 指向本步寫入的 buffer (swap after each sub-step)
 // [方案A] feq_d 已移除 — collision 自行計算 feq
 // [方案B] f_new[19] 不再使用 — f_streamed 在 register 直接碰撞
-// Macro arrays also use pointer double-buffering:
-//   fused kernel reads u/v/w/rho_d as the previous-step wall-BC snapshot and
-//   writes u2/v2/w2/rho_d2; after each sub-step the pointers swap.
 
 //
 // 逆變速度 (升級: ξ 和 ζ 均為 y-z 平面變數):
@@ -1611,10 +1607,6 @@ int main(int argc, char *argv[])
         Launch_CollisionStreaming( f_post_read, f_post_write );
         // Swap: 下一步讀本步的 output
         { double *tmp = f_post_read; f_post_read = f_post_write; f_post_write = tmp; }
-        { double *tmp = rho_d; rho_d = rho_d2; rho_d2 = tmp; }
-        { double *tmp = u;     u     = u2;     u2     = tmp; }
-        { double *tmp = v;     v     = v2;     v2     = tmp; }
-        { double *tmp = w;     w     = w2;     w2     = tmp; }
 
         // Statistics accumulation (FTT >= FTT_STATS_START): mean + RS + derivatives
         // IS_LAMINAR: 層流模式跳過統計累積 (不需要 Reynolds stress / TKE)
@@ -1699,10 +1691,6 @@ int main(int argc, char *argv[])
         Launch_CollisionStreaming( f_post_read, f_post_write );
         // Swap: 下一步讀本步的 output
         { double *tmp = f_post_read; f_post_read = f_post_write; f_post_write = tmp; }
-        { double *tmp = rho_d; rho_d = rho_d2; rho_d2 = tmp; }
-        { double *tmp = u;     u     = u2;     u2     = tmp; }
-        { double *tmp = v;     v     = v2;     v2     = tmp; }
-        { double *tmp = w;     w     = w2;     w2     = tmp; }
 
         // Statistics accumulation (FTT >= FTT_STATS_START)
         // IS_LAMINAR: 層流模式跳過統計累積
