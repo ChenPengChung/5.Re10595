@@ -12,6 +12,7 @@
                            // 會與 <bits/sigcontext.h> 的 cs 欄位衝突。先 include signal.h
                            // 讓 sigcontext struct 先被解析, 之後 macro 才生效不影響。
 #include "variables.h"
+#include "gilbm/precompute2.h"   // Algorithm2: folded departure 表型別/生成器 (須在全域宣告 gilbm2_coords 之前提供 GILBM2_Table)
 using namespace std;
 /************************** Host Variables **************************/
 double  *fh_p[19]; //主機端一般態分佈函數
@@ -71,6 +72,12 @@ double *zeta_z_h, *zeta_z_d;     // [NYD6*NZ6]
 
 // Precomputed stencil base k [NZ6] (int, wall-clamped)
 int *bk_precomp_h, *bk_precomp_d;
+
+#if USE_GILBM_ALGORITHM2
+// Algorithm2: 預計算 folded departure 表 [GILBM2_NCLASS*NYD6*NZ6] (144 B/entry)
+// device 表為 production 消費來源 (bit-exact); host 表僅供 §B5 1e-12 診斷比對
+GILBM2_Table *gilbm2_coords_h, *gilbm2_coords_d;
+#endif
 
 // Phase 3: Curvilinear global time step (runtime, from CFL on contravariant velocities)
 // NOTE: dt (= minSize) is derived from GAMMA in variables.h (tanh analytic formula).
@@ -815,6 +822,48 @@ int main(int argc, char *argv[])
 
     // Precomputed stencil base k → GPU
     CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
+
+#if USE_GILBM_ALGORITHM2
+    // ════════════════════════════════════════════════════════════════
+    //  Algorithm2: 建 folded departure 表 + hard abort 驗證閘
+    //  時序前置 (全部已滿足於此點):
+    //    (1) metric MPI ghost-exchange 完成
+    //    (2) dt_global 已 MPI_Allreduce 並上傳 __constant__ GILBM_dt
+    //    (3) metric 陣列已 H2D、bk_precomp_d 已上傳 (緊鄰上方)
+    //  production 消費 DEVICE 建的表 (bit-exact); host 表僅診斷。
+    // ════════════════════════════════════════════════════════════════
+    {
+        const size_t algo2_n  = (size_t)GILBM2_NCLASS * NYD6 * NZ6;
+        const int    algo2_nb = (int)((algo2_n + 255) / 256);
+        Algorithm2_BuildCoordsTable_Device<<<algo2_nb, 256>>>(gilbm2_coords_d,
+            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d);
+        CHECK_CUDA( cudaDeviceSynchronize() );
+
+        BuildGILBM2DepartureTableHost(gilbm2_coords_h,
+            xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk_precomp_h, dt_global);
+
+#if GILBM_ALGO2_VALIDATE
+        GILBM2_ValidationResult algo2_vr;
+        int algo2_rc = Algorithm2_ValidateCoordsTable(gilbm2_coords_d,
+            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d,
+            gilbm2_coords_h, &algo2_vr, myid);
+        int algo2_rc_glob = 0;
+        CHECK_MPI( MPI_Allreduce(&algo2_rc, &algo2_rc_glob, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD) );
+        if (algo2_rc_glob != 0) {
+            if (myid == 0) fprintf(stderr,
+                "[ALGO2] FATAL: departure-coords table validation FAILED (global rc=%d) — abort before first step.\n",
+                algo2_rc_glob);
+            MPI_Abort(MPI_COMM_WORLD, 92);
+        }
+#endif
+        if (myid == 0)
+            printf("GILBM Algorithm2: %s table built on DEVICE + validated, %zu entries (%zu B/entry, %.2f MiB/rank).\n",
+                   (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED ? "WEIGHTS_FOLDED" :
+                    GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS        ? "WEIGHTS" : "COORDS"),
+                   algo2_n, sizeof(GILBM2_Table),
+                   (double)(algo2_n * sizeof(GILBM2_Table)) / 1048576.0);
+    }
+#endif  // USE_GILBM_ALGORITHM2
 
 #if USE_MRT
     // Phase 3.5: MRT nonequilibrium projection tables -> __constant__ memory

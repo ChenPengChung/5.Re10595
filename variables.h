@@ -59,6 +59,40 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b. GILBM Algorithm2 (folded departure-table 查表; 移植自 Edit6/Edit10) ──
+//   USE_GILBM_ALGORITHM2:
+//     0 = Algorithm1 (in-kernel RK2 departure 重算, 原版)
+//     1 = Algorithm2 (init 建 folded departure 表, kernel 純 flat MAC 查表; 勝 ITBLBM)
+//   #ifndef 包裹 → build 可用 -DUSE_GILBM_ALGORITHM2=0 切回原版做回退/診斷
+//
+//   production default when enabled:
+//     GILBM_ALGO2_STORE = GILBM2_STORE_WEIGHTS_FOLDED (由 precompute2.h 依 USE 自動選定)
+//   STORE 0/1 (COORDS/WEIGHTS) 完整版留在 Edit10; 本專案只用最快 folded,
+//   仍可 -DGILBM_ALGO2_STORE=0/1/2 顯式覆寫做診斷。
+//
+//   GILBM_ALGO2_VALIDATE (不影響流場, 只控 init 是否驗表):
+//     0 = skip Algorithm2 init validation
+//     1 = table vs Algorithm1 reference + class-map + host tolerance
+//     2 = strict: level 1 + folded k_idx shape + folded weight-sum checks
+#ifndef     USE_GILBM_ALGORITHM2
+#define     USE_GILBM_ALGORITHM2    1
+#endif
+#ifndef     GILBM_ALGO2_VALIDATE
+#define     GILBM_ALGO2_VALIDATE    2
+#endif
+#if GILBM_ALGO2_VALIDATE < 0 || GILBM_ALGO2_VALIDATE > 2
+#error "GILBM_ALGO2_VALIDATE must be 0, 1, or 2"
+#endif
+#if defined(GILBM_ALGO2_STORE) && (GILBM_ALGO2_STORE < 0 || GILBM_ALGO2_STORE > 2)
+#error "GILBM_ALGO2_STORE must be 0(COORDS), 1(WEIGHTS), or 2(WEIGHTS_FOLDED)"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_WENO7
+#error "Algorithm2 WEIGHTS_FOLDED requires USE_WENO7=0; zeta folding assumes linear Lagrange-7"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_SMEM_INTERIOR
+#error "Algorithm2 supports only the non-smem Buffer path; set USE_SMEM_INTERIOR=0"
+#endif
+
 // ── §1c. 自動推導開關 (勿手動修改) ──
 #define     USE_MRT      (COLLISION_MODE >= 1)
 

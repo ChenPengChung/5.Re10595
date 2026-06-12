@@ -4,6 +4,7 @@
 #include "MRT_Process.h"
 #include "MRT_Matrix.h"
 #include "gilbm/evolution_gilbm/1.algorithm1.h"   // Algorithm1_FusedKernel_GTS (方案B 融合 kernel)
+#include "gilbm/evolution_gilbm/2.algorithm2.h"   // Algorithm2: folded 查表 kernel (恆編譯防 bit-rot; dispatch 由 USE_GILBM_ALGORITHM2 控)
 
 
 // ===== GPU reduction kernel: sum rho_d over interior points =====
@@ -786,6 +787,18 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     // ═══════════════════════════════════════════════════════════════
 
     // Left boundary: j = 4..6 (3 rows, MPI iToLeft 精確範圍)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        u2, v2, w2, rho_d2,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        4);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -795,8 +808,21 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         4);
+#endif
 
     // Right boundary: j = NYD6-7..NYD6-5 (3 rows, MPI iToRight 精確範圍)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        u2, v2, w2, rho_d2,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        NYD6 - 7);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -806,6 +832,7 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         NYD6 - 7);
+#endif
 
     // ── 等 Buffer 獨佔完成（GPU 空閒 → 快速 sync）──
     CHECK_CUDA( cudaStreamSynchronize(stream1) );
@@ -835,6 +862,18 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     // ═══════════════════════════════════════════════════════════════
 
     // [P0 v3] Launch 1: j=3 (從 Buffer 移出的左邊界行)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        u2, v2, w2, rho_d2,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        3);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -844,6 +883,7 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         3);
+#endif
 
     // [P0 v3] Launch 2: j=7..NYD6-8 (主 Interior)
 #if USE_SMEM_INTERIOR
@@ -864,6 +904,18 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     //   V100 高速路徑 (預設): non-smem, 無 __syncthreads 開銷
     //     V100 128KB L1 已在硬體層級處理 η-row overlap
     //     實測: non-smem 10.3 ms vs smem 17.3 ms → non-smem 快 67%
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimInt, blockdimInt, 0, stream0>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        u2, v2, w2, rho_d2,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        7);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimInt, blockdimInt, 0, stream0>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -874,8 +926,21 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         rho_modify_d, Force_d,
         7);
 #endif
+#endif
 
     // [P0 v3] Launch 3: j=NYD6-4 (從 Buffer 移出的右邊界行)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        u2, v2, w2, rho_d2,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        NYD6 - 4);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -885,6 +950,7 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         NYD6 - 4);
+#endif
 
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_step1_stop, stream0);
