@@ -489,6 +489,34 @@ __global__ void Algorithm2_ValidateClassMap_Device(int *mismatch_d)
         atomicAdd(mismatch_d, 1);
 }
 
+#if GILBM2_DEPARTURE_RK4
+// ── RK4 嵌入式 step-doubling 局部誤差: 每點 E_local (cells) → 自我認證 ──
+//   device 重跑 gen_departure_coords 取 err_out (= Richardson |D_2N−D_N|/15)。production 同路徑。
+__global__ void Algorithm2_EmbeddedError_Device(
+    double *err_d,
+    const double *xi_y_d,  const double *xi_z_d,
+    const double *zeta_y_d, const double *zeta_z_d,
+    const int *bk_precomp_d)
+{
+    const size_t N = (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6;
+    size_t n = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (n >= N) return;
+    const int cls = (int)(n / ((size_t)NYD6 * NZ6));
+    const int rem = (int)(n % ((size_t)NYD6 * NZ6));
+    const int j   = rem / (int)NZ6;
+    const int k   = rem % (int)NZ6;
+    double e = 0.0;
+    if (cls >= 1 && j >= 3 && j < (int)NYD6 - 3 && k >= 3 && k < (int)NZ6 - 3) {
+        double ey, ez; gilbm2_class_velocity(cls, &ey, &ez);
+        unsigned char fl = 0; double el = 0.0;
+        (void)gilbm2_gen_departure_coords(j, k, ey, ez, GILBM_dt,
+            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d[k], &fl, &el);
+        e = el;
+    }
+    err_d[n] = e;
+}
+#endif
+
 // ════════════════════════════════════════════════════════════════════════════
 //  §B5  Validation comparator — host 端三方比對（§7b 的 device 部分）
 //  (a) device 建表 (§B3) vs Algo1-path 參照 (§B4)：要求逐位元 0 mismatch。
@@ -513,6 +541,9 @@ struct GILBM2_ValidationResult {
     long long folded_sum_fail;    // strict level 2: sum(ws_eff) must stay within 1e-12 of 1
     double    folded_max_sum_err;
     int       worst_cls, worst_j, worst_k;
+    double    max_embedded_err;   // RK4 嵌入式 step-doubling 最大局部誤差 (cells) — 必須 < ERRTOL
+    long long nonfinite_count;    // RK4: wr/ws 或 E_local 出現 NaN/Inf 數 — 必須 0
+    long long int_field_mismatch; // RK4: folded j0/k_idx vs ref 整數不符數 — 必須 0 (float 容差不可掩蓋)
 };
 
 static inline int Algorithm2_ValidateCoordsTable(
@@ -532,6 +563,7 @@ static inline int Algorithm2_ValidateCoordsTable(
     R.class_map_mismatch = 0;
     R.folded_shape_bad = 0; R.folded_sum_fail = 0; R.folded_max_sum_err = 0.0;
     R.worst_cls = -1; R.worst_j = -1; R.worst_k = -1;
+    R.max_embedded_err = 0.0; R.nonfinite_count = 0; R.int_field_mismatch = 0;
 
     GILBM2_Table *ref_d = nullptr;
     GILBM2_Table *h_dev = (GILBM2_Table*)malloc(bytes);
@@ -611,18 +643,22 @@ static inline int Algorithm2_ValidateCoordsTable(
 #if GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED
         const GILBM2_DepartWeightsFolded &D = h_dev[n];
         const GILBM2_DepartWeightsFolded &Rref = h_ref[n];
-        if (D.j0 != Rref.j0) bit_eq = false;
+        // 整數索引欄位 j0/k_idx RK-independent → 獨立計數 (RK4 gate hard; float 容差不可掩蓋,
+        //   off-by-one 當 double 只是 ~4.94e-324 subnormal 差); 仍同時設 bit_eq 供 RK2 bit-exact gate。
+        if (D.j0 != Rref.j0) { bit_eq = false; R.int_field_mismatch++; }
         for (int s = 0; s < 7; s++) {
-            if (D.k_idx[s] != Rref.k_idx[s]) bit_eq = false;
+            if (D.k_idx[s] != Rref.k_idx[s]) { bit_eq = false; R.int_field_mismatch++; }
         }
         for (int s = 0; s < 7; s++) {
             const double diff = fabs(D.wr[s] - Rref.wr[s]);
+            if (!isfinite(D.wr[s])) R.nonfinite_count++;                    // NaN/Inf 守衛
             if (memcmp(&D.wr[s], &Rref.wr[s], sizeof(double)) != 0) bit_eq = false;
             if (diff > emax) emax = diff;
             ssq_dev += diff * diff;
         }
         for (int s = 0; s < 7; s++) {
             const double diff = fabs(D.ws[s] - Rref.ws[s]);
+            if (!isfinite(D.ws[s])) R.nonfinite_count++;
             if (memcmp(&D.ws[s], &Rref.ws[s], sizeof(double)) != 0) bit_eq = false;
             if (diff > emax) emax = diff;
             ssq_dev += diff * diff;
@@ -704,6 +740,35 @@ static inline int Algorithm2_ValidateCoordsTable(
     R.rms_tzeta = 0.0;
     R.host_rms  = table_host_h ? sqrt(ssq_host / ((double)NDBL * M_interior)) : 0.0;
 
+#if GILBM2_DEPARTURE_RK4
+    // ── RK4 嵌入式誤差自我認證: device 重跑 gen_departure_coords 取每點 E_local, 取 max ──
+    {
+        double *err_d = nullptr;
+        double *err_h = (double*)malloc(N * sizeof(double));
+        if (err_h && cudaMalloc(&err_d, N * sizeof(double)) == cudaSuccess) {
+            Algorithm2_EmbeddedError_Device<<<NB, NT_VAL>>>(err_d,
+                xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d);
+            if (cudaDeviceSynchronize() == cudaSuccess &&
+                cudaMemcpy(err_h, err_d, N * sizeof(double), cudaMemcpyDeviceToHost) == cudaSuccess) {
+                double me = 0.0;
+                for (size_t n = 0; n < N; n++) {
+                    if (!isfinite(err_h[n])) R.nonfinite_count++;
+                    else if (err_h[n] > me) me = err_h[n];
+                }
+                R.max_embedded_err = me;
+            } else {
+                fprintf(stderr, "[ALGO2][rank %d] FATAL: embedded-error kernel failed\n", myid);
+                R.max_embedded_err = 1.0e300;
+            }
+            cudaFree(err_d);
+        } else {
+            fprintf(stderr, "[ALGO2][rank %d] FATAL: embedded-error alloc failed\n", myid);
+            R.max_embedded_err = 1.0e300;
+        }
+        free(err_h);
+    }
+#endif
+
     printf("[ALGO2][rank %d] table validation (%d double fields/entry): dev-vs-Algo1ref bitwise "
            "mismatch = %lld (max|d|=%.3e, rms=%.3e)%s; dev-vs-host max=%.3e rms=%.3e "
            "tol_fail=%lld; class-map mismatch=%d%s\n",
@@ -725,12 +790,34 @@ static inline int Algorithm2_ValidateCoordsTable(
     }
 #endif
 
+#if GILBM2_DEPARTURE_RK4
+    printf("[ALGO2][rank %d] RK4 departure: embedded max E_local=%.3e (tol %.1e)%s; "
+           "weight gap vs Algo1-RK2 max=%.3e (預期~6e-6, bound 1e-3); int-field=%lld%s; nonfinite=%lld\n",
+           myid, R.max_embedded_err, (double)GILBM2_DEPARTURE_ERRTOL,
+           (R.max_embedded_err < GILBM2_DEPARTURE_ERRTOL ? " [CONVERGED OK]" : " [NOT CONVERGED]"),
+           R.max_abs_txi, R.int_field_mismatch,
+           (R.int_field_mismatch == 0 ? " [INT OK]" : " [INT FAIL]"), R.nonfinite_count);
+#endif
+
     if (out) *out = R;
+#if GILBM2_DEPARTURE_RK4
+    //  RK4 過閘: 嵌入式收斂(<ERRTOL) + 獨立 gap 未爆(<1e-3) + dev==host + 無 NaN + 整數索引 j0/k_idx 相等
+    //  + class-map + folded-shape/sum; 不再要求 bitwise(float 權重故意偏離 Algorithm1 RK2 = 精度增益)。
+    return (R.max_embedded_err < GILBM2_DEPARTURE_ERRTOL &&
+            R.max_abs_txi < 1.0e-3 &&
+            R.host_tol_fail == 0 &&
+            R.nonfinite_count == 0 &&
+            R.int_field_mismatch == 0 &&
+            R.class_map_mismatch == 0 &&
+            R.folded_shape_bad == 0 &&
+            R.folded_sum_fail == 0) ? 0 : 1;
+#else
     return (R.bitwise_mismatch == 0 &&
             R.host_tol_fail == 0 &&
             R.class_map_mismatch == 0 &&
             R.folded_shape_bad == 0 &&
             R.folded_sum_fail == 0) ? 0 : 1;
+#endif
 }
 
 #endif // ALGORITHM2_H
