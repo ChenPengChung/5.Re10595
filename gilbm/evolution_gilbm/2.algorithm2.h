@@ -489,6 +489,34 @@ __global__ void Algorithm2_ValidateClassMap_Device(int *mismatch_d)
         atomicAdd(mismatch_d, 1);
 }
 
+#if GILBM2_DEPARTURE_RK4
+// ── RK4 嵌入式 step-doubling 局部誤差: 每點 E_local (cells) → 自我認證 ──
+//   device 端重跑 gen_departure_coords 取 err_out (= |D_2N − D_N|)。與 production 同路徑。
+__global__ void Algorithm2_EmbeddedError_Device(
+    double *err_d,
+    const double *xi_y_d,  const double *xi_z_d,
+    const double *zeta_y_d, const double *zeta_z_d,
+    const int *bk_precomp_d)
+{
+    const size_t N = (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6;
+    size_t n = (size_t)blockIdx.x * blockDim.x + threadIdx.x;
+    if (n >= N) return;
+    const int cls = (int)(n / ((size_t)NYD6 * NZ6));
+    const int rem = (int)(n % ((size_t)NYD6 * NZ6));
+    const int j   = rem / (int)NZ6;
+    const int k   = rem % (int)NZ6;
+    double e = 0.0;
+    if (cls >= 1 && j >= 3 && j < (int)NYD6 - 3 && k >= 3 && k < (int)NZ6 - 3) {
+        double ey, ez; gilbm2_class_velocity(cls, &ey, &ez);
+        unsigned char fl = 0; double el = 0.0;
+        (void)gilbm2_gen_departure_coords(j, k, ey, ez, GILBM_dt,
+            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d[k], &fl, &el);
+        e = el;
+    }
+    err_d[n] = e;
+}
+#endif
+
 // ════════════════════════════════════════════════════════════════════════════
 //  §B5  Validation comparator — host 端三方比對（§7b 的 device 部分）
 //  (a) device 建表 (§B3) vs Algo1-path 參照 (§B4)：要求逐位元 0 mismatch。
@@ -510,6 +538,8 @@ struct GILBM2_ValidationResult {
     double    host_rms;           // (b) interior-domain RMS
     int       class_map_mismatch; // (c) q→class→(ey,ez) vs GILBM_e — 必須 0
     int       worst_cls, worst_j, worst_k;
+    double    max_embedded_err;   // RK4 嵌入式 step-doubling 最大局部誤差 (cells) — 必須 < ERRTOL
+    long long nonfinite_count;    // RK4: table 值 / E_local 出現 NaN/Inf 的數量 — 必須 0 (補 fabs(NaN)>tol=false 漏洞)
 };
 
 static inline int Algorithm2_ValidateCoordsTable(
@@ -528,6 +558,8 @@ static inline int Algorithm2_ValidateCoordsTable(
     R.host_tol_fail = 0; R.host_max_abs = 0.0; R.host_rms = 0.0;
     R.class_map_mismatch = 0;
     R.worst_cls = -1; R.worst_j = -1; R.worst_k = -1;
+    R.max_embedded_err = 0.0;
+    R.nonfinite_count = 0;
 
     GILBM2_Table *ref_d = nullptr;
     GILBM2_Table *h_dev = (GILBM2_Table*)malloc(bytes);
@@ -592,6 +624,7 @@ static inline int Algorithm2_ValidateCoordsTable(
         double emax   = 0.0;
         for (int d = 0; d < NDBL; d++) {
             const double diff = fabs(dv[d] - rf[d]);
+            if (!isfinite(dv[d])) R.nonfinite_count++;   // NaN/Inf 守衛: fabs(NaN)>tol=false 會靜默略過 max-tracker
             if (memcmp(&dv[d], &rf[d], sizeof(double)) != 0) bit_eq = false;
             if (diff > emax) emax = diff;
             ssq_dev += diff * diff;
@@ -616,7 +649,11 @@ static inline int Algorithm2_ValidateCoordsTable(
                 ssq_host += hd * hd;
             }
             if (hm > R.host_max_abs) R.host_max_abs = hm;
+#if GILBM2_DEPARTURE_RK4
+            if (hm > GILBM2_DEPARTURE_ERRTOL) R.host_tol_fail++;   // 兩側皆 RK4(含資料相依 break) → 放寬到 ERRTOL
+#else
             if (hm > 1.0e-12) R.host_tol_fail++;
+#endif
         }
     }
     free(h_dev); free(h_ref);
@@ -626,6 +663,56 @@ static inline int Algorithm2_ValidateCoordsTable(
     R.rms_tzeta = 0.0;
     R.host_rms  = table_host_h ? sqrt(ssq_host / ((double)NDBL * M_interior)) : 0.0;
 
+#if GILBM2_DEPARTURE_RK4
+    // ── RK4 嵌入式誤差自我認證: device 重跑 gen_departure_coords 取每點 E_local, 取 max ──
+    {
+        double *err_d = nullptr;
+        double *err_h = (double*)malloc(N * sizeof(double));
+        if (err_h && cudaMalloc(&err_d, N * sizeof(double)) == cudaSuccess) {
+            Algorithm2_EmbeddedError_Device<<<NB, NT_VAL>>>(err_d,
+                xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d);
+            if (cudaDeviceSynchronize() == cudaSuccess &&
+                cudaMemcpy(err_h, err_d, N * sizeof(double), cudaMemcpyDeviceToHost) == cudaSuccess) {
+                double me = 0.0;
+                for (size_t n = 0; n < N; n++) {
+                    if (!isfinite(err_h[n])) R.nonfinite_count++;   // NaN 位移 → NaN E_local → 在此抓 (主要 NaN 源)
+                    else if (err_h[n] > me) me = err_h[n];
+                }
+                R.max_embedded_err = me;
+            } else {
+                fprintf(stderr, "[ALGO2][rank %d] FATAL: embedded-error kernel failed\n", myid);
+                R.max_embedded_err = 1.0e300;
+            }
+            cudaFree(err_d);
+        } else {
+            fprintf(stderr, "[ALGO2][rank %d] FATAL: embedded-error alloc failed\n", myid);
+            R.max_embedded_err = 1.0e300;
+        }
+        free(err_h);
+    }
+    // RK4: table 故意偏離 Algorithm1-RK2 (= 精度增益)。驗證 = 嵌入式自我認證 + 獨立 gap + NaN 守衛。
+    //   注意: max_abs_txi 在 FOLDED/WEIGHTS 模式是「折疊權重空間」最大差 (dimensionless),
+    //         ≈ 座標 (r,s) gap × O(1) Lagrange 導數; 預期 ~6e-6, 收緊上限 1e-3 (對標 doc §3, 取代過鬆的 1e-2)。
+    //   gap 是唯一用「獨立實作 (gilbm_rk2_displacement)」的交叉檢查 → 須夠緊以抓系統性 sampling bug
+    //   (self-cert/dev-vs-host 兩側同 RK4 generator, 對共用 sampling 偏差盲視)。
+    printf("[ALGO2][rank %d] RK4 departure validation (%d doubles/entry): embedded max E_local=%.3e "
+           "(tol %.1e)%s; weight-space gap vs Algorithm1-RK2 max=%.3e (預期~6e-6, bound 1e-3); "
+           "dev-vs-host max=%.3e tol_fail=%lld; nonfinite=%lld; class-map mismatch=%d%s\n",
+           myid, NDBL, R.max_embedded_err, (double)GILBM2_DEPARTURE_ERRTOL,
+           (R.max_embedded_err < GILBM2_DEPARTURE_ERRTOL ? " [CONVERGED OK]" : " [NOT CONVERGED]"),
+           R.max_abs_txi, R.host_max_abs, R.host_tol_fail, R.nonfinite_count,
+           R.class_map_mismatch,
+           (R.class_map_mismatch == 0 ? " [MAP OK]" : " [MAP FAIL]"));
+
+    if (out) *out = R;
+    //  RK4 過閘: 嵌入式收斂(<ERRTOL) + 獨立 gap 未爆(<1e-3, 對標 doc 預期 ~6e-6) + dev==host
+    //  + class-map + 無 NaN/Inf (nonfinite==0; 補 codex 指出的 fabs(NaN)>tol=false 漏洞)。
+    return (R.max_embedded_err < GILBM2_DEPARTURE_ERRTOL
+            && R.max_abs_txi < 1.0e-3
+            && R.host_tol_fail == 0
+            && R.nonfinite_count == 0
+            && R.class_map_mismatch == 0) ? 0 : 1;
+#else
     printf("[ALGO2][rank %d] table validation (%d doubles/entry): dev-vs-Algo1ref bitwise "
            "mismatch = %lld (max|d|=%.3e, rms=%.3e)%s; dev-vs-host max=%.3e rms=%.3e "
            "tol_fail=%lld; class-map mismatch=%d%s\n",
@@ -641,6 +728,7 @@ static inline int Algorithm2_ValidateCoordsTable(
 
     if (out) *out = R;
     return (R.bitwise_mismatch == 0 && R.host_tol_fail == 0 && R.class_map_mismatch == 0) ? 0 : 1;
+#endif
 }
 
 #endif // ALGORITHM2_H
