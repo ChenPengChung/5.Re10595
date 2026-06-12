@@ -593,7 +593,10 @@ fi
 
 # [PENDING RE-SELECT] (2026-06-02) 若 head job PENDING 太久, 用 job-guard 取消 (含 PENDING→RUNNING
 # race-guard) 後 re-select 能更快開跑的組合. 滿足使用者切換時機 (b): pending 時重選.
-SC_PENDING_TIMEOUT_MIN="${SC_PENDING_TIMEOUT_MIN:-10}"
+# [TEMP-LOCK 2026-06-12] 暫時關閉 PENDING-churn: 原預設 10min 太短, GPU 滿載時每 10min
+#   cancel+重投 → 永遠累積不到排隊年資、撐不到 backfill 窗。調高到 1440(=24h) 等同不 churn,
+#   讓 head 撐住 16gpus 保留位開跑。解鎖還原: 改回 "${SC_PENDING_TIMEOUT_MIN:-10}"
+SC_PENDING_TIMEOUT_MIN="${SC_PENDING_TIMEOUT_MIN:-1440}"
 _pending_too_long() {
     local jid st pe now age
     jid="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
