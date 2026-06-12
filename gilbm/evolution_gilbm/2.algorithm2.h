@@ -71,7 +71,6 @@ __device__ void algorithm2_step1_GTS(
     const double *xi_y_d,   const double *xi_z_d,   // unused (signature parity; RK2 已預計算)
     const int *bk_precomp_d,
     const double *z_zeta_d, // ∂z/∂ζ for stretch_factor (WENO7 only, NULL when USE_WENO7=0)
-    const double *u_bc, const double *v_bc, const double *w_bc, const double *rho_bc,
     double *u_out, double *v_out, double *w_out, double *rho_out_arr,
     double *rho_modify,
     const double *Force,     // body force (streamwise, device pointer)
@@ -98,7 +97,7 @@ __device__ void algorithm2_step1_GTS(
     double zeta_z_val = zeta_z_d[idx_jk];
 
     // ── Wall BC: 6th-order one-sided FD for velocity gradient ──
-    //   讀 read-only macro snapshot (前一步值) — 與 Algorithm1 相同
+    //   讀 u_out/v_out/w_out/rho_out_arr (前一步值) — 與 Algorithm1 相同
     double rho_wall = 0.0, du_dk = 0.0, dv_dk = 0.0, dw_dk = 0.0;
     if (is_bottom) {
         int idx3 = j * nface + 4 * NX6 + i;
@@ -107,17 +106,17 @@ __device__ void algorithm2_step1_GTS(
         int idx6 = j * nface + 7 * NX6 + i;
         int idx7 = j * nface + 8 * NX6 + i;
         int idx8 = j * nface + 9 * NX6 + i;
-        double u3 = u_bc[idx3], u4 = u_bc[idx4], u5 = u_bc[idx5], u6 = u_bc[idx6];
-        double u7 = u_bc[idx7], u8 = u_bc[idx8];
-        double v3 = v_bc[idx3], v4 = v_bc[idx4], v5 = v_bc[idx5], v6 = v_bc[idx6];
-        double v7 = v_bc[idx7], v8 = v_bc[idx8];
-        double w3 = w_bc[idx3], w4 = w_bc[idx4], w5 = w_bc[idx5], w6 = w_bc[idx6];
-        double w7 = w_bc[idx7], w8 = w_bc[idx8];
+        double u3 = u_out[idx3], u4 = u_out[idx4], u5 = u_out[idx5], u6 = u_out[idx6];
+        double u7 = u_out[idx7], u8 = u_out[idx8];
+        double v3 = v_out[idx3], v4 = v_out[idx4], v5 = v_out[idx5], v6 = v_out[idx6];
+        double v7 = v_out[idx7], v8 = v_out[idx8];
+        double w3 = w_out[idx3], w4 = w_out[idx4], w5 = w_out[idx5], w6 = w_out[idx6];
+        double w7 = w_out[idx7], w8 = w_out[idx8];
         // 6th-order one-sided FD: (360u₁ - 450u₂ + 400u₃ - 225u₄ + 72u₅ - 10u₆) / 60
         du_dk = (360.0*u3 - 450.0*u4 + 400.0*u5 - 225.0*u6 + 72.0*u7 - 10.0*u8) / 60.0;
         dv_dk = (360.0*v3 - 450.0*v4 + 400.0*v5 - 225.0*v6 + 72.0*v7 - 10.0*v8) / 60.0;
         dw_dk = (360.0*w3 - 450.0*w4 + 400.0*w5 - 225.0*w6 + 72.0*w7 - 10.0*w8) / 60.0;
-        rho_wall = rho_bc[idx3];
+        rho_wall = rho_out_arr[idx3];
     } else if (is_top) {
         int idxm1 = j * nface + (NZ6 - 5) * NX6 + i;
         int idxm2 = j * nface + (NZ6 - 6) * NX6 + i;
@@ -125,17 +124,17 @@ __device__ void algorithm2_step1_GTS(
         int idxm4 = j * nface + (NZ6 - 8) * NX6 + i;
         int idxm5 = j * nface + (NZ6 - 9) * NX6 + i;
         int idxm6 = j * nface + (NZ6 - 10) * NX6 + i;
-        double um1 = u_bc[idxm1], um2 = u_bc[idxm2], um3 = u_bc[idxm3], um4 = u_bc[idxm4];
-        double um5 = u_bc[idxm5], um6 = u_bc[idxm6];
-        double vm1 = v_bc[idxm1], vm2 = v_bc[idxm2], vm3 = v_bc[idxm3], vm4 = v_bc[idxm4];
-        double vm5 = v_bc[idxm5], vm6 = v_bc[idxm6];
-        double wm1 = w_bc[idxm1], wm2 = w_bc[idxm2], wm3 = w_bc[idxm3], wm4 = w_bc[idxm4];
-        double wm5 = w_bc[idxm5], wm6 = w_bc[idxm6];
+        double um1 = u_out[idxm1], um2 = u_out[idxm2], um3 = u_out[idxm3], um4 = u_out[idxm4];
+        double um5 = u_out[idxm5], um6 = u_out[idxm6];
+        double vm1 = v_out[idxm1], vm2 = v_out[idxm2], vm3 = v_out[idxm3], vm4 = v_out[idxm4];
+        double vm5 = v_out[idxm5], vm6 = v_out[idxm6];
+        double wm1 = w_out[idxm1], wm2 = w_out[idxm2], wm3 = w_out[idxm3], wm4 = w_out[idxm4];
+        double wm5 = w_out[idxm5], wm6 = w_out[idxm6];
         // 6th-order one-sided FD (reversed sign for top wall)
         du_dk = -(360.0*um1 - 450.0*um2 + 400.0*um3 - 225.0*um4 + 72.0*um5 - 10.0*um6) / 60.0;
         dv_dk = -(360.0*vm1 - 450.0*vm2 + 400.0*vm3 - 225.0*vm4 + 72.0*vm5 - 10.0*vm6) / 60.0;
         dw_dk = -(360.0*wm1 - 450.0*wm2 + 400.0*wm3 - 225.0*wm4 + 72.0*wm5 - 10.0*wm6) / 60.0;
-        rho_wall = rho_bc[idxm1];
+        rho_wall = rho_out_arr[idxm1];
     }
 
     // ── STEP 1: Interpolation + Streaming ──
@@ -345,7 +344,6 @@ __global__ void Algorithm2_FusedKernel_GTS_Buffer(
     const double *xi_y_d,   const double *xi_z_d,
     const int    *bk_precomp_d,
     const double *z_zeta_d,
-    const double *u_bc, const double *v_bc, const double *w_bc, const double *rho_bc,
     double *u_out, double *v_out, double *w_out, double *rho_out,
     double *rho_modify, const double *Force,
     const GILBM2_Table * __restrict__ table_d,
@@ -358,7 +356,6 @@ __global__ void Algorithm2_FusedKernel_GTS_Buffer(
     algorithm2_step1_GTS(i, j, k,
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
-        u_bc, v_bc, w_bc, rho_bc,
         u_out, v_out, w_out, rho_out, rho_modify, Force, table_d);
 }
 

@@ -794,7 +794,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         gilbm2_coords_d,
         4);
@@ -805,7 +804,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         4);
 #endif
@@ -818,7 +816,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         gilbm2_coords_d,
         NYD6 - 7);
@@ -829,7 +826,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         NYD6 - 7);
 #endif
@@ -869,7 +865,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         gilbm2_coords_d,
         3);
@@ -880,7 +875,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         3);
 #endif
@@ -897,7 +891,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         7);
 #else
@@ -911,7 +904,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         gilbm2_coords_d,
         7);
@@ -922,7 +914,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         7);
 #endif
@@ -936,7 +927,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         gilbm2_coords_d,
         NYD6 - 4);
@@ -947,7 +937,6 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         xi_y_d, xi_z_d, bk_precomp_d,
         z_zeta_d,
         u, v, w, rho_d,
-        u2, v2, w2, rho_d2,
         rho_modify_d, Force_d,
         NYD6 - 4);
 #endif

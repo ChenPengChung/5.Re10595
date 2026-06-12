@@ -8,10 +8,10 @@
 //  textually identical downstream of the table read, but are separately
 //  compiled __global__ functions).
 //
-//  Wall-BC race fix: wall rows (k=3, NZ6-4) read a read-only macro snapshot
-//  and write a separate macro output buffer. Therefore the HARD gate covers
-//  the full domain, including wall rows. A1-vs-A1 rerun measures the full
-//  determinism floor.
+//  Wall-BC (WallRace reverted): wall rows (k=3, NZ6-4) read the macro output
+//  arrays directly (u_out/v_out/w_out/rho_out_arr, previous-step values) — the
+//  pre-WallRace direct read. The HARD gate covers the full domain, including
+//  wall rows. A1-vs-A1 rerun measures the full determinism floor.
 //
 //  The MRT __constant__ tables are deliberately left zero-initialized:
 //  both kernels read the SAME constants, so collision degenerates to an
@@ -253,7 +253,6 @@ int main() {
     reset_state();
     Algorithm1_FusedKernel_GTS_Buffer<<<grid_all, block_all>>>(f_in_d, f_out_d,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_d, nullptr,
-        u_d, v_d, w_d, r_d,
         u_out_d, v_out_d, w_out_d, r_out_d,
         rho_mod_d, force_d, 3);
     ABCHK(cudaDeviceSynchronize());
@@ -263,7 +262,6 @@ int main() {
     reset_state();
     Algorithm1_FusedKernel_GTS_Buffer<<<grid_all, block_all>>>(f_in_d, f_out_d,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_d, nullptr,
-        u_d, v_d, w_d, r_d,
         u_out_d, v_out_d, w_out_d, r_out_d,
         rho_mod_d, force_d, 3);
     ABCHK(cudaDeviceSynchronize());
@@ -273,7 +271,6 @@ int main() {
     reset_state();
     Algorithm2_FusedKernel_GTS_Buffer<<<grid_all, block_all>>>(f_in_d, f_out_d,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_d, nullptr,
-        u_d, v_d, w_d, r_d,
         u_out_d, v_out_d, w_out_d, r_out_d,
         rho_mod_d, force_d, coords_d, 3);
     ABCHK(cudaDeviceSynchronize());
