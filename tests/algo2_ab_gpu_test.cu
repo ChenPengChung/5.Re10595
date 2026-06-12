@@ -296,7 +296,7 @@ int main() {
     printf("[AB] A2-vs-A1 gate: %s (TOL=%.0e)\n",
            (RK4_MODE ? "RK4 bounded-delta (A2=RK4 故意≠A1=RK2; verdict 用 GAP_SANITY)" :
             TOL > 0.0 ? "1e-12 tolerance (FOLDED)" : "bit-exact (memcmp)"), TOL);
-    long long floor_mm = 0, nonwall_mm = 0, wall_mm = 0, macro_mm = 0;
+    long long floor_mm = 0, nonwall_mm = 0, wall_mm = 0, macro_mm = 0, nan_mm = 0;
     double max_nonwall = 0.0, max_wall = 0.0;
     for (int q = 0; q < 19; q++)
         for (int j = 3; j < (int)NYD6 - 3; j++)
@@ -307,6 +307,7 @@ int main() {
                     // 地板永遠 bitwise (A1 自身決定性, 與 TOL 無關), 全域含 wall。
                     if (memcmp(&fA[idx], &fA2[idx], 8) != 0) floor_mm++;
                     const double d = fabs(fA[idx] - fB[idx]);
+                    if (!isfinite(fA[idx]) || !isfinite(fB[idx])) nan_mm++;   // 直接掃 NaN/Inf (NaN>TOL=false → max 累加器抓不到)
                     const bool mism = (TOL > 0.0) ? (d > TOL) : (memcmp(&fA[idx], &fB[idx], 8) != 0);
                     if (mism) {
                         if (wall) { wall_mm++;    if (d > max_wall)    max_wall = d; }
@@ -319,6 +320,7 @@ int main() {
                 for (int i = 3; i < (int)NX6 - 3; i++) {
                     size_t idx = (size_t)m * GRID + (size_t)j * NX6 * NZ6 + (size_t)k * NX6 + i;
                     const double dm = fabs(mA[idx] - mB[idx]);
+                    if (!isfinite(mA[idx]) || !isfinite(mB[idx])) nan_mm++;
                     const bool mm = (TOL > 0.0) ? (dm > TOL) : (memcmp(&mA[idx], &mB[idx], 8) != 0);
                     if (mm) macro_mm++;
                 }
@@ -329,10 +331,14 @@ int main() {
     printf("[AB] A1-vs-A2 f wall rows (hard gate): %lld mismatches, max|d|=%.3e (expect 0)\n", wall_mm, max_wall);
     printf("[AB] A1-vs-A2 u/v/w/rho full-domain : %lld mismatches (expect 0)\n", macro_mm);
 
+    printf("[AB] A1-vs-A2 non-finite (NaN/Inf) f+macro : %lld (hard gate, expect 0)\n", nan_mm);
     int rc;
     if (floor_mm != 0) {
         printf("[AB] RESULT: INCONCLUSIVE — Algorithm1 itself nondeterministic on this device (race floor != 0)\n");
         rc = 2;
+    } else if (nan_mm != 0) {
+        printf("[AB] RESULT: FAIL — Algorithm2 produced %lld non-finite (NaN/Inf) f/macro values (壞 RK4 consumer; max_* 抓不到 NaN, 故直接掃)\n", nan_mm);
+        rc = 1;
     } else if (nonwall_mm == 0 && macro_mm == 0 && wall_mm == 0) {
         printf("[AB] RESULT: PASS — Algorithm2 %s to Algorithm1 (full domain incl wall rows)\n",
                (TOL > 0.0 ? "1e-12-equivalent" : "bit-identical"));
