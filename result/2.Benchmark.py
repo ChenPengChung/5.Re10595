@@ -1331,6 +1331,34 @@ if HAS_VTK and bench_sources:
         print(f"  {'<avg>':>6s}  {'  '.join(avg_vals)}")
         print()
 
+# ── Persist L2 errors to JSON (additive; for live monitoring; never fatal) ──
+try:
+    import json as _json, glob as _glob
+    _vtks = _glob.glob(os.path.join(SCRIPT_DIR, "velocity_merged_*.vtk"))
+    _step = None
+    if _vtks:
+        _latest = max(_vtks, key=os.path.getmtime)
+        _m = re.search(r"velocity_merged_(\d+)\.vtk", os.path.basename(_latest))
+        _step = int(_m.group(1)) if _m else None
+    _summary = {"Re": Re, "step": _step, "sources": {}}
+    for _sid in L2_errors:
+        _avg, _per = {}, {}
+        for _f in ["U", "V", "uu", "vv", "uv", "k"]:
+            _vals = [L2_errors[_sid][_xh][_f] for _xh in L2_errors[_sid]
+                     if L2_errors[_sid].get(_xh, {}).get(_f) is not None]
+            if _vals:
+                _avg[_f] = float(np.mean(_vals))
+        for _xh in sorted(L2_errors[_sid]):
+            _per[f"{_xh:.2f}"] = {k: float(v) for k, v in L2_errors[_sid][_xh].items()
+                                  if v is not None}
+        _summary["sources"][_sid] = {"avg": _avg, "per_station": _per}
+    _out = os.path.join(SCRIPT_DIR, f"L2_errors_Re{Re}.json")
+    with open(_out, "w") as _fh:
+        _json.dump(_summary, _fh, indent=2)
+    print(f"[INFO] Persisted L2 errors -> {_out}")
+except Exception as _e:
+    print(f"[WARN] L2 persist failed: {_e}")
+
 # ── Build compact L2 summary string for plot titles ──
 # Format: "L2(U): LESOCC 5.2%, MGLET 4.8%"
 def _l2_title_summary(field_sim):
