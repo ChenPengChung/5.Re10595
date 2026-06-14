@@ -3954,8 +3954,11 @@ def main():
               'full-interior {:.3e})'.format(max_div, max_div_full))
         print('      max |grad u|  = {:.3e}'.format(max_strain))
 
-        # ---- Gate 2 (second layer): the f_neq dilatational source must be < 1e-12 ----
-        fneq_div_gate_tol = 1.0e-12
+        # ---- Gate 2 (second layer): the f_neq dilatational source must be < div-gate-tol ----
+        #   [Edit11 2026-06-14, 使用者授權] 1.0e-12 -> 2.0e-12: 233M Breuer 細網格 div-exact 直解的
+        #   float64 散度地板 ~1.46e-12 > 1e-12 (spurious dilatational f_neq ~ cs^2*div ~ 4.9e-13,
+        #   仍機器零可忽略); 與 Layer-1 u* div gate (--div-gate-tol=2e-12) 一致 (上方 :3943 註解原意)。
+        fneq_div_gate_tol = 2.0e-12
         if not np.isfinite(max_div) or max_div >= fneq_div_gate_tol:
             sys.exit('FATAL: f_neq dilatational gate FAILED: max|tr(grad u*)| = {:.6e} '
                      '>= {:.0e} on the 2nd-order CE gradient that builds f_neq.\n'

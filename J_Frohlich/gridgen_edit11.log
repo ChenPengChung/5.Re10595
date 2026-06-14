@@ -1,0 +1,104 @@
+==============================================================
+  Periodic Hill Grid -- AUTO MODE  (Poisson: ADI)
+  Reading from: /home/s8313697/5.Re10595/Edit11_Krank5600/variables.h
+==============================================================
+  [auto] Reference grid: I=197 x J=129
+  [auto] variables.h: NY=1025 (nodes), NZ=512 (nodes), LZ=3.036, ALPHA=0.5
+  [auto] Flow: Re=5600, Uref=0.015, H_HILL=1, CFL=0.5
+  [auto] Wall-normal: 512 nodes = 511 cells
+  [auto] GAMMA=3.6635616461296454 (user input)
+  [auto] minSize=7.541747e-04 (derived from GAMMA)
+  [auto] Reference: 3.fine grid.dat
+  [auto] Target grid: I=1025 (=NY) x J=512 (=NZ)
+
+  ========================================================================
+   GILBM Stability Calibration Reference
+   REFERENCE ONLY: 3.fine -> 129x64, Re=150, Uref=0.0503, CFL=0.5
+   Actual omega is recomputed from variables.h after grid generation.
+  ========================================================================
+   GAMMA |    omega |    max|c~| | dz_ratio | RefStatus    | Note
+  ------------------------------------------------------------------------
+     0.0 |     0.92 |        209 |       31 | OPTIMAL      | UNIFORM z (no clustering) + minSize=NaN!
+     0.5 |     0.58 |         38 |        2 | OPTIMAL      | Very mild symmetric clustering
+     1.0 |     0.59 |         42 |        2 | OPTIMAL      | Mild symmetric clustering
+     1.5 |     0.60 |         50 |        3 | OPTIMAL      | Moderate symmetric clustering
+     2.0 |     0.63 |         63 |        4 | OPTIMAL      | Ref case: recommended <-- ref rec
+     2.5 |     0.67 |         83 |        5 | OPTIMAL      | Good clustering
+     3.0 |     0.73 |        112 |        8 | OPTIMAL      | Ref case: strong clustering
+     3.5 |     0.81 |        156 |       12 | OPTIMAL      | Strong clustering
+     4.0 |     0.94 |        221 |       20 | OPTIMAL      | Very strong (approaching Frohlich-level)
+     5.0 |     1.43 |        463 |       52 | OK           | Extreme clustering, omega > 1.2
+  ------------------------------------------------------------------------
+
+  Physical-z redistribution: GAMMA controls Vinokur tanh in z-space.
+  GAMMA=0 = uniform (NO wall clustering, minSize macro = NaN!).
+  GAMMA=2.0 was the reference-case recommendation only.
+  Do not infer current-grid stability from this table; use the
+  post-generation check computed with variables.h flow parameters.
+
+  [pre-check] 1D 預估 (無網格, estimate_omega_pregrid):
+    dz_min     = 7.541747e-04
+    max|c̃| est = 1551.4
+    dt_est     = 3.2230e-04
+    omega_est  = 0.5249  [預估穩定]
+
+  [auto] Spacing ratio constraint: [0.0, 20.0]
+    [1/6] Computing P,Q from reference ...
+    [2/6] Interpolating P,Q: (197x129) -> (1025x512) ...
+    [3/6] Resampling boundaries ...
+    [3/6] Bottom boundary: analytical hill overwrite (max correction = 2.329e-06)
+    [3/6] Top boundary: analytical LZ=3.036 overwrite (max correction = 8.031e-06)
+    [4/6] TFI initial guess ...
+    [5/6] Poisson solve — ADI (max 1000000 iter) ...
+    ADI sigma: [2.5152e+06, 3.0694e+08]  (8 params, adaptive cap)
+    iter      0:  res = 2.910629e-12  sigma=2.515e+06
+    ADI converged at iter 4, res = 8.603365e-13
+    ADI Jacobian OK: J_min = 3.9787e-09 > 0
+    [6/6] No stretching (gamma=0) — Frolich Poisson spacing preserved
+  [auto] Base grid: I=1025 x J=512 ✓
+
+  ====================================================================
+   Grid Spacing Ratio Limiter
+  ====================================================================
+    Constraint: max(Δy,Δz)/min(Δy,Δz) ∈ [0.0, 20.0]
+    NZ = 512, ALPHA = 0.50
+
+  Adjustment Log:
+    Step 0: GAMMA=3.6636 → ratio=17.60 (Δy=[4.7811e-03, 1.3274e-02], Δz=[7.5417e-04, 1.1456e-02])
+      → ratio 17.60 ∈ [0.0, 20.0] — 無需調整 ✓
+
+    Δy range: [4.781059e-03, 1.327420e-02]
+    Δz range: [7.541747e-04, 1.145560e-02]
+    Combined ratio: 17.6010
+      max from: Δy = 1.327420e-02
+      min from: Δz = 7.541747e-04
+
+    ✓ GAMMA=3.6636 滿足限制（無需調整）
+  ====================================================================
+
+  [auto] Applying Vinokur stretching: GAMMA=3.663562, ALPHA=0.5
+  [auto] minSize=7.541747e-04 (adjusted GAMMA=3.663562)
+
+  ==============================================================
+   GILBM Stability Check
+  ==============================================================
+    GAMMA        = 3.6636
+    flow params  = Uref=0.015, Re=5600, H_HILL=1, CFL=0.5
+    niu          = 2.678571e-06
+    omega_global = 0.5245  [OPTIMAL]
+    max|c_tilde| = 1526.4
+    dt_global    = 3.2757e-04
+    a_max (LTS)  = 15.2
+    Status       = GOOD
+  ==============================================================
+
+  [對照] 調整後 1D預估 omega=0.5249 vs 2D精確 omega=0.5245 (誤差 0.1%)
+  [post-verify] Final spacing ratio: 17.6010 (Δy=[4.7811e-03, 1.3274e-02], Δz=[7.5417e-04, 1.1456e-02])
+  [written] /home/s8313697/5.Re10595/Edit11_Krank5600/J_Frohlich/adaptive_3.fine grid_I1025_J512_s0.950000.dat
+  [written] /home/s8313697/5.Re10595/Edit11_Krank5600/J_Frohlich/grid_data_I1025_J512_s0.950000.txt
+  [auto] Output validated: I=1025 J=512 ✓ (matches NY=1025, NZ=512)
+  [saved] /home/s8313697/5.Re10595/Edit11_Krank5600/J_Frohlich/compare_auto_I1025_J512_s0.950000.png
+  [auto] Output: /home/s8313697/5.Re10595/Edit11_Krank5600/J_Frohlich/adaptive_3.fine grid_I1025_J512_s0.950000.dat
+==============================================================
+  DONE: /home/s8313697/5.Re10595/Edit11_Krank5600/J_Frohlich/adaptive_3.fine grid_I1025_J512_s0.950000.dat
+==============================================================

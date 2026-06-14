@@ -130,6 +130,21 @@ void AllocateMemory() {
     CHECK_CUDA( cudaMallocHost((void**)&bk_precomp_h, NZ6 * sizeof(int)) );
     CHECK_CUDA( cudaMalloc(&bk_precomp_d, NZ6 * sizeof(int)) );
 
+#if USE_ITBLBM_STREAMING
+    {
+        const size_t itb_coeff_count =
+            (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6;
+        const size_t itb_coeff_bytes = itb_coeff_count * sizeof(ITB_YZCoeff);
+        CHECK_CUDA( cudaMallocHost((void**)&itb_yz_coeff_h, itb_coeff_bytes) );
+        CHECK_CUDA( cudaMalloc((void**)&itb_yz_coeff_d, itb_coeff_bytes) );
+        CHECK_CUDA( cudaMemset(itb_yz_coeff_d, 0, itb_coeff_bytes) );
+        if (myid == 0) {
+            printf("[Memory] ITB compact coord: %.2f MB/rank (%d yz classes x NYD6 x NZ6)\n",
+                   itb_coeff_bytes / 1048576.0, ITB_YZ_CLASS_COUNT);
+        }
+    }
+#endif
+
 #if USE_GILBM_ALGORITHM2
     // Algorithm2 departure table [GILBM2_NCLASS*NYD6*NZ6].
     // WEIGHTS_FOLDED is global memory, not __constant__ memory.
@@ -301,6 +316,11 @@ void FreeSource() {
     // Precomputed stencil base k
     CHECK_CUDA( cudaFreeHost(bk_precomp_h) );
     CHECK_CUDA( cudaFree(bk_precomp_d) );
+
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaFreeHost(itb_yz_coeff_h) );
+    CHECK_CUDA( cudaFree(itb_yz_coeff_d) );
+#endif
 
 #if USE_GILBM_ALGORITHM2
     CHECK_CUDA( cudaFreeHost(gilbm2_coords_h) );

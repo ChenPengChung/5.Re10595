@@ -13,6 +13,9 @@
                            // 讓 sigcontext struct 先被解析, 之後 macro 才生效不影響。
 #include "variables.h"
 #include "gilbm/precompute2.h"   // Algorithm2 table type/generator; needed before globals/memory.h
+#if USE_ITBLBM_STREAMING
+#include "itblbm/isoparametric_coeff.h"
+#endif
 using namespace std;
 /************************** Host Variables **************************/
 double  *fh_p[19]; //主機端一般態分佈函數
@@ -71,6 +74,11 @@ double *zeta_z_h, *zeta_z_d;     // [NYD6*NZ6]
 
 // Precomputed stencil base k [NZ6] (int, wall-clamped)
 int *bk_precomp_h, *bk_precomp_d;
+
+#if USE_ITBLBM_STREAMING
+ITB_YZCoeff *itb_yz_coeff_h = NULL;
+ITB_YZCoeff *itb_yz_coeff_d = NULL;
+#endif
 
 #if USE_GILBM_ALGORITHM2
 // Algorithm2: 預計算 departure 表 [GILBM2_NCLASS*NYD6*NZ6]
@@ -224,6 +232,9 @@ int itag_f6[23] = {400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,4
 #include "initialization.h"
 #include "gilbm/metric_terms.h"
 #include "gilbm/precompute.h"
+#if USE_ITBLBM_STREAMING
+#include "itblbm/isoparametric_precompute.h"
+#endif
 #include "gilbm/diagnostic_gilbm.h"
 #include "communication.h"
 #include "convergence.h"
@@ -675,6 +686,28 @@ int main(int argc, char *argv[])
     // 1.3 讀取外部二維 (y, z) 座標 (取代 GenerateMesh_Y + GenerateMesh_Z)
     ReadExternalGrid_YZ(y_2d_h, z_h, myid);
 
+#if USE_ITBLBM_STREAMING
+    double *itb_y_2d_geom_h = NULL;
+    double *itb_z_geom_h = NULL;
+    {
+        const size_t yz_bytes = (size_t)NYD6 * (size_t)NZ6 * sizeof(double);
+        itb_y_2d_geom_h = (double*)malloc(yz_bytes);
+        itb_z_geom_h    = (double*)malloc(yz_bytes);
+        if (!itb_y_2d_geom_h || !itb_z_geom_h) {
+            if (myid == 0) {
+                fprintf(stderr,
+                    "[ITB] FATAL: cannot allocate seam-continuous coordinate snapshot\n");
+            }
+            MPI_Abort(MPI_COMM_WORLD, 73);
+        }
+        memcpy(itb_y_2d_geom_h, y_2d_h, yz_bytes);
+        memcpy(itb_z_geom_h,    z_h,    yz_bytes);
+        if (myid == 0) {
+            printf("[ITB] Saved seam-continuous y-z coordinate snapshot before MPI ghost exchange.\n");
+        }
+    }
+#endif
+
     // Mass correction uses physical control-volume weights from the curvilinear
     // y-z grid. Build before the later coordinate MPI exchange because
     // ReadExternalGrid_YZ still has the correct +/-LY periodic ghost offsets.
@@ -818,6 +851,30 @@ int main(int argc, char *argv[])
 
     // Precomputed stencil base k → GPU
     CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
+
+#if USE_ITBLBM_STREAMING
+    {
+        ITB_PrecomputeCoefficientsHost(itb_yz_coeff_h,
+                                       itb_y_2d_geom_h,
+                                       itb_z_geom_h,
+                                       dt_global, myid);
+        double itb_wx_h[2][ITB_X_ORDER];
+        ITB_PrecomputeXWeightsHost(itb_wx_h, dt_global);
+        const size_t itb_coeff_count =
+            (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6;
+        CHECK_CUDA( cudaMemcpy(itb_yz_coeff_d, itb_yz_coeff_h,
+                               itb_coeff_count * sizeof(ITB_YZCoeff),
+                               cudaMemcpyHostToDevice) );
+        CHECK_CUDA( cudaMemcpyToSymbol(ITB_WX, itb_wx_h, sizeof(itb_wx_h)) );
+        if (myid == 0) {
+            printf("[ITB] coefficients and x7 weights copied to GPU.\n");
+        }
+        free(itb_y_2d_geom_h);
+        free(itb_z_geom_h);
+        itb_y_2d_geom_h = NULL;
+        itb_z_geom_h = NULL;
+    }
+#endif
 
 #if USE_GILBM_ALGORITHM2
     // ════════════════════════════════════════════════════════════════

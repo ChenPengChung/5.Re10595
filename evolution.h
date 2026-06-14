@@ -805,6 +805,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         4);
 #endif
 
@@ -827,6 +830,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         NYD6 - 7);
 #endif
 
@@ -876,6 +882,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         3);
 #endif
 
@@ -915,6 +924,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         7);
 #endif
 #endif
@@ -938,6 +950,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         NYD6 - 4);
 #endif
 

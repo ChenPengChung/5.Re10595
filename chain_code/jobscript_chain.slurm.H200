@@ -1,16 +1,24 @@
 #!/bin/bash
-#SBATCH --job-name=Edit6_5600DNS 
+#SBATCH --job-name=Edit11_Krank5600
 #SBATCH --account=MST115169
-#SBATCH --partition=16gpus
-#SBATCH --nodes=4
+#SBATCH --exclude=25a-hgpn052
+# [Edit11 2026-06-14] 強制排除 25a-hgpn052: interp macro 內插為單執行緒 memory-bound,
+#   該節點單核 ~1.7x 慢 (48min vs 28min/macro)。SBATCH --exclude 不受 blacklist NCHC-health 釋放影響。
+#   (種子生成完成後此節點對純 solver 續投無妨, 可日後移除此行。)
+#SBATCH --partition=64gpus
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 暫時鎖定 16gpus partition → 預設 walltime = 2 天 (NCHC 16gpus MaxTime);
-#             可由 sbatch --time= 覆寫 (dispatcher 自由切換時) / 或 ./run partition 改變。
+#SBATCH --exclusive
+# [一條龍] --exclusive 取整節點 CPU: 第一輪在 head node 跑 phase2 interp 生成種子場時,
+#          單進程 numpy 才能用滿 ~112 核 (否則受限於 ntasks*cpus-per-task=8 核, 極慢)。
+#          solver 階段不受影響 (仍 ppr:8:node, 8 GPU/node)。
+# [POLICY-B1] Edit11 鎖定 64gpus partition → 預設 walltime = 1 天 (NCHC 64gpus MaxTime);
+#             可由 sbatch --time= 覆寫 / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=2-00:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -22,14 +30,14 @@
 # jobscript_chain.slurm.H200 — GILBM Periodic Hill 自動續鏈 jobscript (H200 版)
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
-#   (1) partition/nodes/gres — 16gpus / 4 nodes × 8 GPU/node=32  (GB200: gb200 / 8 nodes × 4 GPU/node=32)
-#       對應 variables.h jp=32 (32 streamwise MPI ranks)。jp 固定 32 (NCHC 2026-06 政策);
-#       暫時鎖定 16gpus (per-account cap=32), dispatcher 自由切換 {8gpus,16gpus,32gpus}。
+#   (1) partition/nodes/gres — 64gpus / 8 nodes × 8 GPU/node=64  (GB200: gb200 / 16 nodes × 4 GPU/node=64)
+#       對應 variables.h jp=64 (64 streamwise MPI ranks)。Edit11 Krank5600 warm-start regrid;
+#       鎖定 64gpus (per-account cap=64), 唯一容得下 jp=64 的 partition。
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
 #                              (GB200: /usr/local/cuda-13.0 on compute node)
-#   (4) mpirun 對映          — -np 32 --map-by ppr:8:node (4 nodes 32 GPU)
-#                              (GB200: -np 32 --map-by ppr:4:node on 8 nodes)
+#   (4) mpirun 對映          — -np 64 --map-by ppr:8:node (8 nodes 64 GPU)
+#                              (GB200: -np 64 --map-by ppr:4:node on 16 nodes)
 #   (5) 自我續投檔名         — sbatch jobscript_chain.slurm.H200
 #
 # 三大政策 (POLICY-A1/B1/C1) 全保留,與主線 check_policy 驗證通過等價.
@@ -251,7 +259,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-32}
+NP=${SLURM_NTASKS:-64}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -310,6 +318,30 @@ validate_checkpoint() {
     echo "OK accu=$accu cv=$cv"
     return 0
 }
+
+# ===== 4.0 [一條龍] 無 checkpoint 時, 在本計算節點先生成種子場 (phase2 interp) =====
+#   只有第一輪 (完全無 checkpoint) 才生成; resubmit 時 checkpoint 已在 → 跳過、直接續跑。
+#   interp = 單進程 numpy (CPU, --exclusive 取整 head node 核); 失敗則 chain 停, 不啟 solver。
+#   生成後立即跑整性閘 verify_seed_integrity.sh; 不過 → 停 (不在壞種子上啟 solver)。
+#   此設計讓 phase2 生成 + 主程式在「同一個 64gpus@jp64 allocation」內一條龍跑, 不空出 partition。
+if [ -z "$(ls -1d restart/checkpoint/step_*/ 2>/dev/null | grep -v '\.WRITING$')" ]; then
+    log "[SEED] 無 checkpoint -> 在計算節點生成種子場 (interp_checkpoint.py, node=$(hostname))"
+    _SEED_TH="$(nproc 2>/dev/null || echo 64)"
+    OMP_NUM_THREADS="$_SEED_TH" OPENBLAS_NUM_THREADS="$_SEED_TH" MKL_NUM_THREADS="$_SEED_TH" \
+    NUMEXPR_NUM_THREADS="$_SEED_TH" POISSON_SERIAL=1 \
+        python3 -u phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1 --div-gate-tol 2e-12
+    _SEED_RC=$?
+    if [ "$_SEED_RC" -ne 0 ]; then
+        log "[SEED] FATAL: interp_checkpoint.py RC=$_SEED_RC -> chain 停 (不啟 solver)"
+        exit 42
+    fi
+    if ! bash chain_code/tools/verify_seed_integrity.sh; then
+        log "[SEED] FATAL: 種子整性閘失敗 -> chain 停 (不在壞種子上啟 solver)"
+        exit 42
+    fi
+    : > restart/.seed_ready
+    log "[SEED] ✓ 種子場生成 + 整性閘通過 (node=$(hostname)) -> AUTO-HEAL 接手續跑 solver"
+fi
 
 # ===== 4.1 AUTO-HEAL =====
 if [ "$CHAIN_COUNT" -eq 1 ]; then
@@ -518,7 +550,7 @@ WATCHDOG_HANG=0
 WATCHDOG_HANG_NODE=""
 
 # [H200] size from sbatch (--nodes/--ntasks-per-node=8) → NP=$SLURM_NTASKS; a.out := a.out.jp$NP.
-#   --map-by ppr:8:node is jp-independent (always 8 GPU/node on H200). NP=${SLURM_NTASKS:-32} (ln 253).
+#   --map-by ppr:8:node is jp-independent (always 8 GPU/node on H200). NP=${SLURM_NTASKS:-64} (ln 254).
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
     mpirun -np "$NP" --map-by ppr:8:node --bind-to none $MPIRUN_SIG_FLAGS \
            stdbuf -oL ./a.out $ARGS &

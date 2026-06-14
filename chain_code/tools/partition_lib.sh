@@ -35,8 +35,8 @@ h200_partition_walltime() {
         *)       echo "" ;;
     esac
 }
-# 本專案 jp 鎖定 32 → 自由切換候選集 = 三個 cap≥32 的 partition (見 select_combo_lib.sh SC_PARTITIONS)。
-h200_known_partitions() { echo "8gpus 16gpus 32gpus"; }
+# [EDIT11] jp 鎖定 64 → 候選集含 64gpus (cap=64, 唯一容得下 jp=64; 見 select_combo_lib.sh SC_PARTITIONS)。
+h200_known_partitions() { echo "8gpus 16gpus 32gpus 64gpus"; }
 
 h200_partition_cap() {   # static per-account GPU cap (QOS MaxTRESPerAccount, verified 2026-06-05)
     case "$1" in 8gpus|16gpus|32gpus) echo 32 ;; 64gpus) echo 64 ;; dev) echo 4 ;; *) echo 0 ;; esac

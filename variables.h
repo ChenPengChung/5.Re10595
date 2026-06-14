@@ -57,6 +57,20 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b-ITB. ITB-ISLBM streaming path (ported from Edit9) ──
+//   0 = current GILBM RK2 / contravariant interpolation path
+//   1 = precomputed physical-space isoparametric interpolation path
+// First pass keeps collision, wall BC, MPI, statistics, and dt_global unchanged.
+#ifndef USE_ITBLBM_STREAMING
+#define     USE_ITBLBM_STREAMING    1
+#endif
+#ifndef ITBLBM_STRICT_PRECOMPUTE
+#define     ITBLBM_STRICT_PRECOMPUTE 1
+#endif
+#if USE_ITBLBM_STREAMING && USE_SMEM_INTERIOR
+#error "USE_ITBLBM_STREAMING first pass requires USE_SMEM_INTERIOR=0"
+#endif
+
 // ── §1b2. Algorithm2: GILBM RK2 預計算表 (production fast path) ──
 //   0 = Algorithm1 baseline (預設)
 //   1 = Algorithm2: init 建表，runtime kernel 查表
@@ -71,7 +85,11 @@
 //     1 = table vs Algorithm1 reference + class-map + host tolerance
 //     2 = strict: level 1 + folded k_idx shape + folded weight-sum checks
 #ifndef     USE_GILBM_ALGORITHM2
+#if USE_ITBLBM_STREAMING
+#define     USE_GILBM_ALGORITHM2    0
+#else
 #define     USE_GILBM_ALGORITHM2    1
+#endif
 #endif
 #ifndef     GILBM_ALGO2_VALIDATE
 #define     GILBM_ALGO2_VALIDATE    2
@@ -81,6 +99,9 @@
 #endif
 #if defined(GILBM_ALGO2_STORE) && (GILBM_ALGO2_STORE < 0 || GILBM_ALGO2_STORE > 2)
 #error "GILBM_ALGO2_STORE must be 0(COORDS), 1(WEIGHTS), or 2(WEIGHTS_FOLDED)"
+#endif
+#if USE_ITBLBM_STREAMING && USE_GILBM_ALGORITHM2
+#error "USE_ITBLBM_STREAMING and USE_GILBM_ALGORITHM2 are mutually exclusive streaming paths"
 #endif
 #if USE_GILBM_ALGORITHM2 && USE_WENO7
 #error "Algorithm2 WEIGHTS_FOLDED requires USE_WENO7=0; zeta folding assumes linear Lagrange-7"
@@ -110,10 +131,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      321        // 展向格點
-#define     NY      641         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      321         // 法向格點
-#define     jp      32         //  GPU 數量 (流向分割)
+#define     NX      404        // 展向格點 (= Breuer 2009 Re5600 DNS span)
+#define     NY      769         // 流向格點 (Breuer DNS stream=765→769; 需 (NY-1)%jp==0; 768=64×12 ✓ jp=64)
+#define     NZ      750         // 法向格點 (= Breuer 2009 Re5600 DNS wall-normal; 同 2 階 FV → 對等比較)
+#define     jp      64         //  GPU 數量 (流向分割; 接 64gpus slot)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -144,7 +165,7 @@
 //   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
 //   minSize: 壁面最小格距 ≈ uniform_dz × Ratio (Ratio=0.5 時 a≈0.60)
-#define     STRETCH_A           0.95
+#define     STRETCH_A           0.893674
 #define     ALPHA               0.5     // 歷史遺留，固定 0.5，檔名不再包含 ALPHA
 #define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
 // ALPHA 必須為 0.5 — 若修改此值需同步驗證 minSize 與 grid 生成邏輯
@@ -222,7 +243,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     60.0    // 統計量開始累積 (2026-06-12: 25→60, RK4 暖啟動延後+放棄舊統計, FTT_restart=50.77<60→reset)
+#define     FTT_STATS_START     10.0    // 統計量開始累積 (Edit11 warm-start regrid: interp 後 FTT=0/accu=0, ~6-8 FTT 重平衡後累積)
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
@@ -330,6 +351,9 @@
 #define     GHOST_EXTRAP_ORDER  2
 #if GHOST_EXTRAP_ORDER < 2 || GHOST_EXTRAP_ORDER > 3
 #error "GHOST_EXTRAP_ORDER must be 2 (quadratic) or 3 (cubic)"
+#endif
+#if USE_ITBLBM_STREAMING && GHOST_EXTRAP_ORDER != 2
+#error "USE_ITBLBM_STREAMING first pass supports only GHOST_EXTRAP_ORDER=2"
 #endif
 
 

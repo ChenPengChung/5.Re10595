@@ -66,6 +66,7 @@ MODE_CLUSTER=""    # "" = auto-detect; "H200" or "GB200" = user override
 MODE_REGRID=0
 MODE_FORCE_REGRID=0
 MODE_PREFLIGHT_ONLY=0
+MODE_DEFER_GEN=0   # 1 = Case-2 不在 login node inline interp; 改由 chain job 在計算節點自生成 (一條龍)
 REGRID_OLD_GRID=""
 REGRID_NEW_GRID=""
 REGRID_OLD_GAMMA=""
@@ -84,6 +85,7 @@ while [ $# -gt 0 ]; do
         --regrid-from-origin) MODE_REGRID=1 ;;
         --force-regrid)    MODE_FORCE_REGRID=1 ;;
         --preflight-only)  MODE_PREFLIGHT_ONLY=1 ;;
+        --defer-gen)       MODE_DEFER_GEN=1 ;;
         --origin-dir)
             shift
             if [ $# -eq 0 ]; then echo "[run.sh] Missing value after $arg"; exit 2; fi
@@ -818,6 +820,12 @@ _run_regrid_pipeline() {
     fi
 
     # Step C: 執行 checkpoint interpolation
+    if [ "${MODE_DEFER_GEN:-0}" -eq 1 ]; then
+        echo "[case-2] --defer-gen: 略過 login-node inline interp。維度驗證 (Step A/B) 已通過。"
+        echo "          種子場改由 chain job 在計算節點 (64gpus@jp64) 自行生成 (一條龍, 不空出 partition)。"
+        HAS_CKPT=0; HAS_STATE=0
+        return 0
+    fi
     echo "[case-2] 維度驗證通過, 執行 checkpoint interpolation (old grid → new grid)..."
     local _INTERP_CMD
     _INTERP_CMD=(python3 phase2_generatecheckpoint/interp_checkpoint.py --auto --step 1
@@ -1009,6 +1017,11 @@ if [ "$_PIPELINE_CASE" -eq 2 ]; then
 
     # ── (e) Step 3: 全座標比對 newgrid vs solver grid ──
     echo ""
+    if [ "${MODE_DEFER_GEN:-0}" -eq 1 ]; then
+        echo "[case-2] Step 3: --defer-gen → 略過 login-node 座標比對。"
+        echo "          (原因: _derive_solver_grid_path 用舊 _g<GAMMA>_a<ALPHA> 命名, 與當前 _s<STRETCH_A> 不符;"
+        echo "           interp 在 chain job 內已自驗 NEW grid vs solver runtime grid, 等效安全。)"
+    else
     echo "[case-2] Step 3: 比對 phase1 newgrid 與 J_Frohlich solver grid (全座標)..."
     _SIM_GRID="$(_derive_solver_grid_path "$_VH_NY" "$_VH_NZ")"
     if [ -s "$_SIM_GRID" ]; then
@@ -1028,6 +1041,7 @@ if [ "$_PIPELINE_CASE" -eq 2 ]; then
         echo "        grid_zeta_tool.py --auto 應已在 Step 1 生成此檔案"
         exit 1
     fi
+    fi   # end --defer-gen guard for Step 3
 
     echo ""
     if [ "$MODE_PREFLIGHT_ONLY" -eq 1 ]; then

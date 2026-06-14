@@ -1,0 +1,100 @@
+================================================================
+[genckpt] START 2026-06-14 17:29:59  node=25a-hgpn118  jobid=102727
+[genckpt] partition=8gpus  account=mst115169  threads=64
+[genckpt] cwd=/home/s8313697/5.Re10595/Edit11_Krank5600
+[genckpt] RAM: 2015 GB total, 1686 GB avail
+[genckpt] source: phase2_generatecheckpoint/oldcheckpoint_Re5600_step_86300001 (jp=32)
+[genckpt] target: restart/checkpoint/step_00000001 (jp=64, 1025x512x512)
+================================================================
+[auto] NEW grid from variables.h: NX=404 NY=769 NZ=750 jp=64 GAMMA=2.879764290217904 ALPHA=0.5
+[auto] Origin checkpoint: /home/s8313697/5.Re10595/Edit11_Krank5600/phase2_generatecheckpoint/oldcheckpoint_Re5600_step_86300001
+[auto] Grid directory: /home/s8313697/5.Re10595/Edit11_Krank5600/phase1_generategrid
+  OK: NEW phase1 filename STRETCH_A s=0.893674 matches variables.h
+[auto] OLD grid (uniform gamma=3.6635616461296454, alpha=0.5): oldgrid_3.fine grid_I641_J321_s0.950000.dat
+[auto] NEW grid (variable gamma=2.879764290217904, alpha=0.5): newgrid_3.fine grid_I769_J750_s0.893674.dat
+
+--- Configuring OLD grid ---
+  Auto-detected from metadata: NX=321 NY=641 NZ=321 jp=32
+  OK: OLD grid .dat validated: I=641=NY, J=321=NZ
+
+--- Configuring NEW grid ---
+  Project mode: reading from /home/s8313697/5.Re10595/Edit11_Krank5600/variables.h
+    NX = 404
+    NY = 769
+    NZ = 750
+    jp = 64
+    GAMMA = 2.879764290217904
+    ALPHA = 0.5
+  OK: NEW grid filename STRETCH_A s=0.893674 matches variables.h
+  OK: NEW grid .dat validated: I=769=NY, J=750=NZ
+
+  WARNING: OLD GAMMA=3.6635616461296454 vs NEW GAMMA=2.879764290217904 differ by 0.78
+           Physical-space interpolation handles this correctly,
+           but verify OLD grid .dat matches the source checkpoint.
+========================================================================
+LBM checkpoint interpolator: 321x641x321 (jp=32) -> 404x769x750 (jp=64)
+========================================================================
+OLD: NX=321 NY=641 NZ=321 jp=32 GAMMA=3.6635616461296454 grid=/home/s8313697/5.Re10595/Edit11_Krank5600/phase1_generategrid/oldgrid_3.fine grid_I641_J321_s0.950000.dat
+NEW: NX=404 NY=769 NZ=750 jp=64 GAMMA=2.879764290217904 grid=/home/s8313697/5.Re10595/Edit11_Krank5600/phase1_generategrid/newgrid_3.fine grid_I769_J750_s0.893674.dat
+Domain: LX=4.5 LY=9.0 LZ=3.036 H_HILL=1.0
+Density control-volume method: jacobian-gl (variables.h:CELL_VOLUME_METHOD=1)
+u* divergence output gate: max|div(u*)| < 2.000000e-12 before f_eq
+
+Rank repartition plan:
+  OLD jp=32  unique j/rank=20  local NYD6=27  input files: 19*f + rho per rank
+  NEW jp=64  unique j/rank=12  local NYD6=19  output files: 19*f + rho per rank
+  Repartition: stitch OLD ranks into one global field, apply conservation/projection globally, then split into NEW ranks.
+
+  OK: solver runtime filename STRETCH_A s=0.893674 matches variables.h
+--- Validating NEW grid against solver runtime grid ---
+  OK: NEW grid coordinates match solver runtime grid
+      NEW grid:    /home/s8313697/5.Re10595/Edit11_Krank5600/phase1_generategrid/newgrid_3.fine grid_I769_J750_s0.893674.dat
+      solver grid: /home/s8313697/5.Re10595/Edit11_Krank5600/J_Frohlich/adaptive_3.fine grid_I769_J750_s0.893674.dat
+      compared 576750 points, max_abs_diff=0.000e+00, tol=0.000e+00
+      grid parameter fingerprint: not present (legacy .dat headers)
+
+Output directory: restart/checkpoint/step_00000001 (from --output-root + --step)
+
+[1/8] Reading old metadata: /home/s8313697/5.Re10595/Edit11_Krank5600/phase2_generatecheckpoint/oldcheckpoint_Re5600_step_86300001/metadata.dat
+      grid_dims=327,27,327 mpi_rank_count=32 step=86300001 FTT=72.968478382807902 Force=2.918400e-06
+      source dt_global=5.073127059370000e-04 half_Fdt=7.402707938488083e-10
+[2/8] Building OLD grid coordinates
+      Y interior range [-0.0000, 9.0000] (expect [0, 9.0])
+      Z interior range [1.0000, 3.0360] (expect [hill, 3.036])
+      OLD grid coordinate SHA-256: 1afa50f03a9c3496...e711588d
+      OLD grid provenance: source checkpoint has no coordinate hash (legacy)
+[3/8] Reading 608 f-files (32 ranks x 19 directions)
+      f00: stitched 32 ranks
+      f01: stitched 32 ranks
+      f02: stitched 32 ranks
+      f03: stitched 32 ranks
+      f04: stitched 32 ranks
+      f05: stitched 32 ranks
+      f06: stitched 32 ranks
+      f07: stitched 32 ranks
+      f08: stitched 32 ranks
+      f09: stitched 32 ranks
+      f10: stitched 32 ranks
+      f11: stitched 32 ranks
+      f12: stitched 32 ranks
+      f13: stitched 32 ranks
+      f14: stitched 32 ranks
+      f15: stitched 32 ranks
+      f16: stitched 32 ranks
+      f17: stitched 32 ranks
+      f18: stitched 32 ranks
+      OLD interior rho = [0.999151, 1.000258], mean = 0.999997
+      OLD interior max|u| = 1.791827e-02, max|v| = 2.728416e-02, max|w| = 1.681242e-02
+      OLD Ub (j=BFR cross-section) = 1.481436825363784e-02
+      OLD rho volume-weighted mean = 1.000000000006656
+      OLD absolute rho mass = 1.143590167784101e+02, control volume = 1.143590167776490e+02
+      OLD Jacobian-GL volume: rel diff vs shoelace = 3.405866e-07, fallback cells = 0
+      OLD max |rho_file - sum(f)| = 3.647e-04
+      WARN: rho_file != sum(f) by 3.647e-04 (expected from LBM mass correction)
+            Using sum(f) as authoritative rho for feq/fneq computation
+[4/8] Building NEW grid coordinates
+      Y interior range [-0.0000, 9.0000]
+      Z interior range [1.0000, 3.0360]
+[5/8] Interpolating macros (rho, ux, uy, uz) to NEW grid in PHYSICAL space
+      interpolation order: 6 (7-point Lagrange O(h^6) + cubic wall ghost extrapolation)
+slurmstepd-25a-hgpn118: error: *** JOB 102727 ON 25a-hgpn118 CANCELLED AT 2026-06-14T17:34:23 ***
