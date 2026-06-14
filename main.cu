@@ -849,9 +849,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Precomputed stencil base k → GPU
-    CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
-
 #if USE_ITBLBM_STREAMING
     {
         ITB_PrecomputeCoefficientsHost(itb_yz_coeff_h,
@@ -875,6 +872,9 @@ int main(int argc, char *argv[])
         itb_z_geom_h = NULL;
     }
 #endif
+
+    // Precomputed stencil base k → GPU
+    CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
 
 #if USE_GILBM_ALGORITHM2
     // ════════════════════════════════════════════════════════════════

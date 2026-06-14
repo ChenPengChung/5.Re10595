@@ -72,8 +72,12 @@
 #endif
 
 // ── §1b2. Algorithm2: GILBM RK2 預計算表 (production fast path) ──
-//   0 = Algorithm1 baseline (預設)
+//   0 = Algorithm1 baseline / required when ITB streaming is enabled
 //   1 = Algorithm2: init 建表，runtime kernel 查表
+//
+//   If USE_GILBM_ALGORITHM2 is not specified explicitly:
+//     USE_ITBLBM_STREAMING=1 -> USE_GILBM_ALGORITHM2=0
+//     USE_ITBLBM_STREAMING=0 -> USE_GILBM_ALGORITHM2=1
 //
 //   production default when enabled:
 //     GILBM_ALGO2_STORE = GILBM2_STORE_WEIGHTS_FOLDED

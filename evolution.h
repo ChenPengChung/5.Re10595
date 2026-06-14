@@ -751,6 +751,20 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     dim3 griddimSW(  1,      NYD6/NT+1, NZ6);
     dim3 blockdimSW( 3, NT,        1 );
 
+#if USE_ITBLBM_STREAMING
+    // [P0 v4] Buffer grid: keep blockDim.y=1.
+    // The fused ITB kernel is register-heavy; using blockDim=(NT,3,1)
+    // can exceed per-block resources and silently leave buffer rows stale
+    // unless launch errors are checked immediately.
+    dim3 griddimBuf(NX6/NT+1, 3, NZ6);
+    dim3 blockdimBuf(NT, 1, 1);
+
+    // [P0 v4] Interior grid: j=7..NYD6-8, 每 block 1 row.
+    // When NYD6==14 (128-GPU large case), this range is empty; do not
+    // launch a zero-grid kernel.
+    const int nInteriorRows = NYD6 - 14;
+    dim3 griddimInt(NX6/NT+1, (nInteriorRows > 0 ? nInteriorRows : 1), NZ6);
+#else
     // [P0 v3] Buffer grid: 3 rows of j per launch, blockDim.y=3
     //   只算 MPI 實際需要打包的行（省去 j=3 和 j=NYD6-4 的白做）
     //   j=3, j=NYD6-4 移到 Interior (stream0) 與 MPI 重疊
@@ -761,6 +775,7 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     //   NYD6-14 interior rows (NYD6=23 → 9 rows → 639 blocks)
     //   start_j=7, gridDim.y=NYD6-14 (每 block 1 row j)
     dim3 griddimInt(NX6/NT+1, NYD6 - 14, NZ6);
+#endif
     dim3 blockdimInt(NT, 1, 1);
 
     // [P0 v3] 從 Buffer 移出的 2 行：j=3 和 j=NYD6-4，各 1 row
@@ -811,6 +826,13 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         4);
 #endif
 
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+
+    // [PERF rank1] pack+start LEFT halo (j=4..6 done) — MPI-left now in flight, overlaps Buf-right below
+    MPI_FPost_PackStart_Left(f_post_write, mpi_send_buf_left_d, req_persist, stream1);
+#endif
+
     // Right boundary: j = NYD6-7..NYD6-5 (3 rows, MPI iToRight 精確範圍)
 #if USE_GILBM_ALGORITHM2
     Algorithm2_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
@@ -836,8 +858,17 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         NYD6 - 7);
 #endif
 
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+
+    // [PERF rank1] pack+start RIGHT halo (j=NYD6-7..-5 done) — MPI-right now in flight
+    MPI_FPost_PackStart_Right(f_post_write, mpi_send_buf_right_d, req_persist, stream1);
+    // (原 global cudaStreamSynchronize(stream1) 移除: 兩 MPI 已在途; PackStart 內部已同步各自 pack;
+    //  下方 free rows 在 stream0 與在途 MPI 重疊 → 回收暴露的 MPI)
+#else
     // ── 等 Buffer 獨佔完成（GPU 空閒 → 快速 sync）──
     CHECK_CUDA( cudaStreamSynchronize(stream1) );
+#endif
 
 #if USE_TIMING && TIMING_DETAIL
     // Buffer 完成: 記錄 Buffer 獨佔時間 (launch + kernel + sync)
@@ -888,7 +919,14 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         3);
 #endif
 
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+#endif
+
     // [P0 v3] Launch 2: j=7..NYD6-8 (主 Interior)
+#if USE_ITBLBM_STREAMING
+    if (nInteriorRows > 0) {
+#endif
 #if USE_SMEM_INTERIOR
     //   P100 路徑: Shared Memory Cooperative η-Row Loading
     //     smem_eta[7][NT+6] 消除 3D 方向 85% DRAM reads
@@ -930,6 +968,10 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         7);
 #endif
 #endif
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+    }
+#endif
 
     // [P0 v3] Launch 3: j=NYD6-4 (從 Buffer 移出的右邊界行)
 #if USE_GILBM_ALGORITHM2
@@ -956,6 +998,10 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         NYD6 - 4);
 #endif
 
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+#endif
+
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_step1_stop, stream0);
 #endif
@@ -972,11 +1018,17 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     if (g_timing_sample) t_mpi_wtime_start = MPI_Wtime();
 #endif
 
+#if USE_ITBLBM_STREAMING
+    // [PERF rank1] wait + unpack both halves (MPIs were started during buffer/free-row compute)
+    MPI_FPost_WaitUnpack_Left (f_post_write, mpi_recv_buf_left_d,  req_persist, stream1);
+    MPI_FPost_WaitUnpack_Right(f_post_write, mpi_recv_buf_right_d, req_persist, stream1);
+#else
     MPI_Exchange_FPost_Packed(
         f_post_write,
         mpi_send_buf_left_d,  mpi_send_buf_right_d,
         mpi_recv_buf_left_d,  mpi_recv_buf_right_d,
         req_persist, stream1);
+#endif
 
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample)
@@ -1000,6 +1052,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     if (g_timing_sample) cudaEventRecord(g_timing.ev_psw_start, stream0);
 #endif
     periodicSW_fpost<<<griddimSW, blockdimSW, 0, stream0>>>(f_post_write, GRID_SIZE);
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+#endif
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_psw_stop, stream0);
 #endif

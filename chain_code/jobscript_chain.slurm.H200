@@ -10,10 +10,11 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-#SBATCH --exclusive
-# [一條龍] --exclusive 取整節點 CPU: 第一輪在 head node 跑 phase2 interp 生成種子場時,
-#          單進程 numpy 才能用滿 ~112 核 (否則受限於 ntasks*cpus-per-task=8 核, 極慢)。
-#          solver 階段不受影響 (仍 ppr:8:node, 8 GPU/node)。
+# [Edit11 2026-06-15] --exclusive 已移除 (種子場已生成完畢 restart/checkpoint/step_00000001)。
+#   原為第一輪 phase2 interp 在 head node 用滿 CPU 而加,但實測 --exclusive + cpus-per-task=1
+#   會讓 OpenMPI/PMIx 把 64 ranks 誤映到 7 nodes → "not enough slots... 8 slots requested" →
+#   mpirun 秒崩 RC=1 (曾空轉 58 輪)。移除後與 production-proven Edit6/Edit9 佈局一致;
+#   jp=64 已用 --nodes=8 --gres=gpu:8 吃滿整個 64gpus partition,本就不需 --exclusive 卡位。
 # [POLICY-B1] Edit11 鎖定 64gpus partition → 預設 walltime = 1 天 (NCHC 64gpus MaxTime);
 #             可由 sbatch --time= 覆寫 / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
