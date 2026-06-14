@@ -238,8 +238,10 @@ void MPI_Exchange_FPost_Packed(
     // ── Step 1: GPU Pack (兩個方向的 halo 打包到連續 buffer) ──
     PackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, send_buf_left, iToLeft, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     PackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, send_buf_right, iToRight, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     CHECK_CUDA( cudaStreamSynchronize(stream_pack) );
 
     // ── Step 2: MPI Persistent Start + Wait ──
@@ -253,8 +255,10 @@ void MPI_Exchange_FPost_Packed(
     // ── Step 3: GPU Unpack (recv buffer → f_post ghost zones) ──
     UnpackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, recv_buf_right, iFromRight, icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     UnpackHaloSelective_Kernel<<<grid_pack, block_pack, 0, stream_pack>>>(
         f_post, recv_buf_left,  iFromLeft,  icount_sw, GRID_SIZE);
+    CHECK_CUDA( cudaGetLastError() );
     // 不在此處 sync — 呼叫端 (evolution.h) 負責雙流同步:
     //   cudaStreamSynchronize(stream0)  等 Full kernel 完成
     //   cudaStreamSynchronize(stream1)  等 Unpack 完成
@@ -416,8 +420,10 @@ void MPI_Exchange_Macro_Packed(
     // Pack
     PackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, send_buf_left, iToLeft, icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
     PackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, send_buf_right, iToRight, icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
     CHECK_CUDA( cudaStreamSynchronize(stream_pack) );
 
     // MPI Persistent Start + Wait
@@ -428,8 +434,10 @@ void MPI_Exchange_Macro_Packed(
     // Unpack
     UnpackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, recv_buf_right, iFromRight, icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
     UnpackMacro_Kernel<<<grid_macro, block_macro, 0, stream_pack>>>(
         rho_d, u_d, v_d, w_d, recv_buf_left,  iFromLeft,  icount_sw);
+    CHECK_CUDA( cudaGetLastError() );
 }
 
 
@@ -639,7 +647,6 @@ void SendDataToCPU(double *f_new[19]) {
 }
 
 #endif
-
 
 
 
