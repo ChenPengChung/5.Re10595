@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ERCOFTAC UFR 3-30 Periodic Hill Benchmark Comparison
-GILBM vs multiple benchmark sources (DNS/LES/Experiment)
+ITB-ISLBM vs multiple benchmark sources (DNS/LES/Experiment)
 =====================================================
 用法:
   python3 2.Benchmark.py               # 互動詢問 Re
@@ -1416,7 +1416,7 @@ mpl.rcParams.update({
 })
 
 # ── Simulation colour ──
-# Red solid line for GILBM (present work) — high contrast vs benchmark blues/greens.
+# Red solid line for ITB-ISLBM (present work) — high contrast vs benchmark blues/greens.
 c_sim = "#CC2222"  # red
 
 
@@ -1462,8 +1462,8 @@ def _place_hill_legend(ax, field_label, scale, Re_val, legend_pos='bottom-left',
 
     legend_entries = []   # (type, label, color, marker_char)
     if HAS_VTK:
-        # GILBM = our own code, keep plain (non-italic) text
-        legend_entries.append(('line', 'GILBM', c_sim, None))
+        # ITB-ISLBM = our own code, keep plain (non-italic) text
+        legend_entries.append(('line', 'ITB-ISLBM', c_sim, None))
     for _, info, bdata in bench_sources:
         # Only include benchmark sources that have data for the current field
         if field_bench is not None:
