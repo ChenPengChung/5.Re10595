@@ -71,7 +71,7 @@
 //     1 = table vs Algorithm1 reference + class-map + host tolerance
 //     2 = strict: level 1 + folded k_idx shape + folded weight-sum checks
 #ifndef     USE_GILBM_ALGORITHM2
-#define     USE_GILBM_ALGORITHM2    1
+#define     USE_GILBM_ALGORITHM2    0
 #endif
 #ifndef     GILBM_ALGO2_VALIDATE
 #define     GILBM_ALGO2_VALIDATE    2
@@ -222,7 +222,7 @@
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     60.0    // 統計量開始累積 (2026-06-12: 25→60, RK4 暖啟動延後+放棄舊統計, FTT_restart=50.77<60→reset)
+#define     FTT_STATS_START     88.0    // 統計量開始累積 (2026-06-12: 25→60, RK4 暖啟動延後+放棄舊統計, FTT_restart=50.77<60→reset)
 #define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
