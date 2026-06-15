@@ -379,7 +379,7 @@
 // ── 效能診斷 ──
 // SKIP_MIDSTEP_MASSCORR: 跳過 even/odd sub-step 間的 mid-step mass correction
 //   0 = 保留, 1 = 跳過 (減少 MPI barrier)
-#define     SKIP_MIDSTEP_MASSCORR    0
+#define     SKIP_MIDSTEP_MASSCORR    1
 
 
 // ================================================================
