@@ -64,3 +64,6 @@ restart/dispatcher.heartbeat
 slot_handoff.log
 restart/slot_handoff.heartbeat
 restart/slot_handoff.pid
+
+# data collection / transfer staging (huge binary snapshot — never track)
+Re5600_ITBLBM_*
