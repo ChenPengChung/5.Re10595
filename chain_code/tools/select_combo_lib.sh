@@ -45,7 +45,7 @@ SC_ACCT="${SC_ACCT:-MST114348}"
 #   - 32gpus: cap=32 ≥ jp32 → 可投 (1-day walltime)。
 #   (dev cap=4 < 32、64gpus 需 jp64 + 更細網格; 兩者皆不在候選集。)
 #   帳號手足 job 佔滿某 partition 的 cap 時該組 QOS-BLOCK 罰分不投, 換有空檔的 partition (never-idle)。
-SC_VALID_JP="${SC_VALID_JP:-64}"
+SC_VALID_JP="${SC_VALID_JP:-32}"
 # [Edit12 temporary lock] jp 鎖定 32, 暫時只使用 16gpus partition。
 SC_PARTITIONS="${SC_PARTITIONS:-16gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
