@@ -193,12 +193,12 @@ inline double Timing_ComputeMLUPS_Instant_Total(float iter_ms) {
 }
 
 // ── 累積平均 MLUPS (Jin 定義, session average) ──
-// per-GPU: pts * steps * 2 / time
-// total:   pts * steps * 2 * jp / time
+// per-GPU: pts * substeps / time      (step 本身即子步計數器, 不再 ×2)
+// total:   pts * substeps * jp / time
 inline double Timing_ComputeMLUPS_Avg_PerGPU(int steps_elapsed, double gpu_seconds) {
     if (gpu_seconds <= 0.0 || steps_elapsed <= 0) return 0.0;
     double pts = (double)(NX6) * (double)(NYD6) * (double)(NZ6);
-    double updates = pts * (double)steps_elapsed * 2.0;
+    double updates = pts * (double)steps_elapsed;  // step 即子步計數器(每子步1次全格更新), 不再 ×2
     return updates / gpu_seconds / 1.0e6;
 }
 inline double Timing_ComputeMLUPS_Avg_Total(int steps_elapsed, double gpu_seconds) {
@@ -372,7 +372,7 @@ inline void Timing_Report(int step, int myid, double FTT_now, const char *argv0)
         // 若無取樣數據, 用區間 GPU 時間估算
         float iter_ms_used = g_timing.last_iter_ms;
         if (iter_ms_used <= 0.0f && steps_since > 0 && g_timing.last_gpu_interval_s > 0.0) {
-            iter_ms_used = (float)(g_timing.last_gpu_interval_s * 1000.0 / (double)(steps_since * 2));
+            iter_ms_used = (float)(g_timing.last_gpu_interval_s * 1000.0 / (double)(steps_since));
         }
         double mlups_total   = Timing_ComputeMLUPS_Instant_Total(iter_ms_used);
         double mlups_pergpu  = Timing_ComputeMLUPS_Instant_PerGPU(iter_ms_used);
@@ -391,7 +391,7 @@ inline void Timing_Report(int step, int myid, double FTT_now, const char *argv0)
                (long long)NX6 * (long long)NYD6 * (long long)NZ6);
         printf("| GPU  time: %.2f min (cumul)\n", gpu_total_min);
         printf("| Wall time: %.2f min (total), %.2f s (last %d sub-steps)\n",
-               wall_total / 60.0, wall_since, steps_since * 2);
+               wall_total / 60.0, wall_since, steps_since);
         printf("| MLUPS (instant):  %8.2f total, %8.2f /GPU  (Iter_ms=%.3f ms)\n",
                mlups_total, mlups_pergpu, iter_ms_used);
         printf("| MLUPS (avg):      %8.2f total, %8.2f /GPU\n",
