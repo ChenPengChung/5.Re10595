@@ -9,7 +9,7 @@
 #   每 2000 iter 印 max_corr) — 不需 GPU。
 # ==============================================================================
 #SBATCH --job-name=Edit6_gridgen
-#SBATCH --account=MST115169
+#SBATCH --account=MST114348
 #SBATCH --partition=dev
 #SBATCH --nodes=1
 #SBATCH --ntasks=1

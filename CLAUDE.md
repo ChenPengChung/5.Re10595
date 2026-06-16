@@ -29,7 +29,7 @@ Do NOT submit, cancel, rebuild, or mutate any job / chain / checkpoint state.
    federation display quirk) — **trust `sacct` for job state**, not squeue.
    Also: `scontrol show job $JID | grep -oE 'Partition=[^ ]+|Account=[^ ]+|TimeLimit=[^ ]+|WorkDir=[^ ]+'`
    (verify WorkDir == this project; expect partition h200/gb200, walltime 4-00:00:00,
-   account mst115169).
+   account mst114348).
 2. **Solver progress** — `slurm_$JID.log`: tail the latest
    `[Step N | FTT=.. Re=.. Ma_max=.. Error=..]` line + latest `[CONV] ...` line
    + the per-2000-step MLUPS block if present. Confirm Step / FTT are advancing.

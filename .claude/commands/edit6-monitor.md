@@ -42,4 +42,4 @@ argument-hint: (無參數; 連續監控請用 /loop /edit6-monitor)
 三層保命:dispatcher(net-best + PENDING re-select)、jobscript Layer 2(compute node 自我續投)、
 systemd(`Restart=on-failure` + linger,15s 級)。另有 Route B:`chain_code/health_watchdog.sh`
 由 `edit6-watchdog.timer`(每 10 分)在**無 session** 時做存活+稽核+自動 restart+推 alert 報告。
-有效 jp ∈ {16,32,64};cap normal=16 / 4nodes=32 / dev=∞;帳號 MST115169;H200=8 GPU/node。
+有效 jp ∈ {16,32,64};cap normal=16 / 4nodes=32 / dev=∞;帳號 MST114348;H200=8 GPU/node。

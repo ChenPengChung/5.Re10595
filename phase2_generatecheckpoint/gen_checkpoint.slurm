@@ -11,7 +11,7 @@
 #
 # Partition 選擇 (2026-06-14 實測 live capacity):
 #   QOS p_8gpus: MinTRES=gres/gpu=1 (只需 1 token GPU), MaxTRESPerAccount=32,
-#   且 MST115169 在 8gpus 用量=0 (Edit6 job 97266 把 16gpus 的 32 cap 佔滿)。
+#   且 MST114348 在 8gpus 用量=0 (Edit6 job 97266 把 16gpus 的 32 cap 佔滿)。
 #   → 用 8gpus + gpu:1 立即開跑, 且不碰保留給 jp=64 chain 的 64gpus。2-day walltime。
 #
 # Poisson 投影: POISSON_SERIAL=1 — 平行 multiprocessing.Pool 會 fork() 繼承大 VSZ,
@@ -21,7 +21,7 @@
 #   (≈ sqrt(N)*eps) 略高於原 1e-12 gate; 沿用 Edit7 已文件化的 2e-12。輸出交 Codex 複驗。
 # ==============================================================================
 #SBATCH --job-name=Edit11_GenerateCheckpoint
-#SBATCH --account=MST115169
+#SBATCH --account=MST114348
 #SBATCH --partition=64gpus
 #SBATCH --nodes=8
 #SBATCH --ntasks=1

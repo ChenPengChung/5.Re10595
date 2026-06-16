@@ -139,9 +139,9 @@
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
 #define     NX      404        // 展向格點 (= Breuer 2009 Re5600 DNS span)
-#define     NY      769         // 流向格點 (Breuer DNS stream=765→769; 需 (NY-1)%jp==0; 768=64×12 ✓ jp=64)
+#define     NY      769         // 流向格點 (Breuer DNS stream=765→769; 需 (NY-1)%jp==0; 768=32×24 ✓ jp=32)
 #define     NZ      750         // 法向格點 (= Breuer 2009 Re5600 DNS wall-normal; 同 2 階 FV → 對等比較)
-#define     jp      64         //  GPU 數量 (流向分割; 接 64gpus slot)
+#define     jp      32         //  GPU 數量 (流向分割; 暫時鎖定 16gpus@32jp)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]

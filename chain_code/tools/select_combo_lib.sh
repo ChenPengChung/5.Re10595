@@ -30,7 +30,7 @@
 # Depends on: cwd=PROJECT_ROOT; partition_lib.sh + jpswitch_lib.sh (sourced below).
 # =============================================================================
 
-SC_ACCT="${SC_ACCT:-MST115169}"
+SC_ACCT="${SC_ACCT:-MST114348}"
 # [NCHC 2026-06-05 政策改版] 舊 federated normal/4nodes/large 已 State=INACTIVE 不可投;
 #   新單叢集 H200 partition = dev / 8gpus / 16gpus / 32gpus / 64gpus, per-account GPU cap
 #   由 QOS p_<partition> MaxTRESPerAccount 決定: dev=4, 8gpus=32, 16gpus=32, 32gpus=32, 64gpus=64。
@@ -46,9 +46,8 @@ SC_ACCT="${SC_ACCT:-MST115169}"
 #   (dev cap=4 < 32、64gpus 需 jp64 + 更細網格; 兩者皆不在候選集。)
 #   帳號手足 job 佔滿某 partition 的 cap 時該組 QOS-BLOCK 罰分不投, 換有空檔的 partition (never-idle)。
 SC_VALID_JP="${SC_VALID_JP:-64}"
-# [EDIT11 Krank5600 warm-start regrid] jp 鎖定 64 (269M 細網格), 唯一容得下 jp=64 的 partition
-#   = 64gpus (per-account cap=64)。dispatcher 只在 64gpus 內續投, 不做 jp-切換、不跳別 partition。
-SC_PARTITIONS="${SC_PARTITIONS:-64gpus}"
+# [Edit12 temporary lock] jp 鎖定 32, 暫時只使用 16gpus partition。
+SC_PARTITIONS="${SC_PARTITIONS:-16gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
 SC_JS="${SC_JS:-chain_code/jobscript_chain.slurm.H200}"
