@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=Edit6_5600DNS 
 #SBATCH --account=MST114348
-#SBATCH --partition=32gpus
+#SBATCH --partition=64gpus
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
