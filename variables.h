@@ -62,7 +62,10 @@
 //   1 = precomputed physical-space isoparametric interpolation path
 // First pass keeps collision, wall BC, MPI, statistics, and dt_global unchanged.
 #ifndef USE_ITBLBM_STREAMING
-#define     USE_ITBLBM_STREAMING    1
+// [Edit12 2026-06-16] ITB-LBM → GILBM Algorithm2 變體:
+//   0 → 自動啟用 USE_GILBM_ALGORITHM2=1(precompute folded 表)+ GILBM2_DEPARTURE_RK4=1(RK4 預設)
+//   + GILBM_ALGO2_STORE=FOLDED(對標 ITBLBM 3.50ms)。對標 Edit11(ITB-LBM/Algorithm1/RK2)。
+#define     USE_ITBLBM_STREAMING    0
 #endif
 #ifndef ITBLBM_STRICT_PRECOMPUTE
 #define     ITBLBM_STRICT_PRECOMPUTE 1
