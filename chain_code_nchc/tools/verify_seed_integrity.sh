@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# verify_seed_integrity.sh — Edit11 warm-start 種子 checkpoint 整性閘 (純唯讀)
+# verify_seed_integrity.sh — Edit13 warm-start 種子 checkpoint 整性閘 (純唯讀)
 # ----------------------------------------------------------------------------
 # 驗 restart/checkpoint/step_00000001 是否為有效的 jp=N 種子場 (interp 產物)。
 # 期望值全部從 variables.h 推導 (NX/NY/NZ/jp) → 隨網格變更自動正確、不寫死。

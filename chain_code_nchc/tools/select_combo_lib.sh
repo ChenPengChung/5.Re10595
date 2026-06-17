@@ -46,7 +46,7 @@ SC_ACCT="${SC_ACCT:-MST115169}"
 #   (dev cap=4 < 32、64gpus 需 jp64 + 更細網格; 兩者皆不在候選集。)
 #   帳號手足 job 佔滿某 partition 的 cap 時該組 QOS-BLOCK 罰分不投, 換有空檔的 partition (never-idle)。
 SC_VALID_JP="${SC_VALID_JP:-64}"
-# [EDIT11 Krank5600 warm-start regrid] jp 鎖定 64 (269M 細網格), 唯一容得下 jp=64 的 partition
+# [EDIT13 Krank5600 warm-start regrid] jp 鎖定 64 (269M 細網格), 唯一容得下 jp=64 的 partition
 #   = 64gpus (per-account cap=64)。dispatcher 只在 64gpus 內續投, 不做 jp-切換、不跳別 partition。
 SC_PARTITIONS="${SC_PARTITIONS:-64gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node

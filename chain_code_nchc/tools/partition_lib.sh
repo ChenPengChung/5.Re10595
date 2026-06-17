@@ -35,7 +35,7 @@ h200_partition_walltime() {
         *)       echo "" ;;
     esac
 }
-# [EDIT11] jp 鎖定 64 → 候選集含 64gpus (cap=64, 唯一容得下 jp=64; 見 select_combo_lib.sh SC_PARTITIONS)。
+# [EDIT13] jp 鎖定 64 → 候選集含 64gpus (cap=64, 唯一容得下 jp=64; 見 select_combo_lib.sh SC_PARTITIONS)。
 h200_known_partitions() { echo "8gpus 16gpus 32gpus 64gpus"; }
 
 h200_partition_cap() {   # static per-account GPU cap (QOS MaxTRESPerAccount, verified 2026-06-05)

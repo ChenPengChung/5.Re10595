@@ -1,10 +1,10 @@
 #!/bin/bash
-#SBATCH --job-name=Edit11_Krank5600
+#SBATCH --job-name=Edit13_2800ITBLBM
 #SBATCH --account=MST115169
 #SBATCH --exclude=25a-hgpn052,25a-hgpn024
-# [Edit11 2026-06-14] 強制排除 25a-hgpn052: interp macro 內插為單執行緒 memory-bound,
+# [Edit13 2026-06-14] 強制排除 25a-hgpn052: interp macro 內插為單執行緒 memory-bound,
 #   該節點單核 ~1.7x 慢 (48min vs 28min/macro)。SBATCH --exclude 不受 blacklist NCHC-health 釋放影響。
-# [Edit11 2026-06-16] 加排除 25a-hgpn024: 該節點劣化, instant MLUPS↓5×(Iter_ms 7.7→37ms)拖垮全場;
+# [Edit13 2026-06-16] 加排除 25a-hgpn024: 該節點劣化, instant MLUPS↓5×(Iter_ms 7.7→37ms)拖垮全場;
 #   昨日曾 hang 過被 NCHC 放回。硬排除以換健康節點續跑。
 #   (種子生成完成後此節點對純 solver 續投無妨, 可日後移除此行。)
 #SBATCH --partition=64gpus
@@ -12,12 +12,12 @@
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
 #SBATCH --cpus-per-task=1
-# [Edit11 2026-06-15] --exclusive 已移除 (種子場已生成完畢 restart/checkpoint/step_00000001)。
+# [Edit13 2026-06-15] --exclusive 已移除 (種子場已生成完畢 restart/checkpoint/step_00000001)。
 #   原為第一輪 phase2 interp 在 head node 用滿 CPU 而加,但實測 --exclusive + cpus-per-task=1
 #   會讓 OpenMPI/PMIx 把 64 ranks 誤映到 7 nodes → "not enough slots... 8 slots requested" →
 #   mpirun 秒崩 RC=1 (曾空轉 58 輪)。移除後與 production-proven Edit6/Edit9 佈局一致;
 #   jp=64 已用 --nodes=8 --gres=gpu:8 吃滿整個 64gpus partition,本就不需 --exclusive 卡位。
-# [POLICY-B1] Edit11 鎖定 64gpus partition → 預設 walltime = 1 天 (NCHC 64gpus MaxTime);
+# [POLICY-B1] Edit13 鎖定 64gpus partition → 預設 walltime = 1 天 (NCHC 64gpus MaxTime);
 #             可由 sbatch --time= 覆寫 / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
@@ -34,7 +34,7 @@
 #
 # 與 GB200 主線 jobscript_chain.slurm.GB200 的差異 (僅 4 處, 其餘邏輯 100% 一致):
 #   (1) partition/nodes/gres — 64gpus / 8 nodes × 8 GPU/node=64  (GB200: gb200 / 16 nodes × 4 GPU/node=64)
-#       對應 variables.h jp=64 (64 streamwise MPI ranks)。Edit11 Krank5600 warm-start regrid;
+#       對應 variables.h jp=64 (64 streamwise MPI ranks)。Edit13 Krank5600 warm-start regrid;
 #       鎖定 64gpus (per-account cap=64), 唯一容得下 jp=64 的 partition。
 #   (2) HPC-SDK 路徑         — Linux_x86_64          (GB200: Linux_aarch64)
 #   (3) CUDA_HOME            — /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
