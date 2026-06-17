@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""checklist.py — Edit6_5600DNS 重要紀錄/狀態檔 checklist 即時生成器.
+"""checklist.py — Edit13_2800ITBLBM 重要紀錄/狀態檔 checklist 即時生成器.
 
 掃描本專案根目錄下 daemon / chain 關鍵狀態檔的「存在性」, 重新標記 [Y]/[N],
 重新蓋上生成時間 + chain head 狀態, 並動態列舉 owner 單例鎖 / slurm 當前 log /
@@ -150,7 +150,7 @@ def build(stats):
 
     # ---- 檔頭 ----
     a("# " + "=" * (LINE_W - 2))
-    a("# Edit6_5600DNS 重要紀錄/狀態檔 checklist")
+    a("# Edit13_2800ITBLBM 重要紀錄/狀態檔 checklist")
     a("# " + "-" * (LINE_W - 2))
     a(f"# 生成時間: {now} | chain head: {jid or '(無)'} ({state})")
     a("# [Y]=存在  [N]=缺失")
@@ -271,7 +271,7 @@ def summary(stats):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Edit6_5600DNS checklist 即時生成器")
+    ap = argparse.ArgumentParser(description="Edit13_2800ITBLBM checklist 即時生成器")
     ap.add_argument("--stdout", action="store_true", help="印到 stdout, 不寫檔")
     ap.add_argument("--check", action="store_true", help="只印摘要; 非預期缺漏則 exit 1")
     ap.add_argument("-o", "--output", default=os.path.join(ROOT, "checklist.txt"),

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ==============================================================================
-# gen_grid.slurm — 在計算節點上產生 Edit6_5600DNS 的 adaptive 網格
+# gen_grid.slurm — 在計算節點上產生 Edit13_2800ITBLBM 的 adaptive 網格
 #   執行: python3 J_Frohlich/grid_zeta_tool.py --auto
 #   讀取: variables.h (NY=641, NZ=321, STRETCH_A=0.80, RATIO_LO=0.0, RATIO_HI=20.0)
 #   產出: J_Frohlich/adaptive_3.fine grid_I641_J321_s0.800000.dat

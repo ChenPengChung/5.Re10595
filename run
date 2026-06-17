@@ -3,11 +3,11 @@
 # run — GILBM Periodic Hill 統一入口 (方案 A)
 # ==============================================================================
 # 根目錄唯一的 shell 入口, 取代過去 10 個 root-level symlink.
-# 所有實作檔案都在 chain_code/ 裡, 本 wrapper 只做 subcommand 路由.
+# 所有實作檔案都在 chain_code_nchc/ 裡, 本 wrapper 只做 subcommand 路由.
 #
 # 用法:
 #   ./run                        自動偵測情境 + 叢集並投遞 (等同舊 ./run.sh)
-#   ./run --status               只看狀態不投遞  (傳給 chain_code/run.sh)
+#   ./run --status               只看狀態不投遞  (傳給 chain_code_nchc/run.sh)
 #   ./run --rebuild              強制重編 a.out 再投
 #   ./run --h200 | --gb200       強制選 cluster
 #   ./run --force-cold           清空所有 state 從頭跑 (須確認)
@@ -45,16 +45,16 @@
 
 set -euo pipefail
 
-# ── 自我定位: wrapper 與 chain_code/ 的相對位置 ──
+# ── 自我定位: wrapper 與 chain_code_nchc/ 的相對位置 ──
 _SELF="$(readlink -f "$0" 2>/dev/null || realpath "$0" 2>/dev/null || echo "$0")"
 PROJECT_ROOT="$(cd "$(dirname "$_SELF")" && pwd)"
-CHAIN_DIR="$PROJECT_ROOT/chain_code"
+CHAIN_DIR="$PROJECT_ROOT/chain_code_nchc"
 
 # 確保 subcommand 執行時 cwd 為 project root (restart/, a.out, result/ 等相對路徑依賴)
 cd "$PROJECT_ROOT"
 
 if [ ! -d "$CHAIN_DIR" ]; then
-    echo "[run] FATAL: chain_code/ 不存在於 $PROJECT_ROOT" >&2
+    echo "[run] FATAL: chain_code_nchc/ 不存在於 $PROJECT_ROOT" >&2
     exit 1
 fi
 
@@ -64,7 +64,7 @@ usage() {
 
 case "${1:-}" in
     ""|--*)
-        # Default / 帶 flag 的傳統用法 → 直接轉給 chain_code/run.sh
+        # Default / 帶 flag 的傳統用法 → 直接轉給 chain_code_nchc/run.sh
         exec bash "$CHAIN_DIR/run.sh" "$@"
         ;;
     status)

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-gif_render_loop.py — 全場 GIF 批次渲染 driver (lbm-render-1 快路徑) [Edit6_5600DNS 版]
+gif_render_loop.py — 全場 GIF 批次渲染 driver (lbm-render-1 快路徑) [Edit13_2800ITBLBM 版]
 ====================================================================================
 依 CLAUDE.md「全場 GIF 動畫設定」+ 使用者更正 (claude_animation):
   * 用 lbm-render-1 快路徑 (render_frame.py --slice-only, fast_slice X=mid 薄板),
@@ -31,7 +31,7 @@ Edit6 與 Edit7 差異:
 """
 import os, sys, re, glob, time, subprocess
 
-ROOT = "/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT = "/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
 PV = "/work/s8313697/software/ParaView-5.12.1-osmesa-MPI-Linux-Python3.10-x86_64/bin/pvbatch"
 RENDER = os.path.join(ROOT, "animation", "render_frame.py")
 GIF_ENC = os.path.join(ROOT, "animation", "gif_encode.py")

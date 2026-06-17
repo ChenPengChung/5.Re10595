@@ -63,11 +63,11 @@ Report concisely. This shortcut is **read-only** — it never changes job/chain 
   (4) 沒問題 → 回報「沒問題」表格。
 
 ### Route B — systemd watchdog timer(無 session 也運作;不修碼)
-- `chain_code/health_watchdog.sh` 由 **`edit6-watchdog.timer`(每 10 分)** 執行,
+- `chain_code_nchc/health_watchdog.sh` 由 **`edit6-watchdog.timer`(每 10 分)** 執行,
   做存活+切換稽核,**自動 `systemctl --user restart`** 死掉的 daemon、watcher 多實例則
-  `daemon_reset.sh` 清成單一,並把問題 best-effort 推到 tracked `chain_code/health_watchdog_alerts.log`。
+  `daemon_reset.sh` 清成單一,並把問題 best-effort 推到 tracked `chain_code_nchc/health_watchdog_alerts.log`。
 - **不修程式碼**(那需 Claude/Route A);code-level 問題只推「診斷 + 需 Claude 修」的報告。
-- 安裝/重裝(冪等):`bash chain_code/install_systemd.sh`;查下次巡檢:
+- 安裝/重裝(冪等):`bash chain_code_nchc/install_systemd.sh`;查下次巡檢:
   `systemctl --user list-timers edit6-watchdog.timer`。
 
 ### 跨 session / 別專案邊界(MUST)
@@ -79,7 +79,7 @@ Report concisely. This shortcut is **read-only** — it never changes job/chain 
 
 ## Project info
 
-- Branch: Edit6_5600DNS
+- Branch: Edit13_2800ITBLBM
 - Remote: origin (GitHub)
 - Language: commit messages should be in Traditional Chinese (繁體中文)
 - This is a CFD (Computational Fluid Dynamics) LBM simulation project running on HPC clusters (H200/GB200).
@@ -106,7 +106,7 @@ This user runs multiple simulation projects on the same HPC cluster.
 
 ### Enforcement
 
-A PreToolUse hook (`chain_code/tools/claude_slurm_guard.sh`) automatically blocks bare `scancel` and modifying `scontrol` commands. If the hook blocks you, do NOT attempt to bypass it.
+A PreToolUse hook (`chain_code_nchc/tools/claude_slurm_guard.sh`) automatically blocks bare `scancel` and modifying `scontrol` commands. If the hook blocks you, do NOT attempt to bypass it.
 
 ## Periodic Hill testing shortcut (triggered by user command)
 
@@ -135,9 +135,9 @@ missing.
    ```bash
    ./run dispatcher start
    ```
-5. **Launch `watcher/hill_watcher.sh`** (the project's one and only watcher):
+5. **Launch `watcher_nchc/hill_watcher.sh`** (the project's one and only watcher):
    ```bash
-   nohup bash watcher/hill_watcher.sh > /dev/null 2>&1 &
+   nohup bash watcher_nchc/hill_watcher.sh > /dev/null 2>&1 &
    ```
    It writes a PID file at `live/watcher.pid`, polls every 30s, and:
    - Always runs `result/4.Ma_U_Time.py --Re <Re>` against the latest stable
@@ -358,7 +358,7 @@ kernel 按 `e_x` 符號查表，避免每個 q 重複計算 Lagrange 係數。
 
 | 項目 | 本專案 (D3Q19) | Duct 參考專案 (D3Q27) |
 |------|---------------|----------------------|
-| 路徑 | `Edit6_5600DNS` | `/home/s8313697/D3Q27_PeriodicHill/Edit2_PeriodicHillDuct` |
+| 路徑 | `Edit13_2800ITBLBM` | `/home/s8313697/D3Q27_PeriodicHill/Edit2_PeriodicHillDuct` |
 | K 矩陣 | `GILBM_MRT_K[19][19]` | `GILBM_MRT_K[27][27]` |
 | Forcing 投影 | 4 表 (F0+Fu+Fv+Fw, 一階時後三為零) | 1 表 `GILBM_MRT_Fproj[27]` |
 | Forcing 基底 | `F0[q] = w_q·3·cy` (兩專案相同) | `F_unit[q] = D3Q27_W[q]*3.0*D3Q27_ey[q]` |

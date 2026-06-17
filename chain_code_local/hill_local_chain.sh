@@ -2,7 +2,7 @@
 # ==============================================================================
 # hill_local_chain.sh — 本地 V100 單節點 8-GPU「一段」執行
 # ------------------------------------------------------------------------------
-# 取代 NCHC 的 chain_code/jobscript_chain.slurm.*(那靠 SLURM walltime + sbatch
+# 取代 NCHC 的 chain_code_nchc/jobscript_chain.slurm.*(那靠 SLURM walltime + sbatch
 # resubmit)。本地由 cfdq daemon 在「搶到的」V100 節點上以此啟動,負責一「段」
 # 計算 + 與 cfdq 溝通要不要續鏈。
 #
@@ -18,7 +18,9 @@
 # 用法 (手動): bash hill_local_chain.sh
 # ==============================================================================
 set -uo pipefail
-cd "$(dirname "$(readlink -f "$0")")"
+# 本腳本位於 <專案根>/chain_code_local/;cd 到上一層 = 專案根,
+# 讓 ./a.out、restart/、run_local_*.log 都落在專案根(cfdq 記的 cwd 也是專案根)。
+cd "$(dirname "$(readlink -f "$0")")/.."
 
 NP="${CFDQ_NP:-8}"
 EXIT_FILE="${CFDQ_EXIT_FILE:-restart/.chain_exit}"

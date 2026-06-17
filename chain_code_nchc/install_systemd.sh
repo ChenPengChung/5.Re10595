@@ -3,7 +3,7 @@
 # 根治: 取代會被 Edit7/2.Re1400 搶寫清掉的 cron-watchdog → systemd Restart=on-failure 守護,
 # enable-linger 讓其登出/reboot 也活, 且完全不碰 user crontab(無 lost-update race)。
 set -e
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"; UDIR="$HOME/.config/systemd/user"
+ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"; UDIR="$HOME/.config/systemd/user"
 mkdir -p "$UDIR"
 cp -f "$ROOT/chain_code/systemd/edit6-dispatcher.service" "$UDIR/"
 cp -f "$ROOT/chain_code/systemd/edit6-watcher.service"    "$UDIR/"

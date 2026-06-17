@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# gif_watchdog.sh — Edit6_5600DNS 全場 GIF 累積器看門狗 (對話獨立 / session-free)
+# gif_watchdog.sh — Edit13_2800ITBLBM 全場 GIF 累積器看門狗 (對話獨立 / session-free)
 # =============================================================================
 # 目的: 讓 1000 幀 GIF 製作「完全不倚賴 Claude 對話」。
 #   - gif_render_loop.py driver 以 setsid nohup 脫離 session 跑。
@@ -20,7 +20,7 @@
 # =============================================================================
 set -u
 
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
 cd "$ROOT" || { echo "cannot cd $ROOT"; exit 1; }
 
 DRIVER_PY="animation/gif_render_loop.py"

@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# switch_partition.sh — Edit6_5600DNS GPU jobscript partition 任意切換工具
+# switch_partition.sh — Edit13_2800ITBLBM GPU jobscript partition 任意切換工具
 # -----------------------------------------------------------------------------
 # 背景: NCHC 取消了 federated "h200"/"gb200" partition,改為單一 hpc 叢集。
 #       本工具讓你把 jobscript 的 #SBATCH --partition / --time 安全切換到
@@ -21,7 +21,7 @@
 #       只改 #SBATCH --partition / --time 兩行;先備份 jobscript。
 # =============================================================================
 set -u
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
 JS="$ROOT/chain_code/jobscript_chain.slurm.H200"
 ACCT="${SWITCH_ACCT:-MST115169}"
 NODES="${SWITCH_NODES:-8}"      # 本案 jp=64 → 8 節點 × 8 GPU

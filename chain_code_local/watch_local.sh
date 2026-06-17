@@ -1,15 +1,17 @@
 #!/bin/bash
 # ==============================================================================
-# watch_local.sh — 本地監看 (取代 NCHC watcher/hill_watcher.sh 的「核心健康監控」)
+# watch_local.sh — 本地監看 (取代 NCHC watcher_nchc/hill_watcher.sh 的「核心健康監控」)
 # ------------------------------------------------------------------------------
 # 不依賴 matplotlib/python:純讀 solver log + checkpoint + cfdq 狀態。
 #   * solver 進度 ([CONV]/[VTK]/[Step]/MLUPS) 有沒有前進
 #   * NaN/DIVERG/FATAL/MPI_Abort 警報
 #   * checkpoint 有沒有持續長出 (斷鍊續跑的依據)
 #   * cfdq job 狀態 + daemon 近期事件 (搶佔/續鏈)
-# 用法:  bash watch_local.sh [間隔秒=30]
+# 用法:  bash chain_code_local/watch_local.sh [間隔秒=30]   (在專案根目錄執行)
 # ==============================================================================
-cd "$(dirname "$(readlink -f "$0")")"
+# 本腳本位於 <專案根>/chain_code_local/;cd 到上一層 = 專案根,才讀得到根目錄的
+# run_local_*.log 與 restart/checkpoint/。
+cd "$(dirname "$(readlink -f "$0")")/.."
 INT="${1:-30}"
 R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; B=$'\e[1m'; Z=$'\e[0m'
 while :; do
