@@ -1,0 +1,74 @@
+# Compiled binaries
+a.out
+a.out.*
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Large data files
+*.vtk
+*.bin
+
+# Simulation runtime outputs
+restart/
+statistics/
+live/
+slurm_*.log
+slurm_*.err
+nan_monitor_log.txt
+gilbm_metrics_full.dat
+meshYZ.DAT
+.run.lock
+STOP_CHAIN
+
+# Auto-generated grid files
+J_Frohlich/adaptive_*.dat
+J_Frohlich/grid_data_*.txt
+J_Frohlich/compare_auto_*.png
+
+# Estimation data (analysis outputs)
+Estimation/
+
+# Animation frames and videos
+animation/png_frames/
+animation/png_uniform_*/
+animation/enc_tmp_*/
+animation/flow_*.mp4
+animation/short_*.mp4
+animation/*.gif
+animation/*.log
+png_frames/
+
+# Result data files (keep Python scripts)
+result/*.dat
+
+# PDF files
+*.pdf
+
+# Three mandatory tracking files — keep .dat.gz, ignore raw .dat
+Ustar_Force_record.dat
+timing_log.dat
+checkrho.dat
+!Ustar_Force_record.dat.gz
+!timing_log.dat.gz
+!checkrho.dat.gz
+DISPATCHER_ACTIVE
+chain_code/health_watchdog_alerts.log
+
+# checklist.txt 由 checklist.py 每個 watcher 週期重新生成(時間戳/checkpoint 每輪變動),
+# 屬即時產物而非原始碼; 不追蹤以免 index-sweep 自動推送器頻繁 commit 造成 spam。
+# 來源(產生器)checklist.py 仍追蹤; 一次性快照已留在 commit 917d1df 歷史中。
+checklist.txt
+
+# --- (migration 2026-06-17) 再生成的快取/輸出, 不追蹤 ---
+result/_slice_cache/
+*.npy
+result/*.png
+result/*_Final.vtk
+J_Frohlich/__pycache__/
+
+# --- local-run runtime / build logs (每段執行或編譯重生的雜訊, 非原始碼) ---
+run_local_*.log
+.cfdq_wrapper.log
+build_local.log

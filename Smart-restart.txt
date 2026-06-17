@@ -1,0 +1,285 @@
+1. ==================== (1) 補 +x (上傳後常被洗掉) =================================================================================
+
+chmod +x run
+chmod +x chain_code/*.sh
+chmod +x chain_code/build_and_submit.sh.*
+chmod +x chain_code/jobscript_chain.slurm.*
+chmod +x chain_code/tools/*.sh
+
+=> 濃縮指令為 "chmod +x " 
+2. ==================== (2) 驗證: 應全都 rwxr-xr-x  ================================================================================ 
+
+ls -la  run chain_code/run.sh
+ls -la  chain_code/tools/blacklist_lib.sh 
+ 
+3. ==================== (3) 確認沒有殘留 state (全新必須是乾淨) ====================================================================
+
+rm -rf restart/
+rm -f DISPATCHER_ACTIVE STOP_DISPATCHER .run.lock
+squeue -u $USER                     # 應該沒任何 job
+sinfo -p dev,gb200-dev -o "%12P %.6a %.6D %.20t"
+
+4. ==================== (4) H200 ====================================================================================================
+
+./run build H200 --build-only
+cp a.out a.out.H200
+ls -la a.out.H200 
+
+=> 濃縮指令為 "H200" 
+
+5. ==================== (5) GB200 ====================================================================================================
+
+./run build GB200 --build-only
+cp a.out a.out.GB200
+ls -la a.out.GB200 
+
+=> 濃縮指令為 "GB200"
+
+6. ==================== (6) 複製檔案到H200 ============================================================================================
+
+cp a.out.H200 a.out
+
+7. ==================== (7) 投首輪 ====================================================================================================
+
+./run
+cat restart/chain_count
+cat restart/chain_jobid
+./run dispatcher start
+./run dispatcher status
+
+
+###################################################################################################
+
+以後進入專案只有 ==> 
+
+cd /home/s8313697/2.Re1400_129x257x129
+
+# 冷啟動完整流程 (rsync 後第一次)
+chmod +x        # 補權限 (單獨一個 +x, 無檔名參數就觸發專案版)
+H200            # 編 H200 binary
+GB200           # 編 GB200 binary
+cp a.out.H200 a.out
+lbm-run         # 投首輪 + 啟 dispatcher + 顯示狀態 
+
+
+
+
+
+計畫守門員 : paetition 數量以及 partition轉換計畫 
+ Plan — Net-throughput-optimal, never-idle, jp×partition auto-switching daemon
+
+ Context (why)
+
+ The sim keeps stalling and wasting compute: the h200/gb200 federated partitions were
+ removed, the old dispatcher (chain_code/submit_dispatcher.sh) loops "no-capacity" on the
+ defunct candidates, and a jp=64 job is permanently rejected (MaxGRESPerAccount: per-account
+ GPU cap = 32 on normal/4nodes). We already switched to jp=32 (checkpoint step_9500001,
+ repartitioned + metadata fixed, validates, ready to resume).
+
+ The user's true objective (confirmed): never let the run idle, and at every decision point
+ automatically run the (jp × partition) combination with the highest net throughput — not
+ the largest GPU count for its own sake. jp must be freely switchable, which requires making
+ checkpoint repartition statistics-preserving (currently it drops the 36 sum_* fields).
+
+ Hard facts that shape the design
+
+ - Partitions (single H200 cluster): normal (2-day, cap 32 GPU/acct), 4nodes (1-day, cap 32),
+ dev (1-hour, uncapped), large/slinky (gov-only → unusable).
+ - H200 = 8 GPU/node. Valid jp for NY=641: 640%jp==0 && 640/jp≥7 && jp%8==0 → {16, 32, 64}
+ (128 impossible: slab 5<7). **jp=64 ⇒ dev-only** (64>32 cap); jp≤32 fits all three.
+ - jp is compile-time (variables.h #define jp) → each jp needs its own binary.
+ - Repartition is bit-exact (pure per-rank slab stitch→split; y-axis is periodic, main.cu:426)
+ — verified the 36 sum_* fields share rho's exact layout (all 14,542,344 B/file).
+ - Stats not needed yet: FTT_STATS_START=40, current FTT=13.97, accu_count=0. So jp-switching
+ is already lossless today → ship the daemon first, land stats-preservation before FTT 40.
+ - Solver gates: [G6] checks mpi_rank_count+grid_dims (fileIO.h:~609); run.sh Preflight-C
+ checks variables_h_mtime (NOT new_jp/new_chunk_j — those are cosmetic).
+
+ Objective / decision logic
+
+ Trigger points: (a) every round-end, (b) job stuck PENDING > timeout (~10 min).
+
+ 1. Read FTT + current jp (checkpoint metadata mpi_rank_count) + accu_count.
+ 2. Enumerate ADMISSIBLE combos c=(jp,partition):
+      valid jp {16,32,64} × {normal,4nodes,dev}
+      HARD filters: jp≤32 for normal/4nodes (cap); a.out.jp<N> exists; partition auth ok.
+ 3. For each c: probe start-ETA via `sbatch --test-only ... --exclude=25a-hgpn207`.
+ 4. Score net throughput (additive FTT-over-horizon, below); pick argmax.
+ 5. Apply: partition-only change → sbatch CLI flags (no file mutation).
+           jp change → stop cleanly → repartition → cp a.out.jp<N> → update variables.h+provenance → submit.
+ 6. PENDING re-select: if submitted job pends > timeout → (race-guard) re-run selection (may
+    pick a smaller jp / dev to start now). NEVER idle-wait while dev can place a job.
+
+ Net-throughput model (corrected: additive, in FTT units)
+
+ net(c) = r_ftt(jp) · max(0, H − startdelay(c) − switch_overhead(c))
+ - r_ftt(jp) = realized FTT/hour at jp, measured from timing_log.dat (ΔFTT/ΔWall_min×60),
+ persisted to restart/throughput_by_jp.dat. Cold-start: anchor on measured jp=32, provisional
+ r_ftt(jp)=r_ftt(32)·(jp/32)^0.85 (sub-linear), replaced by measurement after one round.
+ - startdelay(c) = probed ETA wait (hours; ≈0 for dev since uncapped).
+ - switch_overhead(c) = repartition (~3 min, only if jp changes) + restart init.
+ - H = 48 h at round-end; 1 h at PENDING re-select (favors start-now).
+ - Never-idle by construction: dev always yields a placeable-now combo; selector returns a
+ placeable combo unless a soon-free one strictly beats "dev-now + re-decide."
+ - Anti-thrash: switch jp only if net(best_other_jp) > net(current_jp)·1.15; min 2-round
+ dwell per jp; partition-only switches are cheap (margin ≈1.0).
+ - Productivity guard: treat a combo as productive only if r_ftt(jp)·walltime ≥ one checkpoint interval (NDTBIN=100000); a dev slot too short
+ to reach a checkpoint is net-negative.
+
+ Architecture — EXTEND the dispatcher, don't rewrite
+
+ The dispatcher's locking/sentinel/exit-code machinery is the asset and is correct (staged
+ mv -T HEAD.lockdir, SUBMITTING→PENDING→RUNNING, stale self-heal, TBD-race window, RC=42 stop /
+ RC=0+STOP_CHAIN natural-stop, blacklist, grace period). Replace only the broken selection brain
+ and add jp-switching; keep all of it. Hot path is pure file-ops + sbatch — never nvcc.
+
+ File reorganization — consolidate all plan-touched scripts into chain_code/
+
+ Per user: every script this plan uses lives under chain_code/ (operator tools together; binaries
+ and restart/ runtime data stay where the run expects them).
+ - Move repartition_jp.py → chain_code/repartition_jp.py.
+ - Move changejp.sh → chain_code/changejp.sh; fix ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ and REPART="$(dirname "$0")/repartition_jp.py". Keep a 2-line root wrapper changejp.sh
+ (exec chain_code/changejp.sh "$@") so the claude_changejp shortcut (./changejp.sh) still works.
+ - New daemon/libs go under chain_code/tools/ (alongside the existing *_lib.sh).
+ - Only code coupling to fix: changejp.sh's REPART/ROOT (above); CLAUDE.md shortcut text is
+ descriptive (update the claude_changejp path note in the project CLAUDE.md).
+ - Stay put: a.out.jp* binaries + a.out (run dir root); restart/throughput_by_jp.dat,
+ restart/checkpoint/, sentinels (restart/).
+
+ Files to CREATE
+
+ ┌──────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────┐
+ │                       File                       │                                       Purpose                                        │
+ ├──────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+ │ chain_code/tools/select_combo_lib.sh             │ enumerate admissible combos, ETA probe, r_ftt measure, net-score, pick_combo,        │
+ │                                                  │ --simulate dry-run                                                                   │
+ ├──────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+ │ chain_code/tools/jpswitch_lib.sh                 │ jp-switch core: repartition + cp a.out.jp<N> (NO build) + edit variables.h + update  │
+ │                                                  │ provenance mtime. Sourced by daemon AND chain_code/changejp.sh                       │
+ ├──────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+ │ chain_code/tools/roundtrip_verify.sh             │ byte-exact sha256 round-trip gate (jp→X→jp on a ckpt copy)                           │
+ ├──────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+ │ changejp.sh (root, 2-line wrapper →              │ preserve claude_changejp shortcut                                                    │
+ │ chain_code/changejp.sh)                          │                                                                                      │
+ ├──────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+ │ a.out.jp32 (have), a.out.jp64 (build),           │ pre-built per-jp binaries (run-dir root)                                             │
+ │ a.out.jp16 (optional)                            │                                                                                      │
+ ├──────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────┤
+ │ restart/throughput_by_jp.dat                     │ persisted measured r_ftt(jp) (runtime data)                                          │
+ └──────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────┘
+
+ Files to MOVE + MODIFY
+
+ ┌───────────────────────────────────────┬──────────────────────────────────────────────────────────────────────────────────────────────────┐
+ │            File (new path)            │                                              Change                                              │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │                                       │ add 36 sum_* re-split + copy 3 global cv_*_history + carry accu_count/cv_count (metadata already │
+ │ chain_code/repartition_jp.py (moved)  │  carried); update file-count to 20*jp + (36*jp if stats) + cv + 1. Do NOT rewrite the width math │
+ │                                       │  — Codex verified the two formulas (with-ghost +7 / without-ghost +1) are algebraically          │
+ │                                       │ identical; add a clarifying comment only                                                         │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ chain_code/changejp.sh (moved)        │ fix ROOT="$(dirname $0)/.."/REPART; source jpswitch_lib.sh; drop in-line ./run --rebuild (use cp │
+ │                                       │  a.out.jp<N>); guard GB200 sed with [ -f "$JS_GB200" ] (GB200 dropped)                           │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │                                       │ replace PARTITION_CANDIDATES/pick_cluster with select_combo_lib; add jp-switch step in           │
+ │ chain_code/submit_dispatcher.sh       │ submit_round (after lock, before binary swap, fall back to current jp on repartition failure);   │
+ │                                       │ cp a.out.jp<N>; drop GB200/a.out.GB200; add PENDING re-select. Keep all                          │
+ │                                       │ locking/sentinel/exit/blacklist/grace code.                                                      │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │                                       │ (P1 fix) add a REPARTITIONING lock state treated as live for up to ~10 min, so the 3-min         │
+ │ chain_code/tools/head_lock_lib.sh     │ repartition inside submit_round is not stolen by the 30-s HEAD_STALE_TIMEOUT (else a 2nd         │
+ │                                       │ submitter duplicates the job)                                                                    │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │                                       │ (P2 correctness fix) mpirun -np 32 (line ~521, stale comment says 64) → mpirun -np "$NP"         │
+ │ chain_code/jobscript_chain.slurm.H200 │ (NP=${SLURM_NTASKS:-32} already defined ln 253) so size comes from sbatch                        │
+ │                                       │ --nodes/--ntasks-per-node=8/--gres=gpu:8 CLI → no per-switch jobscript mutation. --map-by        │
+ │                                       │ ppr:8:node is jp-independent → not mutated. Fix stale comments (ln 25, 519)                      │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ chain_code/tools/partition_lib.sh     │ add h200_partition_walltime map (normal=2-00:00:00, 4nodes=1-00:00:00, dev=1:00:00); selector    │
+ │                                       │ falls back to jobscript #SBATCH --time if absent                                                 │
+ ├───────────────────────────────────────┼──────────────────────────────────────────────────────────────────────────────────────────────────┤
+ │ CLAUDE.md (project)                   │ update claude_changejp path note → chain_code/changejp.sh                                        │
+ └───────────────────────────────────────┴──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+ Codex review — folded-in corrections
+
+ - P1 (critical race): jp-switch holds HEAD.lockdir in SUBMITTING for ~3 min, but HEAD_STALE_TIMEOUT=30s → another submitter would steal it and
+ double-submit. Fix = new REPARTITIONING state (or scoped 600 s timeout) in head_lock_lib.sh, live until repartition completes. Must land
+ before Phase 4.
+ - P1 (my plan was wrong): the +7/+1 width formulas are algebraically equal (with-ghost vs without-ghost) → drop the "unify" rewrite, document
+ instead. Keeps risk out of the stats code.
+ - P2: mpirun -np 32 is hardcoded (not $NP) — the CLI-sizing design only works after this one-line fix. Confirmed correctness, not cleanup.
+ - P3 (never-idle): productivity guard r_ftt·walltime ≥ checkpoint interval could make a 1-h dev slot net-negative and stall. Use NDTBIN/2 for
+ dev (keep-alive path) so dev never gets fully excluded.
+ - M1: PENDING re-select MUST cancel the stuck job via ./run job-guard scancel (never bare scancel) + re-check squeue/lock state to abort if it
+ flipped PENDING→RUNNING in the race window.
+ - M2: define a.out.jp<N> naming + presence check + a tiny manifest (jp↔binary md5) so the daemon never cps a mismatched binary.
+ - M3: stats round-trip test before Phase 5 = generate mock sum_*_<rank>.bin with known values → repartition → round-trip → sha256 compare
+ (real sum_* only exist after FTT 40).
+
+ REUSE (do not reimplement)
+
+ - head_lock_lib.sh: acquire_head_lock, write_head_jobid, verify_am_head, release_head_lock[_if_mine], _head_squeue_state.
+ - blacklist_lib.sh: bl_effective_exclude, bl_add (keeps 25a-hgpn207 excluded).
+ - submit_dispatcher.sh: chain_has_active_job, chain_last_exit_code, submit_round skeleton, grace/no-capacity loop, exit-code handling.
+ - changejp.sh: transactional ckpt swap (TMP → mv-bak → mv-in → relink latest); jp-validity check; ./run job-guard scancel discipline.
+ - switch_partition.sh: probe_ok (full sbatch --test-only), acct_allowed (AllowAccounts), to_sec (walltime parse + auto-cap).
+
+ Safety gates (mandatory)
+
+ - Byte-exact round-trip gate before enabling any jp-switch: sha256 every f*/rho/sum_*
+ after jp→X→jp must be identical. On ANY mismatch → freeze jp (partition-only switching) +
+ write restart/STOP_JPSWITCH + loud log.
+ - No nvcc in hot path (cp pre-built binary only); binary jp verified via manifest.
+ - Never rebuild while a job runs; jp-switch only happens between rounds (no active job).
+ - scancel only via ./run job-guard scancel (WorkDir-verified, cross-project safe).
+ - PENDING→RUNNING race guard: re-check squeue/lock state before any re-select scancel.
+ - Repartition failure → fall back to current jp (submit, never idle); keep _bak until a clean
+ new-jp checkpoint exists; retain only newest 1–2 _bak.
+
+ Phased implementation (de-risked ordering)
+
+ - Phase 0 (immediate, mostly read-only): resume jp=32 on normal (fixed ckpt) as the
+ baseline so compute proceeds; pre-build a.out.jp64. Build roundtrip_verify.sh and run on a
+ copy of the live checkpoint (32→64→32, 32→16→32). Build select_combo_lib --simulate and watch
+ its choices for sanity (no locking/submit).
+ - Phase 1: harden repartition_jp.py (add stats-preserving paths + round-trip assert; document
+     - switch_partition.sh: probe_ok (full sbatch --test-only), acct_allowed (AllowAccounts), to_sec (walltime parse + auto-cap).
+
+     Safety gates (mandatory)
+
+     - Byte-exact round-trip gate before enabling any jp-switch: sha256 every f*/rho/sum_*
+     after jp→X→jp must be identical. On ANY mismatch → freeze jp (partition-only switching) +
+     write restart/STOP_JPSWITCH + loud log.
+     - No nvcc in hot path (cp pre-built binary only); binary jp verified via manifest.
+     - Never rebuild while a job runs; jp-switch only happens between rounds (no active job).
+     - scancel only via ./run job-guard scancel (WorkDir-verified, cross-project safe).
+     - PENDING→RUNNING race guard: re-check squeue/lock state before any re-select scancel.
+     - Repartition failure → fall back to current jp (submit, never idle); keep _bak until a clean
+     new-jp checkpoint exists; retain only newest 1–2 _bak.
+
+     Phased implementation (de-risked ordering)
+
+     - Phase 0 (immediate, mostly read-only): resume jp=32 on normal (fixed ckpt) as the
+     baseline so compute proceeds; pre-build a.out.jp64. Build roundtrip_verify.sh and run on a
+     copy of the live checkpoint (32→64→32, 32→16→32). Build select_combo_lib --simulate and watch
+     its choices for sanity (no locking/submit).
+     - Phase 1: harden repartition_jp.py (add stats-preserving paths + round-trip assert; document
+     ones once they exist after FTT 40).
+     - Phase 2: extract jpswitch_lib.sh; refactor changejp.sh onto it; DRY-RUN verify.
+     - Phase 3: select_combo_lib.sh with unit tests (mock sbatch --test-only output).
+     - Phase 4: surgically wire selector + jp-switch into submit_dispatcher.sh.
+     - Phase 5 (staged rollout): shadow mode (log choice, submit fixed jp=32) → partition-only
+     switching → jp-switching while accu_count==0 (safe today) → land stats-preservation + its
+     byte-exact gate before FTT reaches 40.
+
+     Verification
+
+     - roundtrip_verify.sh: sha256 round-trip == identity for f/rho (and sum_* once present).
+     - select_combo_lib --simulate: prints admissible combos, probed ETAs, r_ftt, net scores, choice
+     — sane for several rounds before going live.
+     - Shadow mode: daemon's chosen combo matches a hand-check.
+     - End-to-end on a real round: FTT advancing, [G6] Schema OK, no MPI_Abort/FATAL, checkrho≈1.0;
+     after a post-FTT-40 jp switch, confirm accu_count preserved and stats continuous (not reset). 
+      

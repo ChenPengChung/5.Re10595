@@ -1,0 +1,478 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# cfdq — CFDLab 本地 SSH 叢集「排隊 + 搶佔」工具 (focused build)
+# ------------------------------------------------------------------------------
+# 用途: 把一個多-GPU job 排進佇列, 一個 daemon 持續 probe 各節點;
+#       一旦出現符合條件(預設 V100、整台 8 卡全空)的節點, 立刻原子搶下並啟動;
+#       job 崩潰/節點掛掉 → 從 checkpoint 換節點續跑 (--chain);  收斂/停 → 停鏈。
+#
+# 設計取捨 (單一使用者場景 → 簡單即正確):
+#   * 單一 daemon (singleton 鎖, NFS mtime 判活, 空鎖有界回收)。
+#   * daemon 內「序列」處理 job → 同一輪不可能兩次搶同一節點 → 不需 per-node 鎖。
+#   * 已跑 job 所在節點自動排除候選 → 不會重複搶。
+#   * 搶前對該節點「再 probe 一次」確認仍空。
+#   * debounce: 節點連續 N 輪全空才搶 (擋別人 MPI 重啟瞬間的假空檔)。
+#   * 崩潰/失聯判定: exit 檔(wrapper 寫到 NFS) > liveness(PID+start-time 防 PID 重用)
+#                    > 連續失聯 TTL (非 job 年齡) 才判 node-lost。
+#   * 啟動視窗崩潰安全: 先寫 launchepoch 再取 pid; reconcile 能回復 launching 殘局。
+#   * 只認 V100 (--model V100): 沒有空的 V100 就「繼續等」, 絕不退而求其次。
+#
+# 子指令:  add | daemon | ls | status | stop | rm | log | nodes | help
+# ==============================================================================
+set -u
+
+CFDQ_HOME="${CFDQ_HOME:-$HOME/.cfdq}"
+PROBE="${CFDQ_PROBE:-$HOME/.local/bin/cfdq-probe.sh}"
+INTERVAL="${CFDQ_INTERVAL:-20}"     # daemon 輪詢秒數
+DEBOUNCE="${CFDQ_DEBOUNCE:-2}"      # 連續幾輪全空才搶
+LOST_TTL="${CFDQ_LOST_TTL:-180}"    # 連續失聯幾秒才判 node-lost
+MEMFREE="${CFDQ_MEMFREE:-1024}"     # GPU mem_used < 此 (MB) 視為空卡
+SSH=(ssh -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=no)
+SSH_TMO=10                          # 每節點 probe/launch 外層 timeout
+
+D_JOBS="$CFDQ_HOME/jobs"
+D_LOCK="$CFDQ_HOME/daemon.lock"
+F_DLOG="$CFDQ_HOME/daemon.log"
+F_STOP="$CFDQ_HOME/daemon.stop"
+F_SEQ="$CFDQ_HOME/seq"
+
+mkdir -p "$D_JOBS"
+
+now(){ date +%s; }
+ts(){ date '+%F %T'; }
+dlog(){ printf '%s %s\n' "$(ts)" "$*" >> "$F_DLOG"; }
+say(){ printf '%s\n' "$*" >&2; }
+mtime(){ stat -c %Y "$1" 2>/dev/null || echo 0; }
+
+# colors
+R=$'\e[31m'; G=$'\e[32m'; Y=$'\e[33m'; C=$'\e[36m'; B=$'\e[1m'; Z=$'\e[0m'
+
+# ---- key=value 讀寫 (value 可含空白) ----
+meta_get(){ # file key
+  [ -f "$1" ] || return 0
+  sed -n "s/^$2=//p" "$1" | head -1
+}
+meta_set(){ # file key value  (原子: 重寫)
+  local f="$1" k="$2" v="$3" tmp
+  tmp="$f.tmp.$$"
+  { [ -f "$f" ] && grep -v "^$k=" "$f"; printf '%s=%s\n' "$k" "$v"; } > "$tmp" 2>/dev/null
+  mv -f "$tmp" "$f"
+}
+status_get(){ cat "$D_JOBS/$1/status" 2>/dev/null; }
+status_set(){ printf '%s' "$2" > "$D_JOBS/$1/status.tmp"; mv -f "$D_JOBS/$1/status.tmp" "$D_JOBS/$1/status"; }
+
+# 候選節點: job 指定 > $CFDQ_NODES > /etc/hosts 的 CFDLab-*
+default_nodes(){
+  if [ -n "${CFDQ_NODES:-}" ]; then printf '%s\n' $CFDQ_NODES; return; fi
+  grep -iE '^[0-9].*[[:space:]]CFDLab-' /etc/hosts 2>/dev/null \
+    | awk '{print $2}' | grep -iE '^CFDLab-' | sort -V -u
+}
+
+# ---- 對單一節點 probe (回傳原始多行; 不可信除非含 END 行) ----
+probe_one(){ # node pids starts
+  timeout "$SSH_TMO" "${SSH[@]}" "$1" "bash '$PROBE' '${2:--}' '${3:--}'" 2>/dev/null
+}
+has_end(){ printf '%s' "$1" | grep -q "^END|"; }
+
+# ---- 解析 probe 原始輸出 ----
+p_nproc(){ printf '%s' "$1" | awk -F'|' '$1=="H"{print $3; exit}'; }
+p_model(){ printf '%s' "$1" | awk -F'|' '$1=="M"{print $2; exit}'; }
+p_ngpu(){  printf '%s' "$1" | awk -F'|' '$1=="M"{print $3; exit}'; }
+p_foreign(){ printf '%s' "$1" | awk -F'|' '$1=="A"' | grep -c . ; }
+p_freegpu(){ # raw memfree -> count GPUs with numeric mem < memfree
+  printf '%s' "$1" | awk -F'|' -v m="$2" '$1=="G" && $4 ~ /^[0-9]+$/ && $4 < m {c++} END{print c+0}'
+}
+p_live(){ printf '%s' "$1" | awk -F'|' -v p="$2" '$1=="L" && $2==p {print $3; exit}'; }
+
+# 「整台全空」(健康 + 有 GPU + 無外人 app + 所有 GPU 都空) — debounce streak 用
+is_fully_free(){ # raw
+  local raw="$1" nc ng
+  has_end "$raw" || return 1
+  nc=$(p_nproc "$raw"); [[ "$nc" =~ ^[0-9]+$ ]] || return 1     # SICK
+  ng=$(p_ngpu "$raw");  [[ "$ng" =~ ^[0-9]+$ ]] && [ "$ng" -ge 1 ] || return 1
+  [ "$(p_foreign "$raw")" -eq 0 ] || return 1                   # 有外人
+  [ "$(p_freegpu "$raw" "$MEMFREE")" -ge "$ng" ] || return 1    # 每張卡都空
+  return 0
+}
+# 符合某 job 需求 (model / np)
+node_ok_for(){ # raw np model_req
+  local raw="$1" np="$2" req="$3" ng md
+  is_fully_free "$raw" || return 1
+  ng=$(p_ngpu "$raw"); [ "$ng" -ge "$np" ] || return 1
+  if [ -n "$req" ]; then md=$(p_model "$raw"); [ "${md,,}" = "${req,,}" ] || return 1; fi
+  return 0
+}
+
+# ===================== singleton 鎖 (NFS mtime 判活) =====================
+acquire_singleton(){
+  local tries=0
+  while :; do
+    if mkdir "$D_LOCK" 2>/dev/null; then
+      printf '%s|%s|%s\n' "$$" "$(hostname -s)" "$(now)" > "$D_LOCK/owner"
+      touch "$D_LOCK/alive"; return 0
+    fi
+    # 已存在: 用 alive 檔 mtime 判 daemon 是否還活 (跨節點 NFS 可靠)
+    local a="$D_LOCK/alive" age
+    if [ -e "$a" ]; then age=$(( $(now) - $(mtime "$a") )); else age=999; fi
+    if [ "$age" -le $(( INTERVAL*3 + 30 )) ]; then
+      say "${R}cfdq: 已有 daemon 在跑 (lock $D_LOCK, alive ${age}s 前)。先 cfdq stop。${Z}"; return 1
+    fi
+    # 陳舊 → 回收 (有界, 不無限 spin)
+    dlog "reclaim stale daemon.lock (alive ${age}s ago)"
+    rm -rf "$D_LOCK"; tries=$((tries+1)); [ "$tries" -ge 5 ] && { say "cfdq: 無法取得鎖"; return 1; }
+  done
+}
+release_singleton(){ rm -rf "$D_LOCK"; }
+
+# ===================== 啟動一段 job 到節點 =====================
+launch_job(){ # id node np
+  local id="$1" node="$2" np="$3" d="$D_JOBS/$1"
+  local cwd cmd ef out pid sid
+  cwd=$(meta_get "$d/spec" cwd); cmd=$(meta_get "$d/spec" cmd)
+  ef="$d/exit"
+  # 搶前再 probe 一次, 確認仍整台全空
+  local raw; raw=$(probe_one "$node" - -)
+  if ! node_ok_for "$raw" "$np" "$(meta_get "$d/spec" model)"; then
+    dlog "job $id: $node 搶前複查已不空, 放棄本輪"; return 1
+  fi
+  rm -f "$ef"
+  # 先寫 launchepoch (取 pid 前) → 崩潰安全
+  meta_set "$d/run" node "$node"
+  meta_set "$d/run" launchepoch "$(now)"
+  status_set "$id" launching
+  dlog "job $id: 搶下 $node (np=$np), 啟動 wrapper..."
+  # nohup 啟動; 回傳 pid|start-time(/proc/pid/stat 第22欄, 防 PID 重用)
+  out=$(timeout "$SSH_TMO" "${SSH[@]}" "$node" \
+        "cd '$cwd' && export CFDQ_EXIT_FILE='$ef' CFDQ_NP='$np' && \
+         nohup $cmd >> '$cwd/.cfdq_wrapper.log' 2>&1 </dev/null & \
+         p=\$!; echo \"\$p|\$(awk '{print \$22}' /proc/\$p/stat 2>/dev/null)\"" 2>/dev/null)
+  pid="${out%%|*}"; sid="${out#*|}"
+  if [[ "$pid" =~ ^[0-9]+$ ]]; then
+    meta_set "$d/run" pid "$pid"; meta_set "$d/run" startid "${sid:--}"
+    meta_set "$d/run" started "$(now)"; meta_set "$d/run" lastalive "$(now)"
+    status_set "$id" running
+    dlog "job $id: RUNNING @ $node pid=$pid"
+    return 0
+  fi
+  # 啟動失敗 → 回滾佇列
+  dlog "job $id: 啟動失敗 (out='$out'), 回滾 queued"
+  rm -f "$d/run"; status_set "$id" queued; return 1
+}
+
+# ===================== 處理 job 結束 =====================
+# [Bug B 修正] 清節點上本使用者殘留的 a.out/mpirun (orphan) — 否則自己的孤兒佔住節點
+#   (FOREIGN>0) → is_fully_free=false → 永遠無法重搶 → 斷鍊。
+#   先送 USR1 給 a.out (嘗試存檔, 保住進度) → 等最多 18s → 仍在則強制 kill。
+#   只在「異常死亡(wrapper 不見/節點失聯)」時清; 正常 exit 檔結束時 a.out 已退出, 不需清。
+cleanup_orphans(){ # node
+  local n="$1"; [ -n "$n" ] || return 0
+  timeout 25 "${SSH[@]}" "$n" '
+    pgrep -u "$USER" -x a.out >/dev/null 2>&1 || exit 0
+    pkill -USR1 -u "$USER" -x a.out 2>/dev/null
+    for i in $(seq 1 18); do sleep 1; pgrep -u "$USER" -x a.out >/dev/null 2>&1 || break; done
+    pkill -9 -u "$USER" -x a.out 2>/dev/null
+    pkill -9 -u "$USER" -x mpirun 2>/dev/null
+    true' 2>/dev/null
+}
+finish_job(){ # id code reason
+  local id="$1" code="$2" reason="${3:-}" d="$D_JOBS/$1"
+  local chain; chain=$(meta_get "$d/spec" chain)
+  case "$code" in
+    0)  status_set "$id" done;   dlog "job $id DONE (exit0 $reason) → 停鏈" ;;
+    42) status_set "$id" failed; dlog "job $id FAILED (exit42 設定錯誤 $reason)" ;;
+    *)  if [ "$chain" = 1 ]; then
+          local rn cln=""; rn=$(meta_get "$d/run" node)
+          case "$reason" in killed|node-lost) cleanup_orphans "$rn"; cln=" + 清 ${rn:-?} 殘留" ;; esac
+          rm -f "$d/run"; status_set "$id" queued
+          dlog "job $id 續鏈 (code=$code $reason)$cln → 重排, 下台從 checkpoint 續"
+        else
+          status_set "$id" done; dlog "job $id 結束 (code=$code $reason, 無 --chain)"
+        fi ;;
+  esac
+}
+
+# launching 殘局回復 (daemon 在啟動視窗被殺)
+recover_launching(){ # id node
+  local id="$1" node="$2" d="$D_JOBS/$1" le age pids
+  le=$(meta_get "$d/run" launchepoch); [[ "$le" =~ ^[0-9]+$ ]] || le=0
+  age=$(( $(now) - le ))
+  [ "$age" -lt 60 ] && return 0     # 還在啟動視窗內, 下輪再看
+  pids=$(timeout "$SSH_TMO" "${SSH[@]}" "$node" "pgrep -u \"\$USER\" -f hill_local_chain.sh | head -1" 2>/dev/null)
+  if [[ "$pids" =~ ^[0-9]+$ ]]; then
+    local sid; sid=$(timeout "$SSH_TMO" "${SSH[@]}" "$node" "awk '{print \$22}' /proc/$pids/stat 2>/dev/null" 2>/dev/null)
+    meta_set "$d/run" pid "$pids"; meta_set "$d/run" startid "${sid:--}"
+    meta_set "$d/run" lastalive "$(now)"; status_set "$id" running
+    dlog "job $id: launching 殘局回復 → adopt pid=$pids @ $node"
+  else
+    rm -f "$d/run"; status_set "$id" queued
+    dlog "job $id: launching 無對應 process (age ${age}s) → 回滾 queued"
+  fi
+}
+
+# ===================== reconcile 執行中的 job =====================
+reconcile(){
+  local d id st ef code node pid sid raw lstate la
+  for d in "$D_JOBS"/*/; do
+    [ -d "$d" ] || continue
+    id=$(basename "$d"); st=$(status_get "$id")
+    [ "$st" = running ] || [ "$st" = launching ] || continue
+    ef="$d/exit"
+    # 1) wrapper 已寫 exit 檔 → 權威
+    if [ -s "$ef" ]; then
+      code=$(tr -dc '0-9' < "$ef" | head -c 5); [ -n "$code" ] || code=1
+      finish_job "$id" "$code" "exitfile"; continue
+    fi
+    node=$(meta_get "$d/run" node); pid=$(meta_get "$d/run" pid)
+    sid=$(meta_get "$d/run" startid)
+    # 2) launching 但還沒 pid → 殘局回復
+    if [ "$st" = launching ] || [ -z "$pid" ]; then
+      [ -n "$node" ] && recover_launching "$id" "$node"; continue
+    fi
+    # 3) liveness probe
+    raw=$(probe_one "$node" "$pid" "$sid")
+    if ! has_end "$raw"; then
+      la=$(meta_get "$d/run" lastalive); [[ "$la" =~ ^[0-9]+$ ]] || la=0
+      if [ $(( $(now) - la )) -gt "$LOST_TTL" ]; then
+        dlog "job $id: $node 連續失聯 > ${LOST_TTL}s → node-lost"
+        finish_job "$id" 137 "node-lost"
+      fi
+      continue   # 暫時失聯, 維持 running
+    fi
+    lstate=$(p_live "$raw" "$pid")
+    if [ "$lstate" = alive ]; then
+      meta_set "$d/run" lastalive "$(now)"
+    else
+      # process 不在但無 exit 檔 → 等一拍再確認 (wrapper 可能正在寫)
+      sleep 1
+      if [ -s "$ef" ]; then code=$(tr -dc '0-9' < "$ef" | head -c 5); finish_job "$id" "${code:-1}" "late-exit"
+      else dlog "job $id: pid $pid 消失且無 exit 檔 → 視為被 kill/崩潰"; finish_job "$id" 137 "killed"; fi
+    fi
+  done
+}
+
+# ===================== 排程 queued job =====================
+declare -A FREE_STREAK
+schedule(){
+  local qids=() d id st n
+  for d in "$D_JOBS"/*/; do [ -d "$d" ] || continue; id=$(basename "$d")
+    [ "$(status_get "$id")" = queued ] && qids+=("$id"); done
+  [ "${#qids[@]}" -eq 0 ] && return 0
+  IFS=$'\n' qids=($(printf '%s\n' "${qids[@]}" | sort)); unset IFS  # FIFO
+
+  # 已被自己 job 佔用的節點 → 排除
+  declare -A BUSY
+  for d in "$D_JOBS"/*/; do [ -d "$d" ] || continue; id=$(basename "$d")
+    st=$(status_get "$id"); case "$st" in running|launching) BUSY["$(meta_get "$d/run" node)"]=1;; esac; done
+
+  # 候選節點 union
+  declare -A CAND
+  for id in "${qids[@]}"; do
+    local nl; nl=$(meta_get "$D_JOBS/$id/spec" nodes); [ -z "$nl" ] && nl=$(default_nodes)
+    for n in $nl; do CAND["$n"]=1; done
+  done
+
+  # 平行 probe 所有候選, 暫存原始輸出
+  local tmp; tmp=$(mktemp -d "$CFDQ_HOME/.probe.XXXXXX") || { dlog "probe mktemp 失敗"; return 1; }
+  for n in "${!CAND[@]}"; do ( probe_one "$n" - - > "$tmp/$n" ) & done; wait
+  # 更新 debounce streak
+  for n in "${!CAND[@]}"; do
+    local raw; raw=$(cat "$tmp/$n" 2>/dev/null)
+    if is_fully_free "$raw"; then FREE_STREAK["$n"]=$(( ${FREE_STREAK[$n]:-0} + 1 ))
+    else FREE_STREAK["$n"]=0; fi
+  done
+
+  # 指派: 每個 queued job 找一個 streak 達標、符合需求、未被佔用的節點
+  declare -A ASSIGNED
+  for id in "${qids[@]}"; do
+    local np model nl chosen=""
+    np=$(meta_get "$D_JOBS/$id/spec" np); [[ "$np" =~ ^[0-9]+$ ]] || np=1
+    model=$(meta_get "$D_JOBS/$id/spec" model)
+    nl=$(meta_get "$D_JOBS/$id/spec" nodes); [ -z "$nl" ] && nl=$(default_nodes)
+    for n in $nl; do
+      [ -n "${BUSY[$n]:-}" ] && continue
+      [ -n "${ASSIGNED[$n]:-}" ] && continue
+      [ "${FREE_STREAK[$n]:-0}" -ge "$DEBOUNCE" ] || continue
+      node_ok_for "$(cat "$tmp/$n" 2>/dev/null)" "$np" "$model" || continue
+      chosen="$n"; break
+    done
+    if [ -n "$chosen" ]; then
+      if launch_job "$id" "$chosen" "$np"; then ASSIGNED["$chosen"]=1; BUSY["$chosen"]=1; fi
+    fi
+  done
+  rm -rf "$tmp"
+}
+
+# ===================== daemon 主迴圈 =====================
+cmd_daemon(){
+  local once=0
+  while [ $# -gt 0 ]; do case "$1" in
+    --once) once=1;; --interval) INTERVAL="$2"; shift;; --debounce) DEBOUNCE="$2"; shift;;
+    *) say "daemon: 未知旗標 $1";; esac; shift; done
+  acquire_singleton || exit 1
+  trap 'release_singleton; dlog "daemon 結束"' EXIT INT TERM
+  dlog "daemon 啟動 pid=$$ host=$(hostname -s) interval=${INTERVAL}s debounce=${DEBOUNCE} lost_ttl=${LOST_TTL}s"
+  say "${G}cfdq daemon 啟動${Z} (interval=${INTERVAL}s, debounce=${DEBOUNCE}, log: $F_DLOG)"
+  rm -f "$F_STOP"
+  while :; do
+    if [ -e "$F_STOP" ]; then dlog "收到 stop sentinel → 退出"; rm -f "$F_STOP"; break; fi
+    touch "$D_LOCK/alive" 2>/dev/null
+    reconcile
+    schedule
+    [ "$once" = 1 ] && break
+    sleep "$INTERVAL"
+  done
+}
+
+# ===================== add =====================
+cmd_add(){
+  local np=1 model="" mode="exclusive" chain=0 name="" nodes="" cmd=""
+  while [ $# -gt 0 ]; do case "$1" in
+    --np) np="$2"; shift;; --model) model="$2"; shift;;
+    --exclusive) mode="exclusive";; --share) mode="share";;
+    --chain) chain=1;; --name) name="$2"; shift;; --nodes) nodes="$2"; shift;;
+    --) shift; cmd="$*"; break;;
+    *) say "add: 未知旗標 $1"; return 2;; esac; shift; done
+  [ -z "$cmd" ] && { say "用法: cfdq add [--np N] [--model V100] [--chain] [--name X] [--nodes \"...\"] -- <command>"; return 2; }
+  local id; id=$(printf '%04d' "$(( $(cat "$F_SEQ" 2>/dev/null || echo 0) + 1 ))"); echo "$id" > "$F_SEQ"
+  local stg="$D_JOBS/.staging.$$.$id"; mkdir -p "$stg"
+  { printf 'cwd=%s\n' "$PWD"; printf 'cmd=%s\n' "$cmd"; printf 'np=%s\n' "$np"
+    printf 'model=%s\n' "$model"; printf 'mode=%s\n' "$mode"; printf 'chain=%s\n' "$chain"
+    printf 'name=%s\n' "${name:-job$id}"; printf 'nodes=%s\n' "$nodes"; printf 'created=%s\n' "$(now)"; } > "$stg/spec"
+  printf 'queued' > "$stg/status"
+  mv "$stg" "$D_JOBS/$id"          # 原子發佈 (避免 daemon 撿到半寫的 job)
+  say "${G}已排入${Z} job $id  (np=$np model=${model:-any} chain=$chain) : $cmd"
+  say "  工作目錄: $PWD"
+  say "  啟動 daemon:  ${B}cfdq daemon${Z}   (建議在母機 tmux)"
+}
+
+# ===================== ls / status =====================
+fmt_elapsed(){ local s="$1"; [ "$s" -lt 0 ] && s=0; printf '%dh%02dm' $((s/3600)) $(((s%3600)/60)); }
+cmd_ls(){
+  local a="$D_LOCK/alive" dstat="${R}stopped${Z}"
+  if [ -e "$a" ] && [ $(( $(now) - $(mtime "$a") )) -le $(( INTERVAL*3 + 30 )) ]; then
+    dstat="${G}running${Z} ($(cat "$D_LOCK/owner" 2>/dev/null))"; fi
+  printf '%scfdq%s  daemon: %s   home: %s\n' "$B" "$Z" "$dstat" "$CFDQ_HOME"
+  printf '%s%-5s %-10s %-9s %-13s %-7s %s%s\n' "$B" ID NAME STATUS NODE/PID ELAPSED CMD "$Z"
+  local d id st name node pid started el cmd col
+  for d in "$D_JOBS"/*/; do [ -d "$d" ] || continue; id=$(basename "$d")
+    st=$(status_get "$id"); name=$(meta_get "$d/spec" name); cmd=$(meta_get "$d/spec" cmd)
+    node=$(meta_get "$d/run" node); pid=$(meta_get "$d/run" pid); started=$(meta_get "$d/run" started)
+    el="-"; [[ "$started" =~ ^[0-9]+$ ]] && el=$(fmt_elapsed $(( $(now) - started )))
+    col="$Z"; case "$st" in running) col="$G";; queued) col="$Y";; launching) col="$C";; failed) col="$R";; esac
+    printf '%-5s %-10s %s%-9s%s %-13s %-7s %s\n' "$id" "${name:0:10}" "$col" "$st" "$Z" \
+      "${node:+$node/$pid}" "$el" "${cmd:0:40}"
+  done
+}
+
+# ===================== nodes (一次性快照) =====================
+cmd_nodes(){
+  local nl; nl=$(default_nodes)
+  local me="${USER:-$(id -un)}"
+  printf '%s候選節點快照%s  (memfree<%sMB=空, 需 V100 整台全空才搶)\n' "$B" "$Z" "$MEMFREE"
+  printf '%s%-13s %-6s %-7s %-5s %-9s %-8s %s%s\n' "$B" NODE STATE MODEL GPUs FREE FOREIGN VERDICT "$Z"
+  local tmp; tmp=$(mktemp -d "$CFDQ_HOME/.nodes.XXXXXX") || return 1
+  for n in $nl; do ( probe_one "$n" - - > "$tmp/$n" ) & done; wait
+  for n in $nl; do
+    local raw; raw=$(cat "$tmp/$n" 2>/dev/null)
+    if ! has_end "$raw"; then printf '%-13s %sDOWN%s\n' "$n" "$R" "$Z"; continue; fi
+    local nc md ng fr fo state scol verdict
+    nc=$(p_nproc "$raw"); md=$(p_model "$raw"); ng=$(p_ngpu "$raw")
+    fr=$(p_freegpu "$raw" "$MEMFREE"); fo=$(p_foreign "$raw")
+    if [[ "$nc" =~ ^[0-9]+$ ]]; then state=UP; scol="$G"; else state=SICK; scol="$Y"; fi
+    if is_fully_free "$raw" && [ "${md,,}" = v100 ]; then verdict="${G}可搶(V100全空)${Z}"
+    elif [ "${md,,}" != v100 ] && [ -n "$md" ] && [ "$md" != "-" ]; then verdict="${Y}非V100,跳過${Z}"
+    elif printf '%s' "$raw" | awk -F'|' -v u="$me" '$1=="A"&&$4==u{f=1}END{exit !f}'; then verdict="${C}你在跑${Z}"
+    elif [ "$fo" -gt 0 ]; then verdict="${R}有人佔${Z}"
+    else verdict="—"; fi
+    printf '%-13s %s%-6s%s %-7s %-5s %-9s %-8s %s\n' "$n" "$scol" "$state" "$Z" "${md:--}" "$ng" "$fr/$ng" "$fo" "$verdict"
+  done
+  # ── 本使用者的 GPU job 明細 (各 subserver;同 ka 的 job 區) ──
+  local me="${USER:-$(id -un)}"
+  local myjobs; myjobs=$(grep -h '^J|' "$tmp"/* 2>/dev/null | awk -F'|' -v u="$me" 'NF>=9 && $3==u')
+  if [ -n "$myjobs" ]; then
+    printf '\n%s ★ %s 的 GPU job%s\n' "$B" "$me" "$Z"
+    printf '%s %-13s %4s  %-12s %-8s %8s  %-9s %s%s\n' "$B" NODE GPUs START ELAPSED memMB CMD DIR "$Z"
+    local _ jh ju jng js je jm jc jd eh em sdate
+    while IFS='|' read -r _ jh ju jng js je jm jc jd; do
+      [ -z "$jh" ] && continue
+      sdate=$(date -d "@${js:-0}" '+%m/%d %H:%M' 2>/dev/null || echo '-')
+      eh=$(( ${je:-0}/3600 )); em=$(( (${je:-0}%3600)/60 ))
+      printf ' %s%-13s%s %4s  %-12s %2dh%02dm  %8s  %-9s %s\n' "$C" "$jh" "$Z" "$jng" "$sdate" "$eh" "$em" "$jm" "$jc" "$jd"
+    done <<< "$myjobs"
+    printf ' %s合計 %d job / %d GPU%s\n' "$G" "$(printf '%s\n' "$myjobs"|grep -c .)" "$(printf '%s\n' "$myjobs"|awk -F'|' '{s+=$4}END{print s+0}')" "$Z"
+  fi
+  rm -rf "$tmp"
+}
+
+# ===================== rm / stop / log =====================
+cmd_rm(){
+  local id="${1:-}"; [ -z "$id" ] && { say "用法: cfdq rm <id>"; return 2; }
+  local d="$D_JOBS/$id"; [ -d "$d" ] || { say "無此 job: $id"; return 1; }
+  local st; st=$(status_get "$id")
+  if [ "$st" = running ]; then
+    local node; node=$(meta_get "$d/run" node)
+    say "送 SIGUSR2 給 a.out (乾淨停, exit0 不續鏈) → $node"
+    meta_set "$d/spec" chain 0
+    # [Bug A 修正] 信號直接送 a.out(其 handler 可靠), 不送 wrapper(trap 不可靠會被殺)
+    timeout "$SSH_TMO" "${SSH[@]}" "$node" "pkill -USR2 -u \$USER -x a.out 2>/dev/null" 2>/dev/null
+    say "已要求停止; a.out 存檔 exit0 → wrapper 回傳 0 → daemon 標記 done。"
+  else
+    status_set "$id" done; say "job $id ($st) 已移除佇列。"
+  fi
+}
+# cfdq yield <id> — 優雅被搶: 送 USR1 給 a.out → checkpoint + exit124 → 續鏈(換節點續跑)
+cmd_yield(){
+  local id="${1:-}"; [ -z "$id" ] && { say "用法: cfdq yield <id>"; return 2; }
+  local d="$D_JOBS/$id"; [ "$(status_get "$id")" = running ] || { say "job $id 非執行中"; return 1; }
+  local node; node=$(meta_get "$d/run" node)
+  say "送 SIGUSR1 給 a.out (優雅 checkpoint + 續鏈) → $node"
+  timeout "$SSH_TMO" "${SSH[@]}" "$node" "pkill -USR1 -u \$USER -x a.out 2>/dev/null" 2>/dev/null
+  say "a.out 存檔 exit124 → daemon 重排 → 下一台空節點從 checkpoint 續。"
+}
+cmd_stop(){ touch "$F_STOP"; say "已送 stop sentinel; daemon 將於下一輪結束 (執行中的 job 不受影響)。"; }
+cmd_log(){
+  local id="${1:-}" follow=0; shift || true
+  [ "${1:-}" = "-f" ] && follow=1
+  if [ -z "$id" ]; then say "用法: cfdq log <id> [-f]   (或 cfdq log daemon)"; return 2; fi
+  if [ "$id" = daemon ]; then [ "$follow" = 1 ] && tail -f "$F_DLOG" || tail -n 40 "$F_DLOG"; return; fi
+  local cwd; cwd=$(meta_get "$D_JOBS/$id/spec" cwd)
+  local f="$cwd/.cfdq_wrapper.log"
+  [ -f "$f" ] || { say "尚無 wrapper log: $f"; return 1; }
+  if [ "$follow" = 1 ]; then tail -f "$f"; else tail -n 40 "$f"; fi
+}
+
+cmd_help(){ sed -n '2,20p' "$0" | sed 's/^# \{0,1\}//'; cat <<'EOF'
+
+子指令:
+  cfdq add [--np N] [--model V100] [--chain] [--name X] [--nodes "n1 n2"] -- <command>
+                          排入一個 job (cwd = 現在目錄)
+  cfdq daemon [--once] [--interval S] [--debounce K]
+                          啟動守望 daemon (建議母機 tmux); --once 跑一輪測試
+  cfdq ls | status        看佇列 / 執行中 / 結束
+  cfdq nodes              一次性節點快照 (哪台 V100 全空可搶)
+  cfdq log <id|daemon> [-f]   看 wrapper / daemon log
+  cfdq rm <id>            取消 (執行中→送 SIGUSR2 乾淨停, 不續鏈)
+  cfdq stop               停 daemon (不影響執行中的 job)
+
+環境變數: CFDQ_HOME CFDQ_INTERVAL CFDQ_DEBOUNCE CFDQ_LOST_TTL CFDQ_MEMFREE CFDQ_NODES
+EOF
+}
+
+# ===================== dispatch =====================
+# 測試掛載點: `CFDQ_LIB=1 source cfdq` → 只載入上面所有函數, 不執行下面的 dispatch
+# (供 tests/test_dispatcher.sh 直接驅動 reconcile/finish_job/schedule 做單元測試)
+[ "${CFDQ_LIB:-0}" = 1 ] && return 0 2>/dev/null
+
+sub="${1:-help}"; shift || true
+case "$sub" in
+  add) cmd_add "$@";;
+  daemon) cmd_daemon "$@";;
+  ls|list|status) cmd_ls "$@";;
+  nodes) cmd_nodes "$@";;
+  rm|cancel) cmd_rm "$@";;
+  yield) cmd_yield "$@";;
+  stop) cmd_stop "$@";;
+  log) cmd_log "$@";;
+  help|-h|--help) cmd_help;;
+  *) say "未知子指令: $sub"; cmd_help; exit 2;;
+esac

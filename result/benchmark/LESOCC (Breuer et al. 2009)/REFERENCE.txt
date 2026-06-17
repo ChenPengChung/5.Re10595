@@ -1,0 +1,34 @@
+================================================================================
+ LESOCC — DNS/LES on Curvilinear Body-Fitted Grids
+================================================================================
+
+Primary Reference:
+  Breuer, M., Peller, N., Rapp, Ch., Manhart, M. (2009).
+  "Flow over periodic hills – Numerical and experimental study in a wide
+   range of Reynolds numbers."
+  Computers & Fluids, 38(2), 433-457.
+  DOI: https://doi.org/10.1016/j.compfluid.2008.05.002
+
+Code:         LESOCC (Large-Eddy Simulation On Curvilinear Coordinates)
+Institution:  Helmut-Schmidt-Universität Hamburg (HSU)
+Author:       Michael Breuer (breuer@hsu-hh.de)
+Method:       3D finite-volume, curvilinear body-fitted grids, colocated,
+              2nd-order central differences, Runge-Kutta time advancement
+SGS Model:    Dynamic Smagorinsky (for LES cases)
+
+Available Reynolds numbers:
+  Re=700   (DNS, Case 1):  13.1M grid points, Nspan=200, dt=0.5e-3, Tavg=1581
+  Re=1400  (DNS, Case 2):  13.1M grid points, Nspan=200, dt=1.1e-3, Tavg=1249
+  Re=2800  (DNS, Case 4):  13.1M grid points, Nspan=200, dt=2.0e-3, Tavg=1249
+  Re=5600  (DNS, Case 6):  13.1M grid points, Nspan=200, dt=2.0e-3, Tavg=1214
+  Re=10595 (LES, Case 9):  13.1M grid points, Nspan=200, dt=1.8e-3, Tavg=1277
+
+Data format: 7 columns, space-separated, # comments
+  y/h   U/Ub   V/Ub   <u'u'>/Ub²   <v'v'>/Ub²   <u'v'>/Ub²   k/Ub²
+
+10 stations: x/h = 0.05, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0
+File naming: UFR3-30_C_{Re}_data_MB-{001-010}.dat
+
+Source: ERCOFTAC Knowledge Base Wiki, UFR 3-30
+  https://kbwiki.ercoftac.org/w/index.php?title=UFR_3-30_Test_Case
+================================================================================
