@@ -274,6 +274,11 @@ while :; do
         log "ALERT: simulation may be diverging — check slurm log immediately"
     fi
 
+    # [解耦] 收斂圖每輪 (POLL_SEC) 都渲染 — 4.Ma_U_Time.py 讀 time-series
+    #        (Ustar_Force_record/checkrho), 與「新 VTK」無關; step 引數僅供 log 標籤。
+    conv_step=$(get_latest_metrics | grep -oE 'Step [0-9]+' | grep -oE '[0-9]+'); conv_step=${conv_step:-0}
+    run_convergence "$conv_step" || true
+
     vtk=$(pick_latest_vtk || true)
     if [[ -n "$vtk" && "$vtk" != "$last_processed" ]]; then
         if is_size_stable "$vtk"; then
@@ -283,10 +288,8 @@ while :; do
             metrics=$(get_latest_metrics)
 
             log "──────────────────────────────────────"
-            log "PROCESS step=$step  FTT=$ftt  accu=$accu"
+            log "PROCESS step=$step  FTT=$ftt  accu=$accu (新 VTK → benchmark/tauwall; 收斂圖已每輪解耦)"
             [[ -n "$metrics" ]] && log "  $metrics"
-
-            run_convergence "$step" || true
 
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,

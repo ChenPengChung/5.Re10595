@@ -239,8 +239,8 @@
 #define     loop        500000000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
 #define     NDTFRC      1000      // 每 N 步更新外力項
-#define     NDTBIN      10000    // [LOCAL-TEST] checkpoint 間隔 (was 100000; 與 NDTVTK 同步 → 每 10000 步存一次 + SIGUSR1 強制最終存檔)
-#define     NDTVTK      10000     // [LOCAL-TEST] VTK 間隔 (was 50000; checkpoint 嵌此區塊故同設 10000)
+#define     NDTBIN      476442   // [I/O降頻] checkpoint 每 0.5 FTT (SPF=952885; was 10000); 與 NDTVTK 同步 nested + SIGUSR1 強制最終存檔
+#define     NDTVTK      476442   // [I/O降頻] VTK 每 0.5 FTT (SPF=952885; was 10000); 寫出另加 FTT>FTT_STATS_START gate (main.cu)
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度
 #define     NDTWENO     1000      // 每 N 步輸出 WENO 診斷 (USE_WENO7=1 時啟用)
 

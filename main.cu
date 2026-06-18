@@ -2198,10 +2198,14 @@ int main(int argc, char *argv[])
             }
 #endif
 
-            fileIO_velocity_vtk_merged( step );
+            // [I/O降頻] VTK 寫出 + 動畫只在 FTT > FTT_STATS_START 才輸出
+            //           (re-equil 瞬態不寫 3.25GB VTK); checkpoint 不 gate, 任何 FTT 都寫 → 不斷鏈。
+            if ( FTT_now > (double)FTT_STATS_START ) {
+                fileIO_velocity_vtk_merged( step );
 
-            // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
-            AnimRenderAndRebuild( step );
+                // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
+                AnimRenderAndRebuild( step );
+            }
 
             // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
             if (step % NDTBIN == 1) {
