@@ -137,6 +137,14 @@ get_latest_ftt() {
     grep -oP 'FTT=\K[0-9.]+' "$slurm_log" | tail -1 || echo "0.00"
 }
 
+# [2026-06-18] 最新 step (給每輪收斂圖刷新用; 純 log 訊息標籤, 不依賴 VTK)
+get_latest_step() {
+    local slurm_log
+    slurm_log=$(ls -t "$PROJECT_DIR"/slurm_*.log 2>/dev/null | head -1)
+    [[ -n "$slurm_log" ]] || { echo "0"; return; }
+    grep -oP 'Step=\K[0-9]+' "$slurm_log" | tail -1 || echo "0"
+}
+
 get_latest_metrics() {
     local slurm_log
     slurm_log=$(ls -t "$PROJECT_DIR"/slurm_*.log 2>/dev/null | head -1)
@@ -274,6 +282,11 @@ while :; do
         log "ALERT: simulation may be diverging — check slurm log immediately"
     fi
 
+    # [2026-06-18] 收斂圖每輪刷新(每 POLL_SEC, login-node, 與計算效率無關): 4.Ma_U_Time.py
+    #   只讀 records(Ustar_Force_record/checkrho/timing_log), 不依賴 VTK → settle 期(VTK
+    #   gated FTT>=FTT_STATS_START)也即時更新 monitor_latest.png。benchmark 仍綁 1FTT stats-VTK(下方)。
+    run_convergence "$(get_latest_step)" || true
+
     vtk=$(pick_latest_vtk || true)
     if [[ -n "$vtk" && "$vtk" != "$last_processed" ]]; then
         if is_size_stable "$vtk"; then
@@ -286,8 +299,7 @@ while :; do
             log "PROCESS step=$step  FTT=$ftt  accu=$accu"
             [[ -n "$metrics" ]] && log "  $metrics"
 
-            run_convergence "$step" || true
-
+            # (收斂圖已移至每輪刷新, 見上方 run_convergence; 此處只跑 benchmark/tauwall — 綁 1FTT stats-VTK)
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,
             #   otherwise RS fields are too noisy (statistics not yet meaningful).
