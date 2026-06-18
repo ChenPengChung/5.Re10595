@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================================
-# health_watchdog.sh — Edit13_2800ITBLBM 24/7 健康守護 (由 systemd --user timer 週期執行)
+# health_watchdog.sh — Edit14_2800GILBM 24/7 健康守護 (由 systemd --user timer 週期執行)
 # ----------------------------------------------------------------------------
 # 不需要任何 Claude session 即可運作。職責 (僅做「腳本能安全做」的事):
 #   1. 存活: dispatcher / watcher 用 systemd is-active + /proc cwd 判定本專案實例。
@@ -16,7 +16,7 @@
 # 手動測試: bash chain_code/health_watchdog.sh   (WATCHDOG_PUSH=0 可關閉推送只本地記錄)
 # ============================================================================
 set -uo pipefail
-ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
+ROOT="/home/chenpengchung/5.Re10595/Edit14_2800GILBM"
 cd "$ROOT" 2>/dev/null || exit 0
 export PATH="/usr/bin:/bin:/usr/local/bin:${PATH:-}"
 

@@ -62,7 +62,7 @@
 | NCHC run.sh 區段 | 行號 | 處置 | 本地改法 |
 |---|---|---|---|
 | 專案根自定位 | 56-59 | **MODIFY** | `CHAIN_DIR` 仍 = 腳本所在;`PROJECT_ROOT=CHAIN_DIR/..` 不變(腳本在 `chain_code_local/`,`..` 一樣是專案根)。Sibling 腳本改指 `chain_code_local/`。 |
-| `MODE_*` 變數 | 61-74 | **MODIFY** | 移除 `MODE_CLUSTER`(--h200/--gb200);其餘保留。新增 `MODE_NP`(預設 8)、`MODE_NAME`(預設 edit13)、`MODE_NO_SUBMIT`。 |
+| `MODE_*` 變數 | 61-74 | **MODIFY** | 移除 `MODE_CLUSTER`(--h200/--gb200);其餘保留。新增 `MODE_NP`(預設 8)、`MODE_NAME`(預設 edit14)、`MODE_NO_SUBMIT`。 |
 | flag 解析 while/case | 76-134 | **MODIFY** | 刪 `--h200/--gb200`;`--no-queue-check` 改為「跳過 cfdq 重投 guard」;新增 `--np N` `--name X` `--no-submit`。保留 `--force-cold/--regrid-from-origin/--force-regrid/--preflight-only/--origin-dir/--old-grid/--new-grid/--rebuild`。`--defer-gen` **刪除**(本地一律母機 python3.12 即時內插,不延後到節點)。 |
 | flag 互斥 guard | 136-144 | **MODIFY** | **只保留** 136(`--force-cold`+`--regrid`)、140(`--force-regrid` 無 `--regrid`)。**刪除 144 的 `--force-cold`+`--preflight-only` FATAL 互斥**——本地此組合合法(= wipe + cold 備料 + 不投遞,V14 要用)。 |
 | `_project_abs_path` | 150 | **KEEP** | — |

@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit13_2800ITBLBM
+#SBATCH --job-name=Edit14_2800GILBM
 #SBATCH --account=MST115169
 #SBATCH --exclude=25a-hgpn052,25a-hgpn024
 # [Edit13 2026-06-14] 強制排除 25a-hgpn052: interp macro 內插為單執行緒 memory-bound,

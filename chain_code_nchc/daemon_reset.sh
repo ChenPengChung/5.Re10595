@@ -8,7 +8,7 @@
 #            不靠 cmdline 路徑字串 (相對路徑啟動會漏判)。
 # (chain 本身由 jobscript Layer 2 自我續投保命, 不依賴本腳本; 本腳本只恢復最佳化用的 daemon。)
 # 用法: bash chain_code/daemon_reset.sh
-ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
+ROOT="/home/chenpengchung/5.Re10595/Edit14_2800GILBM"
 cd "$ROOT" || exit 1
 
 # 1) 停 systemd 兩個 service (若有), 避免 reset 期間 Restart= 又把它拉起

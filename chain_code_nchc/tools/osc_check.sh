@@ -9,7 +9,7 @@
 # restart's tiny re-convergence isn't confused with sustained oscillation.
 # Read-only. Verdict: ✓ smooth / ⚠ OSCILLATION / ⚠ Ma / hard-fail.
 # =============================================================================
-cd /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM || exit 1
+cd /home/chenpengchung/5.Re10595/Edit14_2800GILBM || exit 1
 JID=$(cat restart/chain_jobid 2>/dev/null | tr -d ' ')
 ST=$(sacct -j "$JID" -n -o State 2>/dev/null | head -1 | tr -d ' ')
 echo "job=$JID state=${ST:-?}  $(date '+%H:%M:%S')"

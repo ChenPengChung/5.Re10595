@@ -1,11 +1,11 @@
 [Unit]
-Description=Edit13_2800ITBLBM GILBM dispatcher (net-best jp x partition auto-switch, never-idle)
+Description=Edit14_2800GILBM GILBM dispatcher (net-best jp x partition auto-switch, never-idle)
 StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-WorkingDirectory=/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM
-ExecStart=/bin/bash /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code/submit_dispatcher.sh
+WorkingDirectory=/home/chenpengchung/5.Re10595/Edit14_2800GILBM
+ExecStart=/bin/bash /home/chenpengchung/5.Re10595/Edit14_2800GILBM/chain_code/submit_dispatcher.sh
 # crash / OOM / kill -> 自動重啟; 乾淨退出(STOP_CHAIN/STOP_DISPATCHER 收工, exit 0)-> 不復活
 Restart=on-failure
 RestartSec=15

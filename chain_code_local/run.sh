@@ -21,7 +21,7 @@
 #   bash chain_code_local/run.sh --preflight-only  只跑 grid/regrid/provenance/編譯 備料, 不投遞
 #   bash chain_code_local/run.sh --no-submit     完成全部備料 (含編譯), 不投遞
 #   bash chain_code_local/run.sh --np N          cfdq 申請 GPU 數 (預設 8)
-#   bash chain_code_local/run.sh --name X         cfdq job 名稱 (預設 edit13)
+#   bash chain_code_local/run.sh --name X         cfdq job 名稱 (預設 edit14)
 #   bash chain_code_local/run.sh --no-queue-check 跳過 cfdq 重投 guard (CI/自動化用)
 #   bash chain_code_local/run.sh -h | --help     顯示此使用說明
 #
@@ -56,7 +56,7 @@ MODE_FORCE_REGRID=0
 MODE_PREFLIGHT_ONLY=0
 MODE_NO_SUBMIT=0   # 1 = 完成全部備料 (含編譯) 但不投遞
 MODE_NP=8          # cfdq --np (本地 1 台 8×V100 整台獨佔)
-MODE_NAME="edit13" # cfdq --name
+MODE_NAME="edit14" # cfdq --name
 REGRID_OLD_GRID=""
 REGRID_NEW_GRID=""
 REGRID_OLD_GAMMA=""

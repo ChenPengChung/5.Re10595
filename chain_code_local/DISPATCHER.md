@@ -100,12 +100,12 @@ resume 由 wrapper + solver 自理。
 
 ```bash
 # 0) 先在本環境(有 numpy/scipy 的母機)備妥網格 + 編 V100 binary
-cd ~/5.Re10595/Edit13_2800ITBLBM
+cd ~/5.Re10595/Edit14_2800GILBM
 python3.12 J_Frohlich/grid_zeta_tool.py --auto        # variables.h 改了參數才需重生
 bash chain_code_local/build_local.sh                   # 產 ./a.out (sm_70)
 
 # 1) 排 job(cwd 會被記成本專案根)
-cfdq add --np 8 --model V100 --exclusive --chain --name edit13 -- bash chain_code_local/hill_local_chain.sh
+cfdq add --np 8 --model V100 --exclusive --chain --name edit14 -- bash chain_code_local/hill_local_chain.sh
 
 # 2) 母機 tmux 常駐 daemon
 tmux new -s cfdq
@@ -135,7 +135,7 @@ cfdq stop              # 停 daemon(執行中 job 不受影響)
 - **CFDLab dispatcher 不走 systemd**:`chain_code_nchc/systemd/edit6-*` 是 NCHC 的,在此**休眠**;
   本地 daemon 是母機 tmux 手動常駐。
 - **`chain_code_nchc/` 整套 = NCHC**:其硬編路徑 ROOT 已從舊的別人專案改成本專案
-  (`/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM`),但**內部彼此引用仍指舊資料夾名**
+  (`/home/chenpengchung/5.Re10595/Edit14_2800GILBM`),但**內部彼此引用仍指舊資料夾名**
   (本機優先,未一併改名),故在本地是休眠/未完全接線狀態;本地流程不呼叫它,
   **絕不**把 cfdq 指到 `./run`(那是投 NCHC SLURM)。
 - **只吃 V100**:`--model V100` + binary 只編 sm_70 → 雙保險,永不誤跑 P100;沒有空 V100 就一直等。

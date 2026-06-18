@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=Edit13_2800ITBLBM
+#SBATCH --job-name=Edit14_2800GILBM
 #SBATCH --account=MST115169
 #SBATCH --partition=gb200
 #SBATCH --nodes=16
