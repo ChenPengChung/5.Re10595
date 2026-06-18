@@ -274,6 +274,11 @@ while :; do
         log "ALERT: simulation may be diverging — check slurm log immediately"
     fi
 
+    # [DECOUPLE-CONV 2026-06-18] 收斂圖(4.Ma_U_Time.py)只讀 Ustar_Force_record/checkrho/
+    #   timing_log .dat(每~1000步更新), 完全不需 VTK → 每輪(~POLL_SEC≈30s)都重畫,
+    #   與 VTK 輸出頻率(現降為 1FTT)徹底脫鉤. watcher 在 login-node, 此繪圖與計算效率無關.
+    run_convergence "FTT=$(get_latest_ftt)" || true
+
     vtk=$(pick_latest_vtk || true)
     if [[ -n "$vtk" && "$vtk" != "$last_processed" ]]; then
         if is_size_stable "$vtk"; then
@@ -286,7 +291,9 @@ while :; do
             log "PROCESS step=$step  FTT=$ftt  accu=$accu"
             [[ -n "$metrics" ]] && log "  $metrics"
 
-            run_convergence "$step" || true
+            # 收斂圖已移到每輪(~30s)跑(見上方 DECOUPLE-CONV), 此處不再重複;
+            # benchmark 仍 gate 在「新 VTK」= 新統計 dump(現 1FTT), 因 benchmark 需平均統計量,
+            # 資料每 1FTT 才更新, 跑更頻只是重畫同一張(無新資訊).
 
             # BENCH gate (G2): FTT >= FTT_STATS_START + CV_WINDOW_FTT
             # — only fire benchmark figures once CV window has filled,
