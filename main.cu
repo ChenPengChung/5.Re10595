@@ -2198,10 +2198,15 @@ int main(int argc, char *argv[])
             }
 #endif
 
-            fileIO_velocity_vtk_merged( step );
+            // [VTK gate 2026-06-18] 只在統計階段 (FTT_now > FTT_STATS_START) 才寫 VTK + 動畫;
+            // checkpoint (下方 SaveBinaryCheckpoint) 不 gate — 任何 FTT 都照常寫,保證可續跑。
+            // 目的: FTT_STATS_START 前的 VTK 對 benchmark 無用,跳過省 I/O。
+            if ( FTT_now > FTT_STATS_START ) {
+                fileIO_velocity_vtk_merged( step );
 
-            // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
-            AnimRenderAndRebuild( step );
+                // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
+                AnimRenderAndRebuild( step );
+            }
 
             // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
             if (step % NDTBIN == 1) {

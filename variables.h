@@ -239,8 +239,8 @@
 #define     loop        500000000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
 #define     NDTFRC      1000      // 每 N 步更新外力項
-#define     NDTBIN      100000   // 每 N 步輸出 binary checkpoint (注意: checkpoint 巢狀於 VTK 區塊 main.cu:2101, 真實間隔=lcm(NDTVTK,NDTBIN); 設為 NDTVTK 倍數使名實相符 → 100000=2×NDTVTK)
-#define     NDTVTK      50000     // 每 N 步輸出 VTK
+#define     NDTBIN      1580000   // [2026-06-18 降 I/O] checkpoint 每 ~1 FTT (實測 1,579,042 steps/FTT)。NDTVTK==NDTBIN → lcm=1FTT,checkpoint nested 仍每 1FTT 寫 (任何 FTT 都寫,不 gate)。crash 最多丟 ~1FTT≈5h;1FTT<walltime 進度(~4.6FTT)→ 每期 ≥4 個 checkpoint,不斷鏈。原 100000(0.06FTT,158GB each)過頻。
+#define     NDTVTK      1580000   // [2026-06-18 降 I/O] VTK 每 ~1 FTT,且 main.cu 加 FTT>FTT_STATS_START gate (只在統計階段寫,前期跳過)。原 50000(0.03FTT,每FTT 31個,33GB each)過頻→ I/O 尖峰拖速+觸發壞節點 hang。
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度
 #define     NDTWENO     1000      // 每 N 步輸出 WENO 診斷 (USE_WENO7=1 時啟用)
 
