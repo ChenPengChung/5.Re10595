@@ -2198,12 +2198,16 @@ int main(int argc, char *argv[])
             }
 #endif
 
-            fileIO_velocity_vtk_merged( step );
+            // [FTT gate] VTK 寫檔 + animation 只在 FTT >= FTT_STATS_START 後輸出 (spin-up 期省 I/O);
+            //            checkpoint 不受此 gate — 永遠寫以保崩潰恢復
+            if ( FTT_now >= FTT_STATS_START ) {
+                fileIO_velocity_vtk_merged( step );
 
-            // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
-            AnimRenderAndRebuild( step );
+                // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
+                AnimRenderAndRebuild( step );
+            }
 
-            // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
+            // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU) — 不 gate
             if (step % NDTBIN == 1) {
                 SaveBinaryCheckpoint( step );
             }
