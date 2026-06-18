@@ -57,6 +57,19 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b-EDIT14. 演算法對照組開關 (ITBLBM ↔ GILBM 一對一比較) ──
+//   本 worktree (Edit14_2800GILBM) 是 Edit13_2800ITBLBM 的 GILBM 對照組。
+//   與 Edit13 的「唯一」差異 = 下列三個 streaming / algorithm 開關;
+//   其餘資料點 (Re=2800, Uref, 網格 NX/NY/NZ/jp, 物理/BC/碰撞/統計/forcing)
+//   逐位元相同 → 可做演算法層面的一對一對應比較。
+//     Edit13 (ITBLBM): USE_ITBLBM_STREAMING=1 → USE_GILBM_ALGORITHM2=0
+//     Edit14 (GILBM ): USE_ITBLBM_STREAMING=0 → USE_GILBM_ALGORITHM2=1 + RK4
+//   下列顯式 #define 置於原 #ifndef 守衛之前,故覆寫 §1b-ITB / §1b2 的自動推導
+//   與 gilbm/precompute2.h 的 GILBM2_DEPARTURE_RK4 預設,使三開關一目了然。
+#define     USE_ITBLBM_STREAMING    0   // Edit13: 1  → Edit14: 0  (關閉 ITB streaming)
+#define     USE_GILBM_ALGORITHM2    1   // Edit13: 0  → Edit14: 1  (GILBM Algorithm2 預計算表路徑)
+#define     GILBM2_DEPARTURE_RK4    1   //                  Edit14: 1  (RK4 step-doubling departure 預計算)
+
 // ── §1b-ITB. ITB-ISLBM streaming path (ported from Edit9) ──
 //   0 = current GILBM RK2 / contravariant interpolation path
 //   1 = precomputed physical-space isoparametric interpolation path
