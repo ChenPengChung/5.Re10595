@@ -34,6 +34,12 @@
 : "${BLACKLIST_MAX_PCT:=50}"
 : "${BAD_NODES_FILE:=restart/bad_nodes}"
 : "${GLOBAL_BAD_FILE:=$HOME/.bad_nodes_global}"
+# [Edit11 2026-06-17 激進重整 project-local] 本專案專屬最小 global 黑名單,不碰共用
+# ~/.bad_nodes_global(其他專案各有自己的 lib,不受影響)。只留近期親身確認的壞點
+# (143 今日 hang、024 前次慢節點 episode);其餘 ~37 個過時節點交給 watchdog(當輪自動
+# 排除)+ NCHC-live(真 drained 自動排除)動態處理,避免過度排除造成 jp=64 湊不到 8 個
+# 好節點而飢餓 PENDING。回復: 刪除下面這一行即回到 ~/.bad_nodes_global 預設。
+GLOBAL_BAD_FILE="/home/s8313697/5.Re10595/Edit11_Krank5600/restart/bad_nodes_global_local"
 
 # ─────────────────────────────────────────────────────────────────────────
 # 內部 helper: 把 Slurm state 字串分類
