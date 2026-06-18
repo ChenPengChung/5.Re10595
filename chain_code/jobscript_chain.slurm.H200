@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=Edit12_Krank56002
-#SBATCH --account=MST114348
+#SBATCH --account=MST115169
 #SBATCH --exclude=25a-hgpn052
 # [Edit11 2026-06-14] 強制排除 25a-hgpn052: interp macro 內插為單執行緒 memory-bound,
 #   該節點單核 ~1.7x 慢 (48min vs 28min/macro)。SBATCH --exclude 不受 blacklist NCHC-health 釋放影響。
 #   (種子生成完成後此節點對純 solver 續投無妨, 可日後移除此行。)
-#SBATCH --partition=16gpus
+#SBATCH --partition=32gpus
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
@@ -19,7 +19,7 @@
 #             可由 sbatch --time= 覆寫 / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=2-00:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append

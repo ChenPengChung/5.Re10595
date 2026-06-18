@@ -23,7 +23,7 @@
 set -u
 ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
 JS="$ROOT/chain_code/jobscript_chain.slurm.H200"
-ACCT="${SWITCH_ACCT:-MST114348}"
+ACCT="${SWITCH_ACCT:-MST115169}"
 NODES="${SWITCH_NODES:-8}"      # 本案 jp=64 → 8 節點 × 8 GPU
 GPN="${SWITCH_GPN:-8}"          # gpus / node
 
