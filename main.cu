@@ -2141,12 +2141,18 @@ int main(int argc, char *argv[])
             }
 #endif
 
-            fileIO_velocity_vtk_merged( step );
+            // [2026-06-18] VTK 檔案輸出 gate: 僅 FTT >= FTT_STATS_START 才寫 VTK+anim
+            //   (settle 期不寫 VTK, 省 I/O); gather(上方) + checkpoint(下方) 仍每 1FTT 執行,
+            //   不受此 gate 影響 → 純 I/O 控制, 不碰流場數值/統計
+            if ( FTT_now >= FTT_STATS_START ) {
+                fileIO_velocity_vtk_merged( step );
 
-            // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
-            AnimRenderAndRebuild( step );
+                // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
+                AnimRenderAndRebuild( step );
+            }
 
             // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
+            // ★不受 VTK gate 影響: settle 期(FTT<FTT_STATS_START)仍每 1FTT 寫 checkpoint (crash 保護)
             if (step % NDTBIN == 1) {
                 SaveBinaryCheckpoint( step );
             }
