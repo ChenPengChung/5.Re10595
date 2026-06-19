@@ -19,9 +19,14 @@ mkdir -p "$LIVE_DIR"
 # [硬化] systemd 是 watcher 的唯一真相來源 — service 若 active 就不再手動啟動重複實例。
 # (歷史故障: 恢復時重複跑本腳本 + 下面的 PID_FILE-only dup-guard 被 stale watcher.pid 打敗
 #  → 累積多隻 watcher 同時 racing 狂出圖、灌爆 login node。)
-if systemctl --user is-active --quiet edit6-watcher.service 2>/dev/null; then
-    SYS_PID=$(systemctl --user show -p MainPID --value edit6-watcher.service 2>/dev/null)
-    echo "watcher 已由 systemd 管理 (edit6-watcher.service, MainPID=$SYS_PID), 不重複啟動"
+# [修正 2026-06-19] 服務名必須是「本專案」edit11-watcher.service — 原本誤抄 Edit6 的
+# edit6-watcher.service(跨專案污染): Edit6 服務一直 active → Edit11 launcher 永遠誤判
+# 「已被 systemd 管理」+ 把 Edit6 的 MainPID 寫進 Edit11 watcher.pid → 害 hill_watcher.sh
+# 的 node-local dup-guard(kill -0 那個 Edit6 PID 成功)拒絕啟動。Edit11 目前無 systemd
+# 服務 → 此檢查 inert,正確落到下方 cwd-based dup-guard + setsid 啟動。
+if systemctl --user is-active --quiet edit11-watcher.service 2>/dev/null; then
+    SYS_PID=$(systemctl --user show -p MainPID --value edit11-watcher.service 2>/dev/null)
+    echo "watcher 已由 systemd 管理 (edit11-watcher.service, MainPID=$SYS_PID), 不重複啟動"
     [[ -n "${SYS_PID:-}" ]] && echo "$SYS_PID" > "$PID_FILE" 2>/dev/null || true
     exit 0
 fi
