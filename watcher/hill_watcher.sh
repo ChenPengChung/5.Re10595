@@ -4,6 +4,7 @@ set -u
 
 _SELF="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+_SELF_ABS="$SCRIPT_DIR/$(basename "$_SELF")"   # 絕對自身路徑(供 RESTART_WATCHER 哨兵 re-exec 重讀腳本)
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 RESULT_DIR="$PROJECT_DIR/result"
 LIVE_DIR="$PROJECT_DIR/live"
@@ -266,6 +267,21 @@ last_bench_step=""
 
 while :; do
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
+
+    # ── 跨節點重啟/停止哨兵(任何登入節點 touch 即可,免互動 SSH)──────────────────
+    #   RESTART_WATCHER → 原地 re-exec 重讀腳本(吃進程式碼變更, 如 --lowmem); 同 PID,
+    #     startup 會在「同節點」自動重 claim 鎖(_take), 不製造跨節點重複實例。
+    #   STOP_WATCHER    → graceful exit(trap 釋放鎖); 哨兵保留 → 防 keepalive 立即拉回,
+    #     需手動 rm 才能 (重)啟。用法: `touch live/RESTART_WATCHER` 或 `touch live/STOP_WATCHER`。
+    if [[ -f "$LIVE_DIR/RESTART_WATCHER" ]]; then
+        rm -f "$LIVE_DIR/RESTART_WATCHER"          # 先消費哨兵, 避免 re-exec 後無限重啟
+        log "RESTART_WATCHER → re-exec $_SELF_ABS on $MYHOST (reload script, same pid=$$, re-claim lock)"
+        exec bash "$_SELF_ABS"
+    fi
+    if [[ -f "$LIVE_DIR/STOP_WATCHER" ]]; then
+        log "STOP_WATCHER present → graceful exit on $MYHOST (rm live/STOP_WATCHER to allow (re)start)"
+        exit 0
+    fi
     # 每輪刷新 checklist.txt(daemon/chain 狀態檔即時清單); 唯讀掃描, 失敗不影響主循環。
     # 非零退出 = 非預期缺漏或產生器錯誤 → 只記一行警告供巡檢, 不中斷 watcher。
     python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
