@@ -77,6 +77,34 @@ Report concisely. This shortcut is **read-only** — it never changes job/chain 
   **絕不** `pkill -f` / cmdline 路徑字串;**絕不**碰 Edit7/Edit8/2.Re1400 等別專案 daemon。
 - Route B 是 systemd timer,**不靠 user crontab**(避免歷史的 cross-project crontab clobber)。
 
+## 本地 cfdq keepalive systemd 化 + 跨節點重複根因 (2026-06-19)
+
+本地 V100 cfdq 續跑的「二次守衛」keepalive 已裝成 systemd **user** service
+`edit13-local-keepalive.service`(原始檔 `chain_code_local/systemd/`,安裝器
+`chain_code_local/install_systemd_local.sh`,`enable-linger` 讓它撐過登入節點 reboot)。
+
+**根因警告(watcher 暴增):** `~/.config/systemd/user/` 在**共用 NFS home**,所以
+`systemctl --user enable` 會讓**每個有 user-systemd 的節點(登入即觸發)都啟動同一個 unit**
+→ 跨節點重複起 keepalive、各自再 spawn watcher;keepalive 的 flock(`live/.watchdog.lock`)
+**在 NFS 跨節點不可靠**擋不住,加上壞節點 **CFDLAB-3**(唯讀 FS + 時鐘 +8h、log 出現
+`2026-06-20 03:xx`)持鎖/寫錯誤 age → cfdlab 端反覆重啟 watcher → 15+ 個 watcher、login load 飆高。
+**修法(commit 26e81ed):** unit 內加 **`ConditionHost=cfdlab`**(只有 cfdlab 真正啟動、其餘節點 skip)
++ **`KillMode=process`**(stop/restart 不連帶 cgroup-kill 它 spawn 的 watcher / 全域 cfdq daemon)。
+
+**操作:** 重啟守衛用 `systemctl --user restart edit13-local-keepalive.service`,**不要再 nohup**
+(會跟 service 搶 flock)。若仍出現多個 keepalive/watcher,在**全新 shell**跑一次性收斂工具
+`bash chain_code_local/keepalive_resync.sh`(cwd 驗證、只動本專案、不碰 cfdq/Edit14)。
+
+**稽核陷阱(grep 自我匹配):** 用 `ps`+`grep keepalive_watchdog.sh`/`hill_watcher.sh` 數 daemon 時,
+**你自己的指令列含這些字串會被自己 grep 到** → 多算出幻影 keepalive/watcher。數的時候要排除
+`bash -c` / `snapshot` / 自己的 `$$`。
+
+**元件歸屬(全域 vs 本專案):**
+- 全域 = **cfdq daemon**(`~/bin/cfdq daemon`、`~/.cfdq/`,管**所有專案** job 佇列;各專案 keepalive 都順手守它)。
+- 本專案 = **solver**(compute node 上 `mpirun ./a.out`)、**watcher**(`watcher_nchc/hill_watcher.sh`,登入節點產圖)、
+  **keepalive**(systemd service,守全域 cfdq + 本專案 watcher)。
+- `Edit14_2800GILBM` 是別專案、與本專案**共用同一個全域 cfdq daemon**,絕不碰。
+
 ## Project info
 
 - Branch: Edit13_2800ITBLBM
