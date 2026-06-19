@@ -289,6 +289,54 @@ rm -rf statistics/
 - Does NOT cancel any running jobs or stop the dispatcher/watcher.
 - Report what was deleted (file count / size freed) after execution.
 
+## Benchmark 比對圖 — 雙軌分流(watcher float32 inline ↔ 手動 float64 CPU job)
+
+平均場 VTK 現為 **~35 GB**(NDTVTK=1 FTT、404×769×750 全場 double)。login node 的
+`user.slice` cgroup 記憶體硬上限 **= 20 GB**(跨使用者所有程序共用),float64 讀整顆
+VTK 峰值 ~16.8 GB,加 baseline 幾乎必 OOM,且 cgroup OOM-killer 可能誤殺同 slice 的
+**別專案**程序。因此 benchmark 比對圖採**雙軌分流**:
+
+| 觸發來源 | 路線 | 精度 | 提交 SLURM? | 頻率 |
+|---------|------|------|-------------|------|
+| **watcher 自動**(`run_benchmark`) | inline 在 login node + **`--lowmem`** | **float32**(捨入 ~6e-8) | ❌ 不提交 | VTK-gated + FTT≥G2,~每 1 FTT |
+| **手動 `lbm-plot-benchmark`** | **sbatch `result/bench_computenode.slurm`** 到 dev job(`gres=gpu:1`) | **float64 零誤差** | ✅ 一個 1-GPU dev job | 使用者觸發才跑(非急需) |
+
+> ⚠️ **實測(2026-06-19):dev p_dev QOS 的 `MinTRES=gres/gpu=1` → `--gres=gpu:0` 會 `QOSMinGRES`
+> 永久 PENDING**(`sbatch --test-only` 樂觀估計會誤導,別信)。故 float64 dev job **必須 `--gres=gpu:1`**;
+> 該 1 GPU 計入 dev per-account 上限(32),與主 job(64gpus)獨立。dev 仍是 scavenger 可能 PENDING。
+> **float32 監控圖與 float64 只差 ~6e-8**(遠低於 5% 比對精度)→ 多數情況 watcher 的 float32 圖已是
+> 實質 canonical,float64 dev job 屬「非急需的絕對零誤差」備案。
+
+`2.Benchmark.py` 的 `--lowmem`(`action='store_true'`)**預設關閉=float64 零誤差**;只有
+帶旗標才把保留場(POINTS/U_mean/V_mean/uu/uv/vv/k_TKE)降 float32(~6e-8 捨入,遠低於
+benchmark 5% 比對精度,監控用足夠)。`hill_watcher.sh` 的 `run_benchmark` 帶 `--lowmem`;
+手動 dev job 不帶 → float64。**跳過未用場(velocity/inst/vorticity/P_mean)是無損的**
+(湍流路徑全程不讀,skip 只在 `not LAMINAR` 生效;層流仍正確)。
+
+### `lbm-plot-benchmark`(triggered by user command)
+
+使用者打 **`lbm-plot-benchmark`**(或手動要「零誤差 canonical benchmark 比對圖」)時:
+
+1. **唯讀前置**:挑最新 stat-stable 的 `result/velocity_merged_*.vtk`;讀當前 FTT
+   (< FTT_STATS_START+CV_WINDOW_FTT=20 → 回報標 **preliminary**)。
+2. **提交 dev job**(零誤差 float64,`gres=gpu:1`,不干擾主 job;**從專案根投**讓 WorkDir=根):
+   ```bash
+   cd <project-root> && sbatch result/bench_computenode.slurm   # dev / 1 GPU / 48G / 15min / float64
+   ```
+   `sbatch --test-only` 的「立刻開跑」估計**不可信**(沒算 QOSMinGRES);1-GPU job 仍可能 PENDING
+   (dev scavenger)。**不要**用 `--gres=gpu:0`(QOSMinGRES 永久 PENDING)。從根投→可 `./run job-guard
+   scancel` 取消;從 result/ 投則 hook 擋,需 `! scancel`。
+3. **背景輪詢**到 job 離隊 → `sacct` 終態 + tail `bench_computenode_<jid>.log`
+   (rc + 峰值 RSS)+ `ls fig_*.png`。
+4. **回報**逐變數 L2 誤差(uu/vv/ww/uv/k vs Krank/Breuer DNS)+ 把 fig_*.png 複製到
+   `live/`;FTT<20 標 preliminary。
+5. **唯讀分析**:只讀 VTK + 寫 fig_*.png,不碰流場/checkpoint/solver;
+   `result/bench_computenode_*.log` 是執行期產物(已 gitignore)。
+
+**守門**:1-GPU dev job 計入 dev per-account 上限(32),與主 job(64gpus)獨立、只共用檔案系統。
+0-GPU 不可(QOSMinGRES)。cancel 只用 `./run job-guard scancel`(從根投時 WorkDir=根可直接取消)。
+遵守跨專案 Job 隔離;cancel 只用 `./run job-guard scancel`。
+
 ## GILBM 效能優化架構 — MRT 預計算 + eta 權重共享 + Forcing 開關
 
 本專案已完成三項 host-side 預計算優化，所有表格在 `main.cu` 初始化階段

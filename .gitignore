@@ -60,3 +60,10 @@ chain_code/health_watchdog_alerts.log
 # 屬即時產物而非原始碼; 不追蹤以免 index-sweep 自動推送器頻繁 commit 造成 spam。
 # 來源(產生器)checklist.py 仍追蹤; 一次性快照已留在 commit 917d1df 歷史中。
 checklist.txt
+
+# benchmark 計算節點 job log(執行期產物,不追蹤)
+result/bench_computenode_*.log
+
+# benchmark 比對圖(執行期產物,每次跑重生;watcher 會複製到 live/)
+result/fig_*.png
+result/.bench_f32_ab.log

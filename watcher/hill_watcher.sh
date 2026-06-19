@@ -195,8 +195,10 @@ run_benchmark() {
     local before_marker="$LIVE_DIR/.bench.marker.$$"
     : > "$before_marker"
 
+    # --lowmem: watcher inline 在 login node 跑,用 float32 省記憶體(35GB VTK 撞 20GB cgroup)。
+    # 監控圖捨入 ~6e-8 可忽略。手動 canonical(零誤差 float64)走 lbm-plot-benchmark → dev CPU job。
     capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$BENCH_SCRIPT" \
-        --Re "$RE" --no-ask-scales --no-ask-density 2>&1)
+        --Re "$RE" --no-ask-scales --no-ask-density --lowmem 2>&1)
     rc=$?
 
     if (( rc == 124 )); then

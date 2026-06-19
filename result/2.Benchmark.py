@@ -277,7 +277,16 @@ parser.add_argument(
     action='store_true',
     help='Turbulent: 使用預設 benchmark 數據密度，不互動詢問',
 )
+parser.add_argument(
+    '--lowmem',
+    action='store_true',
+    help='讀 VTK 時把保留場降成 float32 省記憶體（login-node/watcher 用，'
+         '避免 35GB VTK 撞 20GB cgroup OOM）。預設 float64 零誤差，'
+         '帶此旗標才降精度（捨入 ~6e-8，遠低於 benchmark 5%% 比對精度）。',
+)
 args, _ = parser.parse_known_args()
+# float64 = 零誤差（手動 canonical / 計算節點 CPU job 用）；float32 = 省記憶體（watcher inline）。
+BENCH_LOWMEM = bool(args.lowmem)
 
 U_REF, _VARIABLES_HEADER_PATH = resolve_uref_for_postprocess(SCRIPT_DIR)
 
@@ -519,6 +528,15 @@ def parse_vtk(filepath):
                     idx += 1
         return arr[:idx], None
 
+    # [low-mem 2026-06-19] 跳過 benchmark 不需要的大場(瞬時 velocity/inst、vorticity、壓力),
+    # 避免 35GB VTK 在 login node 20GB cgroup 限制下 OOM;只載 U_mean/V_mean/uu/uv/vv/k_TKE。
+    # 注意:這些場只在「湍流」路徑用不到;LAMINAR(Re<=150)會用 u_inst/velocity 當速度候選,
+    # 故 skip 只在 (not LAMINAR) 時生效,湍流(本專案 Re5600)省記憶體、層流仍正確。
+    _BENCH_SKIP_FIELDS = {"velocity", "u_inst", "v_inst", "w_inst",
+                          "omega_u", "omega_v", "omega_w", "P_mean"}
+    _bench_skip_on = (not LAMINAR)
+    # 保留場的讀入精度:預設 float64 零誤差;--lowmem 時 float32 省一半記憶體(監控用)。
+    _bench_dtype = np.float32 if BENCH_LOWMEM else np.float64
     with open(filepath, "rb") as f:
         pushback = None
         while True:
@@ -555,7 +573,7 @@ def parse_vtk(filepath):
                     npts = n
                 if is_binary:
                     buf = f.read(n * 3 * esize)
-                    pts = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    pts = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
                     points = pts.reshape(-1, 3)
                     f.readline()  # consume trailing newline after binary block
                 else:
@@ -570,9 +588,12 @@ def parse_vtk(filepath):
                 parts = sline.split()
                 vec_name = parts[1] if len(parts) > 1 else "velocity"
                 dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
+                if _bench_skip_on and vec_name in _BENCH_SKIP_FIELDS and is_binary:
+                    f.seek(npts * 3 * esize, 1); f.readline()  # [low-mem] skip 不需要的場避免 OOM
+                    continue
                 if is_binary:
                     buf = f.read(npts * 3 * esize)
-                    vec = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    vec = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
                     f.readline()
                 else:
                     vec, leftover = _read_ascii_block(
@@ -590,9 +611,12 @@ def parse_vtk(filepath):
                 name = parts[1]
                 dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 f.readline()           # skip LOOKUP_TABLE line
+                if _bench_skip_on and name in _BENCH_SKIP_FIELDS and is_binary:
+                    f.seek(npts * esize, 1); f.readline()  # [low-mem] skip 不需要的場避免 OOM
+                    continue
                 if is_binary:
                     buf = f.read(npts * esize)
-                    arr = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    arr = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
                     f.readline()
                 else:
                     arr, leftover = _read_ascii_block(
