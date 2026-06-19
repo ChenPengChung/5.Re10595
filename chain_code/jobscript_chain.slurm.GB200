@@ -14,9 +14,9 @@
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
-# SIGUSR1 送達時間:walltime 結束前 120s,讓程式完成最終 checkpoint。
+# SIGUSR1 送達時間:walltime 結束前 600s,讓程式完成最終 checkpoint。
 # 120s 為 partition-agnostic 固定值 (任何合理 walltime >= 5 分鐘都適用)。
-#SBATCH --signal=USR1@120
+#SBATCH --signal=USR1@600
 #
 # ==============================================================================
 # jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
@@ -405,7 +405,7 @@ fi
 #   程式被時間切斷前必須能完成 checkpoint,且 exit 124 讓 jobscript 續投下一輪.
 #
 # 時序 (walltime = W 秒, 由 runtime 偵測):
-#   t = W - 120s   SLURM --signal=USR1@120 送 SIGUSR1
+#   t = W - 600s   SLURM --signal=USR1@600 送 SIGUSR1
 #                    -> stop_control.h handler 設 STOP_SIGNAL_WALLTIME
 #                    -> 主迴圈 break -> 最終 checkpoint -> exit 124 -> 續鏈
 #   t = W - 60s    timeout(1) 備援送 SIGUSR1 (若 SLURM 漏發)
@@ -477,15 +477,15 @@ if [ "$WALLTIME_SEC" -le 0 ]; then
 fi
 
 # ---- 5.0.2 Sanity: 最小 5 分鐘 ----
-MIN_WALLTIME=300
+MIN_WALLTIME=900
 if [ "$WALLTIME_SEC" -lt "$MIN_WALLTIME" ]; then
     log "FATAL [POLICY-B1]: walltime=${WALLTIME_SEC}s < ${MIN_WALLTIME}s"
-    log "                   --signal=USR1@120 + kill_after=60 需要至少 5 分鐘 margin."
+    log "                   --signal=USR1@600 + kill_after=60 需要至少 5 分鐘 margin."
     exit 42
 fi
 
 # ---- 5.0.3 計算 TIMEOUT / KILL_AFTER ----
-KILL_AFTER=60
+KILL_AFTER=600   # [2026-06-19] 120→600: 158GB final checkpoint 需更長 grace,消除 walltime 回退 ~0.5FTT loss
 TIMEOUT=$((WALLTIME_SEC - KILL_AFTER))
 if [ "$TIMEOUT" -le 120 ]; then
     log "FATAL [POLICY-B1]: TIMEOUT=${TIMEOUT}s <= 120s (SIGUSR1 pre-walltime 時刻)"
@@ -497,7 +497,7 @@ log "  source   : $WALLTIME_SRC"
 log "  walltime : ${WALLTIME_SEC}s"
 log "  TIMEOUT  : ${TIMEOUT}s (timeout(1) 備援 SIGUSR1 時刻)"
 log "  KILL_AFT : ${KILL_AFTER}s (SIGKILL margin)"
-log "  SLURM USR1@120: 於 $((WALLTIME_SEC - 120))s 觸發"
+log "  SLURM USR1@600: 於 $((WALLTIME_SEC - 600))s 觸發"
 # ═════ [MUTEX LAYER 3 — epoch guard] ═════
 # mpirun 啟動前最後一道防線:驗證 lock 身分仍是我.
 # 若 lock 被奪 (不該發生,但 orthogonal 驗證),立即 abort 以免 solver 寫 checkpoint.
