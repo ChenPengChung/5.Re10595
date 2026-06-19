@@ -63,3 +63,7 @@ checklist.txt
 
 # benchmark dev job 執行期 log (執行期產物, 不追蹤)
 result/bench_computenode_*.log
+
+# watcher 跨節點重啟/停止哨兵(執行期, 不追蹤)
+live/RESTART_WATCHER
+live/STOP_WATCHER
