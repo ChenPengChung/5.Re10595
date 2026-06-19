@@ -289,6 +289,30 @@ rm -rf statistics/
 - Does NOT cancel any running jobs or stop the dispatcher/watcher.
 - Report what was deleted (file count / size freed) after execution.
 
+## Benchmark 比對圖雙軌分流 (triggered by `lbm-plot-benchmark`)
+
+平均場 VTK 已達數十 GB(全場 double)。login node 的 `user.slice` cgroup 記憶體硬上限
+**~20GB(跨使用者共用)**,float64 讀整顆 VTK 峰值會 OOM,且 cgroup OOM-killer 可能誤殺
+同 slice 的別專案程序。故 benchmark 比對圖採**雙軌分流**:
+
+| 軌 | 觸發 | dtype | 在哪跑 | 記憶體 |
+|----|------|-------|--------|--------|
+| **watcher inline** | 自動(VTK-gated, FTT≥G2=20) | float32(`--lowmem`) | login node, 0 SLURM | ~11GB < 20GB ✓ |
+| **手動 canonical** | `lbm-plot-benchmark` | float64(無 `--lowmem`) | dev 計算節點(48G) | ~20GB(隔離) |
+
+- `result/2.Benchmark.py` 的 `--lowmem`: 湍流跳過 `_BENCH_SKIP_FIELDS`(velocity/inst/omega/P_mean,
+  湍流路徑硬用 U_mean/V_mean 不碰它們)+ float32 讀入。**不帶 `--lowmem` ⇒ float64**(零誤差,
+  benchmark 輸出不變)。float32 捨入 ~6e-8 << 5% 比對精度,監控足夠。
+- watcher(`watcher/hill_watcher.sh:run_benchmark`)永遠 inline + `--lowmem`,**不投任何 SLURM**。
+
+### `lbm-plot-benchmark` 流程(手動 float64 最精準)
+1. 唯讀挑最新 stat-stable VTK;讀 FTT(< G2=20 → 結果標 **preliminary**)。
+2. `sbatch --test-only result/bench_computenode.slurm` 估開跑(dev 是 scavenger 可能 PENDING);
+   再真 `sbatch`(`--gres=gpu:0` 不計 per-account GPU 上限)。可 `--export=ALL,BENCH_RE=<N>` 改 Re。
+3. 背景輪詢到離隊 → sacct 終態 + log(rc + getrusage 峰值 RSS,不依賴 `/usr/bin/time`)+ ls fig_*.png。
+4. 回報逐變數 L2(uu/vv/ww/uv/k vs Krank/Breuer)+ copy fig 到 `live/`。
+- 守門:唯讀分析(只讀 VTK + 寫 fig);不重編/不碰 restart/不覆寫 checkpoint;0-GPU job 與主 job 零 GPU 競爭。
+
 ## GILBM 效能優化架構 — MRT 預計算 + eta 權重共享 + Forcing 開關
 
 本專案已完成三項 host-side 預計算優化，所有表格在 `main.cu` 初始化階段

@@ -63,6 +63,11 @@ except ImportError:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else os.getcwd()
 VTK_DIR = SCRIPT_DIR
 VTK_PATTERN = "velocity_merged_*.vtk"
+
+# ── benchmark 低記憶體: 湍流路徑全程不用的場 (verified: turbulent 用 U_mean/V_mean,
+#    velocity/u_inst/velocity_y 僅 LAMINAR fallback @ ~line 890; turbulent 硬寫 U_mean/V_mean) ──
+_BENCH_SKIP_FIELDS = {"velocity", "u_inst", "v_inst", "w_inst",
+                      "omega_u", "omega_v", "omega_w", "P_mean"}
 BENCH_DIR = os.path.join(SCRIPT_DIR, "benchmark")
 
 XH_STATIONS = [0.05, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
@@ -277,6 +282,11 @@ parser.add_argument(
     action='store_true',
     help='Turbulent: 使用預設 benchmark 數據密度，不互動詢問',
 )
+parser.add_argument(
+    '--lowmem',
+    action='store_true',
+    help='省記憶體: 湍流跳過未用場 + float32 讀入 (watcher inline 用; 預設 float64 零誤差)',
+)
 args, _ = parser.parse_known_args()
 
 U_REF, _VARIABLES_HEADER_PATH = resolve_uref_for_postprocess(SCRIPT_DIR)
@@ -292,6 +302,13 @@ LAMINAR = (Re <= 150)
 if Re <= 150:
     XH_STATIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # No 0.05, 0.5 — 對應 LBM 分布
 print(f"[INFO] Re = {Re}  {'(laminar mode)' if LAMINAR else '(turbulent mode)'}")
+
+# ── benchmark dtype + skip 開關 (不帶 --lowmem ⇒ float64, benchmark 輸出與原行為一致) ──
+BENCH_LOWMEM   = bool(args.lowmem)
+_bench_dtype   = np.float32 if BENCH_LOWMEM else np.float64
+_bench_skip_on = (not LAMINAR)   # 湍流跳過未用場省記憶體; 層流保留 (velocity_y/u_inst 為 fallback)
+if BENCH_LOWMEM:
+    print("[INFO] --lowmem: float32 讀入 + 跳過湍流未用場 (峰值記憶體↓; ~6e-8 捨入 << 5% 比對精度)")
 
 # ── Benchmark 數據點密度控制 ──────────────────────────────────
 # 層流: 100% (全部顯示)
@@ -555,7 +572,7 @@ def parse_vtk(filepath):
                     npts = n
                 if is_binary:
                     buf = f.read(n * 3 * esize)
-                    pts = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    pts = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
                     points = pts.reshape(-1, 3)
                     f.readline()  # consume trailing newline after binary block
                 else:
@@ -571,8 +588,12 @@ def parse_vtk(filepath):
                 vec_name = parts[1] if len(parts) > 1 else "velocity"
                 dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 if is_binary:
+                    if _bench_skip_on and vec_name in _BENCH_SKIP_FIELDS:
+                        f.seek(npts * 3 * esize, 1)   # 跳過未用場(湍流), 不讀進記憶體
+                        f.readline()                  # 吃掉 binary 區塊尾端換行, 對齊下一場標頭
+                        continue
                     buf = f.read(npts * 3 * esize)
-                    vec = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    vec = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
                     f.readline()
                 else:
                     vec, leftover = _read_ascii_block(
@@ -591,8 +612,12 @@ def parse_vtk(filepath):
                 dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 f.readline()           # skip LOOKUP_TABLE line
                 if is_binary:
+                    if _bench_skip_on and name in _BENCH_SKIP_FIELDS:
+                        f.seek(npts * esize, 1)   # 跳過未用場(湍流), 不讀進記憶體
+                        f.readline()              # 吃掉 binary 區塊尾端換行, 對齊下一場標頭
+                        continue
                     buf = f.read(npts * esize)
-                    arr = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    arr = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
                     f.readline()
                 else:
                     arr, leftover = _read_ascii_block(

@@ -195,8 +195,10 @@ run_benchmark() {
     local before_marker="$LIVE_DIR/.bench.marker.$$"
     : > "$before_marker"
 
+    # --lowmem: float32 inline 省記憶體 (33GB VTK 灌進 login node ~20GB cgroup 會 OOM;
+    #   float32 捨入 ~6e-8 << 5% 比對精度, 監控足夠)。手動 canonical 用 dev job float64。
     capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$BENCH_SCRIPT" \
-        --Re "$RE" --no-ask-scales --no-ask-density 2>&1)
+        --Re "$RE" --no-ask-scales --no-ask-density --lowmem 2>&1)
     rc=$?
 
     if (( rc == 124 )); then
