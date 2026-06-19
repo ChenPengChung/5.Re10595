@@ -21,7 +21,9 @@ CFDQ=/home/chenpengchung/bin/cfdq
 INTERVAL=60
 log(){ echo "[$(date '+%F %T')] $*" >> "$LOG"; }
 
-# 自我單例 (flock): 同時只允許一個本專案 watchdog
+# 自我單例 (flock): 同時只允許一個本專案 watchdog。
+# ⚠ fd 8 必須在所有被 spawn 的子程序中關閉 (各 nohup ... 8>&- &),否則子程序(watcher 等)
+#   會繼承並持有此鎖 → 本 watchdog 死後鎖仍被子程序卡住,systemd 接管實例搶不到鎖而空轉退出。
 exec 8>"$PROJ/live/.watchdog.lock"
 flock -n 8 || { log "另一 watchdog 持鎖, 本實例退出"; exit 0; }
 echo $$ > "$PROJ/live/watchdog.pid"
@@ -47,18 +49,18 @@ while true; do
     stale=$((stale+1)); log "WARN: cfdq daemon age=${age}s (>90s) streak=$stale"
     if [ "$stale" -ge 2 ]; then
       log "ALARM: dispatcher 死亡 → 重啟 cfdq daemon"
-      nohup "$CFDQ" daemon >> "$HOME/.cfdq/daemon.log" 2>&1 &
+      nohup "$CFDQ" daemon >> "$HOME/.cfdq/daemon.log" 2>&1 8>&- &
       log "已重啟 cfdq daemon (new pid=$!)"; stale=0; sleep 10
     fi
   else [ "$stale" -ne 0 ] && log "INFO: cfdq daemon 恢復 (age=${age}s)"; stale=0; fi
 
   # ---- (2) hill_watcher ----
   ensure_proc "$PROJ/live/watcher.pid" "hill_watcher" \
-    "nohup bash '$PROJ/watcher_nchc/hill_watcher.sh' >> '$PROJ/live/hill_watcher_console.log' 2>&1 &"
+    "nohup bash '$PROJ/watcher_nchc/hill_watcher.sh' >> '$PROJ/live/hill_watcher_console.log' 2>&1 8>&- &"
 
   # ---- (3) flow_render_loop ----
   ensure_proc "$PROJ/live/flow_render.pid" "flow_render_loop" \
-    "nohup bash '$PROJ/chain_code_local/flow_render_loop.sh' >/dev/null 2>&1 &"
+    "nohup bash '$PROJ/chain_code_local/flow_render_loop.sh' >/dev/null 2>&1 8>&- &"
 
   # ---- 心跳 (每 ~10 分) ----
   now=$(date +%s)
