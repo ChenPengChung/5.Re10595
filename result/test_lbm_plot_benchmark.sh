@@ -26,7 +26,9 @@ echo "=== lbm-plot-benchmark 提交路徑單元測試 ==="
 if bash -n "$SLURM" 2>/dev/null; then ok "bash -n 語法正確"; else bad "bash -n 語法錯誤"; fi
 
 # T3 (★核心): --gres=gpu:N 且 N>=1(gpu>0,避開 QOSMinGRES 永久 PENDING)
-gpu=$(grep -oE '#SBATCH[[:space:]]+--gres=gpu:[0-9]+' "$SLURM" | grep -oE '[0-9]+$' | head -1)
+# 硬化(Codex 建議): 只取「行首」有效 #SBATCH directive(排除被註解/縮排的偽指令);
+# 多個時取最後一個(Slurm 對重複選項取最後值)。
+gpu=$(grep -oE '^#SBATCH[[:space:]]+--gres=gpu:[0-9]+' "$SLURM" | grep -oE '[0-9]+$' | tail -1)
 if [[ -n "${gpu:-}" && "$gpu" -ge 1 ]]; then
     ok "gres=gpu:$gpu (>=1 → 不會被 QOSMinGRES 永久擋)"
 else
@@ -40,11 +42,13 @@ grep -qE '#SBATCH[[:space:]]+--partition=dev' "$SLURM" && ok "partition=dev" || 
 grep -qE '#SBATCH[[:space:]]+--account=[A-Za-z0-9]+' "$SLURM" && ok "account 已設定" || bad "缺 --account"
 
 # T6 (★精度): 跑 2.Benchmark.py 且「不帶 --lowmem」(= float64 高精度 canonical)
+# 硬化(Codex 建議): 查「整支腳本任何位置」皆無 --lowmem(canonical 永不降精度),
+# 不只查與 2.Benchmark.py 同一行(防參數被拆到續行漏判)。
 if grep -q '2.Benchmark.py' "$SLURM"; then
-    if grep '2.Benchmark.py' "$SLURM" | grep -q -- '--lowmem'; then
-        bad "canonical job 誤帶 --lowmem(會變 float32,非最精準)"
+    if grep -q -- '--lowmem' "$SLURM"; then
+        bad "canonical job 出現 --lowmem(任何位置;會變 float32,非最精準)"
     else
-        ok "呼叫 2.Benchmark.py 且不帶 --lowmem(float64 零誤差 canonical)"
+        ok "呼叫 2.Benchmark.py 且全腳本無 --lowmem(float64 零誤差 canonical)"
     fi
 else
     bad "腳本未呼叫 2.Benchmark.py"
