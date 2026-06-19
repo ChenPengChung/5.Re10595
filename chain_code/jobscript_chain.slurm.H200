@@ -26,7 +26,7 @@
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
 # SIGUSR1 送達時間:walltime 結束前 600s,讓程式完成最終 checkpoint。
-# 120s 為 partition-agnostic 固定值 (任何合理 walltime >= 5 分鐘都適用)。
+# 600s 為 partition-agnostic 固定值 (任何合理 walltime >= 15 分鐘都適用)。
 #SBATCH --signal=USR1@600
 #
 # ==============================================================================
@@ -441,9 +441,9 @@ fi
 #   t = W - 600s   SLURM --signal=USR1@600 送 SIGUSR1
 #                    -> stop_control.h handler 設 STOP_SIGNAL_WALLTIME
 #                    -> 主迴圈 break -> 最終 checkpoint -> exit 124 -> 續鏈
-#   t = W - 60s    timeout(1) 備援送 SIGUSR1 (若 SLURM 漏發)
+#   t = W - 600s   timeout(1) 備援送 SIGUSR1 (若 SLURM 漏發)
 #                    -> 同路徑 -> exit 124 -> 續鏈
-#   t = W          timeout --kill-after=60 送 SIGKILL, SLURM walltime 到
+#   t = W          timeout --kill-after=600 送 SIGKILL, SLURM walltime 到
 #                    -> bash 回 124 -> 續鏈
 #
 # Walltime 來源 (by priority):
@@ -513,7 +513,7 @@ fi
 MIN_WALLTIME=900
 if [ "$WALLTIME_SEC" -lt "$MIN_WALLTIME" ]; then
     log "FATAL [POLICY-B1]: walltime=${WALLTIME_SEC}s < ${MIN_WALLTIME}s"
-    log "                   --signal=USR1@600 + kill_after=60 需要至少 5 分鐘 margin."
+    log "                   --signal=USR1@600 + kill_after=600 需要至少 15 分鐘 margin."
     exit 42
 fi
 
