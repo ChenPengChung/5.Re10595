@@ -23,8 +23,8 @@ _read_re() {
 RE=$(_read_re)
 POLL_SEC=30
 SIZE_STABLE_WAIT=3
-CONV_TIMEOUT=180
-BENCH_TIMEOUT=300
+CONV_TIMEOUT=600   # 4.Ma_U_Time.py 單獨 ~7s; 拉高(180→600)防 login node 競爭/dat 大檔下逾時(完整解析優先)
+BENCH_TIMEOUT=900  # float32 --lowmem benchmark 含 ~35GB VTK 完整性掃描+parse ~552s; 拉高(300→900)防 FTT≥G2 那次逾時出不了圖
 MIN_VTK_BYTES=1048576
 
 mkdir -p "$LIVE_DIR"
