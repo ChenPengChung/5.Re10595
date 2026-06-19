@@ -10,7 +10,9 @@
 #   連續 2 輪才重啟 (debounce 防瞬時誤判)。
 # 跨專案安全 (CLAUDE.md): /proc/PID/cwd 判歸屬;絕不 pkill -f;cfdq daemon 是全域單例。
 # 自我單例: flock (程序死即釋鎖, 無 stale-pid 競態)。
-# 用法: nohup bash chain_code_local/keepalive_watchdog.sh >/dev/null 2>&1 &
+# 開機自起: 由 systemd user service `edit14-local-keepalive.service` + enable-linger 拉起,
+#   登出/reboot/斷線後仍自動回來;本層活著 → 另兩常駐 (watcher/daemon) 必被它保活。
+# 裸啟動 (相容/手動): nohup bash chain_code_local/keepalive_watchdog.sh >/dev/null 2>&1 &
 # ==============================================================================
 set -uo pipefail
 PROJ=/home/chenpengchung/5.Re10595/Edit14_2800GILBM
@@ -27,6 +29,9 @@ flock -n 8 || { log "另一 watchdog 持鎖, 本實例退出"; exit 0; }
 echo $$ > "$PROJ/live/watchdog.pid"
 log "===== watchdog 啟動 pid=$$ (守 dispatcher + watcher) ====="
 
+# ⚠ fd 8 必須在所有被 spawn 的子程序中關閉 (各 nohup ... 8>&- &),否則子程序 (watcher 等)
+#   會繼承 flock fd → 即使本 watchdog 死亡, 子程序仍持鎖 → 下一個 watchdog 搶不到鎖而退出,
+#   保活鏈斷裂。故每個 nohup 一律加 8>&-。
 ensure_proc(){ # $1=pidfile $2=human $3=launch-cmd
   local pf="$1" name="$2" cmd="$3" p alive=0
   p=$(cat "$pf" 2>/dev/null || true)
@@ -47,14 +52,14 @@ while true; do
     stale=$((stale+1)); log "WARN: cfdq daemon age=${age}s (>90s) streak=$stale"
     if [ "$stale" -ge 2 ]; then
       log "ALARM: dispatcher 死亡 → 重啟 cfdq daemon"
-      nohup "$CFDQ" daemon >> "$HOME/.cfdq/daemon.log" 2>&1 &
+      nohup "$CFDQ" daemon >> "$HOME/.cfdq/daemon.log" 2>&1 8>&- &
       log "已重啟 cfdq daemon (new pid=$!)"; stale=0; sleep 10
     fi
   else [ "$stale" -ne 0 ] && log "INFO: cfdq daemon 恢復 (age=${age}s)"; stale=0; fi
 
   # ---- (2) hill_watcher ----
   ensure_proc "$PROJ/live/watcher.pid" "hill_watcher" \
-    "nohup bash '$PROJ/watcher_nchc/hill_watcher.sh' >> '$PROJ/live/hill_watcher_console.log' 2>&1 &"
+    "nohup bash '$PROJ/watcher_nchc/hill_watcher.sh' >> '$PROJ/live/hill_watcher_console.log' 2>&1 8>&- &"
 
   # ---- (3) flow_render_loop: 本專案無此腳本 → 略過 ----
 

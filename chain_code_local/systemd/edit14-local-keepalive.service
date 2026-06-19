@@ -1,0 +1,28 @@
+[Unit]
+Description=Edit14_2800GILBM 本地 cfdq keepalive 二次守衛 (守 cfdq daemon + hill_watcher;經 linger 撐過 reboot)
+# keepalive_watchdog.sh 自身已守 cfdq daemon + hill_watcher,故只需一個 service。
+# (與姊妹專案 edit13-local-keepalive.service 同架構/同命名慣例 edit<NN>-local-keepalive)
+#
+# ⚠ 關鍵: ~/.config/systemd/user 在「共享 NFS home」→ `systemctl --user enable` 等於
+#   每個有 user systemd 實例的節點 (登入即觸發) 都會啟動本 unit → 跨節點重複起 keepalive,
+#   各自再 spawn watcher (keepalive 的 flock 在 NFS 跨節點不可靠, 擋不住)。生產主機只在 cfdlab,
+#   故用 ConditionHost 限定: 只有 cfdlab 會真正啟動, 其餘節點 (CFDLAB-3 等) skip (不算失敗)。
+ConditionHost=cfdlab
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+WorkingDirectory=/home/chenpengchung/5.Re10595/Edit14_2800GILBM
+ExecStart=/bin/bash /home/chenpengchung/5.Re10595/Edit14_2800GILBM/chain_code_local/keepalive_watchdog.sh
+# KillMode=process: stop/restart 只終止 keepalive 本體, 不波及它 nohup spawn 的 watcher 與
+#   (萬一由它復活的) 全域 cfdq daemon —— 否則預設 control-group 會連同 cgroup 子程序一起殺,
+#   等於 restart keepalive 就誤殺 watcher / 跨專案誤殺全域 daemon。
+#   安全前提: watcher 已加 8>&- 不持 flock fd → 存活的 watcher 不會擋住重啟後 keepalive 搶鎖。
+KillMode=process
+# 被 kill/crash/OOM (失敗退出) → 重啟;
+# 因 flock 偵測到另一實例已在跑而「乾淨 exit 0」→ 不重啟 (避免搶鎖空轉迴圈)。
+Restart=on-failure
+RestartSec=15
+
+[Install]
+WantedBy=default.target

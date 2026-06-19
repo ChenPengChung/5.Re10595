@@ -84,6 +84,32 @@ Report concisely. This shortcut is **read-only** — it never changes job/chain 
 - Language: commit messages should be in Traditional Chinese (繁體中文)
 - This is a CFD (Computational Fluid Dynamics) LBM simulation project running on HPC clusters (H200/GB200).
 
+## 本地 cfdq systemd 開機自起 (keepalive 守 daemon+watcher,皆不再斷線)
+
+本專案走**本地 cfdq**(母機 `cfdlab` + V100 compute nodes,非 NCHC/SLURM)。三常駐原本
+都是 tmux/nohup 子程序 → session/tmux 一掉就全死(2026-06-19 16:10 watcher+keepalive 同死、
+監控斷線 2h20m)。**已把 keepalive 二次守衛改為 systemd --user 服務 + enable-linger**,
+登出/reboot/斷線皆自起;keepalive 活著 → 它再保活 watcher + cfdq daemon。
+
+### 架構:keepalive-only(與姊妹專案 `edit13-local-keepalive.service` 一致)
+
+| Unit(原始檔 `chain_code_local/systemd/`,裝到 `~/.config/systemd/user/`) | Restart | 說明 |
+|------|---------|------|
+| `edit14-local-keepalive.service` | `on-failure` | 守 `keepalive_watchdog.sh`;crash 復活、flock-defer(另一實例)乾淨 exit 0 不復活 |
+
+- **為何只裝 keepalive 一個 service**(不把 daemon/watcher 各自變 systemd unit):
+  - `cfdq daemon` 是**全域單例**,Edit11/Edit13/Edit14 共用。若 Edit14 獨佔一個
+    `cfdq-daemon.service`,會與 **Edit13 還活著的 keepalive**(也 `nohup cfdq daemon`)搶同一顆
+    daemon → singleton 鎖互打。故兩專案一律以 keepalive(nohup + 鎖)保活全域 daemon,**不搶 systemd 擁有權**。
+  - watcher 由 keepalive 60s 輪詢保活即可(不需獨立 unit)。
+- keepalive 偵測到 watcher / cfdq daemon 死亡 → 仍以 **nohup 重啟**(各子程序加 `8>&-` 關 flock fd,
+  避免子程序繼承鎖致下一個 keepalive 搶不到鎖)。本身則由 systemd `Restart=on-failure` 保活。
+- 冪等安裝/重裝:`bash chain_code_local/install_systemd_local.sh`(cp unit + enable-linger + enable --now)。
+- 重拉:`systemctl --user restart edit14-local-keepalive.service`(它再保活 watcher+daemon)。
+- linger 必須 `Linger=yes`(`loginctl show-user $USER`),否則 reboot 後不自起。
+- 跨專案安全照舊:只裝/動**本專案** keepalive;**絕不**碰 Edit11/Edit13 的服務/job/daemon;
+  全域 cfdq daemon 不重啟(本方案零 daemon 重啟、零 job 中斷)。`~/bin/cfdq` 維持原狀(未改)。
+
 ## SLURM Job Safety (MANDATORY)
 
 This user runs multiple simulation projects on the same HPC cluster.
