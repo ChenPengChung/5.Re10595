@@ -14,9 +14,12 @@
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
-# SIGUSR1 送達時間:walltime 結束前 120s,讓程式完成最終 checkpoint。
-# 120s 為 partition-agnostic 固定值 (任何合理 walltime >= 5 分鐘都適用)。
-#SBATCH --signal=USR1@120
+# SIGUSR1 送達時間:walltime 結束前 600s,讓程式完成最終 checkpoint。
+# [2026-06-19 Edit12] 120s→600s: checkpoint 降頻為每 1FTT 後, 單份 final checkpoint
+#   ~129GB 在舊的 120s grace 內寫不完 → 被 SIGKILL 砍半 → 回退上一個 regular checkpoint
+#   (最多丟 ~1FTT)。600s grace 給 129GB 充足寫入時間(~4× 餘裕)→ final checkpoint 必完成。
+#   Edit12 walltime 為 1 天(32gpus)/2 天(16gpus), 600s grace 僅 ~0.7% overhead。
+#SBATCH --signal=USR1@600
 #
 # ==============================================================================
 # jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
@@ -405,12 +408,11 @@ fi
 #   程式被時間切斷前必須能完成 checkpoint,且 exit 124 讓 jobscript 續投下一輪.
 #
 # 時序 (walltime = W 秒, 由 runtime 偵測):
-#   t = W - 120s   SLURM --signal=USR1@120 送 SIGUSR1
+#   t = W - 600s   SLURM --signal=USR1@600 與 timeout(1) 同時送 SIGUSR1 (冗餘, 互為備援)
 #                    -> stop_control.h handler 設 STOP_SIGNAL_WALLTIME
-#                    -> 主迴圈 break -> 最終 checkpoint -> exit 124 -> 續鏈
-#   t = W - 60s    timeout(1) 備援送 SIGUSR1 (若 SLURM 漏發)
-#                    -> 同路徑 -> exit 124 -> 續鏈
-#   t = W          timeout --kill-after=60 送 SIGKILL, SLURM walltime 到
+#                    -> 主迴圈 break -> 最終 checkpoint(~129GB, 寫入 ~120-160s) -> exit 124 -> 續鏈
+#                    -> 600s grace 確保 1FTT-降頻後的大 checkpoint 寫得完(否則回退丟 ~0.5-1FTT)
+#   t = W          timeout --kill-after=600 送 SIGKILL, SLURM walltime 到
 #                    -> bash 回 124 -> 續鏈
 #
 # Walltime 來源 (by priority):
@@ -476,19 +478,19 @@ if [ "$WALLTIME_SEC" -le 0 ]; then
     log "WARN: 無法偵測 walltime, 使用保守預設 3600s."
 fi
 
-# ---- 5.0.2 Sanity: 最小 5 分鐘 ----
-MIN_WALLTIME=300
+# ---- 5.0.2 Sanity: 最小 20 分鐘 (600s grace + 至少 ~600s 有效計算) ----
+MIN_WALLTIME=1200
 if [ "$WALLTIME_SEC" -lt "$MIN_WALLTIME" ]; then
     log "FATAL [POLICY-B1]: walltime=${WALLTIME_SEC}s < ${MIN_WALLTIME}s"
-    log "                   --signal=USR1@120 + kill_after=60 需要至少 5 分鐘 margin."
+    log "                   --signal=USR1@600 + kill_after=600 需要至少 20 分鐘 margin."
     exit 42
 fi
 
-# ---- 5.0.3 計算 TIMEOUT / KILL_AFTER ----
-KILL_AFTER=60
+# ---- 5.0.3 計算 TIMEOUT / KILL_AFTER (grace=600s: SIGUSR1@W-600, SIGKILL@W) ----
+KILL_AFTER=600
 TIMEOUT=$((WALLTIME_SEC - KILL_AFTER))
-if [ "$TIMEOUT" -le 120 ]; then
-    log "FATAL [POLICY-B1]: TIMEOUT=${TIMEOUT}s <= 120s (SIGUSR1 pre-walltime 時刻)"
+if [ "$TIMEOUT" -le 0 ]; then
+    log "FATAL [POLICY-B1]: TIMEOUT=${TIMEOUT}s <= 0 (walltime < 600s grace; 應已被 MIN_WALLTIME 擋下)"
     exit 42
 fi
 
@@ -497,7 +499,7 @@ log "  source   : $WALLTIME_SRC"
 log "  walltime : ${WALLTIME_SEC}s"
 log "  TIMEOUT  : ${TIMEOUT}s (timeout(1) 備援 SIGUSR1 時刻)"
 log "  KILL_AFT : ${KILL_AFTER}s (SIGKILL margin)"
-log "  SLURM USR1@120: 於 $((WALLTIME_SEC - 120))s 觸發"
+log "  SLURM USR1@600: 於 $((WALLTIME_SEC - 600))s 觸發 (grace=600s for 1FTT-降頻大 checkpoint)"
 # ═════ [MUTEX LAYER 3 — epoch guard] ═════
 # mpirun 啟動前最後一道防線:驗證 lock 身分仍是我.
 # 若 lock 被奪 (不該發生,但 orthogonal 驗證),立即 abort 以免 solver 寫 checkpoint.
