@@ -2,7 +2,7 @@
 #SBATCH --job-name=Edit12_bench
 #SBATCH --account=MST115169
 #SBATCH --partition=dev
-#SBATCH --gres=gpu:0
+#SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=48G
 #SBATCH --time=00:15:00
@@ -13,7 +13,9 @@
 # 平均場 VTK 已達數十 GB。login node user.slice cgroup ~20GB 跨使用者共用 → float64
 # 讀整顆會 OOM 且可能誤殺別專案程序。故 canonical(最精準)投 dev 計算節點(--mem=48G):
 #   - 不帶 --lowmem → float64 (與 watcher float32 inline 雙軌分流)。
-#   - 0-GPU job (--gres=gpu:0) 不計入 per-account GPU 上限, 與主 job 零 GPU 競爭。
+#   - ★--gres=gpu:1: NCHC H200 各 QOS 都有 gpu MinTRES(dev=1) → 0-GPU job 被 QOSMinGRES 永久
+#     擋(實測 130642/130643 PENDING 永不跑)。dev QOS per-account cap=32, 用 1/32 不撞上限, 且與
+#     主 job 的 p_32gpus QOS cap 分離 → 不影響主模擬。GPU 純為滿足 QOSMinGRES, 實際計算在 CPU。
 #   - getrusage 量峰值 RSS (不依賴 NCHC login node 常缺的 /usr/bin/time)。
 #   - 唯讀分析: 只讀最新 stat-stable VTK + 寫 result/fig_*.png; 不碰 solver/restart/checkpoint。
 # Re 預設 5600 (本專案); 可 `sbatch --export=ALL,BENCH_RE=<N> result/bench_computenode.slurm` 覆寫。

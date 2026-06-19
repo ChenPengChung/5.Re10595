@@ -308,10 +308,13 @@ rm -rf statistics/
 ### `lbm-plot-benchmark` 流程(手動 float64 最精準)
 1. 唯讀挑最新 stat-stable VTK;讀 FTT(< G2=20 → 結果標 **preliminary**)。
 2. `sbatch --test-only result/bench_computenode.slurm` 估開跑(dev 是 scavenger 可能 PENDING);
-   再真 `sbatch`(`--gres=gpu:0` 不計 per-account GPU 上限)。可 `--export=ALL,BENCH_RE=<N>` 改 Re。
+   再真 `sbatch`(`--gres=gpu:1`:dev QOS 有 gpu MinTRES → 0-GPU 被 QOSMinGRES 永久擋;用 dev cap
+   1/32、與主 job 的 p_32gpus QOS 分離 → 不撞上限、不影響主模擬;GPU 純滿足 QOS, 計算在 CPU)。
+   可 `--export=ALL,BENCH_RE=<N>` 改 Re;`--export=ALL,BENCH_LOWMEM=1` → float32(A/B 用)。
 3. 背景輪詢到離隊 → sacct 終態 + log(rc + getrusage 峰值 RSS,不依賴 `/usr/bin/time`)+ ls fig_*.png。
 4. 回報逐變數 L2(uu/vv/ww/uv/k vs Krank/Breuer)+ copy fig 到 `live/`。
-- 守門:唯讀分析(只讀 VTK + 寫 fig);不重編/不碰 restart/不覆寫 checkpoint;0-GPU job 與主 job 零 GPU 競爭。
+- 守門:唯讀分析(只讀 VTK + 寫 fig);不重編/不碰 restart/不覆寫 checkpoint;dev 1-GPU job 用 dev QOS
+  獨立 cap(與主 job 的 32gpus QOS 分離)→ 不影響主模擬、不撞 per-account 上限。
 
 ## GILBM 效能優化架構 — MRT 預計算 + eta 權重共享 + Forcing 開關
 
