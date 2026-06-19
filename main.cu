@@ -138,6 +138,16 @@ double g_gpu_time_min = 0.0;     // 供 monitor.h 使用的 GPU 時間 (min)
 volatile sig_atomic_t g_signal_received = 0;  // 由 signal handler 設定
 int                   g_stop_reason     = 0;   // StopReason enum
 
+// [2026-06-19] near-walltime extra checkpoint (signal-independent walltime safety net).
+//   SIGUSR1 walltime-rescue can fail to deliver a final checkpoint (timeout --kill-after=60
+//   gives only ~60s before SIGKILL, too short for the 14GB write → RC=205, no [FINAL]) →
+//   warm-restart falls back to the last 1-FTT regular checkpoint, losing up to ~1 FTT.
+//   The solver tracks its own elapsed (MPI_Wtime) vs GILBM_WALLTIME_S (passed by jobscript)
+//   and writes an extra checkpoint at ~10min and ~5min before walltime → caps the fallback to ~5min.
+double g_run_start_w       = 0.0;   // MPI_Wtime at solver start (set right after MPI_Init)
+double g_walltime_budget_s = 0.0;   // GILBM_WALLTIME_S (hard walltime seconds); 0 = disabled
+int    g_wt_ckpt_stage     = 0;     // 0=none, 1=wrote@~10min, 2=wrote@~5min
+
 // [RESTART-FIX] PID + Gehrke 控制器狀態 (evolution.h 以 extern 引用)
 //   必須跨 restart 保持, 否則 Force 會在續跑邊界出現階躍不連續
 double g_force_integral    = 0.0;
@@ -410,6 +420,15 @@ int main(int argc, char *argv[])
     // SLURM --signal=USR1@120 會在 walltime 前 120s 送 SIGUSR1 → 觸發乾淨退出
     // 使用者可手動 `scancel --signal=USR2 $JID` 要求優雅停止
     InstallStopHandlers();
+
+    // [2026-06-19] near-walltime extra checkpoint: record start (MPI_Wtime) + read jobscript
+    //   walltime budget. Elapsed reckoned from here (just after MPI_Init) is a few-seconds
+    //   conservative under-estimate of true job elapsed → fires slightly EARLY (safe).
+    g_run_start_w = MPI_Wtime();
+    { const char *_wt_env = std::getenv("GILBM_WALLTIME_S"); if (_wt_env) g_walltime_budget_s = atof(_wt_env); }
+    if (myid == 0 && g_walltime_budget_s > 0.0)
+        printf("[WT-CKPT] near-walltime checkpoint armed: budget=%.0fs, extra ckpt @ %.0fs & %.0fs remaining\n",
+               g_walltime_budget_s, 600.0, 300.0);
     if (myid == 0) {
         printf("[Phase7] Signal handlers installed: SIGUSR1, SIGUSR2, SIGTERM\n");
     }
@@ -2195,6 +2214,31 @@ int main(int argc, char *argv[])
                         rho_avg_out - 1.0, rho_modify_h[0], SKIP_MIDSTEP_MASSCORR);
                 fflush(checkrho);
                 fclose(checkrho);
+            }
+        }
+
+        // ===== [2026-06-19] near-walltime extra checkpoint (signal-independent) =====
+        //   SIGUSR1 walltime-rescue can fail (RC=205, no [FINAL]) → warm-restart falls back to
+        //   the last 1-FTT regular checkpoint, losing up to ~1 FTT. Here the solver, on its own
+        //   wall-clock, writes an extra checkpoint at ~10min and ~5min before the hard walltime,
+        //   capping the warm-restart fallback to ~5min (~0.07 FTT). Pure I/O safety; does not
+        //   touch the flow field. Gather sequence mirrors the VTK-block checkpoint path exactly.
+        if (step % 100 == 1 && g_walltime_budget_s > 0.0 && g_wt_ckpt_stage < 2) {
+            double _wt_rem = g_walltime_budget_s - (MPI_Wtime() - g_run_start_w);
+            int _wt_do = 0;
+            if      (g_wt_ckpt_stage == 0 && _wt_rem <= 600.0) { g_wt_ckpt_stage = 1; _wt_do = 1; }
+            else if (g_wt_ckpt_stage == 1 && _wt_rem <= 300.0) { g_wt_ckpt_stage = 2; _wt_do = 1; }
+            if (_wt_do) {
+                if (myid == 0)
+                    printf("[WT-CKPT] near walltime (rem=%.0fs) → extra checkpoint stage %d at step=%d FTT=%.4f\n",
+                           _wt_rem, g_wt_ckpt_stage, step, FTT_now);
+                Launch_UnpackFPost_Direct(f_post_read);   // f_post → fh_p[q] (same as VTK-block gather)
+                SendMacroCPU();                            // u/v/w/rho D2H
+                const size_t _wt_tb = (size_t)NX6 * NYD6 * NZ6 * sizeof(double);
+                CHECK_CUDA( cudaMemcpy(u_tavg_h, u_tavg_d, _wt_tb, cudaMemcpyDeviceToHost) );
+                CHECK_CUDA( cudaMemcpy(v_tavg_h, v_tavg_d, _wt_tb, cudaMemcpyDeviceToHost) );
+                CHECK_CUDA( cudaMemcpy(w_tavg_h, w_tavg_d, _wt_tb, cudaMemcpyDeviceToHost) );
+                SaveBinaryCheckpoint( step );
             }
         }
 

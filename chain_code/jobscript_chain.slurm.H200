@@ -508,6 +508,7 @@ log "[MUTEX-EPOCH] ✓ lock 身分驗證通過 (owner=$SLURM_JOB_ID), 啟動 mpi
 
 log "Starting mpirun  TIMEOUT=${TIMEOUT}s  KILL_AFTER=${KILL_AFTER}s  ARGS=\"$ARGS\""
 export CHAIN_COUNT_FROM_JOBSCRIPT="$CHAIN_COUNT"
+export GILBM_WALLTIME_S="$WALLTIME_SEC"   # [2026-06-19] solver near-walltime extra checkpoint (@ ~10/5min before hard walltime; signal-independent, caps warm-restart fallback to ~5min when SIGUSR1 rescue fails RC=205)
 START_TS=$(date +%s)
 MPIRUN_SIG_FLAGS="-mca orte_forward_job_control 1"
 
