@@ -64,6 +64,7 @@ checklist.txt
 # benchmark 計算節點 job log(執行期產物,不追蹤)
 result/bench_computenode_*.log
 
-# benchmark 比對圖(執行期產物,每次跑重生;watcher 會複製到 live/)
-result/fig_*.png
+# benchmark Reynolds 應力比對圖 result/fig_*.png:2026-06-21 使用者決定「納入 git 追蹤」,
+# 以便他端透過 git 同步看到更新(接受 repo 隨每次刷新增長 ~2.4MB/次;日常 loop 偵測更新後 commit+push)。
+# cf/cp(tau_wall_signed_*)與收斂圖(monitor_convergence_*)本就 tracked。watcher 仍複製一份到 live/(live/ 整個 gitignore)。
 result/.bench_f32_ab.log
