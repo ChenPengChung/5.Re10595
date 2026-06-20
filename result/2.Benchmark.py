@@ -532,11 +532,31 @@ def parse_vtk(filepath):
     # 避免 35GB VTK 在 login node 20GB cgroup 限制下 OOM;只載 U_mean/V_mean/uu/uv/vv/k_TKE。
     # 注意:這些場只在「湍流」路徑用不到;LAMINAR(Re<=150)會用 u_inst/velocity 當速度候選,
     # 故 skip 只在 (not LAMINAR) 時生效,湍流(本專案 Re5600)省記憶體、層流仍正確。
+    # W_mean: benchmark 只畫 mean_u/mean_v(無 mean_w)→ 保留但從未讀取 → 跳過省 ~0.9GB。
     _BENCH_SKIP_FIELDS = {"velocity", "u_inst", "v_inst", "w_inst",
-                          "omega_u", "omega_v", "omega_w", "P_mean"}
+                          "omega_u", "omega_v", "omega_w", "P_mean", "W_mean"}
     _bench_skip_on = (not LAMINAR)
     # 保留場的讀入精度:預設 float64 零誤差;--lowmem 時 float32 省一半記憶體(監控用)。
     _bench_dtype = np.float32 if BENCH_LOWMEM else np.float64
+
+    def _read_be_field(fh, n, dt, esize, out_dtype, chunk_elems=4 * 1024 * 1024):
+        # 串流分塊讀 n 個 big-endian float,邊讀邊降精度寫入預配置 out;避免一次性
+        # f.read(n*esize) 配置整塊暫態 float64 buffer(POINTS ~5.6GB / 每大欄 ~1.86GB 是 OOM 元凶)。
+        # 位元等價於 np.frombuffer(f.read(n*esize), dtype=dt).astype(out_dtype):同 bytes、同序、同值。
+        out = np.empty(n, dtype=out_dtype)
+        i = 0
+        while i < n:
+            m = min(chunk_elems, n - i)
+            cbuf = fh.read(m * esize)
+            got = len(cbuf) // esize
+            if got <= 0:
+                break
+            out[i:i + got] = np.frombuffer(cbuf, dtype=dt, count=got)
+            i += got
+        if i < n:   # 截斷/半寫入檔:還原原版 loud-fail 語義(短讀→ValueError→上層 reshape 失敗→跳過重試),
+            raise ValueError(f"truncated binary block: got {i} of {n} elems")  # 不留未初始化垃圾尾靜默產錯圖
+        return out
+
     with open(filepath, "rb") as f:
         pushback = None
         while True:
@@ -572,8 +592,7 @@ def parse_vtk(filepath):
                 if npts == 0:
                     npts = n
                 if is_binary:
-                    buf = f.read(n * 3 * esize)
-                    pts = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
+                    pts = _read_be_field(f, n * 3, dt, esize, _bench_dtype)
                     points = pts.reshape(-1, 3)
                     f.readline()  # consume trailing newline after binary block
                 else:
@@ -592,8 +611,7 @@ def parse_vtk(filepath):
                     f.seek(npts * 3 * esize, 1); f.readline()  # [low-mem] skip 不需要的場避免 OOM
                     continue
                 if is_binary:
-                    buf = f.read(npts * 3 * esize)
-                    vec = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
+                    vec = _read_be_field(f, npts * 3, dt, esize, _bench_dtype)
                     f.readline()
                 else:
                     vec, leftover = _read_ascii_block(
@@ -615,8 +633,7 @@ def parse_vtk(filepath):
                     f.seek(npts * esize, 1); f.readline()  # [low-mem] skip 不需要的場避免 OOM
                     continue
                 if is_binary:
-                    buf = f.read(npts * esize)
-                    arr = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
+                    arr = _read_be_field(f, npts, dt, esize, _bench_dtype)
                     f.readline()
                 else:
                     arr, leftover = _read_ascii_block(

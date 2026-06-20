@@ -148,6 +148,19 @@ def parse_vtk(filepath):
                 if idx < n: arr[idx] = float(v); idx += 1
         return arr[:idx], None
 
+    def _read_be(fh, n, dtype_be, esz, out_dtype, chunk_elems=4 * 1024 * 1024):
+        # 串流分塊讀 n 個 big-endian float → out_dtype;避免一次 fh.read(n*esz) 配置整塊暫態
+        # buffer(POINTS/大欄 OOM 元凶)。位元等價於 frombuffer(fh.read(n*esz),dtype_be).astype(out_dtype)。
+        out = np.empty(n, dtype=out_dtype); i = 0
+        while i < n:
+            m = min(chunk_elems, n - i)
+            cbuf = fh.read(m * esz); got = len(cbuf) // esz
+            if got <= 0: break
+            out[i:i + got] = np.frombuffer(cbuf, dtype=dtype_be, count=got); i += got
+        if i < n:   # 截斷/半寫入檔:還原 loud-fail(短讀→ValueError→上層跳過重試),不留垃圾尾靜默產錯圖
+            raise ValueError(f"truncated binary block: got {i} of {n} elems")
+        return out
+
     with open(filepath, "rb") as f:
         pb = None
         while True:
@@ -167,8 +180,7 @@ def parse_vtk(filepath):
                 p = s.split(); n = int(p[1]); dt, es = _dt(p[2] if len(p)>2 else "double")
                 if npts == 0: npts = n
                 if is_binary:
-                    buf = f.read(n*3*es)
-                    points = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy().reshape(-1,3)
+                    points = _read_be(f, n*3, dt, es, _TW_DTYPE).reshape(-1,3)
                     f.readline()
                 else:
                     pts, pb = _read_ascii(f, n*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -179,8 +191,7 @@ def parse_vtk(filepath):
                 if _TW_LOWMEM and is_binary:        # tau_wall 不用任何 VECTORS 欄 → 跳過省記憶體(僅 binary;ascii 小檔照讀)
                     f.seek(npts*3*es, 1); f.readline(); continue
                 if is_binary:
-                    buf = f.read(npts*3*es)
-                    vec = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
+                    vec = _read_be(f, npts*3, dt, es, _TW_DTYPE)
                     f.readline()
                 else:
                     vec, pb = _read_ascii(f, npts*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -195,8 +206,7 @@ def parse_vtk(filepath):
                 if _TW_LOWMEM and is_binary and nm not in _TW_KEEP:   # 跳過未用 SCALARS(★保留 U/V/P_mean)
                     f.seek(npts*es, 1); f.readline(); continue
                 if is_binary:
-                    buf = f.read(npts*es)
-                    arr = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
+                    arr = _read_be(f, npts, dt, es, _TW_DTYPE)
                     f.readline()
                 else:
                     arr, pb = _read_ascii(f, npts, ("SCALARS","VECTORS"))
