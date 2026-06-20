@@ -67,7 +67,7 @@ VTK_PATTERN = "velocity_merged_*.vtk"
 # ── benchmark 低記憶體: 湍流路徑全程不用的場 (verified: turbulent 用 U_mean/V_mean,
 #    velocity/u_inst/velocity_y 僅 LAMINAR fallback @ ~line 890; turbulent 硬寫 U_mean/V_mean) ──
 _BENCH_SKIP_FIELDS = {"velocity", "u_inst", "v_inst", "w_inst",
-                      "omega_u", "omega_v", "omega_w", "P_mean"}
+                      "omega_u", "omega_v", "omega_w", "P_mean", "W_mean"}
 BENCH_DIR = os.path.join(SCRIPT_DIR, "benchmark")
 
 XH_STATIONS = [0.05, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
@@ -306,7 +306,7 @@ print(f"[INFO] Re = {Re}  {'(laminar mode)' if LAMINAR else '(turbulent mode)'}"
 # ── benchmark dtype + skip 開關 (不帶 --lowmem ⇒ float64, benchmark 輸出與原行為一致) ──
 BENCH_LOWMEM   = bool(args.lowmem)
 _bench_dtype   = np.float32 if BENCH_LOWMEM else np.float64
-_bench_skip_on = (not LAMINAR)   # 湍流跳過未用場省記憶體; 層流保留 (velocity_y/u_inst 為 fallback)
+_bench_skip_on = (BENCH_LOWMEM and not LAMINAR)   # ★skip 受 --lowmem 閘控: 無 --lowmem(canonical)讀全場 float64 零誤差/位元不變; 帶 --lowmem 才跳湍流未用場省記憶體
 if BENCH_LOWMEM:
     print("[INFO] --lowmem: float32 讀入 + 跳過湍流未用場 (峰值記憶體↓; ~6e-8 捨入 << 5% 比對精度)")
 
@@ -492,6 +492,26 @@ def hill_function(Y):
 # ================================================================
 # VTK Parsing
 # ================================================================
+def _read_binary_stream(fh, count, src_dt, esize, out_dtype, chunk_elems=4 * 1024 * 1024):
+    """串流分塊讀 VTK binary 區塊: 預配置 out + 每次讀 ~chunk(預設 4M 元素) 邊讀邊轉,
+    消「f.read 整場 buf(src_dt) + astype 輸出(out_dtype)」的暫態翻倍 spike(login 20GB cgroup OOM rc=137 元凶)。
+    ★截斷守門: 短讀(got 累計 < count)→ ValueError; 否則截斷/半寫入 VTK 會回傳滿長度帶未初始化垃圾尾,
+      reshape 誤成功 → 靜默產錯圖。守門還原 loud-fail(上層 catch→跳過重試)。"""
+    out = np.empty(count, dtype=out_dtype)
+    i = 0
+    chunk_bytes = chunk_elems * esize
+    while i < count:
+        cbuf = fh.read(min(chunk_bytes, (count - i) * esize))
+        got = len(cbuf) // esize
+        if got == 0:
+            break
+        out[i:i + got] = np.frombuffer(cbuf, dtype=src_dt, count=got)
+        i += got
+    if i < count:
+        raise ValueError("truncated VTK binary block: expected %d elems, got %d" % (count, i))
+    return out
+
+
 def parse_vtk(filepath):
     """Read points, velocity, and scalar fields from legacy STRUCTURED_GRID VTK.
 
@@ -571,9 +591,7 @@ def parse_vtk(filepath):
                 if npts == 0:
                     npts = n
                 if is_binary:
-                    buf = f.read(n * 3 * esize)
-                    pts = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
-                    points = pts.reshape(-1, 3)
+                    points = _read_binary_stream(f, n * 3, dt, esize, _bench_dtype).reshape(-1, 3)
                     f.readline()  # consume trailing newline after binary block
                 else:
                     pts, leftover = _read_ascii_block(
@@ -592,8 +610,7 @@ def parse_vtk(filepath):
                         f.seek(npts * 3 * esize, 1)   # 跳過未用場(湍流), 不讀進記憶體
                         f.readline()                  # 吃掉 binary 區塊尾端換行, 對齊下一場標頭
                         continue
-                    buf = f.read(npts * 3 * esize)
-                    vec = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
+                    vec = _read_binary_stream(f, npts * 3, dt, esize, _bench_dtype)
                     f.readline()
                 else:
                     vec, leftover = _read_ascii_block(
@@ -616,8 +633,7 @@ def parse_vtk(filepath):
                         f.seek(npts * esize, 1)   # 跳過未用場(湍流), 不讀進記憶體
                         f.readline()              # 吃掉 binary 區塊尾端換行, 對齊下一場標頭
                         continue
-                    buf = f.read(npts * esize)
-                    arr = np.frombuffer(buf, dtype=dt).astype(_bench_dtype)
+                    arr = _read_binary_stream(f, npts, dt, esize, _bench_dtype)
                     f.readline()
                 else:
                     arr, leftover = _read_ascii_block(

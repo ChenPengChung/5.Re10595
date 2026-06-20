@@ -121,6 +121,26 @@ def get_const(defs, names):
 # ====================================================================
 #  VTK BINARY/ASCII reader
 # ====================================================================
+def _read_binary_stream(fh, count, src_dt, esize, out_dtype, chunk_elems=4 * 1024 * 1024):
+    """串流分塊讀 VTK binary 區塊: 預配置 out + 每次讀 ~chunk(預設 4M 元素) 邊讀邊轉,
+    消「f.read 整場 buf(src_dt) + astype 輸出(out_dtype)」的暫態翻倍 spike(login 20GB cgroup OOM rc=137 元凶)。
+    ★截斷守門: 短讀(got 累計 < count)→ ValueError; 否則截斷/半寫入 VTK 會回傳滿長度帶未初始化垃圾尾,
+      reshape 誤成功 → 靜默產錯圖。守門還原 loud-fail(上層 catch→跳過重試)。"""
+    out = np.empty(count, dtype=out_dtype)
+    i = 0
+    chunk_bytes = chunk_elems * esize
+    while i < count:
+        cbuf = fh.read(min(chunk_bytes, (count - i) * esize))
+        got = len(cbuf) // esize
+        if got == 0:
+            break
+        out[i:i + got] = np.frombuffer(cbuf, dtype=src_dt, count=got)
+        i += got
+    if i < count:
+        raise ValueError("truncated VTK binary block: expected %d elems, got %d" % (count, i))
+    return out
+
+
 def parse_vtk(filepath):
     dims = None; npts = 0; npts_from_dims = 0
     points = np.empty((0, 3)); scalars = {}; is_binary = False
@@ -162,8 +182,7 @@ def parse_vtk(filepath):
                 p = s.split(); n = int(p[1]); dt, es = _dt(p[2] if len(p)>2 else "double")
                 if npts == 0: npts = n
                 if is_binary:
-                    buf = f.read(n*3*es)
-                    points = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy().reshape(-1,3)
+                    points = _read_binary_stream(f, n*3, dt, es, _TW_DTYPE).reshape(-1,3)
                     f.readline()
                 else:
                     pts, pb = _read_ascii(f, n*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -175,8 +194,7 @@ def parse_vtk(filepath):
                     f.seek(npts*3*es, 1); f.readline()    # tau_wall 不用任何 VECTORS → 跳過省記憶體
                     continue
                 if is_binary:
-                    buf = f.read(npts*3*es)
-                    vec = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
+                    vec = _read_binary_stream(f, npts*3, dt, es, _TW_DTYPE)
                     f.readline()
                 else:
                     vec, pb = _read_ascii(f, npts*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -192,8 +210,7 @@ def parse_vtk(filepath):
                     f.seek(npts*es, 1); f.readline()      # 非 keep-list scalar → 跳過省記憶體
                     continue
                 if is_binary:
-                    buf = f.read(npts*es)
-                    arr = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
+                    arr = _read_binary_stream(f, npts, dt, es, _TW_DTYPE)
                     f.readline()
                 else:
                     arr, pb = _read_ascii(f, npts, ("SCALARS","VECTORS"))
