@@ -349,8 +349,9 @@ while :; do
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     _write_hb                  # benchmark 前補心跳(run_benchmark 阻塞 ≤BENCH_TIMEOUT=900s, 期間無法再刷)
                     run_benchmark "$step" || true
+                    _write_hb                  # benchmark 後立即補心跳, 再跑 tauwall — 把單次 staleness 壓在
+                                               #   「一個 op」≤900s 內(否則 benchmark+tauwall 串接 gap 可達 1800>HB_STALE=1200)
                     run_tauwall "$step" || true
-                    _write_hb                  # benchmark/tauwall 後立即補心跳(縮短到下一輪頂端的空窗)
                     last_bench_step="$step"
                 fi
             else
