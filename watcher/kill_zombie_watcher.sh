@@ -31,7 +31,6 @@ echo "=== Edit12 殭屍 watcher 清除 @ $(date '+%F %T') (本機=$MYHOST) ==="
 
 # ── 1. 合法持鎖者(單一真相)──────────────────────────────────────────────
 owner="$(cat "$NODELOCK/owner" 2>/dev/null || true)"
-owner_host="${owner%%:*}"; owner_pid="${owner##*:}"
 hb="$(cat "$HEARTBEAT" 2>/dev/null || true)"
 echo "  nodelock owner(合法 watcher)= ${owner:-（無鎖!）}"
 echo "  heartbeat 現值              = ${hb:-（無）}"
@@ -39,13 +38,15 @@ if [[ -z "$owner" ]]; then
     echo "  ⚠️ 沒有 nodelock owner — 無法判定誰合法;建議先 bash watcher/hill_watcher_start.sh 起一隻再跑本腳本。"
     exit 2
 fi
-# owner 格式守門:必須完整 host:pid 且 pid 為數字。owner 只在 _claim_lock/_take 寫(rm→mkdir→echo);
-# 若此刻讀到 NFS 半寫的畸形值(無冒號 → owner_pid 變成 host 字串, 與數字 PID 永不相等 → 連合法者都被判殭屍)
-# → fail-safe 偏向保留:本輪不殺, 以免誤殺合法持鎖者。
-if [[ "$owner" != *:* ]] || ! [[ "$owner_pid" =~ ^[0-9]+$ ]]; then
-    echo "  ⚠️ owner 檔疑似改寫中(=$owner)— 本輪略過殺殭屍以免誤殺合法者(稍後重跑)。"
+# owner 格式守門:必須嚴格為「非空主機名:數字pid」(單一冒號)。owner 只在 _claim_lock/_take 寫
+# (rm→mkdir→echo);若此刻讀到 NFS 半寫的畸形值(無冒號/多冒號/空主機/非數字 pid)→ fail-safe
+# 偏向保留:本輪不殺, 以免誤殺合法持鎖者。用 regex 一次驗證 + 萃取 host/pid(防 host:1:2、:123 漏網)。
+if ! [[ "$owner" =~ ^([^:]+):([0-9]+)$ ]]; then
+    echo "  ⚠️ owner 檔疑似改寫中或畸形(=$owner)— 本輪略過殺殭屍以免誤殺合法者(稍後重跑)。"
     exit 2
 fi
+owner_host="${BASH_REMATCH[1]}"
+owner_pid="${BASH_REMATCH[2]}"
 
 # ── 2. 本機殭屍掃描 + 直接 kill(/proc/cwd 驗證屬 Edit12)──────────────────
 echo "── 本機($MYHOST)Edit12 watcher 實例掃描 ──"

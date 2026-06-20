@@ -28,6 +28,7 @@ CONV_TIMEOUT=600    # 4.Ma_U_Time.py 單獨跑 ~7s; 拉高(180→600)防 login n
 BENCH_TIMEOUT=900   # float32 --lowmem benchmark 含 33GB VTK 完整性掃描+parse ~552s; 拉高(300→900)
                     # 防 FTT≥G2 後 inline benchmark 逾時(每 1FTT 一次, 900s << VTK cadence)
 MIN_VTK_BYTES=1048576
+CHECKLIST_TIMEOUT=60  # checklist.py 正常 ~0.16s; 包 timeout 防 NFS 卡住把 top-hb→conv-hb 空窗拉成無界(否則破壞 HB_STALE 不變量)
 
 mkdir -p "$LIVE_DIR"
 
@@ -49,6 +50,9 @@ HB_STALE=1200                             # 心跳 > 此值視為擁有者已死
                                           #   heartbeat 假性過期 → 別節點錯誤奪鎖 → 真 watcher 被 self-evict
                                           #   誤殺。迴圈內已在 conv/benchmark 前後各補 _write_hb,把單次
                                           #   staleness 壓在「一個 op」內(≤900s),故 1200 有足夠裕度。
+# 不變量守門:相鄰心跳間隔必須 < HB_STALE。最長單 op = BENCH_TIMEOUT(benchmark/tauwall 共用)+ POLL_SEC sleep。
+# 鎖死此關係, 防日後有人調高 timeout 卻忘了同步 HB_STALE → 靜默破壞「健康者不被誤判死」。
+(( HB_STALE > BENCH_TIMEOUT + POLL_SEC )) || { log "FATAL: HB_STALE($HB_STALE) 必須 > BENCH_TIMEOUT($BENCH_TIMEOUT)+POLL_SEC($POLL_SEC)"; exit 1; }
 _hb_age()  { local ts; ts=$(cut -d: -f3 "$HEARTBEAT" 2>/dev/null); [ -n "${ts:-}" ] && echo $(( $(date +%s) - ts )) || echo 999999; }
 _hb_host() { cut -d: -f1 "$HEARTBEAT" 2>/dev/null; }
 _write_hb(){ printf '%s:%s:%s\n' "$MYHOST" "$$" "$(date +%s)" > "$HEARTBEAT" 2>/dev/null || true; }
@@ -310,8 +314,8 @@ while :; do
     fi
     # 每輪刷新 checklist.txt(daemon/chain 狀態檔即時清單); 唯讀掃描, 失敗不影響主循環。
     # 非零退出 = 非預期缺漏或產生器錯誤 → 只記一行警告供巡檢, 不中斷 watcher。
-    python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
-        || log "checklist: 產生器非零退出(非預期缺漏或錯誤, 詳見 checklist.txt)"
+    timeout "$CHECKLIST_TIMEOUT" python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
+        || log "checklist: 非零退出或逾時 >${CHECKLIST_TIMEOUT}s(非預期缺漏/錯誤/卡住, 詳見 checklist.txt)"
     RE=$(_read_re)
 
     if ! check_nan_divergence; then
