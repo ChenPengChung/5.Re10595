@@ -28,6 +28,12 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR   = os.path.dirname(SCRIPT_DIR)
 BENCH_DIR  = os.path.join(SCRIPT_DIR, "benchmark")
 
+# watcher inline 監控用 float32 省記憶體 (--lowmem); 預設 float64 零誤差。tau_wall 讀整顆
+#   velocity_merged VTK (~21GB float64 超 login 20GB cgroup OOM; float32 ~10.5GB 安全, 捨入 ~6e-8)。
+_TW_DTYPE = np.float64
+_TW_SKIP_ON = False                                  # --lowmem 時 True: 跳過 tau_wall 不用的場(省記憶體)
+_TW_KEEP_SCALARS = {"U_mean", "V_mean", "P_mean"}    # tau_wall 只用這 3 個(cf←U/V_mean, cp←P_mean); 其餘 SCALARS + 全部 VECTORS 跳過
+
 # ====================================================================
 #  6th-order Fornberg FD coefficients (7-point stencil, unit spacing)
 # ====================================================================
@@ -157,7 +163,7 @@ def parse_vtk(filepath):
                 if npts == 0: npts = n
                 if is_binary:
                     buf = f.read(n*3*es)
-                    points = np.frombuffer(buf, dtype=dt).astype(np.float64).copy().reshape(-1,3)
+                    points = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy().reshape(-1,3)
                     f.readline()
                 else:
                     pts, pb = _read_ascii(f, n*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -165,9 +171,12 @@ def parse_vtk(filepath):
             elif s.startswith("VECTORS"):
                 if npts==0 and npts_from_dims>0: npts = npts_from_dims
                 p = s.split(); nm = p[1]; dt, es = _dt(p[2] if len(p)>2 else "double")
+                if is_binary and _TW_SKIP_ON:
+                    f.seek(npts*3*es, 1); f.readline()    # tau_wall 不用任何 VECTORS → 跳過省記憶體
+                    continue
                 if is_binary:
                     buf = f.read(npts*3*es)
-                    vec = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    vec = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
                     f.readline()
                 else:
                     vec, pb = _read_ascii(f, npts*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -179,9 +188,12 @@ def parse_vtk(filepath):
                 if npts==0 and npts_from_dims>0: npts = npts_from_dims
                 p = s.split(); nm = p[1]; dt, es = _dt(p[2] if len(p)>2 else "double")
                 f.readline()
+                if is_binary and _TW_SKIP_ON and nm not in _TW_KEEP_SCALARS:
+                    f.seek(npts*es, 1); f.readline()      # 非 keep-list scalar → 跳過省記憶體
+                    continue
                 if is_binary:
                     buf = f.read(npts*es)
-                    arr = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    arr = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
                     f.readline()
                 else:
                     arr, pb = _read_ascii(f, npts, ("SCALARS","VECTORS"))
@@ -366,9 +378,16 @@ def main(argv=None):
                     help="Use default benchmark density, skip interactive")
     ap.add_argument("--auto", action="store_true",
                     help="Non-interactive: default density, png only")
+    ap.add_argument("--lowmem", action="store_true",
+                    help="省記憶體 float32 讀入 (watcher inline 用; 預設 float64 零誤差)")
     args = ap.parse_args(argv)
     if args.auto:
         args.no_ask_density = True
+    global _TW_DTYPE, _TW_SKIP_ON
+    _TW_DTYPE = np.float32 if args.lowmem else np.float64
+    _TW_SKIP_ON = bool(args.lowmem)
+    if args.lowmem:
+        print("[INFO] --lowmem: float32 + 跳過未用場(只留 U_mean/V_mean/P_mean + points) → 峰值記憶體大降; ~6e-8 捨入 << 比對精度")
 
     # ── locate inputs ──
     vtk_path = args.vtk or find_latest_vtk(SCRIPT_DIR)

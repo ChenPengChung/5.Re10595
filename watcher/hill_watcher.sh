@@ -239,7 +239,7 @@ run_tauwall() {
     : > "$before_marker"
 
     capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$TAUWALL_SCRIPT" \
-        --Re "$RE" --auto 2>&1)
+        --Re "$RE" --auto --lowmem 2>&1)
     rc=$?
 
     if (( rc == 124 )); then
