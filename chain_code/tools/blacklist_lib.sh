@@ -34,6 +34,11 @@
 : "${BLACKLIST_MAX_PCT:=50}"
 : "${BAD_NODES_FILE:=restart/bad_nodes}"
 : "${GLOBAL_BAD_FILE:=$HOME/.bad_nodes_global}"
+# [PROJECT-LOCAL TRIM 2026-06-20] 硬覆寫: 改用 Edit12 自己的精簡黑名單(只留真壞 143/024),
+#   釋放 ~/.bad_nodes_global 裡 39 個其實 SLURM-健康(早被 NCHC 修好)的誤排節點 → 接棒時 Edit12
+#   可用節點池放寬、縮短 walltime 接棒 PENDING。★不動共用的 ~/.bad_nodes_global(別專案仍用)。
+#   可逆: 刪此行即還原成全域。判別壞節點=MLUPS陡降→reactive 加入 bad_nodes_global_local。
+GLOBAL_BAD_FILE="/home/s8313697/5.Re10595/Edit12_Krank56002/restart/bad_nodes_global_local"
 
 # ─────────────────────────────────────────────────────────────────────────
 # 內部 helper: 把 Slurm state 字串分類
