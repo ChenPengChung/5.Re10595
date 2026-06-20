@@ -115,6 +115,17 @@ def get_const(defs, names):
 # ====================================================================
 #  VTK BINARY/ASCII reader
 # ====================================================================
+# ── lowmem(float32 + 跳過未用欄位)— 移植 2.Benchmark.py 的 OOM 防護 ──────────────
+# tau_wall 只需 U_mean(stream)、V_mean(normal)、P_mean(cp);其餘欄位(velocity/u_inst/
+# omega/W_mean/uu/vv/uv/k_TKE…)一律不讀。--lowmem 時:float32 讀 + 跳過未用 SCALARS/所有
+# VECTORS,把 ~35GB float64 峰值壓進 login node 20GB cgroup,避免 OOM(rc=137,cf/cp 出不來)。
+# 預設(無 --lowmem,canonical dev job)= float64 全讀,零誤差,行為與原版位元相同。
+# ★cp 需要 P_mean → 絕不可跳;float32 對 cf/cp 捨入 ~1e-4 相對(含流向座標 metric 項;遠 < 5% benchmark 精度)。
+_TW_LOWMEM = False
+_TW_DTYPE  = np.float64
+_TW_KEEP   = {"U_mean", "V_mean", "P_mean"}
+
+
 def parse_vtk(filepath):
     dims = None; npts = 0; npts_from_dims = 0
     points = np.empty((0, 3)); scalars = {}; is_binary = False
@@ -157,7 +168,7 @@ def parse_vtk(filepath):
                 if npts == 0: npts = n
                 if is_binary:
                     buf = f.read(n*3*es)
-                    points = np.frombuffer(buf, dtype=dt).astype(np.float64).copy().reshape(-1,3)
+                    points = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy().reshape(-1,3)
                     f.readline()
                 else:
                     pts, pb = _read_ascii(f, n*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -165,9 +176,11 @@ def parse_vtk(filepath):
             elif s.startswith("VECTORS"):
                 if npts==0 and npts_from_dims>0: npts = npts_from_dims
                 p = s.split(); nm = p[1]; dt, es = _dt(p[2] if len(p)>2 else "double")
+                if _TW_LOWMEM and is_binary:        # tau_wall 不用任何 VECTORS 欄 → 跳過省記憶體(僅 binary;ascii 小檔照讀)
+                    f.seek(npts*3*es, 1); f.readline(); continue
                 if is_binary:
                     buf = f.read(npts*3*es)
-                    vec = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    vec = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
                     f.readline()
                 else:
                     vec, pb = _read_ascii(f, npts*3, ("SCALARS","VECTORS","POINT_DATA"))
@@ -178,10 +191,12 @@ def parse_vtk(filepath):
             elif s.startswith("SCALARS"):
                 if npts==0 and npts_from_dims>0: npts = npts_from_dims
                 p = s.split(); nm = p[1]; dt, es = _dt(p[2] if len(p)>2 else "double")
-                f.readline()
+                f.readline()                        # LOOKUP_TABLE 行
+                if _TW_LOWMEM and is_binary and nm not in _TW_KEEP:   # 跳過未用 SCALARS(★保留 U/V/P_mean)
+                    f.seek(npts*es, 1); f.readline(); continue
                 if is_binary:
                     buf = f.read(npts*es)
-                    arr = np.frombuffer(buf, dtype=dt).astype(np.float64).copy()
+                    arr = np.frombuffer(buf, dtype=dt).astype(_TW_DTYPE).copy()
                     f.readline()
                 else:
                     arr, pb = _read_ascii(f, npts, ("SCALARS","VECTORS"))
@@ -366,9 +381,17 @@ def main(argv=None):
                     help="Use default benchmark density, skip interactive")
     ap.add_argument("--auto", action="store_true",
                     help="Non-interactive: default density, png only")
+    ap.add_argument("--lowmem", action="store_true",
+                    help="float32 讀 + 跳過未用欄位(只留 U_mean/V_mean/P_mean)防 login node OOM;"
+                         "cf/cp 捨入 ~1e-4 相對(含 metric;<<5%),監控用足夠;canonical 零誤差請不帶此旗標(float64)")
     args = ap.parse_args(argv)
     if args.auto:
         args.no_ask_density = True
+    global _TW_LOWMEM, _TW_DTYPE
+    _TW_LOWMEM = bool(args.lowmem)
+    _TW_DTYPE  = np.float32 if _TW_LOWMEM else np.float64
+    if _TW_LOWMEM:
+        print("[lowmem] float32 + 跳過未用欄位(留 U_mean/V_mean/P_mean);防 OOM, 捨入 ~1e-4(含 metric)")
 
     # ── locate inputs ──
     vtk_path = args.vtk or find_latest_vtk(SCRIPT_DIR)

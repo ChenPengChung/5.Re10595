@@ -237,8 +237,10 @@ run_tauwall() {
     local before_marker="$LIVE_DIR/.tauwall.marker.$$"
     : > "$before_marker"
 
+    # --lowmem: 同 run_benchmark,float32 + 跳未用欄(保 P_mean 供 cp)防 35GB VTK 撞 20GB cgroup OOM(rc=137)。
+    # cf/cp 捨入 ~1e-4(含 metric;<<5% 比對精度)。canonical 零誤差走 dev job(不帶 --lowmem,float64)。
     capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$TAUWALL_SCRIPT" \
-        --Re "$RE" --auto 2>&1)
+        --Re "$RE" --auto --lowmem 2>&1)
     rc=$?
 
     if (( rc == 124 )); then
