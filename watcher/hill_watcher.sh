@@ -352,6 +352,7 @@ while :; do
                     _write_hb                  # benchmark 後立即補心跳, 再跑 tauwall — 把單次 staleness 壓在
                                                #   「一個 op」≤900s 內(否則 benchmark+tauwall 串接 gap 可達 1800>HB_STALE=1200)
                     run_tauwall "$step" || true
+                    _write_hb                  # ★tauwall 後補心跳:tauwall→下一輪頂端才是真正最長空窗, 這裡是關鍵
                     last_bench_step="$step"
                 fi
             else
