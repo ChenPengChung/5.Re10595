@@ -44,7 +44,11 @@ log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 MYHOST="$(hostname)"
 NODELOCK="$LIVE_DIR/watcher.nodelock"     # 原子 mkdir(NFS 上 mkdir 仍為原子)
 HEARTBEAT="$LIVE_DIR/watcher.heartbeat"   # MYHOST:pid:epoch, 每輪刷新; o 的 source-3 跨節點權威
-HB_STALE=180                              # 心跳 > 180s 視為擁有者已死, 可奪鎖
+HB_STALE=1200                             # 心跳 > 此值視為擁有者已死、可奪鎖。★必須 > 單輪最長阻塞 op
+                                          #   (run_benchmark ≤BENCH_TIMEOUT=900s):否則 benchmark 期間
+                                          #   heartbeat 假性過期 → 別節點錯誤奪鎖 → 真 watcher 被 self-evict
+                                          #   誤殺。迴圈內已在 conv/benchmark 前後各補 _write_hb,把單次
+                                          #   staleness 壓在「一個 op」內(≤900s),故 1200 有足夠裕度。
 _hb_age()  { local ts; ts=$(cut -d: -f3 "$HEARTBEAT" 2>/dev/null); [ -n "${ts:-}" ] && echo $(( $(date +%s) - ts )) || echo 999999; }
 _hb_host() { cut -d: -f1 "$HEARTBEAT" 2>/dev/null; }
 _write_hb(){ printf '%s:%s:%s\n' "$MYHOST" "$$" "$(date +%s)" > "$HEARTBEAT" 2>/dev/null || true; }
@@ -267,7 +271,29 @@ log "=========================================="
 last_processed=""
 last_bench_step=""
 
+_displaced_strikes=0       # self-eviction debounce:連續幾輪偵測到 nodelock 已被別人接管
 while :; do
+    # ── 殭屍自我巡邏 self-eviction(跨節點, 免 SSH/2FA)─────────────────────────────────
+    #    nodelock/owner 檔是「誰是合法持鎖者」的單一真相(只在 _claim_lock/_take 寫, 非每輪刷)。
+    #    我若不再是 owner = 已被新 watcher 接管 → 我是被取代的殭屍 → 優雅自殺。任何被取代的 watcher
+    #    都會在 ~2 個 poll 週期內自動消失, 無需跨節點 kill(共享 home FS 即可, 免 SSH/2FA)。
+    #    · owner 為空(_take 的 rm→mkdir 瞬間)→ -n 判空跳過, 不誤判。
+    #    · debounce 2 輪 → 防 NFS 半寫/暫態誤觸。
+    #    · ★必須 `trap - EXIT`:預設 EXIT trap 會在 heartbeat host==MYHOST 時 rm NODELOCK + rm PID_FILE,
+    #      但此刻那是「接管者的合法鎖 / 合法 pid 檔」, 殭屍絕不可刪 → 清掉 trap 只默默退出 + 清自己 marker。
+    _lock_owner=$(cat "$NODELOCK/owner" 2>/dev/null || true)
+    if [[ -n "${_lock_owner:-}" && "$_lock_owner" != "$MYHOST:$$" ]]; then
+        _displaced_strikes=$(( _displaced_strikes + 1 ))
+        if [[ "$_displaced_strikes" -ge 2 ]]; then
+            log "SELF-EVICT: nodelock owner=$_lock_owner != me=$MYHOST:$$ (displaced 2 cycles) → zombie self-exit on $MYHOST"
+            trap - EXIT
+            find "$LIVE_DIR" -maxdepth 1 -name ".*.marker.$$" -delete 2>/dev/null || true
+            exit 0
+        fi
+    else
+        _displaced_strikes=0
+    fi
+
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
     # ── 跨節點重啟/停止哨兵(任何登入節點 touch 即可, 免互動 SSH)──────────────────
     #   RESTART_WATCHER → 原地 re-exec 重讀腳本(吃進 --lowmem / CONV_TIMEOUT 等碼變更); 同 PID,
@@ -295,6 +321,7 @@ while :; do
     # [DECOUPLE-CONV 2026-06-18] 收斂圖(4.Ma_U_Time.py)只讀 Ustar_Force_record/checkrho/
     #   timing_log .dat(每~1000步更新), 完全不需 VTK → 每輪(~POLL_SEC≈30s)都重畫,
     #   與 VTK 輸出頻率(現降為 1FTT)徹底脫鉤. watcher 在 login-node, 此繪圖與計算效率無關.
+    _write_hb                      # conv 前補心跳(run_convergence 阻塞 ≤CONV_TIMEOUT=600s, 期間無法再刷)
     run_convergence "FTT=$(get_latest_ftt)" || true
 
     vtk=$(pick_latest_vtk || true)
@@ -320,8 +347,10 @@ while :; do
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
                 if [[ "$last_bench_step" != "$step" ]]; then
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
+                    _write_hb                  # benchmark 前補心跳(run_benchmark 阻塞 ≤BENCH_TIMEOUT=900s, 期間無法再刷)
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
+                    _write_hb                  # benchmark/tauwall 後立即補心跳(縮短到下一輪頂端的空窗)
                     last_bench_step="$step"
                 fi
             else
