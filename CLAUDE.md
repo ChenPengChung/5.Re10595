@@ -77,6 +77,33 @@ Report concisely. This shortcut is **read-only** — it never changes job/chain 
   **絕不** `pkill -f` / cmdline 路徑字串;**絕不**碰 Edit7/Edit8/2.Re1400 等別專案 daemon。
 - Route B 是 systemd timer,**不靠 user crontab**(避免歷史的 cross-project crontab clobber)。
 
+## 殭屍 watcher 自滅(self-eviction)+ `claude_kill_zombie_watcher` 快捷
+
+**問題**:watcher 是跨節點單例(共享 home 上 atomic mkdir 鎖 `live/watcher.nodelock`,內含 `owner`
+檔 = `主機名:pid`,只在 claim/take 時寫)。若 takeover 沒殺乾淨,別登入節點可能殘留**無鎖殭屍
+watcher**(偶爾蓋寫 heartbeat、與合法者搶 render)。**NCHC 登入節點間 SSH 有 2FA/push → 無法
+scripted 跨節點 kill**(免密碼 SSH 不可行,別嘗試)。唯一正解 = **共享 FS 機制,零 SSH**。
+
+### 機制 A:self-eviction(根治,自動)— `hill_watcher.sh` 內建
+主迴圈頂端讀 `nodelock/owner`,**若不再是自己(`主機名:$$`)連續 2 輪 → 優雅自殺**(`trap - EXIT`
+後 `exit 0`,只清自己的 marker)。任何被取代的 watcher 在 ~2 個 poll 週期(~60s)內自動消失,**免
+SSH**。關鍵安全點(已對抗驗證 + codex 過):
+- 合法持鎖者 owner == 自己 → **永不誤觸自殺**;owner 為空(_take 瞬間)用 `-n` 跳過;debounce 2 輪防 NFS 半寫。
+- 殭屍自殺**必須 `trap - EXIT`**:預設 EXIT trap 會 `rm PID_FILE` + 在 heartbeat host==本機時 `rm -rf NODELOCK`
+  → 殭屍會刪到**接管者的合法鎖/pid**;清掉 trap 才安全。
+- **HB_STALE 必須 > 單輪相鄰 `_write_hb` 最長空窗**(binding op = `run_tauwall` ≤BENCH_TIMEOUT=900s +
+  POLL_SEC):否則長 op 期間 heartbeat 假性過期 → 別節點錯誤奪鎖 → 真 watcher 被誤殺。現 `HB_STALE=1200`,
+  且 conv/benchmark/tauwall 前後都補 `_write_hb`;啟動時 `(( HB_STALE > BENCH_TIMEOUT + POLL_SEC ))` assert
+  鎖死此不變量(改 timeout 別忘同步)。
+
+### 機制 B:`claude_kill_zombie_watcher` 快捷(手動,即時)— `watcher/kill_zombie_watcher.sh`
+使用者打 **`claude_kill_zombie_watcher`** 時跑 `bash watcher/kill_zombie_watcher.sh`(或 `--watch` 多監測 ~90s):
+1. 讀 `nodelock/owner`(合法持鎖者單一真相;owner 畸形/改寫中 → fail-safe exit 2 不殺)。
+2. **本機**殭屍掃描:`pgrep -f '[h]ill_watcher\.sh'` + `/proc/PID/cwd == 專案根(pwd -P)` 驗歸屬,
+   非持鎖者 → kill(**明確 PID,殺前重讀 owner 防 TOCTOU 誤殺剛接管者;絕不 `pkill -f`、絕不碰 Edit6/Edit12**)。
+3. **跨節點**殭屍:靠機制 A 自滅(新碼 ~60s);跑舊碼的歷史殭屍共享 FS 殺不到 → 回報需該節點重啟/重開。
+4. 收斂回報單一實例。**守門**:只殺本機、cwd==本專案根、明確 PID;不 scancel/不動 job/checkpoint。
+
 ## Project info
 
 - Branch: Edit6_5600DNS

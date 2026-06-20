@@ -25,6 +25,7 @@ POLL_SEC=30
 SIZE_STABLE_WAIT=3
 CONV_TIMEOUT=600   # 4.Ma_U_Time.py 單獨 ~7s; 拉高(180→600)防 login node 競爭/dat 大檔下逾時(完整解析優先)
 BENCH_TIMEOUT=900  # float32 --lowmem benchmark 含 ~35GB VTK 完整性掃描+parse ~552s; 拉高(300→900)防 FTT≥G2 那次逾時出不了圖
+CHECKLIST_TIMEOUT=60  # checklist.py 正常 ~0.16s; 包 timeout 防 NFS 卡住把 top-hb→conv-hb 空窗拉成無界(否則破壞 HB_STALE 不變量)
 MIN_VTK_BYTES=1048576
 
 mkdir -p "$LIVE_DIR"
@@ -42,7 +43,15 @@ log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 MYHOST="$(hostname)"
 NODELOCK="$LIVE_DIR/watcher.nodelock"     # 原子 mkdir(NFS 上 mkdir 仍為原子)
 HEARTBEAT="$LIVE_DIR/watcher.heartbeat"   # MYHOST:pid:epoch, 每輪刷新; o 的 source-3 跨節點權威
-HB_STALE=180                              # 心跳 > 180s 視為擁有者已死, 可奪鎖
+HB_STALE=1200                             # 心跳 > 此值視為擁有者已死、可奪鎖。★必須 > 單輪「相鄰兩次 _write_hb
+                                          #   之間」最長空窗;否則該長 op 期間 heartbeat 假性過期 → 別節點錯誤
+                                          #   奪鎖 → 真 watcher 被 self-evict 誤殺。實際 binding op = run_tauwall
+                                          #   (≤BENCH_TIMEOUT=900s)到下一輪頂端,故迴圈在 conv/benchmark/tauwall
+                                          #   前後都補 _write_hb,把單次 staleness 壓在「一個 op + sleep」內
+                                          #   (≈900+POLL_SEC=930s),1200 對此有 ~270s 裕度。
+# 不變量守門:相鄰心跳間隔必須 < HB_STALE。最長單 op = BENCH_TIMEOUT(benchmark/tauwall 共用)+ POLL_SEC sleep。
+# 鎖死此關係, 防日後有人調高 timeout 卻忘了同步 HB_STALE → 靜默破壞「健康者不被誤判死」。
+(( HB_STALE > BENCH_TIMEOUT + POLL_SEC )) || { log "FATAL: HB_STALE($HB_STALE) 必須 > BENCH_TIMEOUT($BENCH_TIMEOUT)+POLL_SEC($POLL_SEC)"; exit 1; }
 _hb_age()  { local ts; ts=$(cut -d: -f3 "$HEARTBEAT" 2>/dev/null); [ -n "${ts:-}" ] && echo $(( $(date +%s) - ts )) || echo 999999; }
 _hb_host() { cut -d: -f1 "$HEARTBEAT" 2>/dev/null; }
 _write_hb(){ printf '%s:%s:%s\n' "$MYHOST" "$$" "$(date +%s)" > "$HEARTBEAT" 2>/dev/null || true; }
@@ -264,8 +273,30 @@ log "=========================================="
 
 last_processed=""
 last_bench_step=""
+_displaced_strikes=0       # self-eviction debounce:連續幾輪偵測到 nodelock 已被別人接管
 
 while :; do
+    # ── 殭屍自我巡邏 self-eviction(跨節點, 免 SSH/2FA)─────────────────────────────────
+    #    nodelock/owner 檔是「誰是合法持鎖者」的單一真相(只在 _claim_lock/_take 寫, 非每輪刷)。
+    #    我若不再是 owner = 已被新 watcher 接管 → 我是被取代的殭屍 → 優雅自殺。任何被取代的 watcher
+    #    都會在 ~2 個 poll 週期內自動消失, 無需跨節點 kill(共享 home FS 即可, 免 SSH/2FA)。
+    #    · owner 為空(_take 的 rm→mkdir 瞬間)→ -n 判空跳過, 不誤判。
+    #    · debounce 2 輪 → 防 NFS 半寫/暫態誤觸。
+    #    · ★必須 `trap - EXIT`:預設 EXIT trap 會在 heartbeat host==MYHOST 時 rm NODELOCK + rm PID_FILE,
+    #      但此刻那是「接管者的合法鎖 / 合法 pid 檔」, 殭屍絕不可刪 → 清掉 trap 只默默退出 + 清自己 marker。
+    _lock_owner=$(cat "$NODELOCK/owner" 2>/dev/null || true)
+    if [[ -n "${_lock_owner:-}" && "$_lock_owner" != "$MYHOST:$$" ]]; then
+        _displaced_strikes=$(( _displaced_strikes + 1 ))
+        if [[ "$_displaced_strikes" -ge 2 ]]; then
+            log "SELF-EVICT: nodelock owner=$_lock_owner != me=$MYHOST:$$ (displaced 2 cycles) → zombie self-exit on $MYHOST"
+            trap - EXIT
+            find "$LIVE_DIR" -maxdepth 1 -name ".*.marker.$$" -delete 2>/dev/null || true
+            exit 0
+        fi
+    else
+        _displaced_strikes=0
+    fi
+
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
 
     # ── 跨節點重啟/停止哨兵(任何登入節點 touch 即可,免互動 SSH)──────────────────
@@ -284,8 +315,8 @@ while :; do
     fi
     # 每輪刷新 checklist.txt(daemon/chain 狀態檔即時清單); 唯讀掃描, 失敗不影響主循環。
     # 非零退出 = 非預期缺漏或產生器錯誤 → 只記一行警告供巡檢, 不中斷 watcher。
-    python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
-        || log "checklist: 產生器非零退出(非預期缺漏或錯誤, 詳見 checklist.txt)"
+    timeout "$CHECKLIST_TIMEOUT" python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
+        || log "checklist: 非零退出或逾時 >${CHECKLIST_TIMEOUT}s(非預期缺漏/錯誤/卡住, 詳見 checklist.txt)"
     RE=$(_read_re)
 
     if ! check_nan_divergence; then
@@ -297,6 +328,7 @@ while :; do
     #    VTK 已降為每 1FTT(降 I/O),但收斂圖仍每 30s 更新 fresh。
     #    benchmark + tau_wall 才綁「新 VTK」(見下,需 VTK spatial fields)。
     ftt=$(get_latest_ftt)
+    _write_hb                      # conv 前補心跳(run_convergence 可阻塞 ≤CONV_TIMEOUT=600s, 期間無法再刷)
     run_convergence "$ftt" || true
 
     vtk=$(pick_latest_vtk || true)
@@ -317,8 +349,12 @@ while :; do
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
                 if [[ "$last_bench_step" != "$step" ]]; then
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
+                    _write_hb                  # benchmark 前補心跳(run_benchmark 阻塞 ≤BENCH_TIMEOUT=900s,
+                                               #   期間無法再刷;HB_STALE=1200 > 900 故不會被誤判死)
                     run_benchmark "$step" || true
+                    _write_hb                  # benchmark 後補心跳
                     run_tauwall "$step" || true
+                    _write_hb                  # ★tauwall 後補心跳:tauwall→下一輪頂端才是真正最長空窗, 這裡是關鍵
                     last_bench_step="$step"
                 fi
             else
