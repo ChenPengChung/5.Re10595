@@ -242,10 +242,12 @@ bl_effective_exclude() {
     global_bad=$(bl_global_list)
     live_bad=$(bl_live_list)
     merged=$( { printf '%s\n' "$local_bad"; printf '%s\n' "$global_bad"; printf '%s\n' "$live_bad"; } \
-              | tr ',' '\n' | grep -E '^[A-Za-z0-9._-]+$' | sort -u )
+              | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u )
     # ★sanitize(line 上): 只保留合法節點名 token(純 [A-Za-z0-9._-]) → 擋掉任何 #註解/空格/中文等
     #   非節點 token 洩漏進 sbatch --exclude(2026-06-22 鏈斷根因: bad_nodes 檔註解整段塞進 --exclude →
     #   sbatch "Unable to open file Edit12" → 自投+dispatcher 雙層全爆停鏈)。grep -E 同時也濾掉空行。
+    #   ★{ grep||true; }: 空黑名單時 grep 無 match 回 exit 1, 在呼叫端 set -eo pipefail 下會中止函式,
+    #   故包 || true 讓空集合正常回空(下游 n_merged=0 → return 空)。
     n_merged=$(printf '%s\n' "$merged" | grep -cv '^[[:space:]]*$')
     [ "$n_merged" -eq 0 ] && { printf ''; return; }
 
@@ -261,7 +263,7 @@ bl_effective_exclude() {
                        "$n_merged" "$partition" "$BLACKLIST_MAX_PCT" "$total" "$cap" >&2
                 printf '[blacklist]       截斷至 %d 個 (優先保留 NCHC live, 再按時間戳取最新 local)\n' "$cap" >&2
                 # Step 1: 保留 NCHC live (這些是 NCHC 當下真的壞)
-                local keep_live; keep_live=$(printf '%s\n' "$live_bad" | tr ',' '\n' | grep -E '^[A-Za-z0-9._-]+$' | sort -u)  # ★同 sanitize(只留合法節點名)
+                local keep_live; keep_live=$(printf '%s\n' "$live_bad" | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u)  # ★同 sanitize + ||true 防空集合 set -e 中止
                 local n_live; n_live=$(printf '%s\n' "$keep_live" | grep -cv '^[[:space:]]*$')
                 local picked
                 if [ "$n_live" -ge "$cap" ]; then
@@ -276,7 +278,7 @@ bl_effective_exclude() {
                                 | awk -F'\t' '{print $2}')
                     fi
                     picked=$( { printf '%s\n' "$keep_live"; printf '%s\n' "$extra"; } \
-                              | grep -v '^[[:space:]]*$' | awk '!seen[$0]++' | head -n "$cap")
+                              | { grep -E '^[A-Za-z0-9._-]+$' || true; } | awk '!seen[$0]++' | head -n "$cap")  # ★sanitize 合併 keep_live+extra(extra 未過濾)+ ||true 防空集合
                 fi
                 printf '%s\n' "$picked" | paste -sd,
                 return
