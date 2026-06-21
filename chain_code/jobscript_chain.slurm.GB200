@@ -665,7 +665,10 @@ EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
            | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u | paste -sd, )
 
 if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
-    if ! printf ',%s,' "$EX_LIST" | grep -qF ",$WATCHDOG_HANG_NODE,"; then
+    # ★驗證 WATCHDOG_HANG_NODE 是合法 SLURM nodelist token(單節點或 bracket 如 25a-hgpn[073,091]),
+    #   擋掉 .watchdog_triggered 被污染(含 #/空格/中文)時洩漏進 --exclude → 防最後一條 sanitize bypass。
+    if printf '%s' "$WATCHDOG_HANG_NODE" | grep -qE '^[A-Za-z0-9._-]+(\[[0-9,-]+\])?$' \
+       && ! printf ',%s,' "$EX_LIST" | grep -qF ",$WATCHDOG_HANG_NODE,"; then
         EX_LIST="${EX_LIST:+$EX_LIST,}$WATCHDOG_HANG_NODE"
         log "WATCHDOG: forced $WATCHDOG_HANG_NODE into resubmit exclude"
     fi

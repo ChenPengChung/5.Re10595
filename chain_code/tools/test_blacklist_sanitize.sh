@@ -83,5 +83,26 @@ for js in jobscript_chain.slurm.H200 jobscript_chain.slurm.GB200; do
     if [ "$old" -eq 0 ] && [ "$new" -ge 1 ]; then echo "  [PASS] $js EX_LIST 已 sanitize($new 處, 無舊式殘留)"; else echo "  [FAIL] $js: 舊式殘留=$old 新式=$new"; FAIL=1; miss=1; fi
 done
 
+# ── Test 9: ★watchdog hang-node append 驗證 pattern(單節點/bracket nodelist 通過; #/中文/空格/分號 擋) ──
+WPAT='^[A-Za-z0-9._-]+(\[[0-9,-]+\])?$'
+sub9=0
+for ok in 25a-hgpn073 '25a-hgpn[073,091]' node.x-1; do
+    printf '%s' "$ok" | grep -qE "$WPAT" || { echo "  [FAIL] watchdog 合法 nodelist '$ok' 被誤擋"; FAIL=1; sub9=1; }
+done
+for ng in '# 惡意 Edit12' '中文' 'node a' '25a;rm -rf'; do
+    printf '%s' "$ng" | grep -qE "$WPAT" && { echo "  [FAIL] watchdog 垃圾 '$ng' 未被擋(會洩漏進 --exclude)"; FAIL=1; sub9=1; }
+done
+[ $sub9 -eq 0 ] && echo "  [PASS] watchdog hang-node 驗證: 單節點/bracket 通過, #/中文/空格/分號 擋"
+
+# ── Test 10: ★兩 jobscript 的 watchdog append 都已加驗證(無未驗證殘留) ──
+for js in jobscript_chain.slurm.H200 jobscript_chain.slurm.GB200; do
+    [ -f "$JS_DIR/$js" ] || continue
+    if grep -qF "grep -qE '^[A-Za-z0-9._-]+(\[[0-9,-]+\])?\$'" "$JS_DIR/$js"; then
+        echo "  [PASS] $js watchdog append 已加 nodelist 驗證"
+    else
+        echo "  [FAIL] $js watchdog append 未加驗證(bypass 殘留)"; FAIL=1
+    fi
+done
+
 echo "=== $([ $FAIL -eq 0 ] && echo '✅ 全過' || echo "❌ $FAIL 項失敗") ==="
 exit $FAIL
