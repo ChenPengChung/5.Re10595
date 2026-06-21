@@ -104,5 +104,18 @@ for js in jobscript_chain.slurm.H200 jobscript_chain.slurm.GB200; do
     fi
 done
 
-echo "=== $([ $FAIL -eq 0 ] && echo '✅ 全過' || echo "❌ $FAIL 項失敗") ==="
+# ── Test 11: ★select_combo_lib.sh SC_BADNODE(env-overridable probe exclude)已 sanitize ──
+SCLIB="$JS_DIR/tools/select_combo_lib.sh"
+if [ -f "$SCLIB" ]; then
+    if grep -qF 'SC_BADNODE=$(printf' "$SCLIB"; then
+        echo "  [PASS] select_combo_lib.sh SC_BADNODE 已加 sanitize"
+    else
+        echo "  [FAIL] select_combo_lib.sh SC_BADNODE 未 sanitize(env-override 污染→test-only probe bypass)"; FAIL=1
+    fi
+    # 實測: 污染的 SC_BADNODE env → sanitize 只留合法節點
+    sc=$(printf '%s\n' '# bad Edit12,25a-hgpn207,中文' | tr ',' '\n' | { grep -E "$PAT" || true; } | paste -sd,)
+    [ "$sc" = "25a-hgpn207" ] && echo "  [PASS] SC_BADNODE 污染→只留 25a-hgpn207" || { echo "  [FAIL] SC_BADNODE sanitize 結果 '$sc'"; FAIL=1; }
+fi
+
+echo "=== $([ $FAIL -eq 0 ] && echo '✅ 全過(所有 --exclude 路徑封堵)' || echo "❌ $FAIL 項失敗") ==="
 exit $FAIL

@@ -50,6 +50,10 @@ SC_VALID_JP="${SC_VALID_JP:-32}"
 SC_PARTITIONS="${SC_PARTITIONS:-32gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
+# ★sanitize SC_BADNODE(env-overridable)→ 只留合法節點名 token, 防污染(#/中文/空格)進 sbatch
+#   --test-only --exclude probe(line~105) → 否則 probe 失敗→dispatcher 誤判 no-capacity/停鏈。
+#   { grep||true; } 防空集合在 set -e 下中止; 與 blacklist_lib.sh 的 sanitize 一致。
+SC_BADNODE=$(printf '%s\n' "$SC_BADNODE" | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | paste -sd,)
 SC_JS="${SC_JS:-chain_code/jobscript_chain.slurm.H200}"
 SC_TPDB="${SC_TPDB:-restart/throughput_by_jp.dat}"
 SC_R32_DEFAULT="${SC_R32_DEFAULT:-0.93}"       # bootstrap FTT/hr @ jp=32 (measured 2026-06-02)
