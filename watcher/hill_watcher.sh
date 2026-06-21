@@ -357,6 +357,9 @@ while :; do
                     _write_hb                  # benchmark 後補心跳
                     run_tauwall "$step" || true
                     _write_hb                  # ★tauwall 後補心跳:tauwall→下一輪頂端才是真正最長空窗, 這裡是關鍵
+                    # 自主推送 benchmark 圖到遠端(免 Claude/session;plumbing 不碰 dirty 工作樹)
+                    bash "$PROJECT_DIR/chain_code/push_benchmark_figs.sh" "$step" || true
+                    _write_hb                  # push 後補心跳(git fetch+push ~數秒)
                     last_bench_step="$step"
                 fi
             else
