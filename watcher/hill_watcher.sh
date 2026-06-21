@@ -309,6 +309,9 @@ while :; do
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
+                    # 比照 Edit11: 每次 benchmark 圖刷新後, 單獨 commit+push 8 張比對圖
+                    # (session-independent — 不依賴 Claude /loop, 當機/限流都照推)
+                    bash "$PROJECT_DIR/watcher/push_benchmark_figs.sh" "$PROJECT_DIR" "$RE" || true
                     last_bench_step="$step"
                 fi
             else
