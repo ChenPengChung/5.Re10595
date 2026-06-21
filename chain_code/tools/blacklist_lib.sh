@@ -242,7 +242,10 @@ bl_effective_exclude() {
     global_bad=$(bl_global_list)
     live_bad=$(bl_live_list)
     merged=$( { printf '%s\n' "$local_bad"; printf '%s\n' "$global_bad"; printf '%s\n' "$live_bad"; } \
-              | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u )
+              | tr ',' '\n' | grep -E '^[A-Za-z0-9._-]+$' | sort -u )
+    # ★sanitize(line 上): 只保留合法節點名 token(純 [A-Za-z0-9._-]) → 擋掉任何 #註解/空格/中文等
+    #   非節點 token 洩漏進 sbatch --exclude(2026-06-22 鏈斷根因: bad_nodes 檔註解整段塞進 --exclude →
+    #   sbatch "Unable to open file Edit12" → 自投+dispatcher 雙層全爆停鏈)。grep -E 同時也濾掉空行。
     n_merged=$(printf '%s\n' "$merged" | grep -cv '^[[:space:]]*$')
     [ "$n_merged" -eq 0 ] && { printf ''; return; }
 
@@ -258,7 +261,7 @@ bl_effective_exclude() {
                        "$n_merged" "$partition" "$BLACKLIST_MAX_PCT" "$total" "$cap" >&2
                 printf '[blacklist]       截斷至 %d 個 (優先保留 NCHC live, 再按時間戳取最新 local)\n' "$cap" >&2
                 # Step 1: 保留 NCHC live (這些是 NCHC 當下真的壞)
-                local keep_live; keep_live=$(printf '%s\n' "$live_bad" | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u)
+                local keep_live; keep_live=$(printf '%s\n' "$live_bad" | tr ',' '\n' | grep -E '^[A-Za-z0-9._-]+$' | sort -u)  # ★同 sanitize(只留合法節點名)
                 local n_live; n_live=$(printf '%s\n' "$keep_live" | grep -cv '^[[:space:]]*$')
                 local picked
                 if [ "$n_live" -ge "$cap" ]; then
