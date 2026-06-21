@@ -1,6 +1,7 @@
 #!/bin/bash
 # ============================================================================
-# health_watchdog.sh — Edit6_5600DNS 24/7 健康守護 (由 systemd --user timer 週期執行)
+# health_watchdog.sh — Edit12_Krank56002 24/7 健康守護 (由 systemd --user timer 週期執行)
+# (Edit6 模板移植: ROOT/全 edit*-unit 名/描述皆改 Edit12; /proc/cwd 跨專案守門不變)
 # ----------------------------------------------------------------------------
 # 不需要任何 Claude session 即可運作。職責 (僅做「腳本能安全做」的事):
 #   1. 存活: dispatcher / watcher 用 systemd is-active + /proc cwd 判定本專案實例。
@@ -12,11 +13,11 @@
 #               並 best-effort 推遠端 (單檔、不 -A、不 --force、timeout、失敗即放棄不留殘狀態)。
 # 本腳本「不做」(本質需 Claude / Route A 在 session 內): 不修程式碼、不 scancel、不冷啟。
 # 跨專案安全: 一律 /proc/PID/cwd 判專案歸屬 (cwd 在本專案才算);
-#            絕不碰 Edit7/Edit8 等別專案 daemon;不使用 pkill -f / cmdline 路徑字串。
+#            絕不碰 Edit6/Edit7/Edit8/Edit11 等別專案 daemon;不使用 pkill -f / cmdline 路徑字串。
 # 手動測試: bash chain_code/health_watchdog.sh   (WATCHDOG_PUSH=0 可關閉推送只本地記錄)
 # ============================================================================
 set -uo pipefail
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT="/home/s8313697/5.Re10595/Edit12_Krank56002"
 cd "$ROOT" 2>/dev/null || exit 0
 export PATH="/usr/bin:/bin:/usr/local/bin:${PATH:-}"
 
@@ -30,15 +31,15 @@ TS(){ date '+%F %T'; }
 # 趁此次仍被 timer 拉起時補回檔案 + 重載 + 重新 enable, 確保 timer/daemon 不會默默消失。
 # (僅在缺檔時動作; 不影響別專案 unit。)
 UDIR="$HOME/.config/systemd/user"; _need_reload=0
-for _u in edit6-dispatcher.service edit6-watcher.service edit6-watchdog.service edit6-watchdog.timer; do
+for _u in edit12-dispatcher.service edit12-watcher.service edit12-watchdog.service edit12-watchdog.timer; do
     if [ ! -f "$UDIR/$_u" ] && [ -f "chain_code/systemd/$_u" ]; then
         mkdir -p "$UDIR"; cp -f "chain_code/systemd/$_u" "$UDIR/" 2>/dev/null && _need_reload=1
     fi
 done
 if [ "$_need_reload" = 1 ]; then
     systemctl --user daemon-reload 2>/dev/null || true
-    systemctl --user enable --now edit6-watchdog.timer 2>/dev/null || true
-    systemctl --user enable --now edit6-dispatcher.service edit6-watcher.service 2>/dev/null || true
+    systemctl --user enable --now edit12-watchdog.timer 2>/dev/null || true
+    systemctl --user enable --now edit12-dispatcher.service edit12-watcher.service 2>/dev/null || true
     echo "[$(TS)] self-heal: 補回缺失的 systemd unit 檔 + daemon-reload + re-enable" >> "$LOG"
 fi
 
@@ -53,30 +54,30 @@ problems=()   # 問題點
 actions=()    # watchdog 已自動補救
 
 # ---------- 1. dispatcher ----------
-da=$(systemctl --user is-active edit6-dispatcher.service 2>/dev/null || echo unknown)
+da=$(systemctl --user is-active edit12-dispatcher.service 2>/dev/null || echo unknown)
 dc=$(cnt_cwd submit_dispatcher.sh)
 if [ "$da" != "active" ] || [ "$dc" -lt 1 ]; then
     problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc")
-    systemctl --user reset-failed edit6-dispatcher.service 2>/dev/null || true
-    if systemctl --user restart edit6-dispatcher.service 2>/dev/null; then
-        actions+=("已 systemctl --user restart edit6-dispatcher.service")
+    systemctl --user reset-failed edit12-dispatcher.service 2>/dev/null || true
+    if systemctl --user restart edit12-dispatcher.service 2>/dev/null; then
+        actions+=("已 systemctl --user restart edit12-dispatcher.service")
     else
-        actions+=("dispatcher restart 失敗 → 需 Claude(Route A) journalctl --user -u edit6-dispatcher 診斷+修碼")
+        actions+=("dispatcher restart 失敗 → 需 Claude(Route A) journalctl --user -u edit12-dispatcher 診斷+修碼")
     fi
 fi
 
 # ---------- 2. watcher ----------
-wa=$(systemctl --user is-active edit6-watcher.service 2>/dev/null || echo unknown)
+wa=$(systemctl --user is-active edit12-watcher.service 2>/dev/null || echo unknown)
 wc=$(cnt_cwd hill_watcher.sh)
 png_age=99999
 [ -f live/monitor_latest.png ] && png_age=$(( ($(date +%s) - $(stat -c %Y live/monitor_latest.png 2>/dev/null)) / 60 ))
 if [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
     problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc")
-    systemctl --user reset-failed edit6-watcher.service 2>/dev/null || true
-    if systemctl --user restart edit6-watcher.service 2>/dev/null; then
-        actions+=("已 systemctl --user restart edit6-watcher.service")
+    systemctl --user reset-failed edit12-watcher.service 2>/dev/null || true
+    if systemctl --user restart edit12-watcher.service 2>/dev/null; then
+        actions+=("已 systemctl --user restart edit12-watcher.service")
     else
-        actions+=("watcher restart 失敗 → 需 Claude journalctl --user -u edit6-watcher 診斷+修碼")
+        actions+=("watcher restart 失敗 → 需 Claude journalctl --user -u edit12-watcher 診斷+修碼")
     fi
 elif [ "$wc" -gt 1 ]; then
     problems+=("watcher 多實例(spin/重複): 本專案實例=$wc")
@@ -124,7 +125,7 @@ fi
 printf '%s' "$sig" > "$HASHF"
 
 {
-  echo "## [$(TS)] Edit6 health_watchdog ALERT (${#problems[@]} 問題)"
+  echo "## [$(TS)] Edit12 health_watchdog ALERT (${#problems[@]} 問題)"
   echo "狀態: dispatcher=$da/$dc watcher=$wa/$wc png=${png_age}m job=${JID}:${st:-?}/${sqstate:-—}"
   echo "問題點:"
   printf '  - %s\n' "${problems[@]}"

@@ -1,0 +1,11 @@
+[Unit]
+Description=Edit12_Krank56002 hill_watcher (convergence/benchmark plots -> live/)
+StartLimitIntervalSec=0
+[Service]
+Type=simple
+WorkingDirectory=/home/s8313697/5.Re10595/Edit12_Krank56002
+ExecStart=/bin/bash /home/s8313697/5.Re10595/Edit12_Krank56002/watcher/hill_watcher.sh
+Restart=on-failure
+RestartSec=15
+[Install]
+WantedBy=default.target

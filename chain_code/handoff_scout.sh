@@ -172,7 +172,7 @@ case "$ST" in
       emit HANDOFF "head=$CUR just ended ($ST, ${age}s ago); awaiting successor (grace ${DEAD_GRACE_SEC}s).$DUP_NOTE"
       exit 20
     fi
-    emit CRITICAL "DEAD CHAIN? head=$CUR $ST ${age}s ago, chain_jobid still=$CUR (no successor) & no STOP_CHAIN. Both submitters may have failed. Check: jobscript Section-7 / systemd edit6-dispatcher / sacct lineage.$DUP_NOTE"
+    emit CRITICAL "DEAD CHAIN? head=$CUR $ST ${age}s ago, chain_jobid still=$CUR (no successor) & no STOP_CHAIN. Both submitters may have failed. Check: jobscript Section-7 / systemd edit12-dispatcher / sacct lineage.$DUP_NOTE"
     exit 40
     ;;
 
