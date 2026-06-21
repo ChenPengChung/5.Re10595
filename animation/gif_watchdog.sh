@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# gif_watchdog.sh — Edit6_5600DNS 全場 GIF 累積器看門狗 (對話獨立 / session-free)
+# gif_watchdog.sh — Edit12_Krank56002 全場 GIF 累積器看門狗 (對話獨立 / session-free)
 # =============================================================================
 # 目的: 讓 1000 幀 GIF 製作「完全不倚賴 Claude 對話」。
 #   - gif_render_loop.py driver 以 setsid nohup 脫離 session 跑。
@@ -20,7 +20,7 @@
 # =============================================================================
 set -u
 
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT="/home/s8313697/5.Re10595/Edit12_Krank56002"
 cd "$ROOT" || { echo "cannot cd $ROOT"; exit 1; }
 
 DRIVER_PY="animation/gif_render_loop.py"
@@ -79,14 +79,14 @@ ensure_single_driver(){
   pids="$(scan_drivers)"
   if [ -z "$pids" ]; then
     driver_done && return 0          # 已完成就不重啟
-    log "no Edit6 driver alive → launching"
+    log "no Edit12 driver alive → launching"
     launch_driver
     return 0
   fi
   keep="$(echo "$pids" | head -1)"
   echo "$keep" > "$DRIVER_PID_FILE"
   for extra in $(echo "$pids" | tail -n +2); do
-    log "extra Edit6 driver PID=$extra → kill (keep $keep, 防雙開)"
+    log "extra Edit12 driver PID=$extra → kill (keep $keep, 防雙開)"
     kill "$extra" 2>/dev/null
   done
 }
