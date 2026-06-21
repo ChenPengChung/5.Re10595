@@ -209,7 +209,7 @@ bl_local_list() {
 
 bl_global_list() {
     [ -f "$GLOBAL_BAD_FILE" ] || return 0
-    grep -v '^[[:space:]]*$' "$GLOBAL_BAD_FILE" 2>/dev/null | sort -u | paste -sd,
+    grep -vE '^[[:space:]]*(#|$)' "$GLOBAL_BAD_FILE" 2>/dev/null | sort -u | paste -sd,
 }
 
 bl_live_list() {
