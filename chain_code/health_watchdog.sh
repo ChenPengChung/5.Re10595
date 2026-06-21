@@ -80,9 +80,22 @@ if [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
         actions+=("watcher restart 失敗 → 需 Claude journalctl --user -u edit12-watcher 診斷+修碼")
     fi
 elif [ "$wc" -gt 1 ]; then
-    problems+=("watcher 多實例(spin/重複): 本專案實例=$wc")
-    bash chain_code/daemon_reset.sh >> "$LOG" 2>&1 || true
-    actions+=("已 bash chain_code/daemon_reset.sh 清成單一 systemd watcher")
+    # ★多實例多為 benchmark 期間 re-exec/restart 的「瞬時 2 個」(舊 watcher 阻塞在 run_benchmark
+    #   等 python 子程序、慢死), watcher 自身 singleton lock + self-eviction(~60s)會自動收斂成 1。
+    #   早期版本在此 aggressive daemon_reset → 殺掉 mid-benchmark watcher → 新 watcher 又開 benchmark
+    #   → 每 10min tick 重 reset → benchmark 永遠跑不完(crash loop, 實測 23:30~00:00 figs 從不更新)。
+    #   故改 debounce: 只有「連續 2 次 tick(~10-20min, 遠超 self-eviction 60s)」都見多實例才 daemon_reset。
+    if [ -f live/.wd_dup_seen ]; then
+        problems+=("watcher 多實例(spin/重複, 連續2tick 未自癒): 本專案實例=$wc")
+        bash chain_code/daemon_reset.sh >> "$LOG" 2>&1 || true
+        actions+=("已 bash chain_code/daemon_reset.sh 清成單一 systemd watcher")
+        rm -f live/.wd_dup_seen
+    else
+        : > live/.wd_dup_seen
+        echo "[$(TS)] watcher 多實例=$wc (首見, debounce 不動; 待 self-eviction ~60s 自癒, 下tick仍見才reset)" >> "$LOG"
+    fi
+else
+    rm -f live/.wd_dup_seen 2>/dev/null || true   # 單一健康實例 → 清 debounce marker
 fi
 [ "$png_age" -gt 15 ] && problems+=("watcher live 圖過舊: ${png_age} 分 (應<15; watcher 卡住或長時間無新 VTK)")
 
