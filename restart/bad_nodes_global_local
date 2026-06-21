@@ -1,8 +1,2 @@
-# Edit12 project-local 精簡黑名單 (2026-06-20)
-# 取代 ~/.bad_nodes_global(41個, 其中 39 個其實 SLURM-健康=早被 NCHC 修好的誤排) →
-#   只留「真壞」節點, 接棒時放寬 Edit12 可用節點池、縮短 walltime 接棒 PENDING。
-# ★不動共用的 ~/.bad_nodes_global(別專案仍引用); 可逆: 刪 blacklist_lib.sh 的覆寫行即還原。
-# 判別壞節點標準(使用者定): MLUPS 陡降 = 慢節點標配 → 反應式加入此檔。
-# 目前真壞(Edit11 實測 hang 的共用節點; SLURM 目前未 drain 故需顯式排除):
 25a-hgpn143
 25a-hgpn024
