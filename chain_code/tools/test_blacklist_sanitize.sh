@@ -60,5 +60,28 @@ else
     echo "  [FAIL] 空輸入在 set -eo pipefail 下中止"; FAIL=1
 fi
 
+# ── Test 7: ★模擬 jobscript EX_LIST 合併(bl + PRE_BAD_ALL)端到端 sanitize(codex 抓的 bypass) ──
+ex_bl="25a-hgpn024,25a-hgpn143"
+pre_bad=$(printf '25a-hgpn073\n# 惡意 Edit12\n中文 garbage\n')
+pre_csv=$(printf '%s\n' "$pre_bad" | grep -v '^[[:space:]]*$' | paste -sd,)
+ex_list=$( { printf '%s\n' "$ex_bl"; printf '%s\n' "$pre_csv"; } | tr ',' '\n' | { grep -E "$PAT" || true; } | sort -u | paste -sd, )
+if printf '%s' "$ex_list" | grep -qE "$LEAK"; then
+    echo "  [FAIL] jobscript EX_LIST 合併仍洩漏非節點字元: '$ex_list'"; FAIL=1
+elif printf '%s' "$ex_list" | grep -q '25a-hgpn073'; then
+    echo "  [PASS] jobscript EX_LIST(bl+PRE_BAD_ALL)端到端: 污染(#/中文)擋掉、合法節點(073)保留"
+else
+    echo "  [FAIL] jobscript EX_LIST: 合法節點遺失 '$ex_list'"; FAIL=1
+fi
+
+# ── Test 8: ★jobscript 兩 partition 的 EX_LIST 合併都已套 token sanitize(無 bypass 殘留) ──
+JS_DIR="$(cd "$SELF_DIR/.." && pwd)"
+miss=0
+for js in jobscript_chain.slurm.H200 jobscript_chain.slurm.GB200; do
+    [ -f "$JS_DIR/$js" ] || continue
+    old=$(grep -cF "grep -v '^[[:space:]]*\$' | sort -u | paste -sd," "$JS_DIR/$js")
+    new=$(grep -cF "{ grep -E '^[A-Za-z0-9._-]+\$' || true; } | sort -u | paste -sd," "$JS_DIR/$js")
+    if [ "$old" -eq 0 ] && [ "$new" -ge 1 ]; then echo "  [PASS] $js EX_LIST 已 sanitize($new 處, 無舊式殘留)"; else echo "  [FAIL] $js: 舊式殘留=$old 新式=$new"; FAIL=1; miss=1; fi
+done
+
 echo "=== $([ $FAIL -eq 0 ] && echo '✅ 全過' || echo "❌ $FAIL 項失敗") ==="
 exit $FAIL

@@ -246,7 +246,7 @@ if [ -n "$MATCHED_BAD" ]; then
     EX_LIST_BL=$(bl_effective_exclude "$SLURM_JOB_PARTITION" 2> >(tee -a "$_BL_LOG" >&2))
     PRE_BAD_CSV=$(printf '%s\n' "$PRE_BAD_ALL" | grep -v '^[[:space:]]*$' | paste -sd,)
     EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
-               | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
+               | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u | paste -sd, )
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
     log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}"
@@ -695,7 +695,7 @@ SBATCH_RETRY_DELAY=30
 EX_LIST_BL=$(bl_effective_exclude "$SLURM_JOB_PARTITION" 2> >(tee -a "$_BL_LOG" >&2))
 PRE_BAD_CSV=$(printf '%s\n' "${PRE_BAD_ALL:-}" | grep -v '^[[:space:]]*$' | paste -sd,)
 EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
-           | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
+           | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u | paste -sd, )
 
 if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
     if ! printf ',%s,' "$EX_LIST" | grep -qF ",$WATCHDOG_HANG_NODE,"; then
