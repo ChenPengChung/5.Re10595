@@ -1,6 +1,6 @@
 #!/bin/bash
 # =============================================================================
-# dispatcher_watchdog.sh — 讓 Edit6_5600DNS 的兩個 daemon 不靠運氣地活著:
+# dispatcher_watchdog.sh — 讓 Edit11_Krank5600 的兩個 daemon 不靠運氣地活著:
 #   (A) dispatcher (submit_dispatcher.sh) — 自動續投/切換的大腦
 #   (B) hill_watcher (watcher/hill_watcher.sh) — 產生 live/monitor_latest.png 收斂圖
 #
@@ -8,11 +8,11 @@
 # node-reboot)且使用者沒有要求停鏈(無 STOP_CHAIN),就清掉殘留 + 重啟「本專案自己的」
 # 該 daemon。兩者各自獨立檢查(不會因一個活著就略過另一個)。
 #
-# 安全: 只操作當前專案(Edit6_5600DNS)自己的 daemon 與 sentinel; 絕不碰別專案。
-# 安裝:  crontab -e  ->  */5 * * * * /home/s8313697/5.Re10595/Edit6_5600DNS/chain_code/dispatcher_watchdog.sh
+# 安全: 只操作當前專案(Edit11_Krank5600)自己的 daemon 與 sentinel; 絕不碰別專案。
+# 安裝:  crontab -e  ->  */5 * * * * /home/s8313697/5.Re10595/Edit11_Krank5600/chain_code/dispatcher_watchdog.sh
 #        (亦會由 `./run dispatcher start` 自動確保此 crontab 存在)
 # =============================================================================
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT="/home/s8313697/5.Re10595/Edit11_Krank5600"
 cd "$ROOT" || exit 1
 LOG="restart/dispatcher_watchdog.log"
 

@@ -1,9 +1,9 @@
 #!/bin/bash
 # ============================================================================
-# jp_lock_selfcheck.sh — Edit6_5600DNS「16gpus@32jp 鎖」一致性深檢 (純唯讀)
+# jp_lock_selfcheck.sh — Edit11_Krank5600「16gpus@32jp 鎖」一致性深檢 (純唯讀)
 # ----------------------------------------------------------------------------
-# Edit6 沒有 Edit7 那套 jp-lock 哨兵 (LOCK_JP_PARTITION / jp_lock_status /
-# jp_lock_DRIFT.alert)。Edit6 的「鎖」是底下這幾個檔同時成立:
+# Edit11 沒有 Edit7 那套 jp-lock 哨兵 (LOCK_JP_PARTITION / jp_lock_status /
+# jp_lock_DRIFT.alert)。Edit11 的「鎖」是底下這幾個檔同時成立:
 #   jp 鎖定 32 (variables.h #define jp 32 + select_combo_lib SC_VALID_JP 預設 32)
 #   partition 自由集 = {8gpus,16gpus,32gpus}@jp32 (SC_PARTITIONS 預設)
 #   暫時 pin = restart/h200_partition = 16gpus
@@ -15,7 +15,7 @@
 # 用法: bash chain_code/tools/jp_lock_selfcheck.sh   (-q 只印單行結論)
 # ============================================================================
 set -uo pipefail
-ROOT="/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT="/home/s8313697/5.Re10595/Edit11_Krank5600"
 cd "$ROOT" 2>/dev/null || { echo "FATAL: 無法進入 $ROOT"; exit 2; }
 LIB="chain_code/tools/select_combo_lib.sh"
 QUIET=0; [ "${1:-}" = "-q" ] && QUIET=1

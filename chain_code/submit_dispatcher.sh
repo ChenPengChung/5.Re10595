@@ -59,7 +59,7 @@ fi
 
 # [systemd/standalone] 自寫 pid + DISPATCHER_ACTIVE sentinel, 讓 jobscript hand-off 檢查
 # (kill -0 dispatcher.pid + [ -f DISPATCHER_ACTIVE ]) 認得本 daemon 活著。
-# 無論由 systemd (edit6-dispatcher.service) 或 dispatcher_start.sh 啟動皆正確; trap 在退出時清除。
+# 無論由 systemd (edit11-dispatcher.service) 或 dispatcher_start.sh 啟動皆正確; trap 在退出時清除。
 mkdir -p restart 2>/dev/null
 echo $$ > restart/dispatcher.pid 2>/dev/null || true
 echo $$ > DISPATCHER_ACTIVE 2>/dev/null || true

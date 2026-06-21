@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-gif_render_loop.py — 全場 GIF 批次渲染 driver (lbm-render-1 快路徑) [Edit6_5600DNS 版]
+gif_render_loop.py — 全場 GIF 批次渲染 driver (lbm-render-1 快路徑) [Edit11_Krank5600 版]
 ====================================================================================
 依 CLAUDE.md「全場 GIF 動畫設定」+ 使用者更正 (claude_animation):
   * 用 lbm-render-1 快路徑 (render_frame.py --slice-only, fast_slice X=mid 薄板),
@@ -15,7 +15,7 @@ gif_render_loop.py — 全場 GIF 批次渲染 driver (lbm-render-1 快路徑) [
 不修改 video_encode_mp4.py / pipeline.py 的 MP4 流程 (本檔為追加)。
 不觸碰任何 Slurm job / restart / checkpoint。
 
-Edit6 與 Edit7 差異:
+Edit11 與 Edit7 差異:
   * grid = 257x513x257 (Edit7 = 449x897x449) → fast_slice.py 自動讀 DIMENSIONS, 無需改。
   * 完整 VTK = 5,150,237,653 B (~5.15GB; Edit7 ~17GB) → FULL_MIN 調為 5.10e9。
   * velocity 場已 ÷Uref (velocity_Y 範圍實測 ~[-0.48,1.33]) → 固定色階 [-2,2] 安全涵蓋。
@@ -31,7 +31,7 @@ Edit6 與 Edit7 差異:
 """
 import os, sys, re, glob, time, subprocess
 
-ROOT = "/home/s8313697/5.Re10595/Edit6_5600DNS"
+ROOT = "/home/s8313697/5.Re10595/Edit11_Krank5600"
 PV = "/work/s8313697/software/ParaView-5.12.1-osmesa-MPI-Linux-Python3.10-x86_64/bin/pvbatch"
 RENDER = os.path.join(ROOT, "animation", "render_frame.py")
 GIF_ENC = os.path.join(ROOT, "animation", "gif_encode.py")
