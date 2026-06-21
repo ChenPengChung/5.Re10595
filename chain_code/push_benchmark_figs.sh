@@ -30,8 +30,8 @@ _commit_push() {  # $1=訊息  其餘=檔案
     git commit -q --only -m "$msg
 
 $CO" -- "$@" 2>/dev/null || return 1
-    if git push -q 2>/dev/null; then return 0
-    else echo "★「$msg」已本地 commit 但 push 失敗(非ff? 不 --force, 待手動補推)"; return 2; fi
+    if timeout 90 git push -q 2>/dev/null; then return 0
+    else echo "★「$msg」已本地 commit 但 push 失敗(非ff/逾時/無SSH? 不 --force, 待下次補推)"; return 2; fi
 }
 
 # ① benchmark 比對圖
