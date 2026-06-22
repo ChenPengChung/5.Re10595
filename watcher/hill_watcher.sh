@@ -307,18 +307,19 @@ while :; do
             #   otherwise RS fields are too noisy (statistics not yet meaningful).
             bench_gate=$(get_bench_gate_ftt)
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
-                # 跨節點去重: 讀共享標記; 此 step 已被任一 owner 跑過 → 跳過(不重複解析/commit)
+                # 跨節點去重: 讀共享標記; 此 step 已被任一 owner 成功跑完 → 跳過(不重複解析/commit)
                 done_bench_step=$(cat "$BENCH_MARK" 2>/dev/null || echo "")
                 if [[ "$done_bench_step" != "$step" ]]; then
-                    # 跑之前先 atomic 搶占標記, 讓併跑的他節點 owner 立刻看到 → 跳過(關併跑窗口)。
-                    # 搶占在跑之前: 某 step benchmark 失敗(rc=137)不會被重試, 由下一個 VTK 補上(圖不 stale)。
-                    printf '%s\n' "$step" > "$BENCH_MARK.tmp.$$" && mv -f "$BENCH_MARK.tmp.$$" "$BENCH_MARK"
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
                     # 比照 Edit11: 每次 benchmark 圖刷新後, 單獨 commit+push 8 張比對圖
                     # (session-independent — 不依賴 Claude /loop, 當機/限流都照推)
                     bash "$PROJECT_DIR/watcher/push_benchmark_figs.sh" "$PROJECT_DIR" "$RE" || true
+                    # ★claim-after-success: 成功跑完才用 atomic mv 寫共享標記。若中途被殺(owner 換節點)
+                    #   /失敗 → 標記未更新 → 下個 owner/poll 重試該 step → 圖不會 stale(保留冗餘韌性,
+                    #   只去掉「已完成步」在 owner 換手時的重跑; 併跑窗口偶爾 2× 遠優於舊 13×)。
+                    printf '%s\n' "$step" > "$BENCH_MARK.tmp.$$" && mv -f "$BENCH_MARK.tmp.$$" "$BENCH_MARK"
                 fi
             else
                 log "BENCH skipped: FTT=$ftt < G2=$bench_gate (accu=$accu, CV window not full)"
