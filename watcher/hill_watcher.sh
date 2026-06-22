@@ -268,7 +268,9 @@ log "  tauwall  = $TAUWALL_SCRIPT"
 log "=========================================="
 
 last_processed=""
-last_bench_step=""
+# 跨節點 benchmark 去重: 用共享檔案標記「哪個 step 已跑過 benchmark」, 取代舊的
+# per-instance in-memory 變數(owner 換節點即歸零 → 同一 VTK 被重複解析+重複 commit)。
+BENCH_MARK="$LIVE_DIR/.last_bench_step"
 
 while :; do
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
@@ -305,14 +307,18 @@ while :; do
             #   otherwise RS fields are too noisy (statistics not yet meaningful).
             bench_gate=$(get_bench_gate_ftt)
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
-                if [[ "$last_bench_step" != "$step" ]]; then
+                # 跨節點去重: 讀共享標記; 此 step 已被任一 owner 跑過 → 跳過(不重複解析/commit)
+                done_bench_step=$(cat "$BENCH_MARK" 2>/dev/null || echo "")
+                if [[ "$done_bench_step" != "$step" ]]; then
+                    # 跑之前先 atomic 搶占標記, 讓併跑的他節點 owner 立刻看到 → 跳過(關併跑窗口)。
+                    # 搶占在跑之前: 某 step benchmark 失敗(rc=137)不會被重試, 由下一個 VTK 補上(圖不 stale)。
+                    printf '%s\n' "$step" > "$BENCH_MARK.tmp.$$" && mv -f "$BENCH_MARK.tmp.$$" "$BENCH_MARK"
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
                     # 比照 Edit11: 每次 benchmark 圖刷新後, 單獨 commit+push 8 張比對圖
                     # (session-independent — 不依賴 Claude /loop, 當機/限流都照推)
                     bash "$PROJECT_DIR/watcher/push_benchmark_figs.sh" "$PROJECT_DIR" "$RE" || true
-                    last_bench_step="$step"
                 fi
             else
                 log "BENCH skipped: FTT=$ftt < G2=$bench_gate (accu=$accu, CV window not full)"
