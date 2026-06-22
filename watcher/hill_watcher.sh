@@ -274,7 +274,9 @@ log "  tauwall  = $TAUWALL_SCRIPT"
 log "=========================================="
 
 last_processed=""
-last_bench_step=""
+# ★去重:last_bench_step 改為跨 owner 共享檔 $LIVE_DIR/.last_bench_step(見下方 BENCH gate),
+#   不再用 in-memory 變數 —— 否則重啟/換 owner 時歸零 → 同一 35GB VTK 重複跑 benchmark
+#   + 重複 push 比對圖(實證:9 step 重複跑、step 50254100 重複 commit、rc=137 併跑)。
 _displaced_strikes=0       # self-eviction debounce:連續幾輪偵測到 nodelock 已被別人接管
 
 while :; do
@@ -349,7 +351,14 @@ while :; do
             #   otherwise RS fields are too noisy (statistics not yet meaningful).
             bench_gate=$(get_bench_gate_ftt)
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
-                if [[ "$last_bench_step" != "$step" ]]; then
+                # ★去重:用跨 owner 共享檔標記「此 step 已跑過 benchmark」。換 owner/重啟後
+                #   新實例讀同一檔 → 已跑過就跳過,避免重複解析 35GB VTK + 重複 push。
+                BENCH_MARK="$LIVE_DIR/.last_bench_step"
+                done_bench_step=$(cat "$BENCH_MARK" 2>/dev/null || echo "")
+                if [[ "$done_bench_step" != "$step" ]]; then
+                    # ★跑之前先 atomic mv 搶占標記,讓併跑的他節點 owner 立刻看到 → 跳過(關併跑窗口)。
+                    #   權衡:某 step benchmark 失敗(rc=137)不重試,由下一顆 VTK 補上(圖按 VTK 更新、不 stale)。
+                    printf '%s\n' "$step" > "$BENCH_MARK.tmp.$$" 2>/dev/null && mv -f "$BENCH_MARK.tmp.$$" "$BENCH_MARK" 2>/dev/null || true
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     _write_hb                  # benchmark 前補心跳(run_benchmark 阻塞 ≤BENCH_TIMEOUT=900s,
                                                #   期間無法再刷;HB_STALE=1200 > 900 故不會被誤判死)
@@ -360,7 +369,6 @@ while :; do
                     # 自主推送 benchmark 圖到遠端(免 Claude/session;plumbing 不碰 dirty 工作樹)
                     bash "$PROJECT_DIR/chain_code/push_benchmark_figs.sh" "$step" || true
                     _write_hb                  # push 後補心跳(git fetch+push ~數秒)
-                    last_bench_step="$step"
                 fi
             else
                 log "BENCH skipped: FTT=$ftt < G2=$bench_gate (accu=$accu, CV window not full)"
