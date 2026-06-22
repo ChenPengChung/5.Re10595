@@ -359,8 +359,9 @@ while :; do
                     _write_hb                  # ★tauwall 後補心跳:tauwall→下一輪頂端才是真正最長空窗, 這裡是關鍵
                     last_bench_step="$step"
                     # ★benchmark 圖更新即自推(rate-limit 免疫: 不靠 Claude loop, watcher 產完圖立即
-                    #   個別 commit+push 到遠端; push 含 timeout, 失敗則本地 commit 待下次補推; 比照 Edit11)
-                    bash "$PROJECT_DIR/chain_code/push_benchmark_figs.sh" || true
+                    #   git plumbing 在 fetch 過的 origin 之上造 commit+push, 永遠 fast-forward;
+                    #   移植自 Edit11 plumbing 版, 傳 $step 讓 commit 訊息 FTT/step 對齊本幀 VTK)
+                    bash "$PROJECT_DIR/chain_code/push_benchmark_figs.sh" "$step" || true
                     _write_hb                  # push 後補心跳(保險: push 雖含 timeout 90s)
                 fi
             else
