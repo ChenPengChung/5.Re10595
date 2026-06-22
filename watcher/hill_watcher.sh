@@ -46,6 +46,7 @@ MYHOST="$(hostname)"
 NODELOCK="$LIVE_DIR/watcher.nodelock"     # 原子 mkdir(NFS 上 mkdir 仍為原子)
 HEARTBEAT="$LIVE_DIR/watcher.heartbeat"   # MYHOST:pid:epoch, 每輪刷新; o 的 source-3 跨節點權威
 HB_STALE=1200                             # 心跳 > 此值視為擁有者已死、可奪鎖。★必須 > 單輪最長阻塞 op
+BENCH_MARK="$LIVE_DIR/.last_bench_step"    # benchmark dedup 共享標記(跨 watcher 重啟/owner 換手共享, 防同 VTK 重跑 benchmark; live/ 已 gitignore 不入版控)
                                           #   (run_benchmark ≤BENCH_TIMEOUT=900s):否則 benchmark 期間
                                           #   heartbeat 假性過期 → 別節點錯誤奪鎖 → 真 watcher 被 self-evict
                                           #   誤殺。迴圈內已在 conv/benchmark 前後各補 _write_hb,把單次
@@ -273,7 +274,7 @@ log "  tauwall  = $TAUWALL_SCRIPT"
 log "=========================================="
 
 last_processed=""
-last_bench_step=""
+# benchmark dedup 已改用共享檔 $BENCH_MARK(跨 watcher 重啟/換 owner 仍 dedup), 不再用 in-memory last_bench_step
 
 _displaced_strikes=0       # self-eviction debounce:連續幾輪偵測到 nodelock 已被別人接管
 while :; do
@@ -349,15 +350,19 @@ while :; do
             #   otherwise RS fields are too noisy (statistics not yet meaningful).
             bench_gate=$(get_bench_gate_ftt)
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
-                if [[ "$last_bench_step" != "$step" ]]; then
+                done_step=$(cat "$BENCH_MARK" 2>/dev/null || echo "")
+                if [[ "$done_step" != "$step" ]]; then
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
+                    # ★跑前 atomic mv 搶占共享標記: 關掉「watcher 重啟/owner 換手後 in-memory dedup 歸零→同一 VTK
+                    #   重跑 benchmark」窗口(2026-06-22 診斷: step 33117001 曾被同節點 watchdog 重啟重跑 3 次浪費 login
+                    #   CPU; push 端已有 origin content-gate 不重複推圖, 此修只省重複計算)。搶占在跑之前→併跑他節點立即跳過。
+                    printf '%s\n' "$step" > "$BENCH_MARK.tmp.$$" && mv -f "$BENCH_MARK.tmp.$$" "$BENCH_MARK"
                     _write_hb                  # benchmark 前補心跳(run_benchmark 阻塞 ≤BENCH_TIMEOUT=900s, 期間無法再刷)
                     run_benchmark "$step" || true
                     _write_hb                  # benchmark 後立即補心跳, 再跑 tauwall — 把單次 staleness 壓在
                                                #   「一個 op」≤900s 內(否則 benchmark+tauwall 串接 gap 可達 1800>HB_STALE=1200)
                     run_tauwall "$step" || true
                     _write_hb                  # ★tauwall 後補心跳:tauwall→下一輪頂端才是真正最長空窗, 這裡是關鍵
-                    last_bench_step="$step"
                     # ★benchmark 圖更新即自推(rate-limit 免疫: 不靠 Claude loop, watcher 產完圖立即
                     #   git plumbing 在 fetch 過的 origin 之上造 commit+push, 永遠 fast-forward;
                     #   移植自 Edit11 plumbing 版, 傳 $step 讓 commit 訊息 FTT/step 對齊本幀 VTK)
