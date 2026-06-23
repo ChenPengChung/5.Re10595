@@ -21,7 +21,12 @@
 #   BLACKLIST_TTL_SEC   TTL 秒數            (預設 86400 = 24h)
 #   BLACKLIST_MAX_PCT   exclude 上限百分比  (預設 50)
 #   BAD_NODES_FILE      本地黑名單路徑      (預設 restart/bad_nodes)
-#   GLOBAL_BAD_FILE     跨專案黑名單        (預設 ~/.bad_nodes_global)
+#   GLOBAL_BAD_FILE     project-local always-exclude 清單
+#                       (預設 restart/bad_nodes_global_local; 純節點名、無TTL、★繞過NCHC —
+#                        給「確認壞但 NCHC 誤判健康」的節點, 如缺 GPU 的 hgpn062。
+#                        改為 project-local: 不依賴/不污染共用 ~/.bad_nodes_global(過肥41節點),
+#                        Edit6 自己維護精簡清單 → exclude 更瘦 → 排程更快。
+#                        ★數據檔一律純節點名, 勿加 # 註解(會洩漏進 --exclude 致斷鏈)。)
 #
 # 用法:
 #   . tools/blacklist_lib.sh
@@ -33,7 +38,7 @@
 : "${BLACKLIST_TTL_SEC:=86400}"
 : "${BLACKLIST_MAX_PCT:=50}"
 : "${BAD_NODES_FILE:=restart/bad_nodes}"
-: "${GLOBAL_BAD_FILE:=$HOME/.bad_nodes_global}"
+: "${GLOBAL_BAD_FILE:=restart/bad_nodes_global_local}"
 
 # ─────────────────────────────────────────────────────────────────────────
 # 內部 helper: 把 Slurm state 字串分類
