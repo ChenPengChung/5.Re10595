@@ -21,12 +21,13 @@
 #   BLACKLIST_TTL_SEC   TTL 秒數            (預設 86400 = 24h)
 #   BLACKLIST_MAX_PCT   exclude 上限百分比  (預設 50)
 #   BAD_NODES_FILE      本地黑名單路徑      (預設 restart/bad_nodes)
-#   GLOBAL_BAD_FILE     project-local always-exclude 清單
-#                       (預設 restart/bad_nodes_global_local; 純節點名、無TTL、★繞過NCHC —
-#                        給「確認壞但 NCHC 誤判健康」的節點, 如缺 GPU 的 hgpn062。
-#                        改為 project-local: 不依賴/不污染共用 ~/.bad_nodes_global(過肥41節點),
-#                        Edit6 自己維護精簡清單 → exclude 更瘦 → 排程更快。
-#                        ★數據檔一律純節點名, 勿加 # 註解(會洩漏進 --exclude 致斷鏈)。)
+#   GLOBAL_BAD_FILE     共用跨專案全域黑名單  (預設 ~/.bad_nodes_global)
+#                       —— genuinely-bad 節點(含正在 draining 的 mixed-, NCHC sinfo -R 只抓
+#                          「完全 drained」抓不到「draining」, 故需此共用全域補上)。繞過 NCHC。
+#   PROJECT_BAD_FILE    project-local always-exclude (預設 restart/bad_nodes_global_local)
+#                       —— Edit6 自有, 給「確認壞但 NCHC 誤判健康」的 NCHC-blind 節點(如缺GPU的062)。
+#   bl_global_list 同時讀上述兩檔合併(共用全域 ∪ project-local), 繞過 NCHC always-exclude。
+#   ★兩個數據檔一律純節點名, 勿加 # 註解(bl_global_list 雖已濾#, 仍避免洩漏進 --exclude 致斷鏈)。
 #
 # 用法:
 #   . tools/blacklist_lib.sh
@@ -38,7 +39,8 @@
 : "${BLACKLIST_TTL_SEC:=86400}"
 : "${BLACKLIST_MAX_PCT:=50}"
 : "${BAD_NODES_FILE:=restart/bad_nodes}"
-: "${GLOBAL_BAD_FILE:=restart/bad_nodes_global_local}"
+: "${GLOBAL_BAD_FILE:=$HOME/.bad_nodes_global}"
+: "${PROJECT_BAD_FILE:=restart/bad_nodes_global_local}"
 
 # ─────────────────────────────────────────────────────────────────────────
 # 內部 helper: 把 Slurm state 字串分類
@@ -208,8 +210,13 @@ bl_local_list() {
 }
 
 bl_global_list() {
-    [ -f "$GLOBAL_BAD_FILE" ] || return 0
-    grep -v '^[[:space:]]*$' "$GLOBAL_BAD_FILE" 2>/dev/null | sort -u | paste -sd,
+    # 雙來源合併: ① 共用跨專案全域 GLOBAL_BAD_FILE (genuinely-bad 含 draining/mixed- 節點;
+    #   bl_live_list 的 sinfo -R 只抓「完全 drained」抓不到「draining」, 故這裡仍需共用全域補上)
+    # ② project-local PROJECT_BAD_FILE (Edit6 自有, 給 NCHC-blind 壞節點如缺GPU的062)。
+    # 兩檔都當 flat list(純節點名); 濾空行+# 註解(防註解洩漏進 --exclude 致斷鏈)。
+    { [ -f "$GLOBAL_BAD_FILE" ]  && cat "$GLOBAL_BAD_FILE"
+      [ -f "$PROJECT_BAD_FILE" ] && cat "$PROJECT_BAD_FILE"
+    } 2>/dev/null | grep -vE '^[[:space:]]*$|^[[:space:]]*#' | sort -u | paste -sd,
 }
 
 bl_live_list() {
