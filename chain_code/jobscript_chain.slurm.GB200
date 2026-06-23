@@ -592,6 +592,7 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
     fi
     ADDED=0
     SKIPPED_HEALTHY=0
+    FASTFAIL_REFUSED=""    # ★NCHC說健康但本輪crash的節點(allocated-while-bad)→加本輪 resubmit session-exclude(防crash-loop)
     while IFS= read -r h; do
         [ -z "$h" ] && continue
         if bl_add "$h" "rc=$RC round=$CHAIN_COUNT elapsed=${ELAPSED}s" "jobscript-fastfail" \
@@ -602,7 +603,8 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
             _rc=$?
             if [ "$_rc" -eq 2 ]; then
                 SKIPPED_HEALTHY=$((SKIPPED_HEALTHY + 1))
-                log "NOT blacklisted $h (NCHC 確認健康; fast-fail 疑似本地程式 bug)"
+                FASTFAIL_REFUSED="${FASTFAIL_REFUSED:+$FASTFAIL_REFUSED,}$h"
+                log "NOT blacklisted $h (NCHC 確認健康) → 仍加本輪 resubmit session-exclude(allocated-while-bad, 防 crash-loop, 不寫持久黑名單)"
             fi
         fi
     done <<< "$HOSTS"
@@ -672,6 +674,19 @@ if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
         EX_LIST="${EX_LIST:+$EX_LIST,}$WATCHDOG_HANG_NODE"
         log "WATCHDOG: forced $WATCHDOG_HANG_NODE into resubmit exclude"
     fi
+fi
+
+# ★FAST-FAIL session-exclude (2026-06-23): fast crash 時 NCHC 說健康但其實壞(allocated-while-bad,
+#   如 hgpn062 物理少 GPU 但 SLURM config 仍 gpu=8)的節點, 加進【本輪】resubmit exclude 防 crash-loop 重演
+#   (原 fast-fail 對 NCHC-healthy 節點拒絕黑名單→re-land→re-crash)。★session-only: 僅這一輪, 下輪自動釋放
+#   (不寫持久黑名單)→ node-starved 叢集避免永久誤殺稀缺健康節點; 節點若真持久壞會再 fast-fail 被擋;
+#   已知持久壞(GPU損)用 blacklist_lib 的 bl_add_global 手動加 project-local 持久黑名單。
+if [ -n "${FASTFAIL_REFUSED:-}" ]; then
+    for _ffn in $(printf '%s' "$FASTFAIL_REFUSED" | tr ',' ' '); do
+        printf '%s' "$_ffn" | grep -qE '^[A-Za-z0-9._-]+$' || continue   # sanitize: 只合法節點名
+        printf ',%s,' "$EX_LIST" | grep -qF ",$_ffn," || EX_LIST="${EX_LIST:+$EX_LIST,}$_ffn"
+    done
+    log "FAST-FAIL: forced session-exclude (NCHC-healthy-but-crashed, allocated-while-bad): $FASTFAIL_REFUSED"
 fi
 
 EXCLUDE_ARG=""

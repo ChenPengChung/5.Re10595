@@ -212,6 +212,32 @@ bl_global_list() {
     grep -vE '^[[:space:]]*(#|$)' "$GLOBAL_BAD_FILE" 2>/dev/null | sort -u | paste -sd,
 }
 
+# bl_add_global <node> — 把節點加入「本專案 project-local 持久黑名單」($GLOBAL_BAD_FILE,
+#   經 line 41 hard-override 指向 restart/bad_nodes_global_local)。純節點名 + dedup + sanitize
+#   (擋 #/空格/中文 → 防 comment-leak 洩漏進 sbatch --exclude 致鏈斷)。★只碰本專案檔, 絕不動共用
+#   ~/.bad_nodes_global(跨專案隔離)。用於「已知持久壞」節點(如 GPU 物理損壞 hgpn062)的 reactive/手動
+#   加入; transient/可疑壞不該用此(改用 bad_nodes TTL 或 jobscript fast-fail session-exclude, 避免
+#   node-starved 叢集永久誤殺稀缺健康節點)。回 0=已加或已存在, 1=非法節點名拒絕。
+bl_add_global() {
+    local node="${1:-}"
+    [ -n "$node" ] || { echo "[blacklist] bl_add_global: 空節點名, 拒絕" >&2; return 1; }
+    if ! printf '%s' "$node" | grep -qE '^[A-Za-z0-9._-]+$'; then
+        echo "[blacklist] bl_add_global: 非法節點名 '$node'(只允許 [A-Za-z0-9._-]), 拒絕(防洩漏)" >&2
+        return 1
+    fi
+    if [ -f "$GLOBAL_BAD_FILE" ] && grep -qxF "$node" "$GLOBAL_BAD_FILE" 2>/dev/null; then
+        echo "[blacklist] bl_add_global: $node 已在 project-local 持久黑名單, 略過" >&2
+        return 0
+    fi
+    mkdir -p "$(dirname "$GLOBAL_BAD_FILE")" 2>/dev/null || true
+    if printf '%s\n' "$node" >> "$GLOBAL_BAD_FILE"; then
+        echo "[blacklist] bl_add_global: $node → $GLOBAL_BAD_FILE (project-local 持久; 不碰共用全域)" >&2
+        return 0
+    fi
+    echo "[blacklist] bl_add_global: 寫入 $GLOBAL_BAD_FILE 失敗(磁碟滿/權限?), 未加入" >&2
+    return 1
+}
+
 bl_live_list() {
     bl_nchc_unhealthy | paste -sd,
 }
