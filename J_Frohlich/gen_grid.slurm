@@ -8,7 +8,7 @@
 # 純 CPU 單核 numpy 工作 (Steger-Sorenson Poisson SOR, 上限 15000 iter,
 #   每 2000 iter 印 max_corr) — 不需 GPU。
 # ==============================================================================
-#SBATCH --job-name=Edit6_gridgen
+#SBATCH --job-name=Edit13_gridgen
 #SBATCH --account=MST115169
 #SBATCH --partition=dev
 #SBATCH --nodes=1

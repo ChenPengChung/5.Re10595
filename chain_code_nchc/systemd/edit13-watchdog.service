@@ -2,5 +2,5 @@
 Description=Edit13_2800ITBLBM health watchdog (daemon liveness + switch-mechanism audit; one-shot per timer tick)
 [Service]
 Type=oneshot
-WorkingDirectory=/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM
-ExecStart=/bin/bash /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/health_watchdog.sh
+WorkingDirectory=%h/5.Re10595/Edit13_2800ITBLBM
+ExecStart=/bin/bash %h/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/health_watchdog.sh

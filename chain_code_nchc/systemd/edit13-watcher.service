@@ -3,8 +3,8 @@ Description=Edit13_2800ITBLBM hill_watcher (convergence/benchmark plots -> live/
 StartLimitIntervalSec=0
 [Service]
 Type=simple
-WorkingDirectory=/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM
-ExecStart=/bin/bash /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/watcher_nchc/hill_watcher.sh
+WorkingDirectory=%h/5.Re10595/Edit13_2800ITBLBM
+ExecStart=/bin/bash %h/5.Re10595/Edit13_2800ITBLBM/watcher_nchc/hill_watcher.sh
 Restart=on-failure
 RestartSec=15
 [Install]

@@ -13,7 +13,7 @@
 #   - 保護活躍 owner: 若本節點正是目前 watcher 鎖的擁有者(心跳 host),直接跳過不殺。
 #
 # 用法: 逐一登入各登入節點(過 1/2/3 選單)後,執行:
-#         bash /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/clean_this_node.sh
+#         bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/clean_this_node.sh
 #       重複登入(gateway 會 load-balance 到不同節點)直到背景巡檢回報收斂、或下方
 #       「已清節點」清單涵蓋 lgn02 lgn03 lgn04 lgn05。lgn01(owner)會被自動跳過。
 set -u

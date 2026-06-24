@@ -34,7 +34,13 @@ exec >>"$LOG_FILE" 2>&1
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
 
 latest_solver_log() {
-    ls -t "$PROJECT_DIR"/slurm_*.log "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1
+    local f
+    f=$(ls -t "$PROJECT_DIR"/slurm_*.log 2>/dev/null | head -1)
+    if [[ -n "${f:-}" ]]; then
+        printf '%s\n' "$f"
+        return
+    fi
+    ls -t "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1
 }
 
 # ── 跨節點單例鎖 (atomic mkdir on shared FS) + heartbeat ──────────────────────
@@ -164,7 +170,7 @@ run_convergence() {
     local before_marker="$LIVE_DIR/.conv.marker.$$"
     : > "$before_marker"
 
-    capture=$(cd "$RESULT_DIR" && timeout "$CONV_TIMEOUT" python3.12 "$CONV_SCRIPT" --Re "$RE" 2>&1)
+    capture=$(cd "$RESULT_DIR" && timeout "$CONV_TIMEOUT" python3 "$CONV_SCRIPT" --Re "$RE" 2>&1)
     rc=$?
 
     if (( rc == 124 )); then
@@ -199,7 +205,7 @@ run_benchmark() {
     local before_marker="$LIVE_DIR/.bench.marker.$$"
     : > "$before_marker"
 
-    capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3.12 "$BENCH_SCRIPT" \
+    capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$BENCH_SCRIPT" \
         --Re "$RE" --no-ask-scales --no-ask-density 2>&1)
     rc=$?
 
@@ -229,7 +235,7 @@ run_tauwall() {
     local before_marker="$LIVE_DIR/.tauwall.marker.$$"
     : > "$before_marker"
 
-    capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3.12 "$TAUWALL_SCRIPT" \
+    capture=$(cd "$RESULT_DIR" && timeout "$BENCH_TIMEOUT" python3 "$TAUWALL_SCRIPT" \
         --Re "$RE" --auto 2>&1)
     rc=$?
 
@@ -270,7 +276,7 @@ while :; do
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
     # 每輪刷新 checklist.txt(daemon/chain 狀態檔即時清單); 唯讀掃描, 失敗不影響主循環。
     # 非零退出 = 非預期缺漏或產生器錯誤 → 只記一行警告供巡檢, 不中斷 watcher。
-    python3.12 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
+    python3 "$PROJECT_DIR/checklist.py" >/dev/null 2>&1 \
         || log "checklist: 產生器非零退出(非預期缺漏或錯誤, 詳見 checklist.txt)"
     RE=$(_read_re)
 

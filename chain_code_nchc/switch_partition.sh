@@ -28,6 +28,7 @@ JS="$CHAIN_DIR/jobscript_chain.slurm.H200"
 ACCT="${SWITCH_ACCT:-MST115169}"
 NODES="${SWITCH_NODES:-4}"      # 本案 jp=32 → 4 節點 × 8 GPU
 GPN="${SWITCH_GPN:-8}"          # gpus / node
+LOCKED_PARTITION="32gpus"
 
 [ -f "$JS" ] || { echo "FATAL: jobscript 不存在: $JS"; exit 1; }
 
@@ -77,6 +78,10 @@ fi
 
 # ---- switch 模式 ----
 P="$cmd"
+[ "$P" = "$LOCKED_PARTITION" ] || {
+  echo "[switch] FATAL: 本專案 partition 已鎖定 ${LOCKED_PARTITION}@jp32，不接受: $P"
+  exit 2
+}
 sinfo -h -p "$P" -o "%P" >/dev/null 2>&1 || { echo "[switch] FATAL: partition '$P' 不存在"; exit 2; }
 acct_allowed "$P" || { echo "[switch] FATAL: 帳號 $ACCT 無權使用 '$P'(AllowAccounts 限制,如 large/slinky 為 gov 專用)— 不切換"; exit 2; }
 

@@ -60,6 +60,11 @@ h200_set_partition() {
         echo "  可用: $(h200_known_partitions)"
         exit 1
     fi
+    if ! printf '%s\n' "$(h200_known_partitions)" | tr ' ' '\n' | grep -qxF "$part"; then
+        echo "[FATAL] 本專案 H200 partition 已鎖定 32gpus@jp32，不接受: $part"
+        echo "  可用: $(h200_known_partitions)"
+        exit 1
+    fi
     wt="$(h200_partition_walltime "$part")"
     if [ -z "$wt" ]; then
         echo "[FATAL] 不認識/不可用的 H200 partition: $part"

@@ -3,18 +3,16 @@
 # 根治: 取代會被 Edit7/2.Re1400 搶寫清掉的 cron-watchdog → systemd Restart=on-failure 守護,
 # enable-linger 讓其登出/reboot 也活, 且完全不碰 user crontab(無 lost-update race)。
 set -e
-ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
-CHAIN_DIR="$ROOT/chain_code_nchc"
+_SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
+CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 UDIR="$HOME/.config/systemd/user"
 mkdir -p "$UDIR"
 
-OLD_UNITS=(edit6-dispatcher.service edit6-watcher.service edit6-watchdog.service edit6-watchdog.timer)
+# 跨專案隔離: 絕不在此 disable/rm 任何 edit6-* unit —— 那是 RUNNING 中的 Edit6_5600DNS
+# 專案在共用 NFS ~/.config/systemd/user/ 下的 live daemon。移除會誤殺別專案的 daemon
+# (歷史 'watcher 暴增' 根因)。Edit13 只安裝/啟用自己的 edit13-* unit。
 NEW_UNITS=(edit13-dispatcher.service edit13-watcher.service edit13-watchdog.service edit13-watchdog.timer)
-
-for u in "${OLD_UNITS[@]}"; do
-    systemctl --user disable --now "$u" 2>/dev/null || true
-    rm -f "$UDIR/$u"
-done
 
 for u in "${NEW_UNITS[@]}"; do
     cp -f "$CHAIN_DIR/systemd/$u" "$UDIR/"

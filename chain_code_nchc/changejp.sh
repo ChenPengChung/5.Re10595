@@ -38,6 +38,11 @@ if ! [[ "$NEW_JP" =~ ^[0-9]+$ ]] || [ "$NEW_JP" -lt 1 ]; then
   echo "用法: bash changejp.sh <NEW_JP> [--apply] [--allow-running] [--force-stats-loss]" >&2
   exit 2
 fi
+if [ "$NEW_JP" -ne 32 ]; then
+  echo "[changejp][FATAL] 本專案 NCHC 起跑前已鎖定 jp=32；拒絕改成 jp=$NEW_JP" >&2
+  echo "                 若未來要解除鎖定，需同步調整 selector/jobscript/selfcheck 後再開放。" >&2
+  exit 2
+fi
 
 CHAIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT="$(cd "$CHAIN_DIR/.." && pwd)"   # project root = parent of chain_code_nchc/

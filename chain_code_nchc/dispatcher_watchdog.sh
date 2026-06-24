@@ -9,7 +9,7 @@
 # 該 daemon。兩者各自獨立檢查(不會因一個活著就略過另一個)。
 #
 # 安全: 只操作當前專案(Edit13_2800ITBLBM)自己的 daemon 與 sentinel; 絕不碰別專案。
-# 安裝:  crontab -e  ->  */5 * * * * /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/dispatcher_watchdog.sh
+# 安裝:  crontab -e  ->  */5 * * * * /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/dispatcher_watchdog.sh
 #        (亦會由 `./run dispatcher start` 自動確保此 crontab 存在)
 # =============================================================================
 _SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
