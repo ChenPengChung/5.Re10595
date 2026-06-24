@@ -13,7 +13,7 @@
 #   - 保護活躍 owner: 若本節點正是目前 watcher 鎖的擁有者(心跳 host),直接跳過不殺。
 #
 # 用法: 逐一登入各登入節點(過 1/2/3 選單)後,執行:
-#         bash /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code/clean_this_node.sh
+#         bash /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/clean_this_node.sh
 #       重複登入(gateway 會 load-balance 到不同節點)直到背景巡檢回報收斂、或下方
 #       「已清節點」清單涵蓋 lgn02 lgn03 lgn04 lgn05。lgn01(owner)會被自動跳過。
 set -u
@@ -39,7 +39,7 @@ if [ -n "$OWNER" ] && [ "$H" = "$OWNER" ]; then
 fi
 
 # ── 1) 停掉本節點的三個 unit(per-node runtime;不碰共享 enable symlink)──────────
-systemctl --user stop edit6-watcher edit6-dispatcher edit6-watchdog.timer 2>/dev/null || true
+systemctl --user stop edit13-watcher.service edit13-dispatcher.service edit13-watchdog.timer 2>/dev/null || true
 
 # ── 2) 殺殘留程序 — 僅限 cwd == 本專案者(跨專案安全)────────────────────────────
 killed=0

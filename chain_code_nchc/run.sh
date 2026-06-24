@@ -51,8 +51,8 @@
 set -eo pipefail   # 不使用 -u: hpcx-init.sh 會踩 unbound variable
 
 # ── [方案 A path discipline] 自我定位 + 鎖 cwd 到 PROJECT_ROOT ────────────────
-# 本 script 位於 chain_code/, 但許多相對路徑 (restart/, a.out, result/, .run.lock)
-# 都在 PROJECT_ROOT. 其他 chain_code/ 內的同伴 script 則透過 $CHAIN_DIR 絕對路徑呼叫.
+# 本 script 位於 chain_code_nchc/, 但許多相對路徑 (restart/, a.out, result/, .run.lock)
+# 都在 PROJECT_ROOT. 其他 chain_code_nchc/ 內的同伴 script 則透過 $CHAIN_DIR 絕對路徑呼叫.
 _SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
 CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
 PROJECT_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
@@ -822,7 +822,7 @@ _run_regrid_pipeline() {
     # Step C: 執行 checkpoint interpolation
     if [ "${MODE_DEFER_GEN:-0}" -eq 1 ]; then
         echo "[case-2] --defer-gen: 略過 login-node inline interp。維度驗證 (Step A/B) 已通過。"
-        echo "          種子場改由 chain job 在計算節點 (64gpus@jp64) 自行生成 (一條龍, 不空出 partition)。"
+        echo "          種子場改由 chain job 在計算節點 (32gpus@jp32) 自行生成 (一條龍, 不空出 partition)。"
         HAS_CKPT=0; HAS_STATE=0
         return 0
     fi

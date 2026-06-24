@@ -107,11 +107,11 @@ if [ -f restart/STOP_NOCAPACITY ]; then
 fi
 
 # ── [守護機制改用 systemd; 已脫離 crontab race] ──
-# 本專案 dispatcher 現由 systemd user service `edit6-dispatcher.service`(Restart=on-failure +
+# 本專案 dispatcher 現由 systemd user service `edit13-dispatcher.service`(Restart=on-failure +
 # enable-linger)守護, 死了 systemd 自動重啟, 完全不碰 user crontab(避免與 Edit7/2.Re1400 搶寫
-# 同一 crontab 造成 lost-update→watchdog 消失的歷史故障)。安裝: bash chain_code/install_systemd.sh。
+# 同一 crontab 造成 lost-update→watchdog 消失的歷史故障)。安裝: bash chain_code_nchc/install_systemd.sh。
 # 本腳本(dispatcher_start.sh)保留為「無 systemd 環境」的手動 fallback, 不再自動裝 cron。
-echo "[dispatcher_start] (note) 守護建議用 systemd: bash chain_code/install_systemd.sh (Restart=on-failure, 不碰 crontab)"
+echo "[dispatcher_start] (note) 守護建議用 systemd: bash chain_code_nchc/install_systemd.sh (Restart=on-failure, 不碰 crontab)"
 
 if [ "$FOREGROUND" -eq 1 ]; then
     echo "[dispatcher_start] 前景模式啟動 (Ctrl+C 可停)"

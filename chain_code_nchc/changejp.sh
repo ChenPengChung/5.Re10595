@@ -39,13 +39,14 @@ if ! [[ "$NEW_JP" =~ ^[0-9]+$ ]] || [ "$NEW_JP" -lt 1 ]; then
   exit 2
 fi
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # project root = parent of chain_code/
+CHAIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$CHAIN_DIR/.." && pwd)"   # project root = parent of chain_code_nchc/
 cd "$ROOT"
 VH="variables.h"
-JS_H200="chain_code/jobscript_chain.slurm.H200"
-JS_GB200="chain_code/jobscript_chain.slurm.GB200"
+JS_H200="$CHAIN_DIR/jobscript_chain.slurm.H200"
+JS_GB200="$CHAIN_DIR/jobscript_chain.slurm.GB200"
 PROV="restart/grid_provenance"
-REPART="chain_code/repartition_jp.py"
+REPART="$CHAIN_DIR/repartition_jp.py"
 
 say()  { printf '%s\n' "$*"; }
 hr()   { printf -- '----------------------------------------------------------------------\n'; }
@@ -211,9 +212,9 @@ rm -f restart/STOP_CHAIN
 
 say "[9/9] dispatcher start + watcher"
 ./run dispatcher start || true
-if [ -f watcher/hill_watcher.sh ]; then
+if [ -f watcher_nchc/hill_watcher.sh ]; then
   pkill -F live/watcher.pid 2>/dev/null || true; rm -f live/watcher.pid 2>/dev/null || true
-  nohup bash watcher/hill_watcher.sh > /dev/null 2>&1 &
+  nohup bash watcher_nchc/hill_watcher.sh > /dev/null 2>&1 &
   say "      watcher 重啟"
 fi
 hr

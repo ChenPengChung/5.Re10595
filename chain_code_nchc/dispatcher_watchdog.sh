@@ -2,17 +2,19 @@
 # =============================================================================
 # dispatcher_watchdog.sh — 讓 Edit13_2800ITBLBM 的兩個 daemon 不靠運氣地活著:
 #   (A) dispatcher (submit_dispatcher.sh) — 自動續投/切換的大腦
-#   (B) hill_watcher (watcher/hill_watcher.sh) — 產生 live/monitor_latest.png 收斂圖
+#   (B) hill_watcher (watcher_nchc/hill_watcher.sh) — 產生 live/monitor_latest.png 收斂圖
 #
 # 設計給 login-node crontab 每 ~5 分鐘跑一次。任一 daemon 程序死掉(crash/被殺/
 # node-reboot)且使用者沒有要求停鏈(無 STOP_CHAIN),就清掉殘留 + 重啟「本專案自己的」
 # 該 daemon。兩者各自獨立檢查(不會因一個活著就略過另一個)。
 #
 # 安全: 只操作當前專案(Edit13_2800ITBLBM)自己的 daemon 與 sentinel; 絕不碰別專案。
-# 安裝:  crontab -e  ->  */5 * * * * /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code/dispatcher_watchdog.sh
+# 安裝:  crontab -e  ->  */5 * * * * /home/chenpengchung/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/dispatcher_watchdog.sh
 #        (亦會由 `./run dispatcher start` 自動確保此 crontab 存在)
 # =============================================================================
-ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
+_SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
+CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
 cd "$ROOT" || exit 1
 LOG="restart/dispatcher_watchdog.log"
 
@@ -40,7 +42,7 @@ wp=$(cat live/watcher.pid 2>/dev/null | tr -d '[:space:]')
 if [ -z "$wp" ] || ! kill -0 "$wp" 2>/dev/null; then
     {
         echo "[$(date '+%F %T')] watchdog: hill_watcher 已死 (pid='${wp:-none}') -> 重啟 (hill_watcher_start.sh 自帶 dup-guard)"
-        bash watcher/hill_watcher_start.sh
+        bash watcher_nchc/hill_watcher_start.sh
         nwp=$(cat live/watcher.pid 2>/dev/null | tr -d '[:space:]')
         if [ -n "$nwp" ] && kill -0 "$nwp" 2>/dev/null; then
             echo "[$(date '+%F %T')] watchdog: hill_watcher 重啟成功 新 PID=$nwp"

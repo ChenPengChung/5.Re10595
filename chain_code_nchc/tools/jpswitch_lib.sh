@@ -5,7 +5,7 @@
 #
 # Given a target jp N, make a jp=N round READY TO SUBMIT:
 #   1) repartition the latest checkpoint (stats-preserving, bit-exact via
-#      chain_code/repartition_jp.py — verified once by roundtrip_verify.sh),
+#      chain_code_nchc/repartition_jp.py — verified once by roundtrip_verify.sh),
 #   2) swap in the pre-built a.out.jp<N> (cp only — NEVER nvcc in this path),
 #   3) update variables.h jp + jobscript --nodes + grid_provenance mtime.
 # The caller submits. On ANY failure the current checkpoint / binary / variables
@@ -17,16 +17,19 @@
 #   jpswitch_binary_ready <N>           -> rc0 if a.out.jp<N> present (+manifest md5 if recorded)
 #   jpswitch_record_manifest <N>        -> record a.out.jp<N> md5 into the manifest
 #   jpswitch_apply <N>                  -> perform the switch; rc0 ok (2=binary,3=repart,4=verify,5=cp)
-# Depends on: cwd=PROJECT_ROOT; chain_code/repartition_jp.py; restart/checkpoint/latest.
+# Depends on: cwd=PROJECT_ROOT; chain_code_nchc/repartition_jp.py; restart/checkpoint/latest.
 # =============================================================================
 
+_JPS_HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+JPSWITCH_CHAIN_DIR="${JPSWITCH_CHAIN_DIR:-$(cd "$_JPS_HERE/.." && pwd)}"
+
 JPSWITCH_VH="${JPSWITCH_VH:-variables.h}"
-JPSWITCH_REPART="${JPSWITCH_REPART:-chain_code/repartition_jp.py}"
+JPSWITCH_REPART="${JPSWITCH_REPART:-$JPSWITCH_CHAIN_DIR/repartition_jp.py}"
 JPSWITCH_PROV="${JPSWITCH_PROV:-restart/grid_provenance}"
 JPSWITCH_MANIFEST="${JPSWITCH_MANIFEST:-restart/binary_manifest.dat}"
 JPSWITCH_LATEST="${JPSWITCH_LATEST:-restart/checkpoint/latest}"
-JPSWITCH_JS_H200="${JPSWITCH_JS_H200:-chain_code/jobscript_chain.slurm.H200}"
-JPSWITCH_JS_GB200="${JPSWITCH_JS_GB200:-chain_code/jobscript_chain.slurm.GB200}"
+JPSWITCH_JS_H200="${JPSWITCH_JS_H200:-$JPSWITCH_CHAIN_DIR/jobscript_chain.slurm.H200}"
+JPSWITCH_JS_GB200="${JPSWITCH_JS_GB200:-$JPSWITCH_CHAIN_DIR/jobscript_chain.slurm.GB200}"
 
 _jps_log() { printf '[jpswitch] %s\n' "$*" >&2; }
 

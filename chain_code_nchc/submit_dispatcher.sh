@@ -59,7 +59,7 @@ fi
 
 # [systemd/standalone] 自寫 pid + DISPATCHER_ACTIVE sentinel, 讓 jobscript hand-off 檢查
 # (kill -0 dispatcher.pid + [ -f DISPATCHER_ACTIVE ]) 認得本 daemon 活著。
-# 無論由 systemd (edit6-dispatcher.service) 或 dispatcher_start.sh 啟動皆正確; trap 在退出時清除。
+# 無論由 systemd (edit13-dispatcher.service) 或 dispatcher_start.sh 啟動皆正確; trap 在退出時清除。
 mkdir -p restart 2>/dev/null
 echo $$ > restart/dispatcher.pid 2>/dev/null || true
 echo $$ > DISPATCHER_ACTIVE 2>/dev/null || true
@@ -397,7 +397,7 @@ submit_round() {
         cur="$(grep -E '^#define[[:space:]]+jp[[:space:]]+[0-9]+' variables.h | grep -oE '[0-9]+' | head -1)"
     fi
     cur="${cur:-32}"
-    local jobscript="chain_code/jobscript_chain.slurm.H200"
+    local jobscript="$CHAIN_DIR/jobscript_chain.slurm.H200"
 
     if [ ! -f "$jobscript" ]; then
         log "ERROR: 找不到 $jobscript"
@@ -595,7 +595,7 @@ fi
 # race-guard) 後 re-select 能更快開跑的組合. 滿足使用者切換時機 (b): pending 時重選.
 # [TEMP-LOCK 2026-06-12] 暫時關閉 PENDING-churn: 原預設 10min 太短, GPU 滿載時每 10min
 #   cancel+重投 → 永遠累積不到排隊年資、撐不到 backfill 窗。調高到 1440(=24h) 等同不 churn,
-#   讓 head 撐住 16gpus 保留位開跑。解鎖還原: 改回 "${SC_PENDING_TIMEOUT_MIN:-10}"
+#   讓 head 撐住目前鎖定 partition 保留位開跑。解鎖還原: 改回 "${SC_PENDING_TIMEOUT_MIN:-10}"
 SC_PENDING_TIMEOUT_MIN="${SC_PENDING_TIMEOUT_MIN:-1440}"
 _pending_too_long() {
     local jid st pe now age

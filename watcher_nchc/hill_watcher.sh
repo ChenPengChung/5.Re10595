@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# hill_watcher.sh — Periodic Hill Re5600 watcher loop
+# hill_watcher.sh — Periodic Hill Re2800 ITB-LBM watcher loop
 set -u
 
 _SELF="${BASH_SOURCE[0]:-$0}"
@@ -17,7 +17,7 @@ TAUWALL_SCRIPT="$RESULT_DIR/10.tau_wall_benchmark.py"
 _read_re() {
     local re
     re=$(awk '$1=="#define" && $2=="Re" {print $3; exit}' "$PROJECT_DIR/variables.h" 2>/dev/null | tr -d '[:space:]')
-    printf '%s\n' "${re:-5600}"
+    printf '%s\n' "${re:-2800}"
 }
 RE=$(_read_re)
 POLL_SEC=30
@@ -32,6 +32,10 @@ mkdir -p "$LIVE_DIR"
 exec >>"$LOG_FILE" 2>&1
 
 log() { printf '[%s] %s\n' "$(date '+%F %T')" "$*"; }
+
+latest_solver_log() {
+    ls -t "$PROJECT_DIR"/slurm_*.log "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1
+}
 
 # ── 跨節點單例鎖 (atomic mkdir on shared FS) + heartbeat ──────────────────────
 # 因 ~/.config/systemd/user 在共享 home → systemd enable 等於全 5 個登入節點都啟用 →
@@ -111,7 +115,7 @@ is_size_stable() {
 
 get_accu_count() {
     local slurm_log
-    slurm_log=$(ls -t "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1)
+    slurm_log=$(latest_solver_log)
     [[ -n "$slurm_log" ]] || { echo 0; return; }
     grep -oP 'accu=\K[0-9]+' "$slurm_log" | tail -1 || echo 0
 }
@@ -132,21 +136,21 @@ get_bench_gate_ftt() {
 
 get_latest_ftt() {
     local slurm_log
-    slurm_log=$(ls -t "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1)
+    slurm_log=$(latest_solver_log)
     [[ -n "$slurm_log" ]] || { echo "0.00"; return; }
     grep -oP 'FTT=\K[0-9.]+' "$slurm_log" | tail -1 || echo "0.00"
 }
 
 get_latest_metrics() {
     local slurm_log
-    slurm_log=$(ls -t "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1)
+    slurm_log=$(latest_solver_log)
     [[ -n "$slurm_log" ]] || return
     grep '^\[Step' "$slurm_log" | tail -1
 }
 
 check_nan_divergence() {
     local slurm_log
-    slurm_log=$(ls -t "$PROJECT_DIR"/run_local_*.log 2>/dev/null | head -1)
+    slurm_log=$(latest_solver_log)
     [[ -n "$slurm_log" ]] || return 0
     if tail -200 "$slurm_log" | grep -qiE 'nan|inf|diverge|ABORT|FATAL'; then
         log "WARNING: NaN/divergence detected in $slurm_log"

@@ -3,12 +3,9 @@
 # select_combo_lib.sh — net-throughput (jp × partition) selector for the chain daemon.
 #
 # Picks the (jp, partition) combo that advances the most FTT over a decision
-# horizon. (NOTE 2026-06-05 NCHC policy: jp is LOCKED at 32; the candidate set is the
-# three partitions {8gpus,16gpus,32gpus}, each with per-account GPU cap 32 ≥ jp32, so
-# the selector effectively picks the partition with the earliest start (free headroom).
-# dev (cap=4) and 64gpus (needs jp64+finer grid) are excluded. If all three are
-# cap-blocked the selector returns no-combo and the dispatcher retries — see
-# submit_dispatcher no-capacity trap.)
+# horizon. Edit13 NCHC preparation intentionally hard-locks the selector to
+# 32gpus@jp32: Re2800, grid size, and ITB-LBM stay project-specific, while the
+# hardware-side chain machinery remains aligned with the established dispatcher model.
 #
 #   net(c) = r_ftt(jp) · max(0, H − startdelay − overhead)
 #     overhead = nrounds·restart_ovh + (jp≠current ? switch_ovh : 0),  nrounds = max(1,(H−sd)/walltime)
@@ -30,28 +27,22 @@
 # Depends on: cwd=PROJECT_ROOT; partition_lib.sh + jpswitch_lib.sh (sourced below).
 # =============================================================================
 
+_sc_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SC_CHAIN_DIR="$(cd "$_sc_here/.." && pwd)"
+SC_PROJECT_ROOT="$(cd "$SC_CHAIN_DIR/.." && pwd)"
+
 SC_ACCT="${SC_ACCT:-MST115169}"
 # [NCHC 2026-06-05 政策改版] 舊 federated normal/4nodes/large 已 State=INACTIVE 不可投;
 #   新單叢集 H200 partition = dev / 8gpus / 16gpus / 32gpus / 64gpus, per-account GPU cap
 #   由 QOS p_<partition> MaxTRESPerAccount 決定: dev=4, 8gpus=32, 16gpus=32, 32gpus=32, 64gpus=64。
 #
-# [本專案 partition@jp 政策] jp 鎖定 32 (= 32 GPU = 4 H200 node)。關鍵發現: 單一帳號最高可在
-#   "16gpus" partition 填滿 32 GPU (QOS p_16gpus cap=32) → jp=32 在 8gpus/16gpus/32gpus 三者皆 ≤cap。
-#   暫時鎖定 (jobscript header 預設) = 16gpus@jp32 (2-day walltime);
-#   自由切換候選集 = {8gpus, 16gpus, 32gpus} × jp32 → 本選擇器抓最佳 net-throughput partition。
-#   完全開啟原則: 每一組都「實際評估後才跳過(帶理由)」, 不盲目預排除 (見 sc_audit / sc_enumerate)。
-#   - 8gpus : cap=32 ≥ jp32 → 可投 (2-day walltime)。a.out.jp32 ready。
-#   - 16gpus: cap=32 ≥ jp32 → 可投 (2-day walltime)。← 暫時鎖定的預設 partition。
-#   - 32gpus: cap=32 ≥ jp32 → 可投 (1-day walltime)。
-#   (dev cap=4 < 32、64gpus 需 jp64 + 更細網格; 兩者皆不在候選集。)
-#   帳號手足 job 佔滿某 partition 的 cap 時該組 QOS-BLOCK 罰分不投, 換有空檔的 partition (never-idle)。
-SC_VALID_JP="${SC_VALID_JP:-64}"
-# [EDIT13 Krank5600 warm-start regrid] jp 鎖定 64 (269M 細網格), 唯一容得下 jp=64 的 partition
-#   = 64gpus (per-account cap=64)。dispatcher 只在 64gpus 內續投, 不做 jp-切換、不跳別 partition。
-SC_PARTITIONS="${SC_PARTITIONS:-64gpus}"
+# [本專案 partition@jp 政策] jp 鎖定 32 (= 32 GPU = 4 H200 node)，partition 鎖定
+#   32gpus。selector 仍保留既有評估/稽核流程，但候選集只有 32gpus@jp32。
+SC_VALID_JP="${SC_VALID_JP:-32}"
+SC_PARTITIONS="${SC_PARTITIONS:-32gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
-SC_JS="${SC_JS:-chain_code/jobscript_chain.slurm.H200}"
+SC_JS="${SC_JS:-$SC_CHAIN_DIR/jobscript_chain.slurm.H200}"
 SC_TPDB="${SC_TPDB:-restart/throughput_by_jp.dat}"
 SC_R32_DEFAULT="${SC_R32_DEFAULT:-0.93}"       # bootstrap FTT/hr @ jp=32 (measured 2026-06-02)
 SC_SCALE_EXP="${SC_SCALE_EXP:-0.85}"           # sub-linear weak-scaling exponent
@@ -61,7 +52,6 @@ SC_RESTART_OVH_H="${SC_RESTART_OVH_H:-0}"   # ~3 min per-round restart
 SC_SWITCH_OVH_H="${SC_SWITCH_OVH_H:-0.1}"      # ~6 min repartition when jp changes
 SC_CAPBLOCK_SD_H="${SC_CAPBLOCK_SD_H:-24}"     # startdelay assigned to a cap-blocked combo
 
-_sc_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$_sc_here/partition_lib.sh"
 . "$_sc_here/jpswitch_lib.sh"
 

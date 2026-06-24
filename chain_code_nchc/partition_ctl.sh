@@ -2,11 +2,10 @@
 # partition_ctl.sh — partition 管理 CLI (arch-aware: x86_64→H200, aarch64→GB200)
 # 用法: ./run partition [list|set|reset|<name>]
 #
-# [H200 / x86_64] 本專案 jp 鎖定 32。此 CLI 重設「暫時鎖定」的 partition:
+# [H200 / x86_64] 本專案 jp 鎖定 32，partition 鎖定 32gpus。此 CLI 重設鎖定值:
 #   改寫 jobscript_chain.slurm.H200 的 #SBATCH --partition / --time (= 直接 ./run 投遞 +
 #   jobscript 自我續投 fallback 的權威預設), 並記錄 restart/h200_partition。
-#   dispatcher 運行中仍會在候選集 {8gpus,16gpus,32gpus} 自由切換, 不受此鎖定約束。
-#   可用: 8gpus / 16gpus / 32gpus (三者 per-account GPU cap=32 ≥ jp32)。
+#   dispatcher 候選集同樣鎖在 32gpus@jp32，不做跨 H200 partition 切換。
 # [GB200 / aarch64] 沿用既有 pin-file (restart/gb200_partition) 機制, 行為不變。
 
 set -eo pipefail
@@ -49,10 +48,9 @@ h200_show_list() {
     echo "═══════════════════════════════════════════════════════════"
     echo ""
     echo " 用法:"
-    echo "   ./run partition <8gpus|16gpus|32gpus>   重設暫時鎖定的 partition"
+    echo "   ./run partition 32gpus                  重設鎖定的 partition"
     echo "   ./run partition reset                   清除 restart/h200_partition 記錄 (header 不變)"
-    echo " 注意: dispatcher 運行中會在 {8gpus,16gpus,32gpus} 自由切換 net-best; 鎖定僅作用於"
-    echo "       直接 ./run 投遞 + jobscript 自我續投 fallback。"
+    echo " 注意: dispatcher 候選集同樣鎖在 32gpus@jp32; 此設定同步直接投遞/fallback。"
 }
 
 h200_set_partition() {
@@ -82,7 +80,7 @@ h200_set_partition() {
     echo "已鎖定 H200 partition=$part  walltime=$wt  (jp=${jp:-?} 不變, $(( ${jp:-0} / 8 )) node)"
     echo "  jobscript header 已更新; restart/h200_partition 已記錄。"
     if [ -f "$PROJECT_ROOT/DISPATCHER_ACTIVE" ]; then
-        echo "  注意: dispatcher 運行中, 它仍會在候選集自由切換; 此鎖定僅影響直接投遞/fallback。"
+        echo "  注意: dispatcher 候選集同樣鎖在 32gpus@jp32。"
     fi
 }
 

@@ -28,15 +28,16 @@ gb200_known_partitions() {
 h200_partition_walltime() {
     case "$1" in
         8gpus)   echo "2-00:00:00" ;;   # 2 day, QOS cap 32 GPU/acct
-        16gpus)  echo "2-00:00:00" ;;   # 2 day, QOS cap 32 GPU/acct  ← 本專案暫時鎖定的 partition
-        32gpus)  echo "1-00:00:00" ;;   # 1 day, QOS cap 32 GPU/acct
+        16gpus)  echo "2-00:00:00" ;;   # 2 day, QOS cap 32 GPU/acct
+        32gpus)  echo "1-00:00:00" ;;   # 1 day, QOS cap 32 GPU/acct ← Edit13 鎖定 partition
         64gpus)  echo "1-00:00:00" ;;   # 1 day, QOS cap 64 GPU/acct (需 jp64 + 更細網格)
         dev)     echo "4:00:00"    ;;   # 4 hour, QOS cap 4 GPU/acct (jp32 不適用)
         *)       echo "" ;;
     esac
 }
-# [EDIT13] jp 鎖定 64 → 候選集含 64gpus (cap=64, 唯一容得下 jp=64; 見 select_combo_lib.sh SC_PARTITIONS)。
-h200_known_partitions() { echo "8gpus 16gpus 32gpus 64gpus"; }
+# [EDIT13] H200 起跑前鎖定 32gpus@jp32；其他 H200 partition 保留於 walltime/cap map,
+# 但 CLI/dispatcher 候選只暴露 32gpus，避免誤切。
+h200_known_partitions() { echo "32gpus"; }
 
 h200_partition_cap() {   # static per-account GPU cap (QOS MaxTRESPerAccount, verified 2026-06-05)
     case "$1" in 8gpus|16gpus|32gpus) echo 32 ;; 64gpus) echo 64 ;; dev) echo 4 ;; *) echo 0 ;; esac

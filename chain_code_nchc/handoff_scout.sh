@@ -153,7 +153,7 @@ case "$ST" in
       *) cls="other:$rsn";;
     esac
     if [ "$page" -ge "$WARN_SEC" ]; then
-      emit WARN "round=$CNT successor=$CUR PENDING ${page}s (>=${WARN_SEC}s) reason=$rsn [$cls]. If self-submitted on 16gpus it can't reselect; dispatcher reselects after 10min if alive.$DUP_NOTE"
+      emit WARN "round=$CNT successor=$CUR PENDING ${page}s (>=${WARN_SEC}s) reason=$rsn [$cls]. If self-submitted on the locked partition it can't reselect; dispatcher reselects after 10min if alive.$DUP_NOTE"
       exit 30
     fi
     emit HANDOFF "round=$CNT successor=$CUR PENDING ${page}s reason=$rsn [$cls] (grabbing).$DUP_NOTE"
@@ -172,7 +172,7 @@ case "$ST" in
       emit HANDOFF "head=$CUR just ended ($ST, ${age}s ago); awaiting successor (grace ${DEAD_GRACE_SEC}s).$DUP_NOTE"
       exit 20
     fi
-    emit CRITICAL "DEAD CHAIN? head=$CUR $ST ${age}s ago, chain_jobid still=$CUR (no successor) & no STOP_CHAIN. Both submitters may have failed. Check: jobscript Section-7 / systemd edit6-dispatcher / sacct lineage.$DUP_NOTE"
+    emit CRITICAL "DEAD CHAIN? head=$CUR $ST ${age}s ago, chain_jobid still=$CUR (no successor) & no STOP_CHAIN. Both submitters may have failed. Check: jobscript Section-7 / systemd edit13-dispatcher / sacct lineage.$DUP_NOTE"
     exit 40
     ;;
 

@@ -7,24 +7,26 @@
 #       「帳號實際可用」的 partition,walltime 自動 cap 到該 partition 上限。
 #
 # 用法:
-#   bash chain_code/switch_partition.sh list
+#   bash chain_code_nchc/switch_partition.sh list
 #        列出所有「含 H200 GPU 的 partition」+ 帳號可否用 + walltime 上限 + idle GPU 節點數
 #
-#   bash chain_code/switch_partition.sh <partition>
+#   bash chain_code_nchc/switch_partition.sh <partition>
 #        切換到該 partition,walltime 自動設為該 partition 的上限(最長)
 #
-#   bash chain_code/switch_partition.sh <partition> <D-HH:MM:SS>
+#   bash chain_code_nchc/switch_partition.sh <partition> <D-HH:MM:SS>
 #        指定 walltime(超過 partition 上限會自動 cap)
 #
 # 安全: 切換前以 sbatch --test-only 做權威驗證(帳號授權 + partition 有效 +
-#       8 節點 GPU 可排)。不可用 → 拒絕切換,不動 jobscript。
+#       4 節點 GPU 可排)。不可用 → 拒絕切換,不動 jobscript。
 #       只改 #SBATCH --partition / --time 兩行;先備份 jobscript。
 # =============================================================================
 set -u
-ROOT="/home/chenpengchung/5.Re10595/Edit13_2800ITBLBM"
-JS="$ROOT/chain_code/jobscript_chain.slurm.H200"
+_SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
+CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
+JS="$CHAIN_DIR/jobscript_chain.slurm.H200"
 ACCT="${SWITCH_ACCT:-MST115169}"
-NODES="${SWITCH_NODES:-8}"      # 本案 jp=64 → 8 節點 × 8 GPU
+NODES="${SWITCH_NODES:-4}"      # 本案 jp=32 → 4 節點 × 8 GPU
 GPN="${SWITCH_GPN:-8}"          # gpus / node
 
 [ -f "$JS" ] || { echo "FATAL: jobscript 不存在: $JS"; exit 1; }
