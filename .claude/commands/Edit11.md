@@ -43,6 +43,12 @@ FTT 前進(maxstep 增、非卡 restart 點)、Error<1e-5、Ma_max<0.1、無 NaN
 **[★9] cluster** — 真健康 idle:`sinfo -h -p 64gpus -t idle -N -o '%N %E'` 數 **reason=none**(扣黑名單)的節點
 (★`sinfo -t idle` 看到的「idle」很多其實 drained DRAM error/保留,要看 reason 欄);+ 本帳號 RUNNING GPU。
 
+**[★9b] 黑名單自動瘦身**(防過肥 → PENDING 飢餓)— 對 `restart/bad_nodes_global_local` 每個節點稽核:
+`sinfo -h -n <node> -o '%T %E'` 看 state/drain + `squeue -h -w <node> -t RUNNING -o '%u %M'` 看其他 user 的 job。
+**移除條件(全部滿足)**:(a) 非 drained(reason=none)、(b) **正被其他使用者的 job 穩定運行 >3h**(別人測過健康)、
+(c) 非「我近 ~2-3h 內才 hang/崩潰加入」的節點(剛失敗的留著觀察)。移除 = 從檔案刪該行(**純節點名、絕不留
+# 註解**;先 `cp` 備份);只影響下次 submit、不碰 running job。drained / idle 無 job / 剛失敗 → 保留。回報移除/保留清單。
+
 **守門(MUST)**:絕不 `systemctl/cp/rm` 任何 `edit6-*`;不碰別專案 job/daemon/checkpoint;`scancel` 只用
 `./run job-guard scancel <明確 jobid>`(帶變數會被 hook 擋);blacklist 數據檔一律純節點名。
 **節奏**:正常 ~3600s;walltime 近(elapsed≥22h)或復原中收緊 ~900s;穩定 RUNNING + FTT 前進 + MLUPS 正常 → 回 ~3600s。
