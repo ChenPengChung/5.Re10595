@@ -23,7 +23,7 @@ JS_H200="$CHAIN_DIR/jobscript_chain.slurm.H200"
 QUIET=0; [ "${1:-}" = "-q" ] && QUIET=1
 
 EXP_JP=32
-EXP_PIN="dev"
+EXP_PIN="32gpus"
 EXP_VALID_JP="32"
 EXP_PARTS="32gpus"
 

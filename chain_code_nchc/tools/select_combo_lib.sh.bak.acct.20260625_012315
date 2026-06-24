@@ -31,7 +31,7 @@ _sc_here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SC_CHAIN_DIR="$(cd "$_sc_here/.." && pwd)"
 SC_PROJECT_ROOT="$(cd "$SC_CHAIN_DIR/.." && pwd)"
 
-SC_ACCT="${SC_ACCT:-MST114348}"
+SC_ACCT="${SC_ACCT:-MST115169}"
 # [NCHC 2026-06-05 政策改版] 舊 federated normal/4nodes/large 已 State=INACTIVE 不可投;
 #   新單叢集 H200 partition = dev / 8gpus / 16gpus / 32gpus / 64gpus, per-account GPU cap
 #   由 QOS p_<partition> MaxTRESPerAccount 決定: dev=4, 8gpus=32, 16gpus=32, 32gpus=32, 64gpus=64。

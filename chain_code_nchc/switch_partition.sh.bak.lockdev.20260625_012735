@@ -28,7 +28,7 @@ JS="$CHAIN_DIR/jobscript_chain.slurm.H200"
 ACCT="${SWITCH_ACCT:-MST115169}"
 NODES="${SWITCH_NODES:-4}"      # 本案 jp=32 → 4 節點 × 8 GPU
 GPN="${SWITCH_GPN:-8}"          # gpus / node
-LOCKED_PARTITION="dev"
+LOCKED_PARTITION="32gpus"
 
 [ -f "$JS" ] || { echo "FATAL: jobscript 不存在: $JS"; exit 1; }
 

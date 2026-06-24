@@ -2,7 +2,7 @@
 # partition_ctl.sh — partition 管理 CLI (arch-aware: x86_64→H200, aarch64→GB200)
 # 用法: ./run partition [list|set|reset|<name>]
 #
-# [H200 / x86_64] 本專案 jp 鎖定 32，partition 鎖定 dev。此 CLI 重設鎖定值:
+# [H200 / x86_64] 本專案 jp 鎖定 32，partition 鎖定 32gpus。此 CLI 重設鎖定值:
 #   改寫 jobscript_chain.slurm.H200 的 #SBATCH --partition / --time (= 直接 ./run 投遞 +
 #   jobscript 自我續投 fallback 的權威預設), 並記錄 restart/h200_partition。
 #   dispatcher 候選集同樣鎖在 32gpus@jp32，不做跨 H200 partition 切換。
@@ -48,7 +48,7 @@ h200_show_list() {
     echo "═══════════════════════════════════════════════════════════"
     echo ""
     echo " 用法:"
-    echo "   ./run partition dev                     重設鎖定的 partition"
+    echo "   ./run partition 32gpus                  重設鎖定的 partition"
     echo "   ./run partition reset                   清除 restart/h200_partition 記錄 (header 不變)"
     echo " 注意: dispatcher 候選集同樣鎖在 32gpus@jp32; 此設定同步直接投遞/fallback。"
 }
@@ -61,7 +61,7 @@ h200_set_partition() {
         exit 1
     fi
     if ! printf '%s\n' "$(h200_known_partitions)" | tr ' ' '\n' | grep -qxF "$part"; then
-        echo "[FATAL] 本專案 H200 partition 已鎖定 dev@jp32，不接受: $part"
+        echo "[FATAL] 本專案 H200 partition 已鎖定 32gpus@jp32，不接受: $part"
         echo "  可用: $(h200_known_partitions)"
         exit 1
     fi
