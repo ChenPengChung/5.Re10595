@@ -34,6 +34,11 @@
 : "${BLACKLIST_MAX_PCT:=50}"
 : "${BAD_NODES_FILE:=restart/bad_nodes}"
 : "${GLOBAL_BAD_FILE:=$HOME/.bad_nodes_global}"
+# [Edit13 2026-06-24 project-local 脫鉤] 本專案專屬最小 global 黑名單,不碰共用
+# ~/.bad_nodes_global(其他專案各有自己的 lib,不受影響)。stale 節點交給 watchdog(當輪
+# 自動排除)+ NCHC-live(真 drained 自動排除)動態處理,避免過度排除造成飢餓 PENDING。
+# 回復: 刪除下面這一行即回到 ~/.bad_nodes_global 預設。
+GLOBAL_BAD_FILE="/home/s8313697/5.Re10595/Edit13_2800ITBLBM/restart/bad_nodes_global_local"
 
 # ─────────────────────────────────────────────────────────────────────────
 # 內部 helper: 把 Slurm state 字串分類
