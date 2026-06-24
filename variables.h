@@ -135,10 +135,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      257        // [LOCAL-TEST] 展向格點 (was 404)
+#define     NX      257         // [LOCAL-TEST] 展向格點 (was 404)
 #define     NY      513         // [LOCAL-TEST] 流向格點 (was 769; 512=8×64 ✓ 滿足 (NY-1)%jp==0, jp=8)
 #define     NZ      257         // [LOCAL-TEST] 法向格點 (was 750)
-#define     jp      8          //  [LOCAL-TEST] GPU 數量 (流向分割; 本地 1 台 8×V100 整台獨佔)
+#define     jp      32          //  [LOCAL-TEST] GPU 數量 (流向分割; 本地 1 台 8×V100 整台獨佔)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
