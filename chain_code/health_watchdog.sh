@@ -3,8 +3,9 @@
 # health_watchdog.sh — Edit11_Krank5600 24/7 健康守護 (由 systemd --user timer 週期執行)
 # ----------------------------------------------------------------------------
 # 不需要任何 Claude session 即可運作。職責 (僅做「腳本能安全做」的事):
-#   1. 存活: dispatcher / watcher 用 systemd is-active + /proc cwd 判定本專案實例。
-#      死亡/inactive/failed → systemctl --user reset-failed + restart;
+#   1. 存活: 先看跨節點 heartbeat(共享 home, 跨節點權威); 新鮮=在某登入節點活著→不動。
+#      只有 heartbeat 凍結才用本節點 systemd is-active + /proc cwd 判真死;
+#      死亡/inactive/failed(且 heartbeat 凍) → systemctl --user reset-failed + restart;
 #      watcher 多實例(spin/重複) → bash chain_code/daemon_reset.sh 清成單一。
 #   2. 切換機制稽核: job 狀態(sacct)、chain_jobid↔squeue、震盪(osc_check)、PENDING 過久、斷鏈。
 #   3. 無問題 → 寫一行 OK 到 live/health_watchdog.log (本地)。
@@ -56,14 +57,27 @@ cnt_cwd(){ local c=0 p l w pp pl; for p in $(pgrep -f "$1" 2>/dev/null); do
     c=$((c+1))
   done; echo "$c"; }
 
+# ★跨節點存活判定(權威, 對應 /Edit11 [4]): dispatcher / watcher 是跨登入節點單例, heartbeat 寫在共享
+#   home, 是「在某登入節點活著」的唯一跨節點真相。本節點 systemctl --user is-active 只反映『本節點』
+#   (systemd --user 為 per-node), 單例在別節點時恆顯 inactive → 若據此 restart, 新實例會在別節點的
+#   nodelock 上 defer→exit→下一輪又 inactive→再 restart, 反覆 futile churn(歷史曾累積 245 次)。
+#   故 restart 前先看 heartbeat: 新鮮(<HB_STALE)= 跨節點存活, 絕不重啟; 只有 heartbeat 凍結(真死)
+#   才落到本地 systemctl/程序檢查 + restart。(jobscript 自投才是 chain 主韌性, daemon 是備援, 延遲
+#   重啟一個真死 daemon ≤ HB_STALE 無害。)
+HB_STALE=300
+hb_fresh(){ local f="$1" max="${2:-$HB_STALE}" age; [ -f "$f" ] || return 1
+    age=$(( $(date +%s) - $(stat -c %Y "$f" 2>/dev/null || echo 0) ))
+    [ "$age" -lt "$max" ]; }
+
 problems=()   # 問題點
 actions=()    # watchdog 已自動補救
 
 # ---------- 1. dispatcher ----------
 da=$(systemctl --user is-active edit11-dispatcher.service 2>/dev/null || echo unknown)
 dc=$(cnt_cwd submit_dispatcher.sh)
-if [ "$da" != "active" ] || [ "$dc" -lt 1 ]; then
-    problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc")
+# ★heartbeat 新鮮 → 跨節點存活(單例可能非本節點)→ 不重啟; 只有凍結才視為真死後 restart。
+if ! hb_fresh restart/dispatcher.heartbeat && { [ "$da" != "active" ] || [ "$dc" -lt 1 ]; }; then
+    problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc heartbeat 凍結>${HB_STALE}s")
     systemctl --user reset-failed edit11-dispatcher.service 2>/dev/null || true
     if systemctl --user restart edit11-dispatcher.service 2>/dev/null; then
         actions+=("已 systemctl --user restart edit11-dispatcher.service")
@@ -77,8 +91,10 @@ wa=$(systemctl --user is-active edit11-watcher.service 2>/dev/null || echo unkno
 wc=$(cnt_cwd hill_watcher.sh)
 png_age=99999
 [ -f live/monitor_latest.png ] && png_age=$(( ($(date +%s) - $(stat -c %Y live/monitor_latest.png 2>/dev/null)) / 60 ))
-if [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
-    problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc")
+# ★heartbeat 新鮮 → watcher 在某登入節點存活(可能非本節點)→ 不重啟; 凍結才視為真死。
+#   但本地多實例(wc>1)無論 heartbeat 為何都要清(elif 仍可達)。
+if ! hb_fresh live/watcher.heartbeat && { [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; }; then
+    problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc heartbeat 凍結>${HB_STALE}s")
     systemctl --user reset-failed edit11-watcher.service 2>/dev/null || true
     if systemctl --user restart edit11-watcher.service 2>/dev/null; then
         actions+=("已 systemctl --user restart edit11-watcher.service")
