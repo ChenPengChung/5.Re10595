@@ -228,6 +228,16 @@ run_benchmark() {
     done
     rm -f "$before_marker"
 
+    # ★L2 歷史追蹤:成功時從 benchmark stdout 抽 3b L2-error 的 <avg> 行記入 live/l2_history.dat
+    #   (供 /Edit11 監控 L2 趨勢)。L2 在 ~5% 方法地板(2階 LBM vs 高階 DNS)會 plateau = 正常;
+    #   只看 (a) 是否異常『上升』(統計可能失效)(b) 統計尾巴是否還在微降。欄序見記錄行。
+    if printf '%s' "$capture" | grep -q 'Quantitative L2-error'; then
+        local ftt_b avgs
+        ftt_b=$(python3 -c "print(f'{$step/1579042:.2f}')" 2>/dev/null || echo '?')
+        avgs=$(printf '%s' "$capture" | grep '<avg>' | grep -oE '[0-9.]+%' | tr '\n' ' ')
+        [[ -n "$avgs" ]] && echo "$(date '+%F %T') step=$step FTT=$ftt_b L2avg[MGLET:U,V,uu,vv,uv,k|Krank:U,V,uu,vv,uv,k]= $avgs" >> "$LIVE_DIR/l2_history.dat"
+    fi
+
     log "BENCH step=$step  Re=$RE  outputs:${copied:- (none)}"
     return 0
 }

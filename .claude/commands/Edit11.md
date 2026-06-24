@@ -31,6 +31,15 @@ FTT 前進(maxstep 增、非卡 restart 點)、Error<1e-5、Ma_max<0.1、無 NaN
 (`grep -aoE 'BENCH step=[0-9]+' live/watcher.log|sort|uniq -c`)、同 FTT 單 commit、rc=137 不因併跑增。
 圖沒跟上 backup:`bash chain_code/push_benchmark_figs.sh <step>`(flock),>2 輪 deferred 才回報。
 
+**[★3b] L2 趨勢監控** — `tail -5 live/l2_history.dat`(watcher 每次成功 benchmark 記一行:step/FTT +
+MGLET/Krank 各 U,V,uu,vv,uv,k 的 `<avg>` 相對 L2%)。**判讀**:
+- **正常**:L2 plateau 在 ~5%(Reynolds 應力 uu/vv/uv/k)= **2 階 LBM vs 高階 DNS 的方法地板**(系統性、
+  不可再降,跑再久也一樣);`<u>` U 應 ~1–2%(極低);統計尾巴 ~0.1–0.3pp 微降也正常。**plateau 不是 bug,不報警。**
+- **只在異常時回報**:(a) L2 隨 FTT **明顯上升** → 統計可能失效/被 reset → 查 `accu_count` 是否還在成長
+  (該檔 §[7] 旁)+ 有無 cold-start;(b) **U(`<u>`)L2 突跳** → 流場問題,連同 NaN/drift 一起查。
+- 檔案 `live/l2_history.dat`(gitignore,隨 benchmark 累積);若尚未生成 = watcher 在 L2-logging 新碼下還沒跑過
+  benchmark(下次 VTK 自然生成,需先 RESTART_WATCHER 載入新碼)。
+
 **[★4] daemon 跨節點存活** — ★用 **heartbeat / lock-owner(跨節點權威)** 判,**非** node-local `systemctl is-active`
 (本 session 在別 login node 時 local 顯示 inactive 是正常單例行為):
 - watcher:`live/watcher.heartbeat`(epoch 第三欄)距今 <90s + `live/watcher.nodelock/owner`;SE(SELF-EVICT)穩定不增。
