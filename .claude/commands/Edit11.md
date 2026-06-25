@@ -74,6 +74,19 @@ MGLET/Krank 各 U,V,uu,vv,uv,k 的 `<avg>` 相對 L2%)。**判讀**:
   損壞才動用 Edit11x vault(直接在 Edit11x warm restart,或複製 vault checkpoint 回 production 再 warm)。
 - **守門**:只讀 Edit11、只 rsync/cp 寫 Edit11x(write_guard 放行 Bash cp);**絕不**碰 Edit6/Edit12/Edit13。
 
+**[★11] 三大紀錄檔分層備份**(過大不進 git;`Ustar_Force_record.dat`/`checkrho.dat`/`timing_log.dat`)—
+gzip(~7x)時間戳快照,**主 `~/log_backups/Edit11_Krank5600`(/home 持久、專案樹外 → 抗 rm/clean/reset/cold)
++ 次 `/work/s8313697/edit11_log_backups`(便利份,scratch 可能被清)**;檔名 `<base>_<時間戳>_step<N>.dat.gz`,
+各 dest/各檔輪替留最近 **10 份**,gzip -t + 兩份 **md5 雙向核對**。⚠ /home 與 /work 同一 weka 後端、**非真異地**
+(要真異地需給 remote 走 rclone/scp)。
+- **每輪呼叫**:`bash chain_code/backup_record_files.sh --throttle 180`(180 分內已備則 dedup 跳過);`--status` 回報份數。
+- **主力 session-independent**:`health_watchdog.sh`(systemd timer 每 10 分)內建 `--throttle 180` → 即使無
+  Claude session(含停機跨夜)也 ~3h 自動一份(留 10 ≈ 30h 史)。
+- **停機前硬閘**:watchdog 於 06/27 07:00~09:00 自動 `--force` 一份「停機前最新」(sentinel `.preshutdown_done`
+  只做一次,session-independent);loop 在該窗亦可手動 `--force` + 與 Edit11x checkpoint `--verify` 同一時點。
+- **append-only 守門**:來源比上次小(疑 cold-reset/truncate)→ 跳過本次快照(保住既有好快照不被輪替沖出)+ ⚠SHRINK。
+- **守門**:只讀三檔、只寫上述兩 dest(路徑硬閘);不碰流場/checkpoint/job/別專案。
+
 **守門(MUST)**:絕不 `systemctl/cp/rm` 任何 `edit6-*`;不碰別專案 job/daemon/checkpoint;`scancel` 只用
 `./run job-guard scancel <明確 jobid>`(帶變數會被 hook 擋);blacklist 數據檔一律純節點名;vault 同步只寫 Edit11x。
 **節奏**:正常 ~3600s;walltime 近(elapsed≥22h)/復原中/**接近停機(06/27 06:00 後)** 收緊 ~900s;穩定 RUNNING +
