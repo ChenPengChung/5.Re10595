@@ -58,7 +58,24 @@ MGLET/Krank 各 U,V,uu,vv,uv,k 的 `<avg>` 相對 L2%)。**判讀**:
 (c) 非「我近 ~2-3h 內才 hang/崩潰加入」的節點(剛失敗的留著觀察)。移除 = 從檔案刪該行(**純節點名、絕不留
 # 註解**;先 `cp` 備份);只影響下次 submit、不碰 running job。drained / idle 無 job / 剛失敗 → 保留。回報移除/保留清單。
 
+**[★10] Edit11x checkpoint vault 同步(NCHC 停機 2026-06-27 09:00~06-28 14:00 第二道防線)** — 把 production
+最新 checkpoint 鏡像到隔離複製檔 `/home/s8313697/5.Re10595/Edit11x_Krank5600`(jp=64 相同 → 純整目錄複製,
+無 repartition);Edit11x 有 STOP_CHAIN+無 job,安全當 vault。詳見記憶 `project_edit11_nchc_shutdown_0627`。
+- **每輪呼叫一次**:`bash chain_code/sync_checkpoint_to_testcopy.sh`(背景跑佳,~157GB/3588 檔)。dedup:vault
+  latest==prod latest 則秒退;新 checkpoint(~每 FTT)出現才真複製。腳本:rsync→.partial→驗 bytes+files→
+  `mv -T`→原子切 latest→prune 留最近 2,**絕不在驗證好的新份就位前刪舊份**;flock 防併發;STABLE_SEC=90 防 mid-write。
+- **回報**:`bash chain_code/sync_checkpoint_to_testcopy.sh --verify`(exit 0=同步/2=不同步)→ 報 vault latest step
+  與 prod latest 是否一致;>1 FTT 落後才示警。
+- **自足性**:checkpoint `step_N/metadata.dat` 自帶 accu_count/grid_dims/dt_global → 只複製 `checkpoint/step_N`+
+  `latest` 即可 warm-restart;**專案根 `statistics/`(58G live 輸出)非 restart 依賴 → 不同步**。
+- **時間閘(每輪比對 currentDate)**:(a) 06/27 ~07:00–08:00(停機前 1–2h):`--verify` 確認同步,不同步立刻補
+  sync;(b) 06/27 09:00 前:再 sync 一次確保 vault 是停機瞬間最新;(c) 06/27 09:00~06/28 14:00 停機中:job 被
+  NCHC 砍、squeue 無 job 屬正常,勿驚慌勿亂投;(d) 06/28 14:00 復機:`lbm-grab` 搶位 warm 重投,production restart
+  損壞才動用 Edit11x vault(直接在 Edit11x warm restart,或複製 vault checkpoint 回 production 再 warm)。
+- **守門**:只讀 Edit11、只 rsync/cp 寫 Edit11x(write_guard 放行 Bash cp);**絕不**碰 Edit6/Edit12/Edit13。
+
 **守門(MUST)**:絕不 `systemctl/cp/rm` 任何 `edit6-*`;不碰別專案 job/daemon/checkpoint;`scancel` 只用
-`./run job-guard scancel <明確 jobid>`(帶變數會被 hook 擋);blacklist 數據檔一律純節點名。
-**節奏**:正常 ~3600s;walltime 近(elapsed≥22h)或復原中收緊 ~900s;穩定 RUNNING + FTT 前進 + MLUPS 正常 → 回 ~3600s。
+`./run job-guard scancel <明確 jobid>`(帶變數會被 hook 擋);blacklist 數據檔一律純節點名;vault 同步只寫 Edit11x。
+**節奏**:正常 ~3600s;walltime 近(elapsed≥22h)/復原中/**接近停機(06/27 06:00 後)** 收緊 ~900s;穩定 RUNNING +
+FTT 前進 + MLUPS 正常 → 回 ~3600s。
 **全綠回報格式**:「沒問題」+ FTT / Re% / CV / drift / MLUPS + daemon(heartbeat)+ cluster + dedup + 距目標 FTT 天數 一句。
