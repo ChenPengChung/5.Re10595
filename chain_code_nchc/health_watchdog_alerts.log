@@ -394,3 +394,2061 @@ unknown 本專案實例=0
   + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
   → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
 ---
+## [2026-06-25 02:10:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 02:20:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 02:20:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 02:30:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 02:40:24] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 02:50:17] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 02:50:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:00:17] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:10:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:20:03] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:20:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:30:03] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:40:17] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:40:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:50:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 03:50:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:00:03] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:10:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:20:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:20:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:30:18] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:40:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:40:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:50:03] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 04:50:19] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:00:17] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:10:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:10:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:20:04] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:20:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148167:RUNNING/RUNNING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148167.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:30:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:50:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 05:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:00:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:20:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:20:47] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:50:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 06:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:00:16] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:10:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:20:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:40:16] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:50:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 07:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:00:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:10:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:20:16] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:40:20] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:50:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=148474:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 08:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=148474:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 148474 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_148474.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:00:02] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=inactive
+unknown/0 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:00:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149063:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:20:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149063:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:30:16] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:40:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149063:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:50:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 09:50:39] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149063:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:00:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:10:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149063:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149063 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149063:CANCELLED+/—
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149063 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149063.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:20:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:20:54] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:30:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:50:16] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 10:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:00:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:20:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:30:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:40:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:50:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 11:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:00:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:10:16] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:20:18] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:30:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:50:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 12:50:50] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:00:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:10:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:20:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:50:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 13:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:00:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:10:34] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:20:04] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:30:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:40:18] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:50:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 14:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:00:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:10:11] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:20:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:30:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:40:51] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=149187:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:50:17] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=149187:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 149187 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 15:50:43] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=inactive
+unknown/0 png=0m job=149187:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:00:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=149187:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:10:54] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=inactive
+unknown/0 png=0m job=149187:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 149187 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_149187.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:30:01] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150178:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:30:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=150178:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:40:11] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150178:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:50:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=150178:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 16:50:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150178:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 17:00:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=150178:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 17:10:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150178:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150178 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150178.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 17:20:03] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=150339:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150339 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150339.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 17:20:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150339:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150339 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150339.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 17:30:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=active/1 png=0m job=150377:PENDING/PENDING
+問題點:
+  - job 150377 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - (無; 此問題需 Claude 修碼)
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150377.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 17:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150393:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150393 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150393.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 18:21:08] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=150393:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 150393 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150393.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 18:30:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150393:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150393 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150393.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 18:40:54] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150522:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150522 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150522.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 18:50:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=active/1 png=0m job=150537:PENDING/PENDING
+問題點:
+  - job 150537 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - (無; 此問題需 Claude 修碼)
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150537.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 19:00:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150537:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150537 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150537.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 19:10:54] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=active/1 png=0m job=150563:PENDING/PENDING
+問題點:
+  - job 150563 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - (無; 此問題需 Claude 修碼)
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150563.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 19:20:03] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=inactive
+unknown/0 png=0m job=150563:PENDING/PENDING
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150563 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150563.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 19:20:28] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=active/1 png=0m job=150563:PENDING/PENDING
+問題點:
+  - job 150563 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - (無; 此問題需 Claude 修碼)
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150563.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 19:30:03] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=inactive
+unknown/0 png=0m job=150563:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150563 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150563.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 20:10:49] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=150656:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150656 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150656.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 20:20:33] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=active/1 watcher=inactive
+unknown/0 png=0m job=150686:PENDING/PENDING
+問題點:
+  - watcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150686 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-watcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150686.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 20:30:02] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=active/1 watcher=active/1 png=0m job=150698:PENDING/PENDING
+問題點:
+  - job 150698 PENDING(已等 0:00) → 確認 dispatcher net-best re-select 有切到可投 partition(never-idle)
+已自動補救(watchdog 能安全做的):
+  - (無; 此問題需 Claude 修碼)
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150698.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 20:41:08] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=150698:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 150698 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150698.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 20:50:55] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150698:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150698 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150698.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 21:21:09] Edit13 health_watchdog ALERT (3 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=150698:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+  - job 150698 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150698.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 21:30:02] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=150698:CANCELLED+/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - job 150698 終態=CANCELLED+ 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_150698.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-25 22:00:31] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=:PENDING/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---

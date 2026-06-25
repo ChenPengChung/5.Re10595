@@ -1,0 +1,319 @@
+#!/bin/bash
+# ==============================================================================
+# build_and_submit.sh.H200   —  H200 cluster (x86_64, Hopper sm_90) 版
+#   1. 編譯 main.cu → a.out  (可 --no-build 跳過)
+#   2. 清理上輪 chain state (restart/ 整個資料夾)
+#   3. 提交 jobscript_chain.slurm.H200 (Round 1 = cold start)
+#   4. 產生 restart/MANIFEST.txt (編譯時 NX/NY/NZ/jp 等環境記錄)
+#
+# 用法 (與 GB200 版 build_and_submit.sh 完全一致):
+#   bash build_and_submit.sh.H200                 # 清理+編譯+提交 (全新 chain)
+#   bash build_and_submit.sh.H200 --no-clean      # 只編譯+提交 (保留 chain state, 續跑)
+#   bash build_and_submit.sh.H200 --build-only    # 只編譯, 不提交
+#   bash build_and_submit.sh.H200 --no-build      # 不編譯, 保留現有 a.out 只做提交
+#   bash build_and_submit.sh.H200 --no-clean --no-build    # run.sh 情境 3B 呼叫用
+#
+# 關鍵差異 (與 GB200 aarch64 版):
+#   - 登入節點 x86_64 + H200 計算節點 x86_64 → 原地編譯, 不需 salloc
+#   - nvcc -arch=sm_90 (Hopper H200), 非 sm_100 (Blackwell GB200)
+#   - HPC-SDK 路徑: Linux_x86_64/...x86_64-linux, 非 Linux_aarch64/...sbsa-linux
+#   - 投遞目標: jobscript_chain.slurm.H200 (4 nodes × 8 GPU = 32 GPU, partition=32gpus)
+#
+# 路徑規範 (升級後):
+#   所有 chain state 集中於 restart/ (chain_jobid / chain_count / bad_nodes /
+#   fast_fail_count / chain.log / STOP_CHAIN / checkpoint/step_XXXXX/ /
+#   MANIFEST.txt). solver 的 stop_control.h 與 fileIO.h 已改讀寫 restart/* .
+# ==============================================================================
+
+set -eo pipefail   # 不使用 -u: hpcx-init.sh 會踩 unbound variable HPCX_ENABLE_NCCLNET_PLUGIN
+
+# ── [方案 A path discipline] ──
+_SELF="$(readlink -f "${BASH_SOURCE[0]:-$0}" 2>/dev/null || realpath "${BASH_SOURCE[0]:-$0}" 2>/dev/null || echo "${BASH_SOURCE[0]:-$0}")"
+CHAIN_DIR="$(cd "$(dirname "$_SELF")" && pwd)"
+PROJECT_ROOT="$(cd "$CHAIN_DIR/.." && pwd)"
+cd "$PROJECT_ROOT" || { echo "[build.H200] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
+
+CLEAN_CHAIN=1
+SUBMIT=1
+BUILD=1
+for arg in "$@"; do
+    case "$arg" in
+        --no-clean)   CLEAN_CHAIN=0 ;;
+        --build-only) SUBMIT=0 ;;
+        --no-build)   BUILD=0 ;;
+        -h|--help)
+            sed -n '2,25p' "$0"; exit 0 ;;
+        *) echo "Unknown arg: $arg"; exit 2 ;;
+    esac
+done
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Legacy cleanup: 若有舊 layout 的 root-level chain state 殘留, 先移掉
+# (升級後一段時間保留此塊, 幾次 commit 後可拿掉)
+# STOP_CHAIN 不列入 legacy cleanup: 因為 solver 現在讀 restart/STOP_CHAIN,
+# 但若有舊 root-level STOP_CHAIN, 讓 jobscript 的 migration block 搬進去.
+# ═══════════════════════════════════════════════════════════════════════════
+if [ "$CLEAN_CHAIN" -eq 1 ]; then
+    rm -f .chain_jobid .chain_count .bad_nodes .fast_fail_count chain.log
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# H200 x86_64 編譯模式
+# ---------------------------------------------------------------------------
+# 登入節點是 x86_64, H200 計算節點也是 x86_64 (Intel/AMD CPU + Hopper GPU).
+# 不需 salloc, 直接在 login node 原地編譯即可.
+# 路徑 (HPC-SDK 內建 CUDA, 非 /usr/local/cuda):
+#   CUDA:      /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
+#   HPC-X:     /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
+#   math_libs: /opt/nvidia/hpc_sdk/Linux_x86_64/25.9/math_libs/13.0/targets/x86_64-linux
+# ═══════════════════════════════════════════════════════════════════════════
+
+if [ "$BUILD" -eq 1 ]; then
+    echo "=== Compiling main.cu on H200 login node (x86_64, sm_90 Hopper) ==="
+
+    set -eo pipefail
+    module purge 2>/dev/null || true
+
+    export CUDA_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/cuda/13.0
+    export PATH=$CUDA_HOME/bin:$PATH
+
+    export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-2.24
+    source $HPCX_HOME/hpcx-init.sh
+    hpcx_load
+
+    echo "Host:         $(hostname)"
+    echo "Arch:         $(uname -m)"
+    echo "Using nvcc:   $(which nvcc)"
+    echo "Using mpicxx: $(which mpicxx)"
+    echo "Using mpirun: $(which mpirun)"
+
+    export MATH_LIBS=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/math_libs/13.0/targets/x86_64-linux
+
+    nvcc -arch=sm_90 -O3 main.cu \
+        -I${CUDA_HOME}/include \
+        -I${MATH_LIBS}/include \
+        -I${HPCX_MPI_DIR}/include \
+        -L${CUDA_HOME}/lib64 \
+        -L${MATH_LIBS}/lib \
+        -L${HPCX_MPI_DIR}/lib -lmpi \
+        -lcufft \
+        -o a.out
+
+    echo "Compilation successful (x86_64 binary, sm_90 Hopper)."
+    file a.out
+
+    if [ ! -x ./a.out ]; then
+        echo "[FATAL] Compilation failed - a.out not produced."
+        exit 1
+    fi
+else
+    echo "[--no-build] 跳過編譯,使用現有 a.out"
+    if [ ! -x ./a.out ]; then
+        echo "[FATAL] --no-build 指定但 ./a.out 不存在,無法提交."
+        exit 1
+    fi
+fi
+
+# ---- Submit ----
+if [ "$SUBMIT" -eq 0 ]; then
+    echo "[--build-only] Skipping sbatch submission."
+    exit 0
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# [SAFETY-GUARD] 防止兩個 chain 同時寫 restart/checkpoint/ 造成 metadata.dat 互相覆蓋
+# ---------------------------------------------------------------------------
+# 觸發情境: 使用者看 chain 跑不順 → 手動重投, 但忘記先 scancel 舊的 job.
+#   → 舊鏈的 Round N+1 仍在 queue 中 (SIGUSR1 自動投出)
+#   → 新鏈 Round 1 也被投出
+#   → 兩個 job 同時 RUN, 都寫 restart/checkpoint/step_*/
+#   → metadata.dat 互相覆蓋, restart 時讀到錯誤 step/Force/FTT
+# ---------------------------------------------------------------------------
+# 本檢查: 投新 job 前檢查 queue 裡是否已有同名 job
+#   有 → 要求使用者先處理 (scancel / --no-clean 續跑) 再回來
+# ═══════════════════════════════════════════════════════════════════════════
+# 從 jobscript.H200 自動抓取 JobName (避免硬編碼 GILBM_PH)
+JOB_NAME=$(awk -F= '/^#SBATCH[[:space:]]+--job-name=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.H200")
+JOB_NAME="${JOB_NAME:-GILBM_PH}"   # fallback if parse fails
+
+# 抓 queue 裡同名 job. %i=JobID, %j=JobName, %T=State.
+EXISTING_JOBS=$(squeue -u "$USER" -h -o '%i %j %T' 2>/dev/null \
+                | grep -E "[[:space:]]${JOB_NAME}([[:space:]]|$)" || true)
+if [ -n "$EXISTING_JOBS" ]; then
+    echo ""
+    echo "╔═══════════════════════════════════════════════════════════════╗"
+    echo "║  ⚠  SAFETY-GUARD: 偵測到已有 ${JOB_NAME} job 在 queue"
+    echo "╚═══════════════════════════════════════════════════════════════╝"
+    echo ""
+    echo "  目前 queue 裡的 ${JOB_NAME} jobs:"
+    echo "$EXISTING_JOBS" | awk '{printf "    JOBID=%s  NAME=%s  STATE=%s\n", $1, $2, $3}'
+    echo ""
+    echo "  如果此時再投新 chain, 兩個 chain 會同時寫 restart/checkpoint/,"
+    echo "  metadata.dat 互相覆蓋 → restart 讀到錯誤 step/Force/FTT"
+    echo "  → Round 之間 Force 值不連續, 統計量污染."
+    echo ""
+    JOBIDS_TO_CANCEL=$(echo "$EXISTING_JOBS" | awk '{print $1}' | xargs)
+    echo "  請先選一個做完再回來:"
+    echo "    (A) 停本專案舊 chain: ./run job-guard scancel <jobid>"
+    echo "        候選 jobid: ${JOBIDS_TO_CANCEL}"
+    echo "        切勿直接 scancel 未驗證 jobid；避免干預其他專案"
+    echo "    (B) 不投新的:     bash build_and_submit.sh.H200 --build-only  (只編不投)"
+    echo "    (C) 強制覆蓋:     FORCE_SUBMIT=1 bash build_and_submit.sh.H200   (不建議)"
+    echo ""
+    if [ "${FORCE_SUBMIT:-0}" = "1" ]; then
+        echo "  [FORCE_SUBMIT=1] 使用者強制投遞, 責任自負."
+    else
+        echo "  [ABORT] 為避免 checkpoint 污染, 本次提交取消 (exit 3)."
+        echo "         若確定要並存 (e.g. 測試場景), 用 FORCE_SUBMIT=1 覆蓋."
+        exit 3
+    fi
+    echo ""
+fi
+
+if [ "$CLEAN_CHAIN" -eq 1 ]; then
+    echo "Cleaning chain state (restart/ — 整個資料夾重建)"
+    rm -rf restart/
+    mkdir -p restart/
+else
+    echo "[--no-clean] Preserving chain state for warm re-submit."
+    mkdir -p restart/
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 產生 restart/MANIFEST.txt
+#   記錄本次 chain 的編譯環境指紋, 便於未來 audit / 跨機器診斷
+#
+# [REVIEW-FIX 2026-04-21 #1] MANIFEST 寫入策略 (append-only journal):
+#   舊行為: 只要 a.out 存在就覆寫 MANIFEST → --no-build 時會把 checkpoint
+#           對應的原指紋蓋掉, 稽核紀錄造假.
+#   新行為:
+#     (a) BUILD=1 (真正重編)      → 追加 BUILD event 到 MANIFEST (append-only)
+#     (b) BUILD=0 且 MANIFEST 缺  → 追加 BOOTSTRAP event (Scenario 2 首次佈置)
+#     (c) BUILD=0 且 MANIFEST 在  → 追加 RESUME event (記錄延用舊 binary),
+#                                   若當前 binary_md5 與最後一次 BUILD 不同則 WARN
+#   任何情況都不刪除歷史行 → 混用新舊 binary 的事故會在 journal 留下痕跡.
+# ═══════════════════════════════════════════════════════════════════════════
+MANIFEST="restart/MANIFEST.txt"
+if [ -x ./a.out ]; then
+    CUR_MD5=$(md5sum a.out 2>/dev/null | awk '{print $1}')
+    CUR_TS=$(date '+%F %T %z')
+    CUR_HOST=$(hostname)
+    CUR_GIT=$(git rev-parse HEAD 2>/dev/null || echo 'n/a')
+    CUR_BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo 'n/a')
+
+    # variables.h 指紋 (NX/NY/NZ/jp/TBSWITCH/INIT)
+    VARS_FP=""
+    for v in NX NY NZ jp TBSWITCH INIT; do
+        val=$(awk -v k="$v" '$0 ~ "^#define[[:space:]]+"k"[[:space:]]" {gsub(/\/\/.*/,""); print $3; exit}' variables.h 2>/dev/null)
+        VARS_FP="${VARS_FP}${v}=${val:-?} "
+    done
+
+    if [ ! -f "$MANIFEST" ]; then
+        # 首次建立 — 寫 header + 當前事件
+        {
+            echo "# GILBM Periodic Hill chain MANIFEST (append-only journal)"
+            echo "# format: [TIMESTAMP] EVENT key=val ..."
+            echo "# events: BUILD | BOOTSTRAP | RESUME"
+        } > "$MANIFEST"
+    fi
+
+    if [ "$BUILD" -eq 1 ]; then
+        EVT="BUILD"
+    elif [ -f "$MANIFEST" ] && grep -q "^\[.*\] BUILD " "$MANIFEST"; then
+        EVT="RESUME"
+        LAST_BUILD_MD5=$(grep "^\[.*\] BUILD " "$MANIFEST" | tail -1 \
+                        | sed -n 's/.*binary_md5=\([^ ]*\).*/\1/p')
+        if [ -n "$LAST_BUILD_MD5" ] && [ "$LAST_BUILD_MD5" != "$CUR_MD5" ]; then
+            echo "[manifest][WARN] 當前 a.out md5=$CUR_MD5 與最後一次 BUILD md5=$LAST_BUILD_MD5 不同"
+            echo "                 若 checkpoint 是用舊 binary 產生, 續跑結果可能不一致"
+            EVT="RESUME_BINARY_MISMATCH"
+        fi
+    else
+        EVT="BOOTSTRAP"
+    fi
+
+    {
+        printf '[%s] %s ' "$CUR_TS" "$EVT"
+        printf 'host=%s user=%s git_commit=%s git_branch=%s ' \
+               "$CUR_HOST" "$USER" "$CUR_GIT" "$CUR_BRANCH"
+        printf 'binary_md5=%s binary_size=%s ' \
+               "$CUR_MD5" "$(stat -c %s a.out 2>/dev/null)"
+        printf '%s\n' "$VARS_FP"
+    } >> "$MANIFEST"
+
+    echo "[manifest] Appended $EVT event → $MANIFEST"
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════
+# [AUTO-EXCLUDE] 提交前由 blacklist_lib.sh 產生 --exclude=
+#   (A) NCHC sinfo live (drain/down/fail/maint)
+#   (B) restart/bad_nodes      — 本地 TTL-valid + NCHC-synced (健康節點自動釋放)
+#   (C) ~/.bad_nodes_global    — 跨專案個人黑名單 (選配)
+#   合併後若超過 partition 50% 會自動截斷, 優先保留 NCHC live + 最新 local.
+# ═══════════════════════════════════════════════════════════════════════════
+if [ -f "$CHAIN_DIR/tools/blacklist_lib.sh" ]; then
+    . "$CHAIN_DIR/tools/blacklist_lib.sh"
+else
+    echo "[submit] FATAL: $CHAIN_DIR/tools/blacklist_lib.sh 不存在, 拒絕提交以免誤用舊邏輯" >&2
+    exit 9
+fi
+# bl_effective_exclude 的診斷訊息全走 stderr, stdout 純為節點清單 → 可安全用 $(...)
+# stderr 重定向到 log 便於除錯, 同時保留 tty 回顯
+_BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
+mkdir -p "$(dirname "$_BL_LOG")"
+_SUBMIT_PART="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.H200")"
+MERGED_BAD=$(bl_effective_exclude "${_SUBMIT_PART:-dev}" 2> >(tee -a "$_BL_LOG" >&2))
+EXCLUDE_ARG=""
+if [ -n "$MERGED_BAD" ]; then
+    EXCLUDE_ARG="--exclude=$MERGED_BAD"
+    export SBATCH_EXCLUDE="$MERGED_BAD"
+    echo "[submit] 自動排除壞節點 (TTL+NCHC sync+cap): $MERGED_BAD"
+else
+    echo "[submit] 叢集健康, 無需排除任何節點"
+fi
+
+# ===========================================================================
+# [SINGLE-HEAD] 捕捉 sbatch 輸出 jobid 寫進 HEAD.lockdir state=PENDING
+# run.sh 已 acquire_head_lock 取得 state=SUBMITTING 槽位; 這裡負責升級/釋放.
+# ===========================================================================
+if [ -f "$CHAIN_DIR/tools/head_lock_lib.sh" ]; then
+    # shellcheck disable=SC1091
+    . "$CHAIN_DIR/tools/head_lock_lib.sh"
+fi
+
+SBATCH_OUT="$(sbatch --parsable $EXCLUDE_ARG "$CHAIN_DIR/jobscript_chain.slurm.H200" 2>&1)"
+SBATCH_RC=$?
+if [ $SBATCH_RC -eq 0 ] && [[ "$SBATCH_OUT" =~ ^[0-9]+$ ]]; then
+    echo "[submit] OK sbatch jobid=$SBATCH_OUT"
+    echo "$SBATCH_OUT" > restart/chain_jobid
+    # [COLD-START-INIT] 冷啟動時 chain_count 還不存在, 必須在此一併初始化為 1.
+    # 否則 jobscript 啟動時會看到 chain_jobid 存在但 chain_count 不見, 誤觸
+    # "[REVIEW-FIX #7] chain state 半損毀" FATAL tripwire → exit 1 → dispatcher 無限迴圈.
+    # 續跑情境 chain_count 已存在, 不覆寫 (保留 round 編號).
+    if [ ! -f restart/chain_count ]; then
+        echo "1" > restart/chain_count
+        echo "[submit] [COLD-START-INIT] 初始化 restart/chain_count=1"
+    fi
+    if type write_head_jobid >/dev/null 2>&1; then
+        if write_head_jobid "$SBATCH_OUT" "H200"; then
+            echo "[submit] [SINGLE-HEAD] HEAD.lockdir 升級 state=PENDING jobid=$SBATCH_OUT"
+        else
+            echo "[submit] [SINGLE-HEAD] WARN: write_head_jobid 失敗 (HEAD.lockdir 不存在?)"
+        fi
+    fi
+else
+    echo "[submit] FAIL sbatch rc=$SBATCH_RC: $SBATCH_OUT"
+    if type release_head_lock >/dev/null 2>&1; then
+        release_head_lock
+        echo "[submit] [SINGLE-HEAD] 已釋放 HEAD.lockdir"
+    fi
+    exit 9
+fi
+
+# Optional NaN monitor (only if script exists)
+if [ -f nan_monitor.py ]; then
+    nohup python3 nan_monitor.py . > nan_monitor_log.txt 2>&1 &
+    echo "NaN monitor started (PID: $!, log: nan_monitor_log.txt)"
+else
+    echo "[INFO] nan_monitor.py not found, skipping NaN watchdog."
+fi

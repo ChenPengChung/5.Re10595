@@ -1,0 +1,8 @@
+[Unit]
+Description=Edit13_2800ITBLBM health watchdog timer (every 10 min; semantic health beyond systemd Restart=on-failure)
+[Timer]
+OnBootSec=2min
+OnCalendar=*:0/10
+Persistent=true
+[Install]
+WantedBy=timers.target
