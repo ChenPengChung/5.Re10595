@@ -30,7 +30,7 @@ DRY="${LBM_DRY:-0}"
 log(){ printf '[%s] %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
 
 # ① 視窗閘 (robot-specific; 窗外便宜 exit, 絕不干擾)
-WINDOW_START="2026-06-28 12:00:00"; WINDOW_END="2026-06-29 12:00:00"
+WINDOW_START="2026-06-27 10:00:00"; WINDOW_END="2026-06-29 12:00:00"
 NOW=$(date +%s)
 WS=$(date -d "$WINDOW_START" +%s 2>/dev/null || echo 0)
 WE=$(date -d "$WINDOW_END" +%s 2>/dev/null || echo 0)
