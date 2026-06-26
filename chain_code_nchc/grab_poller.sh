@@ -61,13 +61,28 @@ disarm_real(){
     systemctl --user disable --now "$TIMER_UNIT" 2>/dev/null
     log "✓ GRABBED (verdict=$1) → 寫 .grab_disarmed + 解除 $TIMER_UNIT (不再輪詢)"
 }
+# Finding 3 守門(codex): 只在 dispatcher 真 active(daemon 武裝)才 disarm。lbm-grab 的 _lbm_arm
+# 可能失敗卻仍回 LAUNCHED → 若不檢查就 disarm, 會留下「job 已投但 daemon 沒起、timer 已停」的
+# 靜默失效。此處強制補武裝, 仍失敗就不 disarm 留待下輪 (chain 另有 jobscript 自續投為備援)。
+disarm_if_armed(){
+    local da; da=$(systemctl --user is-active edit13-dispatcher.service 2>/dev/null)
+    if [ "$da" != active ]; then
+        log "$1 但 dispatcher=$da → 補武裝 dispatcher/watcher (Finding 3 守門)"
+        systemctl --user enable --now edit13-dispatcher.service edit13-watcher.service 2>/dev/null || true
+        da=$(systemctl --user is-active edit13-dispatcher.service 2>/dev/null)
+    fi
+    if [ "$da" = active ]; then disarm_real "$1"
+    else log "⚠ $1 但 dispatcher 補武裝後仍=$da → 不 disarm, 下輪重試 (job 已投; chain 靠 jobscript 自續投, dispatcher 為備援)"; fi
+}
 case "${VERDICT:-}" in
-    LAUNCHED|LAUNCHED-PENDING)
-        disarm_real "$VERDICT" ;;                      # 真投成功 (DRY 不會到此, DRY→DRY-LAUNCH)
+    LAUNCHED|LAUNCHED-PENDING|RESUME-ARM)
+        disarm_if_armed "$VERDICT" ;;                  # 真投/重武裝: 確認 dispatcher 武裝才 disarm (Finding 3)
     DRY-LAUNCH)
         log "would-GRAB + would-disarm (DRY; verdict=DRY-LAUNCH, 不真寫 flag/不真解除)" ;;
-    ALREADY-RUNNING|RESUME-ARM)
-        log "Edit13 已活/重武裝 (verdict=$VERDICT) → 不解除 (只認本 poller 自己 LAUNCH); 無害空轉至視窗關" ;;
+    ALREADY-RUNNING)
+        # Edit13 已被搶(可能手動 ll): dispatcher 武裝才 disarm; 暫停期假 alive 時 dispatcher inactive → 不誤解除
+        if [ "$(systemctl --user is-active edit13-dispatcher.service 2>/dev/null)" = active ]; then disarm_real "$VERDICT"
+        else log "ALREADY-RUNNING 但 dispatcher 未武裝 → 不解除, 續輪詢"; fi ;;
     ABORT-*|FAIL)
         log "未搶到 (verdict=$VERDICT) → 保留 timer 下輪重試 [$(printf '%s' "$OUT" | grep -iE 'MISCONFIG|ABORT|FAIL' | head -1 | tr -s ' ' | cut -c1-90)]" ;;
     *)
