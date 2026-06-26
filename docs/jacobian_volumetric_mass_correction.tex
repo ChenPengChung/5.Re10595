@@ -605,8 +605,10 @@ outside $\Omega$ and contribute no volume, so the telescoping still assigns each
 each cell contributes its full $V_c$ exactly once, proving \eqref{eq:pou}.
 \end{proof}
 Consequently the denominator in \eqref{eq:rho-mean}, $V=\sum_p w_p$ (assembled by
-an MPI all-reduce into the global control volume), equals the exact discrete mesh
-volume, and $\langle\rho\rangle_V$ is a true volume average.
+an MPI all-reduce into the global control volume), equals the discrete mesh
+volume in exact arithmetic (to rounding, and exactly so only on a bit-closed
+grid; see the refinement in \S\ref{sec:self-consistency}), and
+$\langle\rho\rangle_V$ is a true volume average.
 
 % ===========================================================================
 \section{Cell-volume quadrature: Shoelace vs.\ Jacobian GL-3}
@@ -1526,6 +1528,99 @@ reproduced in Appendix~\ref{app:mrt}.
 % ===========================================================================
 \section{Discussion and limitations}
 \label{sec:discussion}
+
+\subsection{Discrete self-consistency, not field fidelity, is the correctness criterion}
+\label{sec:self-consistency}
+
+The seam audit of \S\ref{sec:E4} invites a question of principle that we now
+settle: against \emph{what} reference is the volume-weighted corrector to be
+judged correct? The operative criterion is \emph{internal self-consistency on the
+solver's own discrete grid}---not agreement with the true straight-boundary
+physical domain, and not even exact partition-of-unity closure. We make this
+precise.
+
+\paragraph{The corrector is unconditionally self-consistent.}
+The governor of \S\ref{sec:T4} forms $\langle\rho\rangle_V$ from
+\eqref{eq:rho-mean} using the \emph{same} nodal weights $w_p$ in numerator and
+denominator. Consequently, for any spatially uniform field $\rho_p\equiv c$,
+\begin{equation}
+\rho_p\equiv c
+\quad\Longrightarrow\quad
+\langle\rho\rangle_V
+\;=\;\frac{\sum_p \rho_p\,w_p}{\sum_p w_p}
+\;=\;\frac{c\,\sum_p w_p}{\sum_p w_p}
+\;=\;c ,
+\label{eq:disc-selfconsistency}
+\end{equation}
+to floating-point rounding and \emph{independently of the actual values of the
+weights} $w_p$. In particular $\rho_p\equiv 1$ yields $\langle\rho\rangle_V=1$ and
+hence $\delta\rho=1-\langle\rho\rangle_V=0$ by \eqref{eq:deltarho}: the corrector
+injects nothing into a uniform field, and the one-shot map \eqref{eq:one-shot} has
+already reached its fixed point \eqref{eq:fixed-point}. Crucially, this identity
+holds \emph{unconditionally}---regardless of whether $\Sigma_w=\sum_p w_p$ equals
+the discrete cell sum $\sum_c V_c$, and regardless of whether either equals the
+true physical volume $V_{\mathrm{phys}}$. It is a property of the \emph{algebraic
+form} of \eqref{eq:rho-mean}, not of any geometric accuracy of $w_p$.
+
+\paragraph{Three distinct notions of ``volume agreement'' must not be conflated.}
+The discussion of \S\ref{sec:T3-pou} and \S\ref{sec:E4} touches three logically
+independent statements, only the first of which bears on correctness:
+\begin{enumerate}
+\item[(i)] \emph{Internal self-consistency}: numerator and denominator of
+  \eqref{eq:rho-mean} share the weights $w_p$, so a uniform field is reproduced
+  exactly and no spurious correction is injected. This is \eqref{eq:disc-selfconsistency};
+  it holds \emph{unconditionally}, for \emph{any} positive weights.
+\item[(ii)] \emph{Partition-of-unity closure}:
+  $\Sigma_w=\sum_p w_p$ equals $\sum_c V_c=V_{\mathrm{mesh}}$ on the solver's own
+  grid---Proposition~\ref{prop:pou}, equation~\eqref{eq:pou}. This is an
+  exact-arithmetic identity that holds to IEEE-double rounding \emph{if and only
+  if} the grid's periodic seam is bit-closed; it is exactly the quantity
+  \texttt{VerifyPhysicalDomainVolume3D} measures, and exactly what the seam audit
+  \eqref{eq:E4-metrics} probes.
+\item[(iii)] \emph{Field fidelity}: $\Sigma_w$ equals $V_{\mathrm{phys}}$, the
+  volume of the continuum straight-boundary periodic-hill domain. This is
+  \emph{never} exact---the discrete boundary is a curve, and the
+  outlet wall-normal rows land at, e.g., $y\approx 8.9999967$ rather than the
+  exact period $y=L_y=9$ for interior rows (the two walls register exactly $9$
+  only because one is the read-time normalization anchor). The discrepancy is the
+  $O(h^2)$ chord error of the curved hill plus the single-precision streamwise
+  seam non-closure.
+\end{enumerate}
+
+\paragraph{Only (i) is required for correctness.}
+Property~(i) is \emph{necessary and sufficient} for the corrector to do its job:
+hold the volume-weighted mean density at unity without injecting a spurious
+source. Property~(ii) is a desirable consistency and diagnostic property---it
+certifies that $\Sigma_w$ is a faithful discrete mesh volume---but the corrector
+is self-consistent and mass-conserving whether or not (ii) holds exactly, because
+\eqref{eq:disc-selfconsistency} never invokes $\sum_c V_c$. Property~(iii) is a
+statement of \emph{geometric accuracy}---how faithfully the discrete domain
+approximates the continuum---and therefore bears on \emph{solution} accuracy, not
+on mass-conservation \emph{correctness}. Mass is conserved on the grid the solver
+is actually given (curved boundary, single-precision provenance and all): the
+corrector holds $\langle\rho\rangle_V$ at unity with respect to its \emph{own}
+control volumes $w_p$, which is the only mass that the discrete dynamics either
+sees or can conserve.
+
+\paragraph{The seam discrepancy is a geometric diagnostic, not a defect.}
+It follows that the \texttt{VOL-CHECK} discrepancy reported in the E4 audit
+($\Sigma_w$ versus $\sum_c V_c$, relative $\sim\!1.25\times10^{-7}$,
+\eqref{eq:E4-metrics}) is a \emph{geometric diagnostic of streamwise periodic
+closure}---it flags that the production grid's outlet is not bit-closed onto its
+inlet---and is \emph{not} a mass-conservation defect. The corrector never reads
+$\sum_c V_c$; it reads $\Sigma_w$ in both numerator and denominator, so the seam
+gap cancels identically in \eqref{eq:rho-mean} and cannot bias $\delta\rho$.
+Closing the seam---forcing the outlet nodes to the exact periodic image of the
+inlet ($N_I=513$ streamwise nodes, so node $N_I{-}1=512$ is the outlet),
+$y(N_I{-}1):=y(0)+L_y$ using the grid's own coordinates---makes (ii) exact:
+the E4 closed-seam control collapses the discrepancy from $1.25\times10^{-7}$ to
+$8.1\times10^{-13}$ (\textsc{pass}, Table~\ref{tab:E4-tiers}) and additionally
+renders the grid bit-periodic. But this is a cleanliness and diagnostic
+refinement, \emph{not} a correctness fix: the corrector was already
+self-consistent and mass-conserving before closure. The grid is not ``wrong''---it
+is a faithful $O(h^2)$/seam-level discrete approximation of the continuum hill---and
+the corrector's correctness is established by \eqref{eq:disc-selfconsistency}
+alone, leaving the seam a question of grid closure and geometry only.
 
 \paragraph{Why volume weighting is not optional.}
 The central message is structural: on a stretched body-fitted mesh, the only
