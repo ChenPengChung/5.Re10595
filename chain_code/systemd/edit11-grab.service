@@ -1,0 +1,7 @@
+[Unit]
+Description=Edit11_Krank5600 NCHC reboot auto-grab poller (Edit11-only; warm resubmit the instant the cluster reopens)
+[Service]
+Type=oneshot
+TimeoutStartSec=120
+WorkingDirectory=/home/s8313697/5.Re10595/Edit11_Krank5600
+ExecStart=/bin/bash /home/s8313697/5.Re10595/Edit11_Krank5600/chain_code/grab_poller.sh

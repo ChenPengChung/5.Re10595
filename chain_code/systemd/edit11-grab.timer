@@ -1,0 +1,11 @@
+[Unit]
+Description=Edit11_Krank5600 NCHC reboot auto-grab poller timer (~30s; window-gated in grab_poller.sh)
+[Timer]
+# 每 30s 一次(整點 + 半分);維護一結束就能在 ~30s 內偵測並 warm 搶投。
+# 重開機後 systemd --user(linger=yes)會在下一個 :00/:30 自動續跑。窗口閘在腳本內,
+# 故 timer 24/7 觸發無妨——窗口外腳本毫秒級退出。
+OnCalendar=*-*-* *:*:00,30
+AccuracySec=1s
+Persistent=false
+[Install]
+WantedBy=timers.target

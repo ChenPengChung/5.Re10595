@@ -32,13 +32,30 @@ TS(){ date '+%F %T'; }
 # 時間戳多份輪替留 10、md5 雙向核對。throttle 180 分(timer 每 10 分→實際 ~3h 一份,留 10=~30h);
 # 非阻塞、失敗不影響守護。這是 session-independent 的資料防丟主力。
 bash chain_code/backup_record_files.sh --throttle 180 >/dev/null 2>&1 || true
-# [pre-shutdown hard gate] 國網停機(2026-06-27 09:00)前 07:00~09:00 之間,若尚未做過 →
-# 強制一份「停機前最新」快照(sentinel 確保只做一次)。session-independent,不靠 Claude session。
+# [pre-shutdown hard gate] 國網停機(2026-06-27 09:00 ~ 06-28 14:00)前 07:00~09:00 之間,
+# session-independent 強制備份「停機前最新」資料 + checkpoint vault(不靠 Claude session/loop):
+#   (1) 三大紀錄檔 --force 一份(sentinel 確保只做一次;record 檔每步都變,一份「停機前最新」即可)。
+#   (2) checkpoint vault(Edit11x 第二道防線)每輪同步:dedup+flock → 已同步秒退、僅新 checkpoint
+#       才真複製,捕捉 07:00~09:00 間 job 續寫的最新 checkpoint。vault 可能搬 ~157GB,超過本 oneshot
+#       service 預設 ~90s TimeoutStartSec → 用 systemd-run --user 卸載成獨立 transient unit(escape
+#       timeout/cgroup);systemd-run 不可用才退回前景短 timeout(只夠 dedup-check,完整複製交 Route A loop)。
+#   跨節點安全:sentinel 在共享 home、sync 腳本自帶 flock+dedup → 多節點 watchdog 同時跑也冪等。
 _PSB="$HOME/log_backups/Edit11_Krank5600/.preshutdown_done"
 _gs=$(date -d '2026-06-27 07:00' +%s 2>/dev/null); _ge=$(date -d '2026-06-27 09:00' +%s 2>/dev/null); _now=$(date +%s)
-if [ -n "${_gs:-}" ] && [ -n "${_ge:-}" ] && [ "$_now" -ge "$_gs" ] && [ "$_now" -lt "$_ge" ] && [ ! -f "$_PSB" ]; then
-  if bash chain_code/backup_record_files.sh --force >/dev/null 2>&1; then
-    touch "$_PSB"; echo "[$(TS)] [pre-shutdown] 停機前強制備份完成 → $_PSB" >> "$LOG"
+if [ -n "${_gs:-}" ] && [ -n "${_ge:-}" ] && [ "$_now" -ge "$_gs" ] && [ "$_now" -lt "$_ge" ]; then
+  # (1) 三大紀錄檔:只做一次
+  if [ ! -f "$_PSB" ] && bash chain_code/backup_record_files.sh --force >/dev/null 2>&1; then
+    touch "$_PSB"; echo "[$(TS)] [pre-shutdown] 停機前三大紀錄檔強制備份完成 → $_PSB" >> "$LOG"
+  fi
+  # (2) checkpoint vault:每輪同步(dedup 保護),卸載成獨立 unit 以 escape 本 oneshot 的 timeout
+  if systemd-run --user --quiet --collect --unit="edit11-preshutdown-vaultsync-$(date +%H%M%S)" \
+       /bin/bash -c "cd '$ROOT' && bash chain_code/sync_checkpoint_to_testcopy.sh" >/dev/null 2>&1; then
+    echo "[$(TS)] [pre-shutdown] checkpoint vault 同步已卸載(systemd-run transient unit)" >> "$LOG"
+  else
+    # 前景 fallback 只做 dedup-check(完整 ~157GB 複製交 Route A loop / 下一輪卸載);timeout 25s
+    # 確保即使疊加 (1) 的一次性 record gzip 也遠低於本 oneshot ~90s,不排擠後面的 daemon 存活檢查。
+    timeout 25 bash chain_code/sync_checkpoint_to_testcopy.sh >/dev/null 2>&1 || true
+    echo "[$(TS)] [pre-shutdown] checkpoint vault 同步(前景 fallback;完整複製見 Route A loop)" >> "$LOG"
   fi
 fi
 
