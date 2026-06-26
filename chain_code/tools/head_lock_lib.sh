@@ -30,6 +30,9 @@
 HEAD_LOCK_DIR="${HEAD_LOCK_DIR:-restart/HEAD.lockdir}"
 HEAD_STAGE_PREFIX="${HEAD_STAGE_PREFIX:-restart/.headstage}"
 HEAD_STALE_TIMEOUT="${HEAD_STALE_TIMEOUT:-30}"   # 秒; SUBMITTING 超過此值視為 stale
+# [P1] 一個 jp-switch 會持鎖做 repartition (~數分鐘). 用 REPARTITIONING state, 容忍較長 age
+# (預設 15 分) 才視為 stale, 避免被其他 submitter 在 30s SUBMITTING timeout 後誤搶 → 雙投.
+HEAD_REPART_TIMEOUT="${HEAD_REPART_TIMEOUT:-900}"  # 秒; REPARTITIONING 超過此值才視為 stale
 
 # 內部: 查 squeue 是否有某 jobid 活著 (echo state / 空字串)
 _head_squeue_state() {
@@ -86,6 +89,10 @@ acquire_head_lock() {
             # 若 submitter 超時沒進入 PENDING → 視為 submitter 崩了
             [ "$age" -gt "$HEAD_STALE_TIMEOUT" ] && stale=1
             ;;
+        REPARTITIONING)
+            # [P1] dispatcher 正在持鎖做 jp-switch repartition; 容忍較長 age 才視為 stale
+            [ "$age" -gt "$HEAD_REPART_TIMEOUT" ] && stale=1
+            ;;
         PENDING|RUNNING)
             local live; live="$(_head_squeue_state "$cur_jid")"
             case "$live" in
@@ -124,6 +131,25 @@ hostname=$(hostname 2>/dev/null || echo unknown)
 pending_at=$(date -Iseconds 2>/dev/null || date)
 pending_at_epoch=$(date +%s)
 EOF_PEND
+    mv -f "$tmp" "$HEAD_LOCK_DIR/owner"
+}
+
+# [P1] 標記 HEAD.lockdir 進入 REPARTITIONING (jp-switch 期間). 在 acquire_head_lock 成功
+# (state=SUBMITTING) 之後、開始 repartition 之前呼叫. 重置 submitted_at_epoch, 讓
+# HEAD_REPART_TIMEOUT (預設 15 分) 從 repartition 起算; 完成後再 write_head_jobid 轉 PENDING.
+mark_head_repartitioning() {
+    local tag="${1:-jp-switch}"
+    [ -d "$HEAD_LOCK_DIR" ] || return 1
+    local tmp; tmp="$(mktemp "$HEAD_LOCK_DIR/.owner.XXXXXX")" || return 1
+    cat > "$tmp" <<EOF_REPART
+state=REPARTITIONING
+jobid=TBD
+submitter=$tag
+submitter_pid=$$
+submitted_at=$(date -Iseconds 2>/dev/null || date)
+submitted_at_epoch=$(date +%s)
+hostname=$(hostname 2>/dev/null || echo unknown)
+EOF_REPART
     mv -f "$tmp" "$HEAD_LOCK_DIR/owner"
 }
 

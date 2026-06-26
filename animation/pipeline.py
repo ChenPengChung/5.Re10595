@@ -59,6 +59,55 @@ def find_pvbatch():
     return None
 
 
+def _render_latex(tex, fontsize=64, dpi=150):
+    """Render a LaTeX string to a RGBA PIL Image using matplotlib."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    matplotlib.rcParams["mathtext.fontset"] = "cm"
+    matplotlib.rcParams["font.family"] = "serif"
+    fig = plt.figure(figsize=(0.1, 0.1))
+    fig.text(0.5, 0.5, tex, fontsize=fontsize,
+             ha="center", va="center", color="black")
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=dpi, transparent=True,
+                bbox_inches="tight", pad_inches=0.02)
+    plt.close(fig)
+    buf.seek(0)
+    from PIL import Image
+    return Image.open(buf).convert("RGBA")
+
+
+def _overlay_colorbar_labels(step):
+    """Post-process rendered PNGs: overlay LaTeX colorbar title via PIL."""
+    try:
+        from PIL import Image
+    except ImportError:
+        print("[pipeline] WARN: PIL not available, skip LaTeX overlay", flush=True)
+        return
+
+    label_tex = r"$u/U_{ref}$"
+    lbl = _render_latex(label_tex, fontsize=64, dpi=150)
+    lbl_rot = lbl.rotate(90, expand=True)
+
+    for suffix in ("cont", "RD"):
+        png = os.path.join(FRAMES_DIR, "frame_%06d_%s.png" % (step, suffix))
+        if not os.path.isfile(png):
+            continue
+        try:
+            img = Image.open(png).convert("RGBA")
+            w, h = img.size
+            lw, lh = lbl_rot.size
+            px = int(w * 0.965) - lw // 2
+            py = (h - lh) // 2
+            img.paste(lbl_rot, (px, py), lbl_rot)
+            img.convert("RGB").save(png)
+            print("[pipeline] LaTeX overlay: %s" % os.path.basename(png), flush=True)
+        except Exception as e:
+            print("[pipeline] WARN: overlay failed for %s: %s" % (os.path.basename(png), e), flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description="VTK -> 2 PNG -> 2 lossless MP4 (PNGs preserved)")
     ap.add_argument("vtk", help="Input VTK file (velocity_merged_NNNNNN.vtk)")
@@ -107,6 +156,9 @@ def main():
         print("[pipeline] ERROR: pvbatch render_frame.py failed rc=%d" % r.returncode,
               flush=True)
         sys.exit(4)
+
+    # --- Step 1b: PIL + matplotlib LaTeX overlay (system Python) ---
+    _overlay_colorbar_labels(args.step)
 
     if args.skip_encode:
         print("[pipeline] --skip-encode, PNG render done, skip MP4", flush=True)

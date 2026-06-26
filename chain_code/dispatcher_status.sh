@@ -5,7 +5,7 @@
 # Shows:
 #   1. Whether dispatcher is running (PID + liveness)
 #   2. Chain status (chain_count + latest jobid in queue)
-#   3. sinfo for both partitions
+#   3. sinfo for dispatcher candidate partitions
 #   4. Arch binary availability
 #   5. restart/RUNNING.lockdir mutex state (Layer 3)
 #   6. dispatcher.log tail
@@ -82,7 +82,13 @@ echo ""
 #   (無寬度) 有正確 substitute.
 #   修法: 去掉 '-' dash, 改用 Slurm 官方認的 %<num><letter>, 在所有版本都相容.
 echo "> Partition status:"
-for p in gb200-dev dev; do
+PARTITION_CANDIDATES_RAW="${PARTITION_CANDIDATES:-GB200:gb200 GB200:gb200-full GB200:gb200-rack1 GB200:gb200-rack2 GB200:gb200-dev H200:dev}"
+_seen_parts=""
+for entry in $PARTITION_CANDIDATES_RAW; do
+    p="${entry#*:}"
+    [ -z "$p" ] && continue
+    case " $_seen_parts " in *" $p "*) continue ;; esac
+    _seen_parts="$_seen_parts $p"
     LINE="$(sinfo -h -p "$p" -o '  %12P  avail=%4a  nodes=%4D  state=%12t  reason=%E' 2>/dev/null)"
     if [ -n "$LINE" ]; then
         echo "$LINE"

@@ -208,9 +208,52 @@ def hill_function(Y, LY=9.0):
     return model
 
 
+_HILL_LY = 9.0
+_DEFAULT_LZ = 3.036
+
+
+def hill_function_array(Y_arr, LY=_HILL_LY):
+    """Vectorized hill_function: evaluate the analytical hill profile at an array of positions."""
+    return np.array([hill_function(float(y), LY=LY) for y in Y_arr])
+
+
+def _physical_unit_scale_from_grid(x_grid, LY=_HILL_LY):
+    """Return scale factor that maps Frohlich physical units to code units."""
+    x_max = float(x_grid[0, -1])
+    h_phys = x_max / LY if x_max < 0.5 * LY else 1.0
+    return 1.0 / h_phys if h_phys < 0.5 else 1.0
+
+
+def enforce_analytical_physical_boundaries(x, y, LZ=None, LY=_HILL_LY):
+    """
+    Force bottom/top physical walls to analytical values.
+
+    This deliberately ignores rounded/inexact reference-grid wall heights:
+      bottom = Mellen-Frohlich-Rodi hill polynomial
+      top    = LZ (defaults to 3.036 code units)
+    """
+    if LZ is None:
+        LZ = _DEFAULT_LZ
+    scale = _physical_unit_scale_from_grid(x, LY)
+    y_bottom_old = y[0, :].copy()
+    y_top_old = y[-1, :].copy()
+    y[0, :] = hill_function_array(x[0, :] * scale, LY=LY) / scale
+    y[-1, :] = float(LZ) / scale
+    return {
+        "LZ": float(LZ),
+        "scale": scale,
+        "bottom_correction": float(np.max(np.abs(y[0, :] - y_bottom_old))),
+        "top_correction": float(np.max(np.abs(y[-1, :] - y_top_old))),
+    }
+
+
 def tanh_wall(L, a, j, N):
     """tanhFunction_wall macro from initializationTool.h (Python version)."""
     import math
+    if a <= 0.0:
+        return L * j / N
+    if a >= 1.0:
+        a = 1.0 - 1e-15
     return L/2.0 + (L/2.0/a) * math.tanh((-1.0 + 2.0*j/N) / 2.0 * math.log((1.0+a)/(1.0-a)))
 
 
@@ -282,11 +325,85 @@ def gamma_to_minSize(gamma, LZ, NZ_cells, LY=9.0, alpha=0.5):
     return minSize
 
 
+def estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re,
+                           H_HILL=1.0, CFL=0.5, LY=9.0, alpha=0.5,
+                           non_ortho_factor=1.17):
+    """
+    Pre-grid omega estimate — no generated grid needed.
+
+    Breaks the circular dependency:
+      "need grid to compute omega, need omega to choose GAMMA"
+
+    Approximation chain:
+      1. dz_min     = gamma_to_minSize(GAMMA, LZ, NZ-1)  [analytic]
+      2. max|c̃|_1D  ≈ 1 / dz_min                         [orthogonal]
+      3. max|c̃|_est ≈ max|c̃|_1D × non_ortho_factor       [correction]
+      4. dt          = CFL / max|c̃|_est
+      5. omega       = 3·niu / dt + 0.5
+
+    Why 1/dz_min underestimates max|c̃|:
+      max|c̃| occurs at hill foot (j=1, i≈27) in D3Q19 edge direction
+      (e_y=1, e_z=1).  At that location:
+        c̃_ζ = |ζ_y·e_y + ζ_z·e_z| = |(-z_ξ/J)·1 + (y_ξ/J)·1|
+      The ζ_z term (70%) is well captured by 1/dz_min, but the
+      ζ_y term (30%) comes from the hill slope (z_ξ ≠ 0) and is
+      missing in the 1D estimate.
+
+    Calibration (Periodic Hill, physical-z redistribution):
+      factor = max|c̃|_2D / (1/dz_min), measured over multiple configs:
+        GAMMA=2.0 129×64  → 1.15
+        GAMMA=3.0 129×64  → 1.13
+        GAMMA=4.0 129×64  → 1.11
+        GAMMA=4.0 513×257 → 1.17
+        GAMMA=5.0 129×64  → 1.09
+      Range: 1.09 – 1.18.  Default 1.17 ≈ upper bound → conservative
+      (over-predicts omega, safe for stability screening).
+
+    Parameters
+    ----------
+    gamma    : float  Vinokur stretching parameter (> 0)
+    LZ       : float  wall-normal domain height
+    NZ_cells : int    wall-normal cell count (NZ - 1)
+    Uref, Re, H_HILL : float  flow parameters
+    CFL      : float  CFL number
+    LY       : float  streamwise length (for hill_function)
+    alpha    : float  stretching symmetry (0.5 = symmetric)
+    non_ortho_factor : float
+        Periodic Hill non-orthogonality correction (default 1.17).
+        Source: hill slope z_ξ ≠ 0 + D3Q19 edge direction stacking.
+        Varies 1.09–1.18 across GAMMA/resolution; 1.17 is conservative.
+        Set to 1.0 to revert to pure orthogonal assumption.
+
+    Returns
+    -------
+    dict with keys:
+        omega_est, dt_est, max_c_est, max_c_1d, dz_min, niu,
+        non_ortho_factor
+    """
+    niu = Uref * H_HILL / Re
+    dz_min = gamma_to_minSize(gamma, LZ, NZ_cells, LY, alpha)
+    max_c_1d = 1.0 / dz_min
+    max_c_est = max_c_1d * non_ortho_factor
+    dt_est = CFL / max_c_est
+    omega_est = 0.5 + 3.0 * niu / dt_est
+
+    return {
+        "omega_est": omega_est,
+        "dt_est": dt_est,
+        "max_c_est": max_c_est,
+        "max_c_1d": max_c_1d,
+        "dz_min": dz_min,
+        "niu": niu,
+        "non_ortho_factor": non_ortho_factor,
+    }
+
+
 def vinokur_tanh(eta, gamma, alpha=0.5):
     """
     Vinokur two-sided tanh clustering.  eta in [0,1].
     gamma=0 => identity.  Monotonic for all gamma >= 0.
     """
+
     if gamma < 1e-14:
         return eta.copy()
     denom = np.tanh(gamma * alpha)
@@ -334,32 +451,92 @@ def get_vinokur_gamma_from_ref(x_ref, y_ref, nj_new, alpha=0.5):
 # ============================================================
 #  3b. GILBM Stability Estimation (LBM-specific)
 # ============================================================
+#
+#  omega_global 計算流程 (兩階段)
+#  ================================
+#
+#  階段 A — 無網格 1D 預估 (estimate_omega_pregrid)
+#  ------------------------------------------------
+#  輸入: GAMMA, LZ, NZ, Uref, Re, H_HILL, CFL
+#  流程:
+#    1. dz_min = gamma_to_minSize(GAMMA, LZ, NZ-1)     ← 1D Vinokur 解析
+#    2. max|c̃| ≈ 1/dz_min                               ← 壁面法向主導
+#    3. dt     = CFL / max|c̃| = CFL × dz_min
+#    4. omega  ≈ 0.5 + 3·niu / dt
+#  優點: < 1ms, 不需要生成網格, 可提前攔截不穩定的 GAMMA
+#  修正: non_ortho_factor=1.17 補償 hill 斜面 ζ_y + D3Q19 edge 疊加
+#  精度: 修正後 omega 誤差 < 0.1% (Re=10595), < 0.2% (Re=150)
+#
+#  階段 B — 有網格 2D 精確計算 (estimate_gilbm_stability)
+#  -------------------------------------------------------
+#  輸入: 已生成的 2D 網格 x_grid(nj,ni), y_grid(nj,ni)
+#  流程:
+#    1. 正向度量 (中央差分):
+#         y_xi   = ∂y/∂ξ  (axis=1, 流向)
+#         y_zeta = ∂y/∂ζ  (axis=0, 壁面法向)
+#         z_xi   = ∂z/∂ξ  (axis=1)
+#         z_zeta = ∂z/∂ζ  (axis=0)
+#    2. Jacobian:  J = y_xi·z_zeta − y_zeta·z_xi
+#    3. 逆度量:
+#         ζ_y = −z_xi / J,   ζ_z =  y_xi / J
+#         ξ_y =  z_zeta / J, ξ_z = −y_zeta / J
+#    4. Contravariant velocity (D3Q19 全部方向):
+#         c̃_ζ = |ζ_y·e_y + ζ_z·e_z|
+#         c̃_ξ = |ξ_y·e_y + ξ_z·e_z|
+#         max|c̃| = max over all (ξ,ζ) 格點 and all 19 lattice directions
+#    5. dt_global = CFL / max|c̃|
+#    6. omega = 0.5 + 3·niu / dt_global
+#  精度: 完整 2D 度量, 為最終穩定性判斷
+#
+#  座標對應:
+#    x_grid → y (LBM 流向)     ξ  → axis=1 (i, streamwise)
+#    y_grid → z (LBM 壁面法向) ζ  → axis=0 (j, wall-normal)
+#
+#  omega 物理意義 (此程式碼的 omega = 教科書的 τ):
+#    標準 LBM (dt=1):  τ = 0.5 + 3·ν
+#    GILBM (dt<1):     τ = 0.5 + 3·ν/dt   (sub-cycling 時每步需更多碰撞)
+#    穩定範圍:  0.5 < omega < 2.0
+#      omega → 0.5 : 黏度 → 0 (數值不穩定)
+#      omega → 2.0 : s_visc = 1/omega → 0.5 (過度鬆弛, GILBM 插值不穩定)
+#
+#  建議工作流程:
+#    1. estimate_omega_pregrid   → 快速預判, omega_est > 2.0 則提前攔截
+#    2. 生成網格 (Poisson solve)
+#    3. estimate_gilbm_stability → 最終精確確認
+# ============================================================
 
 def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
-                             Uref=0.0503, Re=150, H_HILL=1.0,
+
+                             Uref=0.0503, Re=150.0, H_HILL=1.0,
                              CFL_lambda=0.5):
     """
-    Estimate GILBM (Generalized Interpolation LBM) stability parameters
-    for a given body-fitted grid.
+    [階段 B] 有網格後的精確 omega 計算.
 
-    The LBM MRT collision operator requires omega in approximately [0.5, 2.0].
-    omega = 0.5 + 3 * niu / dt_global, where dt_global = CFL_lambda / max|c_tilde|.
+    omega (= tau in textbooks) = 3*niu/dt_global + 0.5.
+    Practical stable range: omega in (0.5, 2.0).
+      omega < 0.5 : negative viscosity (mathematically forbidden)
+      omega > 2.0 : s_visc = 1/omega < 0.5, GILBM interpolation unstable
+    dt_global = CFL_lambda / max|c_tilde|.
 
     Parameters
     ----------
     x_grid, y_grid : ndarray (nj, ni)
         Grid coordinates (raw Frohlich or code units).
+        x_grid = streamwise (= y in LBM), y_grid = wall-normal (= z in LBM).
     scale_factor : float
         Multiply grid coords to get code units (=1 if already in code units).
     Uref, Re, H_HILL : float
         Flow parameters. niu = Uref * H_HILL / Re.
+        Defaults match the legacy Re=150 calibration table.  Auto mode
+        overrides these values from variables.h.
     CFL_lambda : float
         CFL number (default 0.5).
 
     Returns
     -------
     dict with keys:
-        omega, dt_global, c_max, dz_min, dz_max, dz_ratio, a_max, status
+        omega, dt_global, c_max, dz_min, dz_max, dz_ratio, a_max, status,
+        niu, Uref, Re, H_HILL, CFL_lambda, scale_factor
     """
     niu = Uref * H_HILL / Re
 
@@ -400,16 +577,16 @@ def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
 
     # Max contravariant velocity over all D3Q19 directions
     max_c = 0.0
-    for alpha in range(3, 19):
-        c_zeta = np.abs(zeta_y[sl] * e_y[alpha] + zeta_z[sl] * e_z[alpha])
-        c_xi   = np.abs(xi_y[sl]   * e_y[alpha] + xi_z[sl]   * e_z[alpha])
+    for iq in range(3, 19):
+        c_zeta = np.abs(zeta_y[sl] * e_y[iq] + zeta_z[sl] * e_z[iq])
+        c_xi   = np.abs(xi_y[sl]   * e_y[iq] + xi_z[sl]   * e_z[iq])
         max_c = max(max_c, c_zeta.max(), c_xi.max())
 
     # Wall-normal spacing
     dz_min = 1e30
     dz_max = 0.0
-    for j in range(ni):
-        dz = np.diff(y_c[:, j])
+    for i in range(ni):
+        dz = np.diff(y_c[:, i])
         dz_pos = dz[dz > 0]
         if len(dz_pos) > 0:
             dz_min = min(dz_min, dz_pos.min())
@@ -422,6 +599,10 @@ def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
     a_max = dz_ratio  # rough LTS acceleration estimate
 
     # Status classification
+    #   omega = 3*niu/dt_global + 0.5  (relaxation time, = tau)
+    #   Hard limits: omega < 0.5 → negative viscosity (forbidden)
+    #                omega > 2.0 → s_visc = 1/omega < 0.5 (overly stiff)
+    #   Practical range: [0.5, ~2.0]
     if omega > 2.0:
         status = "UNSTABLE"
     elif omega > 1.5:
@@ -430,19 +611,23 @@ def estimate_gilbm_stability(x_grid, y_grid, scale_factor=1.0,
         status = "OK"
     elif omega >= 0.55:
         status = "OPTIMAL"
-    else:
+    elif omega >= 0.505:
         status = "GOOD"
+    else:
+        status = "DANGEROUS"
 
     return {
         "omega": omega, "dt_global": dt_global, "c_max": max_c,
         "dz_min": dz_min, "dz_max": dz_max, "dz_ratio": dz_ratio,
         "a_max": a_max, "status": status, "niu": niu,
+        "Uref": Uref, "Re": Re, "H_HILL": H_HILL,
+        "CFL_lambda": CFL_lambda, "scale_factor": scale_factor,
     }
 
 
 def print_gilbm_stability_table():
     """
-    Print the pre-computed GILBM stability reference table.
+    Print the pre-computed GILBM stability calibration table.
 
     This table was calibrated for:
       Reference grid : Frohlich 3.fine (197x129)
@@ -451,16 +636,21 @@ def print_gilbm_stability_table():
       Flow params    : Re=150, Uref=0.0503, H_HILL=1.0
       CFL lambda     : 0.5
 
+    The table is reference-only.  Actual omega depends on the target
+    grid resolution, scale factor, Uref, Re, H_HILL, and CFL; auto mode
+    recomputes it from the generated grid and variables.h.
+
     NOTE: physical-z redistribution REPLACES Frohlich's native wall
     clustering with Vinokur tanh in physical z-space (symmetric when
     alpha=0.5).  GAMMA=0 means UNIFORM spacing (no clustering).
     """
     print()
     print("  " + "=" * 72)
-    print("   GILBM Stability Reference  (Poisson + physical-z redistribution)")
-    print("   3.fine ref -> 129x64, Re=150, Uref=0.0503, CFL=0.5, ALPHA=0.5")
+    print("   GILBM Stability Calibration Reference")
+    print("   REFERENCE ONLY: 3.fine -> 129x64, Re=150, Uref=0.0503, CFL=0.5")
+    print("   Actual omega is recomputed from variables.h after grid generation.")
     print("  " + "=" * 72)
-    print(f"  {'GAMMA':>6s} | {'omega':>8s} | {'max|c~|':>10s} | {'dz_ratio':>8s} | {'Status':<12s} | Note")
+    print(f"  {'GAMMA':>6s} | {'omega':>8s} | {'max|c~|':>10s} | {'dz_ratio':>8s} | {'RefStatus':<12s} | Note")
     print("  " + "-" * 72)
     #                GAMMA  omega   c_max   ratio  status         note
     # Calibrated with redistribute_vertical_physical (2026-03)
@@ -469,9 +659,9 @@ def print_gilbm_stability_table():
         (0.5,  0.58,   38,   2, "OPTIMAL",  "Very mild symmetric clustering"),
         (1.0,  0.59,   42,   2, "OPTIMAL",  "Mild symmetric clustering"),
         (1.5,  0.60,   50,   3, "OPTIMAL",  "Moderate symmetric clustering"),
-        (2.0,  0.63,   63,   4, "OPTIMAL",  "Recommended (good clustering, very stable)"),
+        (2.0,  0.63,   63,   4, "OPTIMAL",  "Ref case: recommended"),
         (2.5,  0.67,   83,   5, "OPTIMAL",  "Good clustering"),
-        (3.0,  0.73,  112,   8, "OPTIMAL",  "Strong clustering, still optimal"),
+        (3.0,  0.73,  112,   8, "OPTIMAL",  "Ref case: strong clustering"),
         (3.5,  0.81,  156,  12, "OPTIMAL",  "Strong clustering"),
         (4.0,  0.94,  221,  20, "OPTIMAL",  "Very strong (approaching Frohlich-level)"),
         (5.0,  1.43,  463,  52, "OK",       "Extreme clustering, omega > 1.2"),
@@ -479,7 +669,7 @@ def print_gilbm_stability_table():
     for gamma, omega, c_max, ratio, status, note in table:
         marker = ""
         if gamma == 2.0:
-            marker = " <--"
+            marker = " <-- ref rec"
         elif status in ("MARGINAL", "UNSTABLE"):
             marker = " ***"
         print(f"  {gamma:6.1f} | {omega:8.2f} | {c_max:10d} | {ratio:8d} | {status:<12s} | {note}{marker}")
@@ -487,12 +677,15 @@ def print_gilbm_stability_table():
     print()
     print("  Physical-z redistribution: GAMMA controls Vinokur tanh in z-space.")
     print("  GAMMA=0 = uniform (NO wall clustering, minSize macro = NaN!).")
-    print("  GAMMA=2.0 is recommended: symmetric, ratio=3.5, omega=0.63.")
-    print("  All GAMMA <= 4.0 are in OPTIMAL range (omega < 1.0).")
+    print("  GAMMA=2.0 was the reference-case recommendation only.")
+    print("  Do not infer current-grid stability from this table; use the")
+    print("  post-generation check computed with variables.h flow parameters.")
     print()
 
 
-def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status):
+def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status,
+                                  Uref=None, Re=None, H_HILL=None,
+                                  CFL_lambda=None, niu=None):
     """
     Print a concise GILBM stability warning for the chosen parameters.
     Called after grid generation to alert the user.
@@ -502,6 +695,12 @@ def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status)
     print("   GILBM Stability Check")
     print("  " + "=" * 62)
     print(f"    GAMMA        = {gamma:.4f}")
+    if Uref is not None and Re is not None:
+        h_val = 1.0 if H_HILL is None else H_HILL
+        cfl_val = 0.5 if CFL_lambda is None else CFL_lambda
+        print(f"    flow params  = Uref={Uref:g}, Re={Re:g}, H_HILL={h_val:g}, CFL={cfl_val:g}")
+        if niu is not None:
+            print(f"    niu          = {niu:.6e}")
     print(f"    omega_global = {omega:.4f}", end="")
     if omega > 2.0:
         print("  *** UNSTABLE (omega > 2.0) ***")
@@ -509,6 +708,8 @@ def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status)
         print("  ** MARGINAL (omega > 1.5) **")
     elif omega > 1.2:
         print("  * OK (omega > 1.2)")
+    elif omega < 0.505:
+        print("  *** DANGEROUS (omega ≈ 0.5, near negative-viscosity limit) ***")
     else:
         print("  [OPTIMAL]")
     print(f"    max|c_tilde| = {c_max:.1f}")
@@ -520,7 +721,11 @@ def print_gilbm_stability_warning(gamma, omega, c_max, dt_global, a_max, status)
         print()
         print("  !! WARNING: This grid WILL DIVERGE in GILBM !!")
         print("  !! Reduce GAMMA (try 2.0~3.0 for safe symmetric clustering) !!")
-        print("  !! MRT collision requires omega < 2.0 for stability. !!")
+        print("  !! omega (= 3*niu/dt_global + 0.5) > 2.0 → s_visc < 0.5, overly stiff !!")
+    elif omega < 0.505:
+        print()
+        print("  !! DANGEROUS: omega ≈ 0.5 → niu ≈ 0 (near negative-viscosity limit) !!")
+        print("  !! Check Uref, Re, and grid scale. Increase Uref or reduce Re. !!")
     elif omega > 1.5:
         print()
         print("  ** CAUTION: Marginal stability. May diverge under")
@@ -767,6 +972,269 @@ def _poisson_solve(x_init, y_init, P, Q,
     return x, y, convergence
 
 
+# ------------------------------------------------------------------
+#  ADI Poisson solver  (alternating-direction implicit)
+# ------------------------------------------------------------------
+
+def _thomas_solve_vec(a, b, c, d):
+    """
+    Vectorized Thomas algorithm for batched independent tridiagonal systems.
+
+    Solves  a[k]*x[k-1] + b[k]*x[k] + c[k]*x[k+1] = d[k],  k = 0..n-1
+    with a[0] and c[n-1] implicitly zero (values in those slots are ignored).
+
+    All inputs have shape (n,) for a single system or (n, M) for M
+    independent systems solved simultaneously via numpy broadcasting.
+    The matrices must be diagonally dominant for numerical stability.
+    """
+    n = b.shape[0]
+    if n == 0:
+        return np.empty_like(d)
+    if n == 1:
+        return d / b
+    cp = np.empty_like(b)
+    dp = np.empty_like(d)
+    cp[0] = c[0] / b[0]
+    dp[0] = d[0] / b[0]
+    for k in range(1, n):
+        w = b[k] - a[k] * cp[k - 1]
+        cp[k] = c[k] / w
+        dp[k] = (d[k] - a[k] * dp[k - 1]) / w
+    x = np.empty_like(d)
+    x[-1] = dp[-1]
+    for k in range(n - 2, -1, -1):
+        x[k] = dp[k] - cp[k] * x[k + 1]
+    return x
+
+
+def _adi_cycle_params(lam_min, lam_max, p):
+    """
+    Compute *p* geometrically-spaced ADI acceleration parameters.
+
+    For the correction form  (I - sigma*L)*delta = sigma*R,
+    effective damping requires  sigma * |eigenvalue| ~ O(1).
+    Since eigenvalues are in [lam_min, lam_max], the sigma range
+    is [1/lam_max, 1/lam_min] — the reciprocal of the eigenvalue range.
+
+    The ratio 1/lam_min can be astronomically large for fine grids.
+    A cap of 1e6 on sigma_max/sigma_min prevents overshooting while
+    still covering most of the spectrum per cycle.
+    """
+    lam_min = max(float(lam_min), 1e-30)
+    lam_max = max(float(lam_max), lam_min * 2.0)
+    sig_lo = 1.0 / lam_max
+    sig_hi = 1.0 / lam_min
+    max_ratio = 1e6
+    if sig_hi > sig_lo * max_ratio:
+        sig_hi = sig_lo * max_ratio
+    if p <= 1:
+        return [np.sqrt(sig_lo * sig_hi)]
+    log_r = np.log(sig_hi / sig_lo)
+    return [sig_lo * np.exp((2 * k + 1) * log_r / (2 * p))
+            for k in range(p)]
+
+
+def _adi_cycle_params_direct(sig_lo, sig_hi, p):
+    """Geometric spacing of p sigma values in [sig_lo, sig_hi]."""
+    sig_lo = max(float(sig_lo), 1e-30)
+    sig_hi = max(float(sig_hi), sig_lo * 2.0)
+    if p <= 1:
+        return [np.sqrt(sig_lo * sig_hi)]
+    log_r = np.log(sig_hi / sig_lo)
+    return [sig_lo * np.exp((2 * k + 1) * log_r / (2 * p))
+            for k in range(p)]
+
+
+def _poisson_solve_adi(x_init, y_init, P, Q,
+                       n_iter=50000, omega=0.9, tol=1e-10,
+                       print_every=2000, n_adi_params=8):
+    """
+    ADI Poisson solver for Steger-Sorenson elliptic grid generation.
+
+    Algorithm — correction-form ADI with Wachspress cycling:
+
+        (I - sigma * L_xi)(I - sigma * L_eta) * delta = sigma * R
+
+    where
+        L_xi  = alpha * d^2/dxi^2      (implicit — tridiagonal in i)
+        L_eta = gamma * d^2/deta^2      (implicit — tridiagonal in j)
+        R     = full Poisson residual   (cross + source terms explicit)
+
+    Each outer iteration:
+      1. Freeze metrics (alpha, beta, gamma, J) from current (x, y)
+      2. Compute true Poisson residual R
+      3. Xi-sweep: Thomas solve along i for every j-row  (batched)
+      4. Eta-sweep: Thomas solve along j for every i-col (batched)
+      5. r += omega * delta
+      6. Convergence: max |residual| < tol  (hard stop on residual)
+      7. Safety: NaN / Jacobian-fold / divergence → return None
+
+    Cross-derivative  -2*beta * r_xieta  and first-derivative source
+    terms  J^2*(P*r_xi + Q*r_eta)  stay in R (explicit).
+    Only principal diffusion enters the tridiagonal splits, so the
+    matrices are always strictly diagonally dominant and the Thomas
+    algorithm is unconditionally stable.
+
+    Parameters
+    ----------
+    x_init, y_init : (nj, ni) arrays — initial guess (boundaries fixed)
+    P, Q           : (nj, ni) arrays — control functions
+    n_iter         : max outer iterations
+    omega          : under-relaxation factor  (0 < omega <= 1)
+    tol            : convergence tolerance on max |Poisson residual|
+    print_every    : reporting interval (0 = silent)
+    n_adi_params   : number of Wachspress cycling sigmas (≥1)
+
+    Returns
+    -------
+    x, y        : (nj, ni) arrays — converged grid, or (None, None) on failure
+    convergence : list of float — max |Poisson residual| per iteration
+    """
+    nj, ni = x_init.shape
+    x = x_init.copy()
+    y = y_init.copy()
+    convergence = []           # max |Poisson residual| per iteration
+    diverged = False
+
+    if ni < 3 or nj < 3:
+        print("    ADI: grid too small (need ni,nj >= 3)")
+        return None, None, convergence
+
+    sigma_cycle = [1.0]
+
+    si = slice(1, ni - 1)          # interior i = 1 .. ni-2
+    sj = slice(1, nj - 1)          # interior j = 1 .. nj-2
+
+    for it in range(n_iter):
+        # ── 1. Frozen metrics from current (x, y) ──────────────────
+        x_xi  = np.zeros_like(x);  x_xi[:, 1:-1]  = 0.5 * (x[:, 2:] - x[:, :-2])
+        y_xi  = np.zeros_like(y);  y_xi[:, 1:-1]  = 0.5 * (y[:, 2:] - y[:, :-2])
+        x_eta = np.zeros_like(x);  x_eta[1:-1, :] = 0.5 * (x[2:, :] - x[:-2, :])
+        y_eta = np.zeros_like(y);  y_eta[1:-1, :] = 0.5 * (y[2:, :] - y[:-2, :])
+
+        al_full = x_eta**2 + y_eta**2
+        be_full = x_xi * x_eta + y_xi * y_eta
+        ga_full = x_xi**2 + y_xi**2
+        J_full  = x_xi * y_eta - x_eta * y_xi
+        J2_full = J_full**2
+
+        al = al_full[sj, si]       # (nj-2, ni-2)
+        be = be_full[sj, si]
+        ga = ga_full[sj, si]
+        j2 = J2_full[sj, si]
+        Pi = P[sj, si]
+        Qi = Q[sj, si]
+
+        # ── 2. True Poisson residual at interior ───────────────────
+        #   R = alpha*r_xixi - 2*beta*r_xieta + gamma*r_etaeta
+        #       + J^2*(P*r_xi + Q*r_eta)
+        x_xixi   = x[sj, 2:] - 2.0 * x[sj, si] + x[sj, :-2]
+        y_xixi   = y[sj, 2:] - 2.0 * y[sj, si] + y[sj, :-2]
+        x_etaeta = x[2:, si] - 2.0 * x[sj, si] + x[:-2, si]
+        y_etaeta = y[2:, si] - 2.0 * y[sj, si] + y[:-2, si]
+        x_xieta  = 0.25 * (x[2:, 2:] - x[2:, :-2]
+                           - x[:-2, 2:] + x[:-2, :-2])
+        y_xieta  = 0.25 * (y[2:, 2:] - y[2:, :-2]
+                           - y[:-2, 2:] + y[:-2, :-2])
+        x_xi_i   = 0.5 * (x[sj, 2:] - x[sj, :-2])
+        y_xi_i   = 0.5 * (y[sj, 2:] - y[sj, :-2])
+        x_eta_i  = 0.5 * (x[2:, si] - x[:-2, si])
+        y_eta_i  = 0.5 * (y[2:, si] - y[:-2, si])
+
+        Rx = (al * x_xixi - 2.0 * be * x_xieta + ga * x_etaeta
+              + j2 * (Pi * x_xi_i + Qi * x_eta_i))
+        Ry = (al * y_xixi - 2.0 * be * y_xieta + ga * y_etaeta
+              + j2 * (Pi * y_xi_i + Qi * y_eta_i))
+
+        max_res = max(float(np.max(np.abs(Rx))),
+                      float(np.max(np.abs(Ry))))
+        convergence.append(max_res)
+
+        # ── Adaptive sigma cycle ───────────────────────────────────
+        # Eigenvalue bounds updated periodically; sigma cap adapts
+        # every iteration to current residual so corrections stay
+        # bounded at ≈ 0.5% of grid scale (no step-size limiter needed)
+        cycle_len = max(n_adi_params, 1)
+        if it % max(cycle_len * 10, 1) == 0 or it == 0:
+            al_mx = float(np.max(al))
+            ga_mx = float(np.max(ga))
+            l_max = 4.0 * max(al_mx, ga_mx)
+            sig_lo = 1.0 / l_max
+            scale_ref_now = max(float(np.max(np.abs(x[sj, si]))),
+                                float(np.max(np.abs(y[sj, si]))), 1e-10)
+
+        safe_sig = 0.005 * scale_ref_now / max(max_res, 1e-30)
+        sig_hi = max(safe_sig, sig_lo * 4.0)
+        sig_hi = min(sig_hi, 1e10)
+        sigma_cycle = _adi_cycle_params_direct(sig_lo, sig_hi, n_adi_params)
+        if it == 0:
+            print(f"    ADI sigma: [{sigma_cycle[0]:.4e}, {sigma_cycle[-1]:.4e}]  "
+                  f"({n_adi_params} params, adaptive cap)")
+
+        sig = sigma_cycle[it % len(sigma_cycle)]
+
+        # ── 3. Safety checks ──────────────────────────────────────
+        if np.isnan(max_res) or max_res > 1e15:
+            print(f"    ADI DIVERGED at iter {it}, residual = {max_res:.4e}")
+            diverged = True
+            break
+
+        if it % 500 == 0:
+            J_min_now = float(np.min(J_full[sj, si]))
+            if J_min_now <= 0:
+                n_neg = int(np.sum(J_full[sj, si] <= 0))
+                print(f"    ADI iter {it}: {n_neg} non-positive Jacobian "
+                      f"(J_min={J_min_now:.4e})")
+
+        if print_every and (it % print_every == 0 or it == n_iter - 1):
+            print(f"    iter {it:6d}:  res = {max_res:.6e}  sigma={sig:.3e}")
+
+        if max_res < tol:
+            print(f"    ADI converged at iter {it}, res = {max_res:.6e}")
+            break
+
+        # ── 5. Xi-sweep: (I - sig*alpha*D²_xi) delta* = sig*R ────
+        # system dim = ni-2 (first axis), batch dim = nj-2 (second)
+        al_T = al.T                                 # (ni-2, nj-2)
+        a_xi =  -sig * al_T
+        b_xi = 1.0 + 2.0 * sig * al_T
+        c_xi =  -sig * al_T
+        dsx = _thomas_solve_vec(a_xi, b_xi, c_xi, sig * Rx.T)
+        dsy = _thomas_solve_vec(a_xi, b_xi, c_xi, sig * Ry.T)
+
+        # ── 6. Eta-sweep: (I - sig*gamma*D²_eta) delta = delta* ──
+        # system dim = nj-2 (first axis), batch dim = ni-2 (second)
+        a_eta =  -sig * ga                           # (nj-2, ni-2)
+        b_eta = 1.0 + 2.0 * sig * ga
+        c_eta =  -sig * ga
+        dx = _thomas_solve_vec(a_eta, b_eta, c_eta, dsx.T)
+        dy = _thomas_solve_vec(a_eta, b_eta, c_eta, dsy.T)
+
+        # ── 7. Update ─────────────────────────────────────────────
+        x[sj, si] += omega * dx
+        y[sj, si] += omega * dy
+
+    # ── Final Jacobian positivity check ──
+    xxi_f  = np.zeros_like(x);  xxi_f[:, 1:-1]  = 0.5 * (x[:, 2:] - x[:, :-2])
+    yxi_f  = np.zeros_like(y);  yxi_f[:, 1:-1]  = 0.5 * (y[:, 2:] - y[:, :-2])
+    xet_f  = np.zeros_like(x);  xet_f[1:-1, :]  = 0.5 * (x[2:, :] - x[:-2, :])
+    yet_f  = np.zeros_like(y);  yet_f[1:-1, :]  = 0.5 * (y[2:, :] - y[:-2, :])
+    J_fin  = xxi_f * yet_f - xet_f * yxi_f
+    Jmf    = float(np.min(J_fin[sj, si]))
+    folded = Jmf <= 0
+    if folded:
+        n_neg = int(np.sum(J_fin[sj, si] <= 0))
+        print(f"    !! ADI FINAL: {n_neg} non-positive Jacobian "
+              f"(J_min={Jmf:.4e}) — GRID REJECTED !!")
+    else:
+        print(f"    ADI Jacobian OK: J_min = {Jmf:.4e} > 0")
+
+    if diverged or folded:
+        return None, None, convergence
+
+    return x, y, convergence
+
+
 def _tfi(x_bot, y_bot, x_top, y_top, x_lft, y_lft, x_rgt, y_rgt):
     """Transfinite Interpolation (vectorised)."""
     ni = len(x_bot); nj = len(x_lft)
@@ -788,29 +1256,36 @@ def _bilinear_interp_2d(data, eta_old, xi_old, eta_new, xi_new):
     Bilinear interpolation of 2D data from (eta_old, xi_old) grid
     to (eta_new, xi_new) grid. Pure numpy, no scipy required.
     """
-    nj_new = len(eta_new)
-    ni_new = len(xi_new)
     nj_old = len(eta_old)
     ni_old = len(xi_old)
-    result = np.empty((nj_new, ni_new))
+    if nj_old < 2 or ni_old < 2:
+        raise ValueError("Bilinear interpolation requires at least 2x2 source points")
 
-    for jj in range(nj_new):
-        e = eta_new[jj]
-        j0 = np.searchsorted(eta_old, e, side='right') - 1
-        j0 = max(0, min(j0, nj_old - 2))
-        j1 = j0 + 1
-        te = (e - eta_old[j0]) / (eta_old[j1] - eta_old[j0]) if eta_old[j1] != eta_old[j0] else 0.0
+    j0 = np.searchsorted(eta_old, eta_new, side='right') - 1
+    i0 = np.searchsorted(xi_old, xi_new, side='right') - 1
+    j0 = np.clip(j0, 0, nj_old - 2)
+    i0 = np.clip(i0, 0, ni_old - 2)
+    j1 = j0 + 1
+    i1 = i0 + 1
 
-        for ii in range(ni_new):
-            x = xi_new[ii]
-            i0 = np.searchsorted(xi_old, x, side='right') - 1
-            i0 = max(0, min(i0, ni_old - 2))
-            i1 = i0 + 1
-            tx = (x - xi_old[i0]) / (xi_old[i1] - xi_old[i0]) if xi_old[i1] != xi_old[i0] else 0.0
+    eta_den = eta_old[j1] - eta_old[j0]
+    xi_den = xi_old[i1] - xi_old[i0]
+    te = np.divide(eta_new - eta_old[j0], eta_den,
+                   out=np.zeros_like(eta_new, dtype=float),
+                   where=eta_den != 0.0)
+    tx = np.divide(xi_new - xi_old[i0], xi_den,
+                   out=np.zeros_like(xi_new, dtype=float),
+                   where=xi_den != 0.0)
 
-            result[jj, ii] = ((1-te)*(1-tx)*data[j0, i0] + (1-te)*tx*data[j0, i1]
-                             + te*(1-tx)*data[j1, i0] + te*tx*data[j1, i1])
-    return result
+    w00 = (1.0 - te)[:, np.newaxis] * (1.0 - tx)[np.newaxis, :]
+    w01 = (1.0 - te)[:, np.newaxis] * tx[np.newaxis, :]
+    w10 = te[:, np.newaxis] * (1.0 - tx)[np.newaxis, :]
+    w11 = te[:, np.newaxis] * tx[np.newaxis, :]
+
+    return (w00 * data[j0[:, np.newaxis], i0[np.newaxis, :]]
+            + w01 * data[j0[:, np.newaxis], i1[np.newaxis, :]]
+            + w10 * data[j1[:, np.newaxis], i0[np.newaxis, :]]
+            + w11 * data[j1[:, np.newaxis], i1[np.newaxis, :]])
 
 
 def _interpolate_PQ(P, Q, ni_old, nj_old, ni_new, nj_new):
@@ -845,7 +1320,10 @@ def _resample_boundary(xb, yb, n_new):
     if n_new == n_old:
         return xb.copy(), yb.copy()
     ds = np.sqrt(np.diff(xb)**2 + np.diff(yb)**2)
-    s = np.concatenate(([0], np.cumsum(ds))); s /= s[-1]
+    s = np.concatenate(([0], np.cumsum(ds)))
+    if s[-1] < 1e-30:
+        return np.full(n_new, xb[0]), np.full(n_new, yb[0])
+    s /= s[-1]
     s_norm_old = np.linspace(0, 1, n_old)
     s_new = np.interp(np.linspace(0, 1, n_new), s_norm_old, s)
 
@@ -859,7 +1337,8 @@ def _resample_boundary(xb, yb, n_new):
 
 def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
                            gamma=0.0, alpha=0.5,
-                           poisson_iter=15000, poisson_tol=1e-10):
+                           poisson_iter=15000, poisson_tol=1e-10,
+                           LZ=None, poisson_method="adi"):
     """
     Full Steger-Sorenson adaptive grid generation.
 
@@ -896,6 +1375,29 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     xl, yl = _resample_boundary(x_ref[:, 0],  y_ref[:, 0],  nj_new)
     xr, yr = _resample_boundary(x_ref[:, -1], y_ref[:, -1], nj_new)
 
+    # Analytical overwrite: bottom boundary must lie exactly on the
+    # Mellen-Fröhlich-Rodi hill polynomial.  _resample_boundary uses cubic
+    # interpolation from the reference grid, which introduces O(1e-6) error
+    # at different target resolutions.  Overwrite yb (wall-normal heights)
+    # with analytically evaluated hill_function values.
+    _scale = _physical_unit_scale_from_grid(x_ref, _HILL_LY)
+    yb_old = yb.copy()
+    yb = hill_function_array(xb * _scale, LY=_HILL_LY) / _scale
+    _max_correction = float(np.max(np.abs(yb - yb_old)))
+    print(f"    [3/6] Bottom boundary: analytical hill overwrite "
+          f"(max correction = {_max_correction:.3e})")
+
+    # Analytical overwrite: top boundary must be at exactly LZ (in physical
+    # units).  The reference grid may have z_top != LZ*h_phys due to the
+    # original Frohlich data being rounded (e.g. 0.085 m vs 3.036*0.028).
+    if LZ is not None:
+        yt_exact = LZ / _scale   # LZ in code units → physical
+        yt_old = yt.copy()
+        yt[:] = yt_exact
+        _top_correction = float(np.max(np.abs(yt - yt_old)))
+        print(f"    [3/6] Top boundary: analytical LZ={LZ} overwrite "
+              f"(max correction = {_top_correction:.3e})")
+
     xl[0] = xb[0];   yl[0] = yb[0]
     xl[-1] = xt[0];  yl[-1] = yt[0]
     xr[0] = xb[-1];  yr[0] = yb[-1]
@@ -904,10 +1406,22 @@ def generate_adaptive_grid(x_ref, y_ref, ni_new, nj_new,
     print("    [4/6] TFI initial guess ...")
     x_tfi, y_tfi = _tfi(xb, yb, xt, yt, xl, yl, xr, yr)
 
-    print(f"    [5/6] Poisson solve (max {poisson_iter} iter) ...")
-    x_out, y_out, conv = _poisson_solve(
-        x_tfi, y_tfi, P_new, Q_new,
-        n_iter=poisson_iter, omega=1.0, tol=poisson_tol, print_every=2000)
+    if poisson_method == "adi":
+        print(f"    [5/6] Poisson solve — ADI (max {poisson_iter} iter) ...")
+        x_out, y_out, conv = _poisson_solve_adi(
+            x_tfi, y_tfi, P_new, Q_new,
+            n_iter=poisson_iter, omega=0.9, tol=poisson_tol,
+            print_every=2000, n_adi_params=8)
+    else:
+        print(f"    [5/6] Poisson solve — Gauss-Seidel (max {poisson_iter} iter) ...")
+        x_out, y_out, conv = _poisson_solve(
+            x_tfi, y_tfi, P_new, Q_new,
+            n_iter=poisson_iter, omega=1.0, tol=poisson_tol,
+            print_every=2000)
+
+    if x_out is None:
+        print("    [5/6] Poisson solve FAILED — returning None")
+        return None, None, conv
 
     if gamma > 1e-14:
         print(f"    [6/6] Applying physical-z stretching (gamma={gamma}, alpha={alpha}) ...")
@@ -931,10 +1445,10 @@ def write_tecplot_dat(filepath, x, y, title="Generated grid",
         f.write('"y corner"\n')
         f.write(f'ZONE T="{zone_title}"\n')
         f.write(f' I={ni}, J={nj}, K=1,F=POINT\n')
-        f.write('DT=(SINGLE SINGLE )\n')
+        f.write('DT=(DOUBLE DOUBLE )\n')
         for j in range(nj):
             for i in range(ni):
-                f.write(f" {x[j, i]: .9E} {y[j, i]: .9E}\n")
+                f.write(f" {x[j, i]: .15E} {y[j, i]: .15E}\n")
     print(f"  [written] {filepath}")
 
 
@@ -1152,6 +1666,248 @@ def validate_grid_dimensions(dat_path, NY, NZ):
 
 
 # ============================================================
+#  7b. Grid Spacing Ratio Limiter
+# ============================================================
+#
+#  網格間距比率限制器
+#  ==================
+#
+#  計算公式:
+#    Δy(ξ,ζ) = (|y(ξ+1,ζ) - y(ξ,ζ)| + |y(ξ,ζ) - y(ξ-1,ζ)|) / 2
+#    Δz(ξ,ζ) = (|z(ξ,ζ+1) - z(ξ,ζ)| + |z(ξ,ζ) - z(ξ,ζ-1)|) / 2
+#
+#  限制:
+#    max(Δy,Δz) / min(Δy,Δz) ∈ [RATIO_LO, RATIO_HI]
+#    全場全域搜索，兩方向合併計算
+#
+#  流程:
+#    1. 生成 Poisson 基礎網格 (gamma=0, 無拉伸)
+#    2. 對候選 GAMMA 套用 Vinokur 重分布 (O(NI×NJ), ~ms)
+#    3. 計算間距比率
+#    4. 二分法調整 GAMMA 直到比率落入範圍
+#    5. 逐步紀錄調整過程
+#
+#  Poisson solve 只執行一次，GAMMA 調整只做重分布 + 比率計算
+# ============================================================
+
+RATIO_LO_DEFAULT = 12.0
+RATIO_HI_DEFAULT = 20.0
+
+
+def compute_local_spacing(x_grid, y_grid, scale_factor=1.0):
+    """
+    Compute local grid spacing using central averaging (dimensionless code units).
+
+    Parameters
+    ----------
+    x_grid : ndarray (nj, ni)  — streamwise coordinate (= y in LBM)
+    y_grid : ndarray (nj, ni)  — wall-normal coordinate (= z in LBM)
+    scale_factor : float — multiply to convert to code units (H_HILL=1.0)
+
+    Returns
+    -------
+    delta_y : ndarray (nj, ni) — local streamwise spacing
+    delta_z : ndarray (nj, ni) — local wall-normal spacing
+    """
+    x_c = x_grid * scale_factor
+    y_c = y_grid * scale_factor
+
+    # Δy: streamwise (i-direction differences of x_grid)
+    dy_fwd = np.abs(np.diff(x_c, axis=1))          # (nj, ni-1)
+    delta_y = np.empty_like(x_c)
+    delta_y[:, 0] = dy_fwd[:, 0]
+    delta_y[:, -1] = dy_fwd[:, -1]
+    delta_y[:, 1:-1] = 0.5 * (dy_fwd[:, 1:] + dy_fwd[:, :-1])
+
+    # Δz: wall-normal (j-direction differences of y_grid)
+    dz_fwd = np.abs(np.diff(y_c, axis=0))           # (nj-1, ni)
+    delta_z = np.empty_like(y_c)
+    delta_z[0, :] = dz_fwd[0, :]
+    delta_z[-1, :] = dz_fwd[-1, :]
+    delta_z[1:-1, :] = 0.5 * (dz_fwd[1:, :] + dz_fwd[:-1, :])
+
+    return delta_y, delta_z
+
+
+def compute_spacing_ratio(delta_y, delta_z):
+    """
+    Compute combined global spacing ratio: max(Δy,Δz) / min(Δy,Δz).
+
+    Returns dict with ratio, extremes, and source labels.
+    """
+    dy_pos = delta_y[delta_y > 1e-30]
+    dz_pos = delta_z[delta_z > 1e-30]
+
+    dy_min = float(dy_pos.min()) if len(dy_pos) > 0 else float('inf')
+    dy_max = float(dy_pos.max()) if len(dy_pos) > 0 else 0.0
+    dz_min = float(dz_pos.min()) if len(dz_pos) > 0 else float('inf')
+    dz_max = float(dz_pos.max()) if len(dz_pos) > 0 else 0.0
+
+    max_val = max(dy_max, dz_max)
+    min_val = min(dy_min, dz_min)
+    max_src = 'Δy' if dy_max >= dz_max else 'Δz'
+    min_src = 'Δy' if dy_min <= dz_min else 'Δz'
+
+    ratio = max_val / min_val if min_val > 0 else float('inf')
+
+    return {
+        "ratio": ratio,
+        "max_val": max_val, "min_val": min_val,
+        "dy_min": dy_min, "dy_max": dy_max,
+        "dz_min": dz_min, "dz_max": dz_max,
+        "max_src": max_src, "min_src": min_src,
+    }
+
+
+def _ratio_at_gamma(x_base, y_base, gamma, alpha, scale_factor):
+    """Apply Vinokur redistribution at candidate gamma, return spacing ratio info."""
+    if gamma > 1e-14:
+        x_t, y_t = redistribute_vertical_physical(
+            x_base, y_base, gamma=gamma, alpha=alpha)
+    else:
+        x_t, y_t = x_base, y_base
+    dy, dz = compute_local_spacing(x_t, y_t, scale_factor)
+    return compute_spacing_ratio(dy, dz)
+
+
+def auto_adjust_gamma(x_base, y_base, gamma_init, alpha, scale_factor,
+                      ratio_lo=RATIO_LO_DEFAULT, ratio_hi=RATIO_HI_DEFAULT,
+                      max_iter=50):
+    """
+    Auto-adjust GAMMA via bisection on a base grid (Poisson-solved, no stretching).
+
+    The base grid's topology is fixed; only the Vinokur redistribution is varied.
+    Each iteration is O(NI×NJ) — no Poisson re-solve.
+
+    Returns
+    -------
+    gamma_adjusted : float
+    log_entries : list of str — per-step adjustment log
+    final_info : dict — compute_spacing_ratio result for the adjusted GAMMA
+    """
+    log = []
+
+    if alpha < 0.5:
+        log.append(f"  ⚠ alpha={alpha:.2f} < 0.5: vinokur_tanh 可能非單調，結果需人工確認")
+
+    # Step 0: evaluate initial GAMMA
+    info0 = _ratio_at_gamma(x_base, y_base, gamma_init, alpha, scale_factor)
+    r0 = info0["ratio"]
+    log.append(f"Step 0: GAMMA={gamma_init:.4f} → ratio={r0:.2f} "
+               f"(Δy=[{info0['dy_min']:.4e}, {info0['dy_max']:.4e}], "
+               f"Δz=[{info0['dz_min']:.4e}, {info0['dz_max']:.4e}])")
+
+    if not np.isfinite(r0):
+        log.append(f"  → ratio={r0} 非有限值，無法調整 ✗")
+        return gamma_init, log, info0
+
+    if ratio_lo <= r0 <= ratio_hi:
+        log.append(f"  → ratio {r0:.2f} ∈ [{ratio_lo}, {ratio_hi}] — 無需調整 ✓")
+        return gamma_init, log, info0
+
+    if r0 < ratio_lo:
+        log.append(f"  → ratio {r0:.2f} < {ratio_lo}: 拉伸不足，需增加 GAMMA")
+        g_lo, g_hi = gamma_init, 20.0
+        target = ratio_lo
+    else:
+        log.append(f"  → ratio {r0:.2f} > {ratio_hi}: 拉伸過強，需減少 GAMMA")
+        if gamma_init < 0.1:
+            log.append(f"  → GAMMA≈0 但 ratio 已超標 — "
+                       f"Poisson 基礎網格本身間距比率過大，無法透過調整 GAMMA 修正")
+            return gamma_init, log, info0
+        g_lo, g_hi = 0.01, gamma_init
+        target = ratio_hi
+
+    best_gamma = None
+    best_info = None
+    best_dist = float('inf')
+
+    for step in range(1, max_iter + 1):
+        g_mid = 0.5 * (g_lo + g_hi)
+        info_mid = _ratio_at_gamma(x_base, y_base, g_mid, alpha, scale_factor)
+        r_mid = info_mid["ratio"]
+
+        if not np.isfinite(r_mid):
+            g_hi = g_mid
+            log.append(f"Step {step}: GAMMA={g_mid:.6f} → ratio=非有限值，收縮上界")
+            continue
+
+        in_range = ratio_lo <= r_mid <= ratio_hi
+        mark = "✓" if in_range else "✗"
+        log.append(f"Step {step}: GAMMA={g_mid:.6f} → ratio={r_mid:.4f} "
+                   f"(Δz_min={info_mid['dz_min']:.4e}) {mark}")
+
+        if in_range:
+            dist = abs(r_mid - target)
+            if dist < best_dist:
+                best_gamma = g_mid
+                best_info = info_mid
+                best_dist = dist
+
+        if r_mid < target:
+            g_lo = g_mid
+        else:
+            g_hi = g_mid
+
+        if abs(g_hi - g_lo) < 1e-6:
+            break
+
+    if best_gamma is not None:
+        stretch_a = float(np.tanh(best_gamma / 2.0))
+        log.append(f"  → 收斂: GAMMA={best_gamma:.6f} → ratio={best_info['ratio']:.4f} "
+                   f"(STRETCH_A={stretch_a:.6f}, 目標={target:.1f})")
+        return best_gamma, log, best_info
+
+    # Fallback: no in-range result found
+    g_final = 0.5 * (g_lo + g_hi)
+    info_final = _ratio_at_gamma(x_base, y_base, g_final, alpha, scale_factor)
+    r_final = info_final["ratio"]
+    stretch_a = float(np.tanh(g_final / 2.0))
+    in_range = ratio_lo <= r_final <= ratio_hi
+    mark = "✓" if in_range else "✗ (未收斂)"
+    log.append(f"  → 最大迭代: GAMMA={g_final:.6f} → ratio={r_final:.4f} "
+               f"(STRETCH_A={stretch_a:.6f}) {mark}")
+    return g_final, log, info_final
+
+
+def print_spacing_ratio_result(gamma_original, gamma_adjusted, ratio_lo, ratio_hi,
+                               final_info, log_entries, NZ, alpha):
+    """Print formatted spacing ratio adjustment report."""
+    print()
+    print("  " + "=" * 68)
+    print("   Grid Spacing Ratio Limiter")
+    print("  " + "=" * 68)
+    print(f"    Constraint: max(Δy,Δz)/min(Δy,Δz) ∈ [{ratio_lo:.1f}, {ratio_hi:.1f}]")
+    print(f"    NZ = {NZ}, ALPHA = {alpha:.2f}")
+    print()
+    print("  Adjustment Log:")
+    for entry in log_entries:
+        print(f"    {entry}")
+    print()
+    print(f"    Δy range: [{final_info['dy_min']:.6e}, {final_info['dy_max']:.6e}]")
+    print(f"    Δz range: [{final_info['dz_min']:.6e}, {final_info['dz_max']:.6e}]")
+    print(f"    Combined ratio: {final_info['ratio']:.4f}")
+    print(f"      max from: {final_info['max_src']} = {final_info['max_val']:.6e}")
+    print(f"      min from: {final_info['min_src']} = {final_info['min_val']:.6e}")
+
+    if abs(gamma_original - gamma_adjusted) > 1e-6:
+        sa_old = float(np.tanh(gamma_original / 2.0))
+        sa_new = float(np.tanh(gamma_adjusted / 2.0))
+        print()
+        print(f"    ⚠ GAMMA 已調整: {gamma_original:.4f} → {gamma_adjusted:.6f}")
+        print(f"      STRETCH_A:    {sa_old:.6f} → {sa_new:.6f}")
+        print()
+        print(f"    請更新 variables.h:")
+        print(f"      #define  STRETCH_A  {sa_new:.6f}")
+    else:
+        print()
+        print(f"    ✓ GAMMA={gamma_adjusted:.4f} 滿足限制（無需調整）")
+
+    print("  " + "=" * 68)
+    print()
+
+
+# ============================================================
 #  8.  Interactive helpers
 # ============================================================
 
@@ -1214,8 +1970,10 @@ def detect_dat_files(folder):
 def parse_variables_h(path):
     """
     Parse #define macros from variables.h.
-    Returns dict with keys: NY, NZ, LZ, LY, CFL, ALPHA, GRID_DAT_DIR, GRID_DAT_REF.
-    GAMMA is optional (auto-computed from bisection if missing).
+    Returns dict with keys such as:
+      NY, NZ, LZ, LY, H_HILL, CFL, ALPHA, GAMMA, Uref, Re,
+      GRID_DAT_DIR, GRID_DAT_REF.
+    GAMMA is parsed when present; auto_generate requires it.
 
     Naming convention (enforced):
       NX, NY, NZ = node count  (格點數)  → cells = NX-1, NY-1, NZ-1
@@ -1229,15 +1987,20 @@ def parse_variables_h(path):
         if m:
             result[key] = int(m.group(1))
     # Float defines (may have parentheses)
-    for key in ("GAMMA", "ALPHA", "CFL"):
+    for key in ("GAMMA", "ALPHA", "CFL", "Uref", "Re", "STRETCH_A"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
     # Float defines that may be in parentheses like (3.036)
-    for key in ("LZ", "LY"):
+    for key in ("LZ", "LY", "H_HILL", "RATIO_LO", "RATIO_HI"):
         m = re.search(rf'#define\s+{key}\s+\(?([\d.eE+\-]+)\)?', text)
         if m:
             result[key] = float(m.group(1))
+    # Derive GAMMA from STRETCH_A when GAMMA is an expression (not a literal number)
+    if "GAMMA" not in result and "STRETCH_A" in result:
+        a = result["STRETCH_A"]
+        if 0.0 < a < 1.0:
+            result["GAMMA"] = float(np.log((1.0 + a) / (1.0 - a)))
     # String defines
     for key in ("GRID_DAT_DIR", "GRID_DAT_REF"):
         m = re.search(rf'#define\s+{key}\s+"([^"]+)"', text)
@@ -1246,7 +2009,39 @@ def parse_variables_h(path):
     return result
 
 
-def auto_generate(variables_h_path, script_dir=None):
+def update_stretch_a_in_variables_h(path, new_stretch_a):
+    """
+    Update #define STRETCH_A in variables.h.
+    If STRETCH_A_X exists, synchronize it to the same value.
+
+    Returns True if the file was modified, False if unchanged.
+    """
+    p = Path(path)
+    text = p.read_text(encoding="utf-8", errors="replace")
+    new_val_str = f"{new_stretch_a:.6f}"
+    modified = False
+
+    for name in ("STRETCH_A", "STRETCH_A_X"):
+        pattern = rf'(#define\s+{name}\s+)[\d.eE+\-]+'
+        m = re.search(pattern, text)
+        if m is None:
+            if name == "STRETCH_A":
+                print(f"  [WARNING] Cannot find #define STRETCH_A in {path}")
+                return False
+            continue
+        old_val_str = text[m.start(0) + len(m.group(1)):m.end(0)]
+        if old_val_str.strip() != new_val_str.strip():
+            text = text[:m.start(0)] + m.group(1) + new_val_str + text[m.end(0):]
+            print(f"  [auto-update] variables.h: {name} {old_val_str} → {new_val_str}")
+            modified = True
+
+    if modified:
+        p.write_text(text, encoding="utf-8")
+    return modified
+
+
+def auto_generate(variables_h_path, script_dir=None, poisson_method="adi",
+                  force=False):
     """
     Fully automatic grid generation:
       1. Parse NY, NZ, LZ, LY, GAMMA, ALPHA from variables.h
@@ -1267,7 +2062,8 @@ def auto_generate(variables_h_path, script_dir=None):
         script_dir = Path(__file__).parent
 
     params = parse_variables_h(variables_h_path)
-    required = ["NY", "NZ", "ALPHA", "GAMMA", "GRID_DAT_REF"]
+    required = ["NY", "NZ", "LZ", "ALPHA", "GAMMA", "STRETCH_A",
+                "GRID_DAT_REF", "Uref", "Re"]
     for k in required:
         if k not in params:
             raise ValueError(f"Missing #define {k} in {variables_h_path}")
@@ -1276,10 +2072,14 @@ def auto_generate(variables_h_path, script_dir=None):
     NZ = params["NZ"]          # node count (格點數)
     alpha = params["ALPHA"]
     gamma = params["GAMMA"]
+    stretch_a = params["STRETCH_A"]
     ref_name = params["GRID_DAT_REF"]
-    LZ = params.get("LZ", 3.036)
+    LZ = params["LZ"]
     LY = params.get("LY", 9.0)
+    H_HILL = params.get("H_HILL", 1.0)
     CFL_val = params.get("CFL", 0.5)
+    Uref = params["Uref"]
+    Re_val = params["Re"]
 
     NZ_cells = NZ - 1          # wall-normal cell count (格子數 = NZ-1)
 
@@ -1300,6 +2100,40 @@ def auto_generate(variables_h_path, script_dir=None):
     if not ref_path.exists():
         raise FileNotFoundError(f"Reference grid not found: {ref_path}")
 
+    # ── Idempotency check: parameter-based, not mtime-based ──
+    # Skip conditions: .dat exists + header I/J == NY/NZ + filename s{STRETCH_A} matches.
+    # If .dat is valid but grid_data diagnostic is missing, only regenerate grid_data.
+    sa_expected = float(np.tanh(gamma / 2.0))
+    grid_key_early = ref_path.stem
+    expected_name = f"adaptive_{grid_key_early}_I{NI}_J{NJ}_s{sa_expected:.6f}.dat"
+    expected_path = script_dir / expected_name
+    if expected_path.exists() and not force:
+        try:
+            ok, ni_a, nj_a, ni_e, nj_e = validate_grid_dimensions(
+                str(expected_path), NY, NZ)
+            if ok:
+                sa_in_name = abs(sa_expected - stretch_a) < 1e-8
+                if not sa_in_name:
+                    print(f"  [auto] Grid exists but STRETCH_A mismatch: "
+                          f"file={sa_expected:.6f} vs variables.h={stretch_a:.6f}")
+                else:
+                    print(f"  [auto] Grid already exists and parameters match: {expected_name}")
+                    print(f"  [auto] I={ni_a} J={nj_a}, s={sa_expected:.6f} ✓")
+                    diag_name = f"grid_data_I{NI}_J{NJ}_s{sa_expected:.6f}.txt"
+                    diag_path = script_dir / diag_name
+                    if not diag_path.exists():
+                        print(f"  [auto] Diagnostics missing — regenerating {diag_name} only")
+                        x_dat, y_dat, _, _ = parse_tecplot_dat(expected_path)
+                        write_grid_data(diag_path, x_dat, y_dat,
+                                        NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha,
+                                        LZ=LZ, source_dat=expected_name)
+                        print(f"  [auto] Diagnostics written: {diag_name}")
+                    return str(expected_path)
+        except Exception:
+            pass
+    elif force and expected_path.exists():
+        print(f"  [auto] --force: ignoring existing {expected_name}, regenerating")
+
     # Load reference grid
     x_ref, y_ref, ni_ref, nj_ref = parse_tecplot_dat(ref_path)
 
@@ -1309,6 +2143,7 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Reference grid: I={ni_ref} x J={nj_ref}")
 
     print(f"  [auto] variables.h: NY={NY} (nodes), NZ={NZ} (nodes), LZ={LZ}, ALPHA={alpha}")
+    print(f"  [auto] Flow: Re={Re_val:g}, Uref={Uref:g}, H_HILL={H_HILL:g}, CFL={CFL_val:g}")
     print(f"  [auto] Wall-normal: {NZ} nodes = {NZ_cells} cells")
     print(f"  [auto] GAMMA={gamma} (user input)")
     if gamma > 0:
@@ -1316,30 +2151,102 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Reference: {ref_path.name}")
     print(f"  [auto] Target grid: I={NI} (=NY) x J={NJ} (=NZ)")
 
-    # ── GILBM stability pre-check ──
+    # ── GILBM stability pre-check (階段 A: 1D 無網格預估) ──
     print_gilbm_stability_table()
+    if gamma > 0:
+        pre = estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re_val,
+                                     H_HILL=H_HILL, CFL=CFL_val, LY=LY,
+                                     alpha=alpha)
+        print(f"  [pre-check] 1D 預估 (無網格, estimate_omega_pregrid):")
+        print(f"    dz_min     = {pre['dz_min']:.6e}")
+        print(f"    max|c̃| est = {pre['max_c_est']:.1f}")
+        print(f"    dt_est     = {pre['dt_est']:.4e}")
+        print(f"    omega_est  = {pre['omega_est']:.4f}", end="")
+        if pre["omega_est"] > 2.0:
+            print("  *** 預估不穩定 (omega > 2.0) ***")
+            print()
+            print("  !! WARNING: 1D 預估 omega > 2.0, 網格很可能不穩定 !!")
+            print("  !! 建議減小 GAMMA 再試. 繼續生成以取得精確值... !!")
+        elif pre["omega_est"] > 1.5:
+            print("  ** 預估邊際 (omega > 1.5)")
+        else:
+            print(f"  [預估穩定]")
+        print()
 
-    x_out, y_out, conv = generate_adaptive_grid(
+    # ── 讀取間距比率限制 ──
+    ratio_lo = params.get("RATIO_LO", RATIO_LO_DEFAULT)
+    ratio_hi = params.get("RATIO_HI", RATIO_HI_DEFAULT)
+    if ratio_lo > ratio_hi:
+        print(f"  [ERROR] RATIO_LO ({ratio_lo}) > RATIO_HI ({ratio_hi}), 請修正 variables.h")
+        return None
+    print(f"  [auto] Spacing ratio constraint: [{ratio_lo}, {ratio_hi}]")
+
+    # ── 計算 scale factor (物理單位 → 無因次 code 單位) ──
+    x_fro_max = x_ref[0, -1]
+    h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
+    scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
+
+    # ── 生成基礎網格 (Poisson solve, gamma=0 無拉伸) ──
+    #    Poisson solve 只執行一次; GAMMA 調整只做 Vinokur 重分布
+    x_base, y_base, _ = generate_adaptive_grid(
         x_ref, y_ref, NI, NJ,
-        gamma=gamma, alpha=alpha,
-        poisson_iter=15000, poisson_tol=1e-12)
+        gamma=0.0, alpha=alpha,
+        poisson_iter=1000000, poisson_tol=1e-12,
+        LZ=LZ, poisson_method=poisson_method)
 
-    # ── Validate generated grid dimensions ──
-    nj_out, ni_out = x_out.shape
+    # ── Validate Poisson solve succeeded ──
+    if x_base is None:
+        print("  !! Poisson solve failed (diverged or folded) — ABORTING !!")
+        return None
+
+    nj_out, ni_out = x_base.shape
     if ni_out != NI or nj_out != NJ:
         print(f"  !! INTERNAL ERROR: generated grid {ni_out}x{nj_out} "
               f"≠ expected {NI}x{NJ} !!")
         sys.exit(1)
-    print(f"  [auto] Generated grid: I={ni_out} x J={nj_out} ✓")
+    print(f"  [auto] Base grid: I={ni_out} x J={nj_out} ✓")
 
-    # ── GILBM stability post-check (on actual generated grid) ──
-    x_fro_max = x_ref[0, -1]
-    h_phys = x_fro_max / LY if x_fro_max < 1.0 else 1.0
-    scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
-    stab = estimate_gilbm_stability(x_out, y_out, scale_factor=scale)
+    # ── 網格間距比率限制器：自動調整 GAMMA ──
+    gamma_original = gamma
+    gamma, adjust_log, ratio_info = auto_adjust_gamma(
+        x_base, y_base, gamma, alpha, scale, ratio_lo, ratio_hi)
+    print_spacing_ratio_result(
+        gamma_original, gamma, ratio_lo, ratio_hi,
+        ratio_info, adjust_log, NZ, alpha)
+
+    # ── 套用調整後的 Vinokur 拉伸 ──
+    if gamma > 1e-14:
+        print(f"  [auto] Applying Vinokur stretching: GAMMA={gamma:.6f}, ALPHA={alpha}")
+        x_out, y_out = redistribute_vertical_physical(
+            x_base, y_base, gamma=gamma, alpha=alpha)
+    else:
+        print(f"  [auto] No stretching (gamma≈0)")
+        x_out, y_out = x_base.copy(), y_base.copy()
+
+    # ── 更新 minSize (使用調整後的 GAMMA) ──
+    if gamma > 0:
+        minSize_val = gamma_to_minSize(gamma, LZ, NZ_cells, LY)
+        print(f"  [auto] minSize={minSize_val:.6e} (adjusted GAMMA={gamma:.6f})")
+
+    # ── GILBM stability post-check (階段 B: 2D 精確計算) ──
+    stab = estimate_gilbm_stability(
+        x_out, y_out, scale_factor=scale,
+        Uref=Uref, Re=Re_val, H_HILL=H_HILL,
+        CFL_lambda=CFL_val)
     print_gilbm_stability_warning(
         gamma, stab["omega"], stab["c_max"],
-        stab["dt_global"], stab["a_max"], stab["status"])
+        stab["dt_global"], stab["a_max"], stab["status"],
+        Uref=stab["Uref"], Re=stab["Re"], H_HILL=stab["H_HILL"],
+        CFL_lambda=stab["CFL_lambda"], niu=stab["niu"])
+
+    # 比較階段 A 預估 vs 階段 B 精確值
+    if gamma > 0 and 'pre' in dir():
+        pre_g = estimate_omega_pregrid(gamma, LZ, NZ_cells, Uref, Re_val,
+                                       H_HILL=H_HILL, CFL=CFL_val, LY=LY,
+                                       alpha=alpha)
+        print(f"  [對照] 調整後 1D預估 omega={pre_g['omega_est']:.4f} vs "
+              f"2D精確 omega={stab['omega']:.4f} "
+              f"(誤差 {abs(pre_g['omega_est']-stab['omega'])/stab['omega']*100:.1f}%)")
 
     if stab["status"] == "UNSTABLE":
         print("  !! Grid generation completed but omega > 2.0 !!")
@@ -1347,20 +2254,30 @@ def auto_generate(variables_h_path, script_dir=None):
         print("  !! Reduce GAMMA in variables.h and regenerate. !!")
         print()
 
-    # Output filename must match C code sprintf format:
-    #   "%s/adaptive_%s_I%d_J%d_a%.1f.dat" with ("3.fine grid", NY, NZ, ALPHA)
-    #   I = NY (streamwise nodes), J = NZ (wall-normal nodes)
-    # ★ CRITICAL: use :.1f to match C's %.1f exactly (e.g. 0.5 not 0.50 or 0.500)
+    # ── Post-generation 間距比率驗證 ──
+    dy_post, dz_post = compute_local_spacing(x_out, y_out, scale)
+    post_info = compute_spacing_ratio(dy_post, dz_post)
+    print(f"  [post-verify] Final spacing ratio: {post_info['ratio']:.4f} "
+          f"(Δy=[{post_info['dy_min']:.4e}, {post_info['dy_max']:.4e}], "
+          f"Δz=[{post_info['dz_min']:.4e}, {post_info['dz_max']:.4e}])")
+    if not (ratio_lo <= post_info['ratio'] <= ratio_hi):
+        print(f"  !! WARNING: Post-generation ratio {post_info['ratio']:.4f} "
+              f"outside [{ratio_lo}, {ratio_hi}] !!")
+        print(f"  !! Grid .dat NOT written. !!")
+        return None
+
+    # Recompute STRETCH_A from (possibly adjusted) gamma for filename
+    sa_for_file = float(np.tanh(gamma / 2.0))
     grid_key = ref_path.stem          # "3.fine grid"
-    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_a{alpha:.1f}.dat"
+    out_name = f"adaptive_{grid_key}_I{NI}_J{NJ}_s{sa_for_file:.6f}.dat"
     out_path = script_dir / out_name
 
     write_tecplot_dat(out_path, x_out, y_out,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_a{alpha}")
+                      zone_title=f"I{NI}_J{NJ}_s{sa_for_file:.6f}")
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
-    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_a{alpha:.1f}.txt"
+    grid_data_path = script_dir / f"grid_data_I{NI}_J{NJ}_s{sa_for_file:.6f}.txt"
     write_grid_data(grid_data_path, x_out, y_out,
                     NY=NY, NZ=NZ, GAMMA=gamma, ALPHA=alpha, LZ=LZ,
                     source_dat=out_path.name)
@@ -1374,11 +2291,25 @@ def auto_generate(variables_h_path, script_dir=None):
     print(f"  [auto] Output validated: I={ni_a} J={nj_a} ✓ (matches NY={ni_e}, NZ={nj_e})")
 
     # Also save comparison plot
-    tag = f"I{NI}_J{NJ}_a{alpha}"
+    tag = f"I{NI}_J{NJ}_s{sa_for_file:.6f}"
     plot_compare(x_ref, y_ref, x_out, y_out,
                  labels=["Reference", f"New ({NI}x{NJ})"],
-                 title=f"Auto: GAMMA={gamma:.4f}, ALPHA={alpha}, Grid={NI}x{NJ}",
+                 title=f"Auto: GAMMA={gamma:.4f}, STRETCH_A={sa_for_file:.6f}, Grid={NI}x{NJ}",
                  savepath=script_dir / f"compare_auto_{tag}.png")
+
+    if abs(gamma_original - gamma) > 1e-6:
+        sa_new = sa_for_file
+        print()
+        print(f"  ★ GAMMA 已從 {gamma_original:.4f} 自動調整為 {gamma:.6f}")
+        print(f"    對應 STRETCH_A = {sa_new:.6f}")
+        updated = update_stretch_a_in_variables_h(variables_h_path, sa_new)
+        if updated:
+            print(f"    ✓ variables.h 已自動更新 STRETCH_A = {sa_new:.6f}")
+            print(f"      → main.cu 重編譯後 STRETCH_A 將匹配網格檔名")
+        else:
+            print(f"    ⚠ variables.h 自動更新失敗，請手動修改:")
+            print(f"      #define STRETCH_A {sa_new:.6f}")
+        print(f"    輸出檔名使用調整後的 STRETCH_A")
 
     print(f"  [auto] Output: {out_path}")
     return str(out_path)
@@ -1392,6 +2323,18 @@ if __name__ == "__main__":
 
     script_dir = Path(__file__).resolve().parent
     base = Path.cwd().resolve()
+
+    # --method adi|gs  (default: adi)
+    poisson_method = "adi"
+    for idx, arg in enumerate(sys.argv):
+        if arg == "--method" and idx + 1 < len(sys.argv):
+            poisson_method = sys.argv[idx + 1].lower()
+    if poisson_method not in ("adi", "gs"):
+        print(f"ERROR: --method must be 'adi' or 'gs', got '{poisson_method}'")
+        sys.exit(1)
+
+    # --force: skip idempotency check, always regenerate
+    force_regen = "--force" in sys.argv
 
     # --auto mode: parse variables.h and generate grid non-interactively
     if "--auto" in sys.argv:
@@ -1414,12 +2357,18 @@ if __name__ == "__main__":
             sys.exit(1)
 
         print("=" * 62)
-        print("  Periodic Hill Grid -- AUTO MODE")
+        print(f"  Periodic Hill Grid -- AUTO MODE  (Poisson: {poisson_method.upper()})")
         print(f"  Reading from: {variables_h}")
         print("=" * 62)
 
-        out = auto_generate(str(variables_h), script_dir)
+        out = auto_generate(str(variables_h), script_dir,
+                            poisson_method=poisson_method,
+                            force=force_regen)
         print("=" * 62)
+        if out is None:
+            print("  FAILED: 網格生成未通過驗證，未寫入檔案")
+            print("=" * 62)
+            sys.exit(1)
         print(f"  DONE: {out}")
         print("=" * 62)
         sys.exit(0)
@@ -1429,6 +2378,32 @@ if __name__ == "__main__":
     print("  Periodic Hill Grid -- Steger-Sorenson Poisson + Zeta")
     print("  (Interactive Mode)")
     print("=" * 62)
+
+    stability_flow = {}
+    stability_LY = 9.0
+    grid_LZ = _DEFAULT_LZ
+    variables_h_for_flow = script_dir.parent / "variables.h"
+    if variables_h_for_flow.exists():
+        try:
+            vh_params = parse_variables_h(variables_h_for_flow)
+            stability_LY = vh_params.get("LY", stability_LY)
+            grid_LZ = vh_params.get("LZ", grid_LZ)
+            if "Uref" in vh_params and "Re" in vh_params:
+                stability_flow = {
+                    "Uref": vh_params["Uref"],
+                    "Re": vh_params["Re"],
+                    "H_HILL": vh_params.get("H_HILL", 1.0),
+                    "CFL_lambda": vh_params.get("CFL", 0.5),
+                }
+                print(f"  Stability flow params from variables.h: "
+                      f"Re={stability_flow['Re']:g}, Uref={stability_flow['Uref']:g}, "
+                      f"H_HILL={stability_flow['H_HILL']:g}, CFL={stability_flow['CFL_lambda']:g}")
+            print(f"  Physical top boundary LZ = {grid_LZ:g} (from variables.h)")
+        except Exception as exc:
+            print(f"  [warn] Could not parse stability flow params from variables.h: {exc}")
+            print(f"  Physical top boundary LZ = {grid_LZ:g} (default)")
+    else:
+        print(f"  Physical top boundary LZ = {grid_LZ:g} (default)")
 
     # -----------------------------------------------------------
     #  Step 1 -- select reference grid
@@ -1530,10 +2505,9 @@ if __name__ == "__main__":
     print()
     print("  GAMMA -- Vinokur stretching in physical z-space")
     print("           0.0 = UNIFORM spacing (no wall clustering, minSize=NaN!)")
-    print("           1.0~2.0 = mild-moderate symmetric clustering (RECOMMENDED)")
-    print("           2.0~3.0 = good clustering, omega still optimal (<0.73)")
-    print("           4.0     = strong (approaching Frohlich-level ratio ~20)")
-    print("           >=5.0   = extreme (omega > 1.0, use with caution)")
+    print("           larger value = stronger symmetric wall clustering")
+    print("           reference-table omega/status is not valid for every Re/grid")
+    print("           actual omega is printed after this grid is generated")
     print()
     GAMMA = ask_float("GAMMA", default=2.0,
                       lo=0.0, hi=10.0)
@@ -1545,6 +2519,24 @@ if __name__ == "__main__":
     print("           >0.5 = top wall denser")
     print()
     ALPHA = ask_float("ALPHA", default=0.5, lo=0.01, hi=0.99)
+
+    # ── 間距比率限制 ──
+    ratio_lo_default = RATIO_LO_DEFAULT
+    ratio_hi_default = RATIO_HI_DEFAULT
+    if variables_h_for_flow.exists():
+        try:
+            _vhp = parse_variables_h(variables_h_for_flow)
+            ratio_lo_default = _vhp.get("RATIO_LO", ratio_lo_default)
+            ratio_hi_default = _vhp.get("RATIO_HI", ratio_hi_default)
+        except Exception:
+            pass
+    print()
+    print("  RATIO_LO / RATIO_HI -- 網格間距比率限制")
+    print("    max(Δy,Δz)/min(Δy,Δz) must be in [RATIO_LO, RATIO_HI]")
+    print("    GAMMA will be auto-adjusted to satisfy this constraint")
+    print()
+    RATIO_LO_VAL = ask_float("RATIO_LO", default=ratio_lo_default, lo=1.0, hi=100.0)
+    RATIO_HI_VAL = ask_float("RATIO_HI", default=ratio_hi_default, lo=RATIO_LO_VAL, hi=200.0)
 
     if mode == 2:
         print()
@@ -1559,8 +2551,32 @@ if __name__ == "__main__":
     print(f"  -> Mode:  {'Zeta-only' if mode == 1 else 'Adaptive (Poisson + P,Q)'}")
     print(f"  -> Grid:  I={NI} x J={NJ}")
     print(f"  -> GAMMA: {GAMMA}  |  ALPHA: {ALPHA}")
+    print(f"  -> Spacing ratio: [{RATIO_LO_VAL}, {RATIO_HI_VAL}]")
     if mode == 2:
         print(f"  -> Poisson iterations: {POISSON_ITER}")
+
+    # ── GILBM stability pre-check (階段 A: 1D 無網格預估) ──
+    pre_interactive = None
+    if GAMMA > 0 and stability_flow:
+        LZ_est = grid_LZ
+        NZ_est = NJ
+        pre_interactive = estimate_omega_pregrid(
+            GAMMA, LZ_est, NZ_est - 1,
+            stability_flow["Uref"], stability_flow["Re"],
+            H_HILL=stability_flow["H_HILL"],
+            CFL=stability_flow["CFL_lambda"],
+            LY=stability_LY, alpha=ALPHA)
+        print()
+        print(f"  [階段A] 1D 預估 (無網格, estimate_omega_pregrid):")
+        print(f"    dz_min     = {pre_interactive['dz_min']:.6e}")
+        print(f"    max|c̃| est = {pre_interactive['max_c_est']:.1f}")
+        print(f"    omega_est  = {pre_interactive['omega_est']:.4f}", end="")
+        if pre_interactive["omega_est"] > 2.0:
+            print("  *** 預估不穩定 ***")
+        elif pre_interactive["omega_est"] > 1.5:
+            print("  ** 預估邊際")
+        else:
+            print("  [預估穩定]")
 
     # -----------------------------------------------------------
     #  Step 5 -- identity verification
@@ -1575,31 +2591,78 @@ if __name__ == "__main__":
     print(f"  Arclength identity:  max|dx| = {dx_err:.2e},  max|dy| = {dy_err:.2e}  ->  {tag}")
 
     # -----------------------------------------------------------
-    #  Step 6 -- generate new grid
+    #  Step 6 -- generate base grid + auto-adjust GAMMA
     # -----------------------------------------------------------
     print("\n" + "-" * 62)
-    print("  [Step 6] Generating new grid ...")
+    print("  [Step 6] Generating grid (base Poisson + GAMMA auto-adjust) ...")
     print("-" * 62)
 
-    if mode == 1:
-        x_new, y_new = redistribute_vertical_physical(x_ref, y_ref,
-                                              gamma=GAMMA, alpha=ALPHA)
-    else:
-        x_new, y_new, poisson_conv = generate_adaptive_grid(
-            x_ref, y_ref, NI, NJ,
-            gamma=GAMMA, alpha=ALPHA,
-            poisson_iter=POISSON_ITER, poisson_tol=1e-12)
-
-    print(f"  Generated grid: I={NI}, J={NJ}")
-
-    # ── GILBM stability post-check ──
+    # Compute scale factor
     x_fro_max = x_ref[0, -1]
-    h_phys = x_fro_max / 9.0 if x_fro_max < 1.0 else 1.0
+    h_phys = x_fro_max / stability_LY if x_fro_max < 1.0 else 1.0
     scale = 1.0 / h_phys if h_phys < 0.5 else 1.0
-    stab = estimate_gilbm_stability(x_new, y_new, scale_factor=scale)
+
+    poisson_conv = None
+    if mode == 1:
+        x_base, y_base = x_ref.copy(), y_ref.copy()
+        info = enforce_analytical_physical_boundaries(x_base, y_base, LZ=grid_LZ)
+        print(f"  [boundary] Enforced analytical walls for zeta-only base: "
+              f"LZ={info['LZ']:.6f}, bottom correction={info['bottom_correction']:.3e}, "
+              f"top correction={info['top_correction']:.3e}")
+    else:
+        x_base, y_base, poisson_conv = generate_adaptive_grid(
+            x_ref, y_ref, NI, NJ,
+            gamma=0.0, alpha=ALPHA,
+            poisson_iter=POISSON_ITER, poisson_tol=1e-12,
+            LZ=grid_LZ, poisson_method=poisson_method)
+        if x_base is None:
+            print("  !! Poisson solve failed — aborting.")
+            sys.exit(1)
+
+    print(f"  Base grid: I={NI}, J={NJ}")
+
+    # ── 自動調整 GAMMA ──
+    GAMMA_original = GAMMA
+    GAMMA, adjust_log, ratio_info = auto_adjust_gamma(
+        x_base, y_base, GAMMA, ALPHA, scale, RATIO_LO_VAL, RATIO_HI_VAL)
+    print_spacing_ratio_result(
+        GAMMA_original, GAMMA, RATIO_LO_VAL, RATIO_HI_VAL,
+        ratio_info, adjust_log, NJ, ALPHA)
+
+    # ── 套用調整後的拉伸 ──
+    if GAMMA > 1e-14:
+        x_new, y_new = redistribute_vertical_physical(
+            x_base, y_base, gamma=GAMMA, alpha=ALPHA)
+    else:
+        x_new, y_new = x_base.copy(), y_base.copy()
+
+    print(f"  Final grid: I={NI}, J={NJ}, GAMMA={GAMMA:.6f}")
+
+    # ── GILBM stability post-check (階段 B: 2D 精確計算) ──
+    stab = estimate_gilbm_stability(
+        x_new, y_new, scale_factor=scale, **stability_flow)
     print_gilbm_stability_warning(
         GAMMA, stab["omega"], stab["c_max"],
-        stab["dt_global"], stab["a_max"], stab["status"])
+        stab["dt_global"], stab["a_max"], stab["status"],
+        Uref=stab["Uref"], Re=stab["Re"], H_HILL=stab["H_HILL"],
+        CFL_lambda=stab["CFL_lambda"], niu=stab["niu"])
+
+    if pre_interactive is not None:
+        print(f"  [對照] 階段A預估 omega={pre_interactive['omega_est']:.4f} vs "
+              f"階段B精確 omega={stab['omega']:.4f} "
+              f"(誤差 {abs(pre_interactive['omega_est']-stab['omega'])/max(stab['omega'],1e-30)*100:.1f}%)")
+
+    # ── Post-generation 間距比率驗證 ──
+    dy_post, dz_post = compute_local_spacing(x_new, y_new, scale)
+    post_info = compute_spacing_ratio(dy_post, dz_post)
+    print(f"  [post-verify] ratio={post_info['ratio']:.4f}")
+    if not (RATIO_LO_VAL <= post_info['ratio'] <= RATIO_HI_VAL):
+        print(f"  !! ERROR: ratio {post_info['ratio']:.4f} outside "
+              f"[{RATIO_LO_VAL}, {RATIO_HI_VAL}] !!")
+        ans = input("  仍然寫入網格？(y/N): ").strip().lower()
+        if ans != 'y':
+            print("  [aborted] 網格未寫入。請調整 GAMMA/ALPHA 後重試。")
+            sys.exit(1)
 
     # -----------------------------------------------------------
     #  Step 7 -- output
@@ -1608,12 +2671,13 @@ if __name__ == "__main__":
     print("  [Step 7] Saving outputs ...")
     print("-" * 62)
 
-    tag_str = f"I{NI}_J{NJ}_g{GAMMA}_a{ALPHA}"
+    SA_val = float(np.tanh(GAMMA / 2.0))
+    tag_str = f"I{NI}_J{NJ}_s{SA_val:.6f}"
 
     out_cmp = base / f"compare_{grid_key}_{tag_str}.png"
     plot_compare(x_ref, y_ref, x_new, y_new,
                  labels=["Reference", f"New ({NI}x{NJ})"],
-                 title=f"GAMMA={GAMMA}, ALPHA={ALPHA}, Grid={NI}x{NJ}",
+                 title=f"GAMMA={GAMMA}, STRETCH_A={SA_val:.6f}, Grid={NI}x{NJ}",
                  savepath=out_cmp)
 
     mid_col = NI // 2
@@ -1625,7 +2689,7 @@ if __name__ == "__main__":
     out_dat = base / f"adaptive_{grid_key}_{tag_str}.dat"
     write_tecplot_dat(out_dat, x_new, y_new,
                       title=f"Periodic hill {NI}x{NJ}",
-                      zone_title=f"I{NI}_J{NJ}_g{GAMMA}_a{ALPHA}")
+                      zone_title=f"I{NI}_J{NJ}_s{SA_val:.6f}")
 
     # ── Write grid_data.txt analysis (i=0 column / hill crest line) ──
     # Try to read LZ from variables.h (same search paths as auto mode);
@@ -1663,8 +2727,10 @@ if __name__ == "__main__":
     if mode == 2 and _HAS_MPL:
         fig_cv, ax_cv = plt.subplots(figsize=(8, 5))
         ax_cv.semilogy(poisson_conv, 'k-', lw=0.6)
-        ax_cv.set_xlabel("Iteration"); ax_cv.set_ylabel("Max correction")
-        ax_cv.set_title(f"Poisson convergence ({NI}x{NJ})")
+        ax_cv.set_xlabel("Iteration")
+        ylabel = "Max |Poisson residual|" if poisson_method == "adi" else "Max correction"
+        ax_cv.set_ylabel(ylabel)
+        ax_cv.set_title(f"Poisson convergence — {poisson_method.upper()} ({NI}x{NJ})")
         ax_cv.grid(True, ls='--', alpha=0.4)
         plt.tight_layout()
         conv_path = base / f"convergence_{grid_key}_{tag_str}.png"
@@ -1688,13 +2754,17 @@ if __name__ == "__main__":
         fig, axes = plt.subplots(len(gammas), 1,
                                  figsize=(18, 3.2 * len(gammas)),
                                  sharex=True)
+        x_ref_sweep = x_ref.copy()
+        y_ref_sweep = y_ref.copy()
+        enforce_analytical_physical_boundaries(x_ref_sweep, y_ref_sweep, LZ=grid_LZ)
         for ax, g in zip(axes, gammas):
             if mode == 1:
-                xn, yn = redistribute_vertical(x_ref, y_ref, gamma=g, alpha=ALPHA)
+                xn, yn = redistribute_vertical(x_ref_sweep, y_ref_sweep, gamma=g, alpha=ALPHA)
             else:
                 xn, yn, _ = generate_adaptive_grid(
                     x_ref, y_ref, NI, NJ,
-                    gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER)
+                    gamma=g, alpha=ALPHA, poisson_iter=POISSON_ITER,
+                    LZ=grid_LZ, poisson_method=poisson_method)
             nj_n, ni_n = xn.shape
             for jj in range(nj_n):
                 ax.plot(xn[jj, :], yn[jj, :], "k-", lw=0.2)

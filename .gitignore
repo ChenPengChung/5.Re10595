@@ -1,140 +1,69 @@
-# =============================================================================
-#  .gitignore  —  Re1400 LBM 模擬專案
-#  原則：原始碼 / 腳本 / 參考資料 追蹤；模擬輸出 / 續跑檔 / 影片 / 日誌 忽略
-# =============================================================================
-
-# -----------------------------------------------------------------------------
-# 1. 編譯產物 (compiled binaries)
-# -----------------------------------------------------------------------------
+# Compiled binaries
 a.out
 a.out.*
-*.o
-*.obj
 
-# -----------------------------------------------------------------------------
-# 2. Slurm / HPC 執行時產物
-# -----------------------------------------------------------------------------
-slurm_*.log
-slurm_*.err
-slurm-*.out
-*.slurm.log
-
-# -----------------------------------------------------------------------------
-# 3. Dispatcher / Chain 執行鎖與狀態檔
-# -----------------------------------------------------------------------------
-.run.lock
-DISPATCHER_ACTIVE
-chain_code/**/*.lock
-chain_code/chain.log
-
-# -----------------------------------------------------------------------------
-# 4. 續跑檔 (restart / checkpoint)
-# -----------------------------------------------------------------------------
-restart/
-
-# -----------------------------------------------------------------------------
-# 5. 模擬輸出 —  result/ 下的原始資料
-# -----------------------------------------------------------------------------
-# 所有 MPI 分塊 / 合併輸出 (bin / vtk / 瞬時 dat)
-result/*.bin
-result/*.vtk
-result/*.vti
-result/*.vtu
-result/*.pvtu
-result/*.pvd
-result/*.h5
-result/*.tec
-result/0_force.dat
-result/velocity_merged_*.*
-result/velocity_*_Final.*
-
-# 但保留 benchmark 參考資料 與 Python 分析腳本
-!result/benchmark/
-!result/benchmark/**
-!result/*.py
-!result/*.cpp
-!result/*.png
-
-# -----------------------------------------------------------------------------
-# 6. Animation / 影片 / 圖框
-# -----------------------------------------------------------------------------
-animation/*.mp4
-animation/*.mp4.lock
-animation/*.mp4.tmp.mp4
-animation/*.tmp.mp4
-animation/.mp4list_*.concat.txt
-animation/.mp4list_*.txt
-animation/anim_log.txt
-animation/png_frames/
-animation/frames/
-animation/*.png
-animation/*.jpg
-
-# animation 資料夾下的 slurm 腳本副本 (由 chain 動態複製的)
-animation/jobscript_chain.slurm.*
-
-# -----------------------------------------------------------------------------
-# 7. 模擬過程產生的診斷 / 統計 檔
-# -----------------------------------------------------------------------------
-gilbm_metrics_full.dat
-meshX.DAT
-meshYZ.DAT
-
-# 根目錄下常見模擬輸出 (不影響已追蹤的 .h / .cu / .py)
-/*.bin
-/*.vtk
-/*.vti
-/*.vtu
-
-# -----------------------------------------------------------------------------
-# 8. 編輯器 / 系統暫存
-# -----------------------------------------------------------------------------
-
-.idea/
-*.swp
-*.swo
-*~
-.DS_Store
-**/.DS_Store
-._*
-**/._*
-Thumbs.db
-
-# Claude Code CLI 本機設定（含本地權限 / 排程鎖，不應進版控）
-.claude/
-**/.claude/
-
-# -----------------------------------------------------------------------------
-# 9. Python 暫存
-# -----------------------------------------------------------------------------
+# Python cache
 __pycache__/
 *.pyc
-*.pyo
-.ipynb_checkpoints/
 
-# -----------------------------------------------------------------------------
-# 10. 雜項暫存 / 批次產生
-# -----------------------------------------------------------------------------
-*.tmp
-*.bak
-nohup.out
-core
-core.*
+# Large data files
+*.vtk
+*.bin
 
-# simulation outputs
+# Simulation runtime outputs
+restart/
+statistics/
+live/
+slurm_*.log
+slurm_*.err
+nan_monitor_log.txt
+gilbm_metrics_full.dat
+meshYZ.DAT
+.run.lock
+STOP_CHAIN
+
+# Auto-generated grid files
+J_Frohlich/adaptive_*.dat
+J_Frohlich/grid_data_*.txt
+J_Frohlich/compare_auto_*.png
+
+# Estimation data (analysis outputs)
+Estimation/
+
+# Animation frames and videos
+animation/png_frames/
+animation/png_uniform_*/
+animation/enc_tmp_*/
+animation/flow_*.mp4
+animation/short_*.mp4
+animation/*.gif
+animation/*.log
 png_frames/
-result/monitor_convergence_*.{pdf,png}
 
-# simulation outputs
-png_frames/
-result/monitor_convergence_*.{pdf,png}
+# Result data files (keep Python scripts)
+result/*.dat
 
-# -----------------------------------------------------------------------------
-# 三大紀錄檔：原始 .dat 不追蹤（本地保留），壓縮 .dat.gz 追蹤推送
-# -----------------------------------------------------------------------------
+# PDF files
+*.pdf
+
+# Three mandatory tracking files — keep .dat.gz, ignore raw .dat
 Ustar_Force_record.dat
 timing_log.dat
 checkrho.dat
 !Ustar_Force_record.dat.gz
 !timing_log.dat.gz
 !checkrho.dat.gz
+DISPATCHER_ACTIVE
+chain_code/health_watchdog_alerts.log
+
+# checklist.txt 由 checklist.py 每個 watcher 週期重新生成(時間戳/checkpoint 每輪變動),
+# 屬即時產物而非原始碼; 不追蹤以免 index-sweep 自動推送器頻繁 commit 造成 spam。
+# 來源(產生器)checklist.py 仍追蹤; 一次性快照已留在 commit 917d1df 歷史中。
+checklist.txt
+
+# benchmark dev job 執行期 log (執行期產物, 不追蹤)
+result/bench_computenode_*.log
+
+# watcher 跨節點重啟/停止哨兵(執行期, 不追蹤)
+live/RESTART_WATCHER
+live/STOP_WATCHER

@@ -1,26 +1,31 @@
 #!/bin/bash
-#SBATCH --job-name=Re10595_257
+#SBATCH --job-name=Edit12_Krank56002
 #SBATCH --account=MST114348
-#SBATCH --partition=gb200-dev
-#SBATCH --nodes=2
+#SBATCH --partition=gb200
+#SBATCH --nodes=8
 #SBATCH --ntasks-per-node=4
 #SBATCH --gres=gpu:4
 #SBATCH --cpus-per-task=1
-# [POLICY-B1] 預設 walltime = 2 小時 (NCHC gb200-dev 上限);
+# [POLICY-B1] 預設 walltime = 4 天 (NCHC gb200 partition 上限);
 #             可由 sbatch --time= 覆寫 / 或切換 partition 時改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=2:00:00
+#SBATCH --time=4-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
-# SIGUSR1 送達時間:walltime 結束前 120s,讓程式完成最終 checkpoint。
-# 120s 為 partition-agnostic 固定值 (任何合理 walltime >= 5 分鐘都適用)。
-#SBATCH --signal=USR1@120
+# SIGUSR1 送達時間:walltime 結束前 600s,讓程式完成最終 checkpoint。
+# [2026-06-19 Edit12] 120s→600s: checkpoint 降頻為每 1FTT 後, 單份 final checkpoint
+#   ~129GB 在舊的 120s grace 內寫不完 → 被 SIGKILL 砍半 → 回退上一個 regular checkpoint
+#   (最多丟 ~1FTT)。600s grace 給 129GB 充足寫入時間(~4× 餘裕)→ final checkpoint 必完成。
+#   Edit12 walltime 為 1 天(32gpus)/2 天(16gpus), 600s grace 僅 ~0.7% overhead。
+#SBATCH --signal=USR1@600
 #
 # ==============================================================================
 # jobscript_chain.slurm.GB200 — GILBM Periodic Hill 自動續鏈 jobscript (GB200 版)
-# 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes / ntasks / mpirun ppr
+# 與 H200 jobscript_chain.slurm.H200 的差異僅 4 處: partition / nodes(8) / ntasks(4/node) / mpirun ppr(4:node)
+# 對應 variables.h jp=32 (32 streamwise MPI ranks): 8 nodes × 4 GPU/node = 32 ranks
+#   (NCHC 2026-06 政策: jp 鎖定 32; GB200=4 GPU/node → 8 nodes; H200=8 GPU/node → 4 nodes。同一 jp32 流場兩叢集等價。)
 #
 # Round 1      -> ./a.out --cold
 # Round >= 2   -> ./a.out --restart=restart/checkpoint/step_<latest>
@@ -121,6 +126,12 @@ else
 fi
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
+
+# [PARTITION-LIB] partition 切換函式庫 (支援 restart/gb200_partition override)
+if [ -f "$CHAIN_DIR/tools/partition_lib.sh" ]; then
+    # shellcheck source=/dev/null
+    . "$CHAIN_DIR/tools/partition_lib.sh"
+fi
 
 if ! verify_am_head "$SLURM_JOB_ID" "GB200"; then
     _rc=$?
@@ -224,11 +235,16 @@ if [ -n "$MATCHED_BAD" ]; then
         bl_add "$node" "pre-flight matched" "jobscript-preflight" \
             2> >(tee -a "$_BL_LOG" >&2) || true
     done
-    EX_LIST=$(bl_effective_exclude "gb200-dev" 2> >(tee -a "$_BL_LOG" >&2))
+    _RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
+    _RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
+    EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+    PRE_BAD_CSV=$(printf '%s\n' "$PRE_BAD_ALL" | grep -v '^[[:space:]]*$' | paste -sd,)
+    EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
+               | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u | paste -sd, )
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Pre-flight requeue exclude: ${EX_LIST:-(empty)}"
-    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}  partition: ${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}"
+    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     if [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "GB200"
         log "Pre-flight requeued: job=$NEXT_ID (HEAD.lockdir jobid->$NEXT_ID state=PENDING)"
@@ -240,7 +256,7 @@ if [ -n "$MATCHED_BAD" ]; then
 fi
 
 # ===== 4. Checkpoint 驗證 =====
-NP=${SLURM_NTASKS:-8}
+NP=${SLURM_NTASKS:-32}
 
 STAT_NAMES=(
     sum_u sum_v sum_w
@@ -392,12 +408,11 @@ fi
 #   程式被時間切斷前必須能完成 checkpoint,且 exit 124 讓 jobscript 續投下一輪.
 #
 # 時序 (walltime = W 秒, 由 runtime 偵測):
-#   t = W - 120s   SLURM --signal=USR1@120 送 SIGUSR1
+#   t = W - 600s   SLURM --signal=USR1@600 與 timeout(1) 同時送 SIGUSR1 (冗餘, 互為備援)
 #                    -> stop_control.h handler 設 STOP_SIGNAL_WALLTIME
-#                    -> 主迴圈 break -> 最終 checkpoint -> exit 124 -> 續鏈
-#   t = W - 60s    timeout(1) 備援送 SIGUSR1 (若 SLURM 漏發)
-#                    -> 同路徑 -> exit 124 -> 續鏈
-#   t = W          timeout --kill-after=60 送 SIGKILL, SLURM walltime 到
+#                    -> 主迴圈 break -> 最終 checkpoint(~129GB, 寫入 ~120-160s) -> exit 124 -> 續鏈
+#                    -> 600s grace 確保 1FTT-降頻後的大 checkpoint 寫得完(否則回退丟 ~0.5-1FTT)
+#   t = W          timeout --kill-after=600 送 SIGKILL, SLURM walltime 到
 #                    -> bash 回 124 -> 續鏈
 #
 # Walltime 來源 (by priority):
@@ -463,19 +478,19 @@ if [ "$WALLTIME_SEC" -le 0 ]; then
     log "WARN: 無法偵測 walltime, 使用保守預設 3600s."
 fi
 
-# ---- 5.0.2 Sanity: 最小 5 分鐘 ----
-MIN_WALLTIME=300
+# ---- 5.0.2 Sanity: 最小 20 分鐘 (600s grace + 至少 ~600s 有效計算) ----
+MIN_WALLTIME=1200
 if [ "$WALLTIME_SEC" -lt "$MIN_WALLTIME" ]; then
     log "FATAL [POLICY-B1]: walltime=${WALLTIME_SEC}s < ${MIN_WALLTIME}s"
-    log "                   --signal=USR1@120 + kill_after=60 需要至少 5 分鐘 margin."
+    log "                   --signal=USR1@600 + kill_after=600 需要至少 20 分鐘 margin."
     exit 42
 fi
 
-# ---- 5.0.3 計算 TIMEOUT / KILL_AFTER ----
-KILL_AFTER=60
+# ---- 5.0.3 計算 TIMEOUT / KILL_AFTER (grace=600s: SIGUSR1@W-600, SIGKILL@W) ----
+KILL_AFTER=600
 TIMEOUT=$((WALLTIME_SEC - KILL_AFTER))
-if [ "$TIMEOUT" -le 120 ]; then
-    log "FATAL [POLICY-B1]: TIMEOUT=${TIMEOUT}s <= 120s (SIGUSR1 pre-walltime 時刻)"
+if [ "$TIMEOUT" -le 0 ]; then
+    log "FATAL [POLICY-B1]: TIMEOUT=${TIMEOUT}s <= 0 (walltime < 600s grace; 應已被 MIN_WALLTIME 擋下)"
     exit 42
 fi
 
@@ -484,7 +499,7 @@ log "  source   : $WALLTIME_SRC"
 log "  walltime : ${WALLTIME_SEC}s"
 log "  TIMEOUT  : ${TIMEOUT}s (timeout(1) 備援 SIGUSR1 時刻)"
 log "  KILL_AFT : ${KILL_AFTER}s (SIGKILL margin)"
-log "  SLURM USR1@120: 於 $((WALLTIME_SEC - 120))s 觸發"
+log "  SLURM USR1@600: 於 $((WALLTIME_SEC - 600))s 觸發 (grace=600s for 1FTT-降頻大 checkpoint)"
 # ═════ [MUTEX LAYER 3 — epoch guard] ═════
 # mpirun 啟動前最後一道防線:驗證 lock 身分仍是我.
 # 若 lock 被奪 (不該發生,但 orthogonal 驗證),立即 abort 以免 solver 寫 checkpoint.
@@ -497,21 +512,55 @@ log "[MUTEX-EPOCH] ✓ lock 身分驗證通過 (owner=$SLURM_JOB_ID), 啟動 mpi
 # ═════════════════════════════════════════
 
 log "Starting mpirun  TIMEOUT=${TIMEOUT}s  KILL_AFTER=${KILL_AFTER}s  ARGS=\"$ARGS\""
-# [REVIEW-FIX #3] 傳 chain round 給 solver
 export CHAIN_COUNT_FROM_JOBSCRIPT="$CHAIN_COUNT"
 START_TS=$(date +%s)
-# [REVIEW-FIX #4] 強制 mpirun 把 SIGUSR1/SIGTERM 轉發給 a.out
-#   HPCX 2.24 (NVIDIA HPC SDK 25.9) 底下的 mpirun 不支援 --forward-signals (OMPI 5.x 旗標),
-#   僅用 -mca orte_forward_job_control 1 (OMPI 4.x ORTE 相容旗標) 就足以轉發 SIGUSR1/SIGTERM.
-#   若未來 cluster 升級到 OMPI 5.x+, 可加回: --forward-signals SIGUSR1,SIGTERM
 MPIRUN_SIG_FLAGS="-mca orte_forward_job_control 1"
+
+# ── WATCHDOG: solver hang detection ──
+WATCHDOG_SENTINEL="restart/.watchdog_triggered"
+rm -f "$WATCHDOG_SENTINEL"
+WATCHDOG_HANG=0
+WATCHDOG_HANG_NODE=""
+
+# [GB200] 8 節點 32 GPU: -np $NP --map-by ppr:4:node (對應 variables.h jp=32)
+#   NP=${SLURM_NTASKS:-32} = nodes(8) × ntasks-per-node(4) = 32; ppr:4:node 為 jp-independent (GB200 恆 4 GPU/node)。
 timeout --signal=USR1 --kill-after=${KILL_AFTER} ${TIMEOUT} \
-    mpirun -np 8 --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
-           stdbuf -oL ./a.out $ARGS
+    mpirun -np "$NP" --map-by ppr:4:node --bind-to none $MPIRUN_SIG_FLAGS \
+           stdbuf -oL ./a.out $ARGS &
+SOLVER_PID=$!
+
+if [ "${WATCHDOG_ENABLED:-1}" -eq 1 ] && [ -f "$CHAIN_DIR/tools/watchdog.sh" ]; then
+    bash "$CHAIN_DIR/tools/watchdog.sh" \
+        "$SOLVER_PID" "$WATCHDOG_SENTINEL" \
+        "${WATCHDOG_TIMEOUT:-600}" "${WATCHDOG_GRACE:-180}" &
+    WATCHDOG_PID=$!
+    log "WATCHDOG: pid=$WATCHDOG_PID solver=$SOLVER_PID timeout=${WATCHDOG_TIMEOUT:-600}s grace=${WATCHDOG_GRACE:-180}s"
+else
+    WATCHDOG_PID=""
+fi
+
+wait "$SOLVER_PID" 2>/dev/null
 RC=$?
+
+if [ -n "${WATCHDOG_PID:-}" ]; then
+    kill "$WATCHDOG_PID" 2>/dev/null
+    wait "$WATCHDOG_PID" 2>/dev/null || true
+fi
+
 END_TS=$(date +%s)
 ELAPSED=$((END_TS - START_TS))
 log "mpirun exit: RC=$RC  elapsed=${ELAPSED}s  nodes=$SLURM_NODELIST"
+
+# ── WATCHDOG: sentinel check + node blacklist (direct-write, bypass bl_add/NCHC) ──
+if [ -f "$WATCHDOG_SENTINEL" ]; then
+    WATCHDOG_HANG_NODE=$(head -1 "$WATCHDOG_SENTINEL" 2>/dev/null || echo "$SLURM_NODELIST")
+    WATCHDOG_HANG=1
+    log "WATCHDOG HANG: $WATCHDOG_HANG_NODE -> blacklist (bypass NCHC — node hung while ALLOCATED)"
+    mkdir -p "$(dirname "$BAD_NODES_FILE")"
+    printf '%s\t%d\twatchdog-hang rc=%d round=%d elapsed=%ds\twatchdog\n' \
+        "$WATCHDOG_HANG_NODE" "$(date +%s)" "$RC" "$CHAIN_COUNT" "$ELAPSED" >> "$BAD_NODES_FILE"
+    rm -f "$WATCHDOG_SENTINEL"
+fi
 
 # Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
 # Auto-summary at job end (writes restart/SUMMARY.md row + snapshot with RC semantics)
@@ -525,6 +574,8 @@ if [ "$RC" -eq 42 ]; then
     log "RC=42 [POLICY-C1] UNAVOIDABLE ERROR -> chain stops (by policy)."
     log "          觸發來源通常是: 無效 argv / grid mismatch / restart 損毀 / init tripwire."
     log "          請查 slurm_${SLURM_JOB_ID}.err 的 [FATAL][POLICY-*] 訊息."
+    touch restart/STOP_CHAIN
+    log "          touch restart/STOP_CHAIN  (RC=42 物化停鏈意圖, 防 dispatcher 無限重投)"
     exit 0
 fi
 
@@ -541,6 +592,7 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
     fi
     ADDED=0
     SKIPPED_HEALTHY=0
+    FASTFAIL_REFUSED=""    # ★NCHC說健康但本輪crash的節點(allocated-while-bad)→加本輪 resubmit session-exclude(防crash-loop)
     while IFS= read -r h; do
         [ -z "$h" ] && continue
         if bl_add "$h" "rc=$RC round=$CHAIN_COUNT elapsed=${ELAPSED}s" "jobscript-fastfail" \
@@ -551,7 +603,8 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
             _rc=$?
             if [ "$_rc" -eq 2 ]; then
                 SKIPPED_HEALTHY=$((SKIPPED_HEALTHY + 1))
-                log "NOT blacklisted $h (NCHC 確認健康; fast-fail 疑似本地程式 bug)"
+                FASTFAIL_REFUSED="${FASTFAIL_REFUSED:+$FASTFAIL_REFUSED,}$h"
+                log "NOT blacklisted $h (NCHC 確認健康) → 仍加本輪 resubmit session-exclude(allocated-while-bad, 防 crash-loop, 不寫持久黑名單)"
             fi
         fi
     done <<< "$HOSTS"
@@ -559,13 +612,7 @@ if [ "$ELAPSED" -lt 60 ] && [ "$RC" -ne 0 ] && [ "$RC" -ne 124 ] && [ "$RC" -ne 
     FF=$(cat restart/fast_fail_count 2>/dev/null || echo 0)
     FF=$((FF + 1))
     echo "$FF" > restart/fast_fail_count
-    if [ "$FF" -ge 5 ]; then
-        log "FAST-FAIL GUARD: 連續 $FF 次 fast-fail. Chain 暫停等人檢查."
-        log "   若 NCHC 都說節點健康 (SKIPPED_HEALTHY>0), 八成是本地程式 bug"
-        log "   恢復: rm restart/fast_fail_count; ./run --gb200"
-        touch restart/STOP_CHAIN
-        exit 1
-    fi
+    log "FAST-FAIL count=$FF (partition=${SLURM_JOB_PARTITION:-unknown}, rc=$RC)"
 else
     rm -f restart/fast_fail_count
 fi
@@ -596,30 +643,69 @@ log "RC=$RC -> queuing chain round $NEXT_COUNT"
 
 # ═════ DISPATCHER 模式 sentinel check ═════
 if [ -f DISPATCHER_ACTIVE ]; then
-    log "DISPATCHER_ACTIVE found -> dispatcher 接手續投, 本 jobscript 不自動 sbatch."
-    log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
-    exit 0
+    # [穩健性修補] 驗證 dispatcher 真的存活才交棒; crash/被殺留下殘留 sentinel 時 -> 清掉 + 自我續投, 絕不斷鏈。
+    _disp_pid=$(cat restart/dispatcher.pid 2>/dev/null | tr -d '[:space:]')
+    if [ -n "$_disp_pid" ] && kill -0 "$_disp_pid" 2>/dev/null; then
+        log "DISPATCHER_ACTIVE + dispatcher 存活 (PID=$_disp_pid) -> 交給 dispatcher 續投, 本 jobscript 不自投."
+        log "           chain_count 已更新為 $NEXT_COUNT, dispatcher 查 sinfo 後投下一 round."
+        exit 0
+    fi
+    log "WARN: DISPATCHER_ACTIVE 存在但 dispatcher 已死 (PID='${_disp_pid:-none}') -> 清殘留 sentinel, 改由 jobscript 自我續投 (防斷鏈)."
+    rm -f DISPATCHER_ACTIVE restart/DISPATCHER_ACTIVE 2>/dev/null
 fi
 # ═════════════════════════════════════════════════
 
 MAX_SBATCH_RETRY=5
 SBATCH_RETRY_DELAY=30
 
-EX_LIST=$(bl_effective_exclude "gb200-dev" 2> >(tee -a "$_BL_LOG" >&2))
+_RESUB_PART_ARGS="$(gb200_sbatch_partition_args 2>/dev/null || true)"
+_RESUB_PARTITION="$(gb200_active_partition 2>/dev/null || true)"
+
+EX_LIST_BL=$(bl_effective_exclude "${_RESUB_PARTITION:-$SLURM_JOB_PARTITION}" 2> >(tee -a "$_BL_LOG" >&2))
+PRE_BAD_CSV=$(printf '%s\n' "${PRE_BAD_ALL:-}" | grep -v '^[[:space:]]*$' | paste -sd,)
+EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
+           | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u | paste -sd, )
+
+if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
+    # ★驗證 WATCHDOG_HANG_NODE 是合法 SLURM nodelist token(單節點或 bracket 如 25a-hgpn[073,091]),
+    #   擋掉 .watchdog_triggered 被污染(含 #/空格/中文)時洩漏進 --exclude → 防最後一條 sanitize bypass。
+    if printf '%s' "$WATCHDOG_HANG_NODE" | grep -qE '^[A-Za-z0-9._-]+(\[[0-9,-]+\])?$' \
+       && ! printf ',%s,' "$EX_LIST" | grep -qF ",$WATCHDOG_HANG_NODE,"; then
+        EX_LIST="${EX_LIST:+$EX_LIST,}$WATCHDOG_HANG_NODE"
+        log "WATCHDOG: forced $WATCHDOG_HANG_NODE into resubmit exclude"
+    fi
+fi
+
+# ★FAST-FAIL session-exclude (2026-06-23): fast crash 時 NCHC 說健康但其實壞(allocated-while-bad,
+#   如 hgpn062 物理少 GPU 但 SLURM config 仍 gpu=8)的節點, 加進【本輪】resubmit exclude 防 crash-loop 重演
+#   (原 fast-fail 對 NCHC-healthy 節點拒絕黑名單→re-land→re-crash)。★session-only: 僅這一輪, 下輪自動釋放
+#   (不寫持久黑名單)→ node-starved 叢集避免永久誤殺稀缺健康節點; 節點若真持久壞會再 fast-fail 被擋;
+#   已知持久壞(GPU損)用 blacklist_lib 的 bl_add_global 手動加 project-local 持久黑名單。
+if [ -n "${FASTFAIL_REFUSED:-}" ]; then
+    for _ffn in $(printf '%s' "$FASTFAIL_REFUSED" | tr ',' ' '); do
+        printf '%s' "$_ffn" | grep -qE '^[A-Za-z0-9._-]+$' || continue   # sanitize: 只合法節點名
+        printf ',%s,' "$EX_LIST" | grep -qF ",$_ffn," || EX_LIST="${EX_LIST:+$EX_LIST,}$_ffn"
+    done
+    log "FAST-FAIL: forced session-exclude (NCHC-healthy-but-crashed, allocated-while-bad): $FASTFAIL_REFUSED"
+fi
+
 EXCLUDE_ARG=""
 if [ -n "$EX_LIST" ]; then
     EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Resubmit exclude (TTL+NCHC sync+cap): $EX_LIST"
+    log "Resubmit exclude (bl+PRE_BAD_ALL+watchdog merged): $EX_LIST"
 else
     log "Resubmit exclude: (empty — cluster healthy)"
 fi
+[ -n "$_RESUB_PARTITION" ] && log "Resubmit partition override: $_RESUB_PARTITION (walltime=$(gb200_partition_walltime "$_RESUB_PARTITION" 2>/dev/null))"
 
 for ATTEMPT in $(seq 1 $MAX_SBATCH_RETRY); do
-    NEXT_ID=$(sbatch --parsable $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
+    NEXT_ID=$(sbatch --parsable $_RESUB_PART_ARGS $EXCLUDE_ARG "$JOBSCRIPT_SELF" 2>&1)
     SBATCH_RC=$?
     if [ $SBATCH_RC -eq 0 ] && [[ "$NEXT_ID" =~ ^[0-9]+$ ]]; then
         write_head_jobid "$NEXT_ID" "GB200"
-        log "Submitted next round: job=$NEXT_ID (attempt $ATTEMPT/$MAX_SBATCH_RETRY)  HEAD.lockdir jobid->$NEXT_ID state=PENDING"
+        # [sync 修補] 自我續投同步 chain_jobid (與 HEAD.lockdir 一致), 防 dispatcher busy-retry
+        printf '%s\n' "$NEXT_ID" > restart/chain_jobid.tmp && mv -f restart/chain_jobid.tmp restart/chain_jobid
+        log "Submitted next round: job=$NEXT_ID (attempt $ATTEMPT/$MAX_SBATCH_RETRY)  HEAD.lockdir+chain_jobid->$NEXT_ID state=PENDING"
         exit 0
     fi
     log "sbatch attempt $ATTEMPT/$MAX_SBATCH_RETRY failed: $NEXT_ID"

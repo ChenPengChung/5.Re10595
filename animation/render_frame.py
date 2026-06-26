@@ -23,6 +23,10 @@ OUTDIR = "png_frames"
 STEP_NUM = None
 VIDEO_MODE = False      # True = 影片模式 (只吐 frame_cont + frame_RD)
                         # False = 人工模式 (8 張 PNG 全輸出)
+SLICE_ONLY = False      # True = lbm-render-1 快路徑: 只抽 X=mid 薄板, 跳過 Path D (Q 三維)
+                        #        用 fast_slice.py 把 17GB → 數十 MB, 載入秒級, 效果與 Path A/B/C 逐點一致
+U_RANGE = None          # (vmin, vmax) = 固定 u_streamwise 色階範圍 (--u-range vmin vmax)
+                        #        全場 GIF 用: 跨幀統一色階, 消除逐幀自動重縮造成的閃爍
 
 args = sys.argv[1:]
 i = 0
@@ -33,6 +37,10 @@ while i < len(args):
         STEP_NUM = int(args[i+1].rstrip('.')); i += 2
     elif args[i] == "--video-mode":
         VIDEO_MODE = True; i += 1
+    elif args[i] in ("--slice-only", "--no-q", "--fast"):
+        SLICE_ONLY = True; i += 1
+    elif args[i] == "--u-range" and i+2 < len(args):
+        U_RANGE = (float(args[i+1]), float(args[i+2])); i += 3
     elif not args[i].startswith("--"):
         VTK_FILE = os.path.abspath(args[i]); i += 1
     else:
@@ -117,7 +125,7 @@ Q_OPACITY = 0.8                   # 與參考範本 OPACITY 一致
 W_RANGE = [-0.02, 0.02]           # 與參考範本 W_RANGE 一致（固定範圍，不做對稱重縮）
 
 # ── FTT / Ma 文字標註用常數（對齊參考範本）──
-Q_U_REF       = 0.0583
+Q_U_REF       = 0.01
 Q_LY          = 9.0
 Q_CS          = 1.0 / 1.732050807568877
 Q_DT_GLOBAL   = 2.397914e-03
@@ -244,10 +252,9 @@ def setup_axes_grid(ren, bounds):
     ag = ren.AxesGrid
     ag.Visibility = 1
 
-    # 軸標題：對應參考圖格式（MathText 排版）
     ag.XTitle = ""
-    ag.YTitle = r"$x/H$"
-    ag.ZTitle = r"$y/H$"
+    ag.YTitle = "x/H"
+    ag.ZTitle = "y/H"
 
     black = [0.0, 0.0, 0.0]
     ag.XTitleColor = black
@@ -333,7 +340,7 @@ def setup_scalar_bar(lut, ren, title="u_streamwise", value_range=None, n_ticks=8
     （只給 Path A/B/C 的 7 張圖用；Path D Q-criterion 有獨立 barD 不受影響）
     value_range=(lo,hi) 指定後會強制顯示 n_ticks 個 tick（避開 ParaView 的自動密集 tick）"""
     bar = GetScalarBar(lut, ren)
-    bar.Title = title
+    bar.Title = ""
     bar.ComponentTitle = ""
     # 字體放大：Title 80pt, Label 40pt
     bar.TitleFontSize = 80
@@ -504,11 +511,78 @@ def add_mean_streamlines(reader, ren, bounds):
 
 
 # ═══════════════════════════════════════════════════════════════════
-# §3  讀取 VTK
+# §3  讀取 VTK (ASCII → Binary 自動轉換加速)
 # ═══════════════════════════════════════════════════════════════════
-log("Loading: " + VTK_FILE)
-reader = LegacyVTKReader(FileNames=[VTK_FILE])
+import time as _time
+
+def _convert_ascii_to_binary(ascii_path):
+    """ASCII VTK → Binary VTK, 回傳 binary 路徑。已存在且較新則跳過。"""
+    base, ext = os.path.splitext(ascii_path)
+    bin_path = base + "_bin" + ext  # e.g. velocity_merged_062001_bin.vtk
+    if os.path.isfile(bin_path) and os.path.getmtime(bin_path) >= os.path.getmtime(ascii_path):
+        log("Binary cache exists: %s" % bin_path)
+        return bin_path
+    log("Converting ASCII → Binary: %s" % os.path.basename(bin_path))
+    t0 = _time.time()
+    _r = LegacyVTKReader(FileNames=[ascii_path])
+    _r.UpdatePipeline()
+    _w = SaveData(bin_path, proxy=_r, FileType='Binary')
+    Delete(_r)
+    elapsed = _time.time() - t0
+    sz_mb = os.path.getsize(bin_path) / 1048576.0
+    log("Converted in %.1fs → %s (%.0f MB)" % (elapsed, os.path.basename(bin_path), sz_mb))
+    return bin_path
+
+# ── 判斷是否為 ASCII VTK, 若是則轉 binary 加速後續讀取 ──
+_use_file = VTK_FILE
+with open(VTK_FILE, 'rb') as _fh:
+    for _ln in range(6):
+        _raw = _fh.readline()
+        if not _raw:
+            break
+        _s = _raw.strip().upper()
+        if _s == b"ASCII":
+            _use_file = _convert_ascii_to_binary(VTK_FILE)
+            break
+        if _s == b"BINARY":
+            break
+
+# ── SLICE_ONLY (lbm-render-1): 用 fast_slice.py 抽 X=mid 薄板取代整顆 17GB ──
+#    只抽 Path A/B/C 會用到的場 (velocity + 可能存在的 mean/TKE),
+#    omega_* 等只有 Path D 用的場不讀; 載入量 17GB → ~55MB, 抽取秒級。
+#    座標慣例 NX 為奇數時 xmid 落在節點 i=(NX-1)/2 → slice 逐點精確、零插值誤差。
+if SLICE_ONLY:
+    import subprocess as _subprocess
+    _script_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+    _fs_py = os.path.join(_script_dir, "fast_slice.py")
+    _slab_dir = os.path.join(os.path.dirname(_use_file), "_slice_cache")
+    _digits = "".join(c for c in os.path.splitext(os.path.basename(_use_file))[0]
+                      if c.isdigit())
+    _slab = os.path.join(_slab_dir, "slab_%s.vtk" % (_digits or "latest"))
+    _fs_fields = ("velocity,U_mean,V_mean,TKE,tke,k_turb,k_TKE,"
+                  "uu_mean,vv_mean,ww_mean,u_u_mean,v_v_mean,w_w_mean,"
+                  "uprime_uprime,vprime_vprime,wprime_wprime,uu_RS,vv_RS,ww_RS")
+    _cmd = ["python3", _fs_py, _use_file, _slab, "--fields", _fs_fields]
+    log("[slice-only] extracting X-mid slab: " + " ".join(_cmd))
+    _t_fs = _time.time()
+    try:
+        _rc = _subprocess.call(_cmd)
+    except Exception as _fse:
+        log("[slice-only] fast_slice exception: %s" % str(_fse)); _rc = 1
+    if _rc == 0 and os.path.isfile(_slab):
+        _use_file = _slab
+        log("[slice-only] slab ready in %.2fs → %s" % (_time.time() - _t_fs, _slab))
+    else:
+        log("[slice-only] fast_slice FAILED (rc=%s)。" % _rc)
+        log("[slice-only] 最新 VTK 可能正在寫入或檔案異常; 數秒後重試 lbm-render-1,"
+            " 或用 lbm-render 讀完整檔。不回退載入 17GB (快路徑刻意避免)。")
+        sys.exit(2)
+
+log("Loading: " + _use_file)
+t_load = _time.time()
+reader = LegacyVTKReader(FileNames=[_use_file])
 reader.UpdatePipeline()
+log("Loaded in %.1fs" % (_time.time() - t_load))
 
 bounds = reader.GetDataInformation().GetBounds()
 xmin, xmax = bounds[0], bounds[1]
@@ -588,14 +662,18 @@ if infoA:
     hi_A = infoA.GetComponentRange(0)[1]
 else:
     lo_A, hi_A = 0.0, 1.0
-log("u_streamwise range: [%.4f, %.4f]" % (lo_A, hi_A))
+if U_RANGE is not None:
+    lo_A, hi_A = U_RANGE
+    log("u_streamwise range: [%.4f, %.4f] (FIXED via --u-range, 跨幀統一色階)" % (lo_A, hi_A))
+else:
+    log("u_streamwise range: [%.4f, %.4f]" % (lo_A, hi_A))
 
 lutA.ColorSpace = "Step"
 lutA.RGBPoints = build_rgb_points(lo_A, hi_A, KEY_COLORS)
 harden_lut(lutA)
 dispA.LookupTable = lutA
 dispA.SetScalarBarVisibility(renA, True)
-setup_scalar_bar(lutA, renA, r"$u/U_{ref}$", value_range=(lo_A, hi_A))
+setup_scalar_bar(lutA, renA, "", value_range=(lo_A, hi_A))
 
 setup_camera(renA, bounds)
 setup_axes_grid(renA, bounds)
@@ -791,8 +869,10 @@ else:
 #  ─ Threshold：Qmax * 5%，再依 20K-80K cells 自適應
 #  ─ 標註：上方置中 "Step=... | FTT=... | Ma_max=..." 文字
 #
-if VIDEO_MODE:
-    pass  # 略過 Path D (video-mode)
+if VIDEO_MODE or SLICE_ONLY:
+    if SLICE_ONLY:
+        log("Path D skipped (slice-only: Q-criterion 3D 需要完整 volume, 改用 lbm-render)")
+    pass  # 略過 Path D (video-mode 或 slice-only)
 elif has_velocity:
     log("=== Path D: Q-criterion isosurface (Rainbow Desaturated, ref-aligned) ===")
 
@@ -890,7 +970,7 @@ elif has_velocity:
         lutD = GetColorTransferFunction("v_over_Uref")
         # v_over_Uref ≡ v_inst = w_code/Uref (ERCOFTAC v/Ub), 已是無因次.
         # W_RANGE = [-0.02, 0.02] 是 lattice w_code 的範圍 (典型 LBM 數量級),
-        # ÷ Q_U_REF 得到 v/Ub 範圍 ≈ [-0.343, 0.343], 用作 LUT 顯示界線.
+        # ÷ Q_U_REF (=Uref=0.01) 得到 v/Ub 範圍 ≈ [-2, 2], 用作 LUT 顯示界線.
         try: lutD.RescaleTransferFunction(W_RANGE[0] / Q_U_REF, W_RANGE[1] / Q_U_REF)
         except: pass
         try: lutD.ApplyPreset('Rainbow Desaturated', True)
@@ -925,11 +1005,198 @@ elif has_velocity:
             outlineD.Representation = "Outline"
             outlineD.AmbientColor = [0.3, 0.3, 0.3]
             outlineD.DiffuseColor = [0.3, 0.3, 0.3]
-            outlineD.LineWidth = 1.5 
-            
+            outlineD.LineWidth = 1.5
             outlineD.Opacity = 0.3
         except:
             pass
+
+        # ── Step 4a: 底部曲面山丘壁面 (curvilinear bottom wall) ──
+        # 薄殼：只取 NormalZ < -0.3 的朝下面（底壁），排除側壁與頂壁
+        WALL_OPACITY = 0.4
+        try:
+            surfD = ExtractSurface(Input=reader)
+            surfD.UpdatePipeline()
+
+            normD = GenerateSurfaceNormals(Input=surfD)
+            normD.ComputeCellNormals = 1
+            normD.UpdatePipeline()
+
+            calcNz = Calculator(Input=normD)
+            calcNz.ResultArrayName = "NormalZ"
+            calcNz.Function = "Normals_Z"
+            calcNz.UpdatePipeline()
+
+            wallBot = Threshold(Input=calcNz)
+            wallBot.Scalars = ['POINTS', 'NormalZ']
+            wallBot.LowerThreshold = -1.0
+            wallBot.UpperThreshold = -0.3
+            wallBot.ThresholdMethod = 'Between'
+            wallBot.UpdatePipeline()
+
+            nWall = wallBot.GetDataInformation().GetNumberOfPoints()
+            log("Bottom wall (NormalZ < -0.3): %d points" % nWall)
+
+            if nWall > 0:
+                dispWall = Show(wallBot, renD)
+                dispWall.Representation = "Surface"
+                dispWall.Opacity = WALL_OPACITY
+                dispWall.AmbientColor = [0.7, 0.7, 0.7]
+                dispWall.DiffuseColor = [0.7, 0.7, 0.7]
+                ColorBy(dispWall, None)
+                dispWall.SetScalarBarVisibility(renD, False)
+                log("Bottom wall displayed at opacity %.2f" % WALL_OPACITY)
+        except Exception as _we:
+            log("Bottom wall skipped: " + str(_we))
+
+        # 補缺角邊線 (4.5, 0, 0) → (4.5, 0, 1)
+        try:
+            edgeLine = Line()
+            edgeLine.Point1 = [4.5, 0.0, 0.0]
+            edgeLine.Point2 = [4.5, 0.0, 1.0]
+            edgeLine.Resolution = 1
+            edgeLine.UpdatePipeline()
+            dispEdgeLine = Show(edgeLine, renD)
+            dispEdgeLine.Representation = "Wireframe"
+            dispEdgeLine.AmbientColor = [0.3, 0.3, 0.3]
+            dispEdgeLine.DiffuseColor = [0.3, 0.3, 0.3]
+            dispEdgeLine.LineWidth = 1.5
+            dispEdgeLine.Opacity = 0.3
+            dispEdgeLine.SetScalarBarVisibility(renD, False)
+            log("Edge line (4.5,0,0)→(4.5,0,1) added")
+        except Exception as _el:
+            log("Edge line skipped: " + str(_el))
+
+        # ── 座標箭頭 — Krank 風格，服貼 (4.5, 0, 0) 角落 ──
+        renD.OrientationAxesVisibility = 0
+        _AX_LEN = 0.7
+        _AX_R = 0.012
+        _AX_O = [0.0, 0.0, 0.0]
+        _arrows = [
+            ([1, 0, 0], "x"),
+            ([0, 1, 0],  "y"),
+            ([0, 0, 1],  "z"),
+        ]
+        _col = [0.0, 0.0, 0.0]
+        for _dir, _lbl in _arrows:
+            try:
+                _ep = [_AX_O[i] + _dir[i] * _AX_LEN for i in range(3)]
+                _ln = Line()
+                _ln.Point1 = _AX_O
+                _ln.Point2 = _ep
+                _ln.Resolution = 1
+                _tb = Tube(Input=_ln)
+                _tb.Radius = _AX_R
+                _tb.NumberofSides = 8
+                _tb.UpdatePipeline()
+                _dp = Show(_tb, renD)
+                _dp.Representation = "Surface"
+                _dp.AmbientColor = _col
+                _dp.DiffuseColor = _col
+                _dp.MapScalars = 0
+                _dp.SetScalarBarVisibility(renD, False)
+
+                _cn = Cone()
+                _tip = [_ep[i] + _dir[i] * 0.05 for i in range(3)]
+                _cn.Center = _tip
+                _cn.Direction = _dir
+                _cn.Height = 0.12
+                _cn.Radius = 0.035
+                _cn.Resolution = 12
+                _cn.Capping = 1
+                _cn.UpdatePipeline()
+                _dpc = Show(_cn, renD)
+                _dpc.Representation = "Surface"
+                _dpc.AmbientColor = _col
+                _dpc.DiffuseColor = _col
+                _dpc.MapScalars = 0
+                _dpc.SetScalarBarVisibility(renD, False)
+
+                # (x/y/z 標籤改用 PIL 後製疊加，避免 Text3D 方向問題)
+                log("Arrow '%s' at (4.5,0,0) placed" % _lbl)
+            except Exception as _ae:
+                log("Arrow '%s' skipped: %s" % (_lbl, str(_ae)))
+
+        # ── Step 4b: 在 Q-criterion 3D 視圖上疊加 2D slice contour 平面 ──
+        # Slice 1: Y=9.0 (streamwise 末端, XZ 平面) → 用 Y=8.95 避開邊界
+        # Slice 2: X=0.0 (spanwise 邊緣, YZ 平面) → 用 X=0.05 避開邊界
+        # 著色: streamwise velocity (velocity_Y), Rainbow Desaturated, 半透明
+        SLICE_OPACITY = 0.7
+        SLICE_Y_POS = ymax - 0.05
+        SLICE_X_POS = xmin + 0.05
+        try:
+            # ── Slice @ Y ≈ 9.0 ──
+            sliceY9 = Slice(Input=reader)
+            sliceY9.SliceType.Normal = [0, 1, 0]
+            sliceY9.SliceType.Origin = [(xmin+xmax)/2, SLICE_Y_POS, (zmin+zmax)/2]
+            sliceY9.UpdatePipeline()
+
+            nY9 = sliceY9.GetDataInformation().GetNumberOfPoints()
+            log("Slice Y=%.2f: %d points" % (SLICE_Y_POS, nY9))
+
+            calcY9 = Calculator(Input=sliceY9)
+            calcY9.ResultArrayName = "u_slice_Y"
+            calcY9.Function = "velocity_Y"
+            calcY9.UpdatePipeline()
+
+            dispY9 = Show(calcY9, renD)
+            dispY9.Representation = "Surface"
+            dispY9.Opacity = SLICE_OPACITY
+
+            ColorBy(dispY9, ('POINTS', 'u_slice_Y'))
+            lutSliceY = GetColorTransferFunction("u_slice_Y")
+            infoSliceY = calcY9.GetDataInformation().GetPointDataInformation().GetArrayInformation("u_slice_Y")
+            if infoSliceY:
+                slo_y = infoSliceY.GetComponentRange(0)[0]
+                shi_y = infoSliceY.GetComponentRange(0)[1]
+            else:
+                slo_y, shi_y = -0.5, 1.4
+            if abs(shi_y - slo_y) < 1e-10:
+                slo_y, shi_y = -0.5, 1.4
+            try: lutSliceY.RescaleTransferFunction(slo_y, shi_y)
+            except: pass
+            try: lutSliceY.ApplyPreset('Rainbow Desaturated', True)
+            except: pass
+            harden_lut(lutSliceY)
+            dispY9.SetScalarBarVisibility(renD, False)
+            log("Slice Y=%.2f: u_slice range [%.4f, %.4f]" % (SLICE_Y_POS, slo_y, shi_y))
+
+            # ── Slice @ X ≈ 0.0 ──
+            sliceX0 = Slice(Input=reader)
+            sliceX0.SliceType.Normal = [1, 0, 0]
+            sliceX0.SliceType.Origin = [SLICE_X_POS, (ymin+ymax)/2, (zmin+zmax)/2]
+            sliceX0.UpdatePipeline()
+
+            nX0 = sliceX0.GetDataInformation().GetNumberOfPoints()
+            log("Slice X=%.2f: %d points" % (SLICE_X_POS, nX0))
+
+            calcX0 = Calculator(Input=sliceX0)
+            calcX0.ResultArrayName = "u_slice_X"
+            calcX0.Function = "velocity_Y"
+            calcX0.UpdatePipeline()
+
+            dispX0 = Show(calcX0, renD)
+            dispX0.Representation = "Surface"
+            dispX0.Opacity = SLICE_OPACITY
+
+            ColorBy(dispX0, ('POINTS', 'u_slice_X'))
+            lutSliceX = GetColorTransferFunction("u_slice_X")
+            infoSliceX = calcX0.GetDataInformation().GetPointDataInformation().GetArrayInformation("u_slice_X")
+            if infoSliceX:
+                slo_x = infoSliceX.GetComponentRange(0)[0]
+                shi_x = infoSliceX.GetComponentRange(0)[1]
+            else:
+                slo_x, shi_x = -0.5, 1.4
+            if abs(shi_x - slo_x) < 1e-10:
+                slo_x, shi_x = -0.5, 1.4
+            try: lutSliceX.RescaleTransferFunction(slo_x, shi_x)
+            except: pass
+            try: lutSliceX.ApplyPreset('Rainbow Desaturated', True)
+            except: pass
+            harden_lut(lutSliceX)
+            dispX0.SetScalarBarVisibility(renD, False)
+            log("Slice X=%.2f: u_slice range [%.4f, %.4f]" % (SLICE_X_POS, slo_x, shi_x))
+        except Exception as _se:
+            log("Slice contours skipped: " + str(_se))
 
         # ── Step 5: (已移除) 上方文字標註 FTT / Ma_max → 保留純粹瞬間快照 ──
 
@@ -947,11 +1214,9 @@ elif has_velocity:
         try:
             agD = renD.AxesGrid
             agD.Visibility = 1
-            # 三軸標題全部移除（底部已有 OrientationAxes 指示方向，避免與刻度數字重疊）
             agD.XTitle = ""
             agD.YTitle = ""
             agD.ZTitle = ""
-            # 字體：Times Bold 黑
             try:
                 agD.XTitleFontFamily = "Times"
                 agD.YTitleFontFamily = "Times"
@@ -969,7 +1234,6 @@ elif has_velocity:
                 agD.XLabelColor = [0,0,0]; agD.YLabelColor = [0,0,0]; agD.ZLabelColor = [0,0,0]
                 agD.GridColor = [0,0,0]
             except: pass
-            # 字級：Title 保持適中，Label 縮小避免與標題重疊（對齊 Path A/B/C 視覺大小）
             agD.XTitleFontSize = 36
             agD.YTitleFontSize = 36
             agD.ZTitleFontSize = 36
@@ -978,8 +1242,6 @@ elif has_velocity:
                 agD.YLabelFontSize = 20
                 agD.ZLabelFontSize = 20
             except: pass
-            # 軸標題 ↔ 刻度數字 固定距離
-            # X/Y 維持 65/40；Z 單獨再拉大到 95/60（z/H 與 1.5 數字重疊問題）
             try:
                 agD.XAxisLabelOffset = 40
                 agD.YAxisLabelOffset = 40
@@ -1000,6 +1262,22 @@ elif has_velocity:
                 agD.YLabelOffset = 40
                 agD.ZLabelOffset = 60
             except: pass
+            # 整數刻度: X=[0,1,2,3,4], Y=[0,1,...,9], Z=[0,1,2,3]
+            try:
+                for _ax in ("X", "Y", "Z"):
+                    try: setattr(agD, _ax+"AxisNotation", "Printf")
+                    except: pass
+                    try: setattr(agD, _ax+"AxisPrintfFormat", "%g")
+                    except: pass
+            except: pass
+            try:
+                agD.XAxisUseCustomLabels = 1
+                agD.XAxisLabels = [0, 1, 2, 3, 4, 4.5]
+                agD.YAxisUseCustomLabels = 1
+                agD.YAxisLabels = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                agD.ZAxisUseCustomLabels = 1
+                agD.ZAxisLabels = [0, 1, 2, 3.036]
+            except: pass
         except Exception as e:
             log("Q-crit axes grid skipped: " + str(e))
 
@@ -1011,18 +1289,73 @@ elif has_velocity:
                        TransparentBackground=0)
         log("Path D saved: " + OUT_QCRIT)
 
-        # ── Step 9: 後製裁切頂端過大空白（三軸標題已移除，無需貼標籤）──
+        # ── Step 9: 後製裁切 + PIL 疊加 x/y/z 箭頭標籤 ──
         try:
-            from PIL import Image as _PILImage
+            from PIL import Image as _PILImage, ImageDraw as _PILDraw, ImageFont as _PILFont
             _im = _PILImage.open(OUT_QCRIT)
             _w, _h = _im.size
             _top_cut = int(_h * 0.15)
             _im_crop = _im.crop((0, _top_cut, _w, _h))
+
+            # 在裁切後的圖上標箭頭名稱 (Krank convention)
+            # x=streamwise(+Y), y=wall-normal(+Z), z=spanwise(-X)
+            _arrow_labels = [
+                ([0.0 + _AX_LEN + 0.20, 0.0, 0.0],  "z", "spanwise"),
+                ([0.0, _AX_LEN + 0.20, 0.0],          "x", "streamwise"),
+                ([0.0 - 0.20, 0.12, _AX_LEN + 0.12], "y", "wall-normal"),
+            ]
+            _arrow_px = []
+            try:
+                _ren = renD.GetRenderWindow().GetRenderers().GetFirstRenderer()
+                from vtkmodules.vtkRenderingCore import vtkCoordinate as _vtkC
+                for _apos, _altr, _adir in _arrow_labels:
+                    _vc = _vtkC()
+                    _vc.SetCoordinateSystemToWorld()
+                    _vc.SetValue(*_apos)
+                    _dp = _vc.GetComputedDisplayValue(_ren)
+                    _px = int(_dp[0])
+                    _py = int(Q_IMG_H - _dp[1]) - _top_cut
+                    _arrow_px.append((_px, _py, _altr, _adir))
+                log("Arrow label pixels: %s" % str(_arrow_px))
+            except Exception as _vce:
+                log("WorldToDisplay fallback: %s" % str(_vce))
+                _cw, _ch = _w, _h - _top_cut
+                _arrow_px = [
+                    (int(_cw*0.09), int(_ch*0.88), "z", "spanwise"),
+                    (int(_cw*0.15), int(_ch*0.90), "x", "streamwise"),
+                    (int(_cw*0.11), int(_ch*0.74), "y", "wall-normal"),
+                ]
+
+            _draw = _PILDraw.Draw(_im_crop)
+            import matplotlib
+            matplotlib.use("Agg")
+            import matplotlib.pyplot as _plt
+            from io import BytesIO as _BytesIO
+            matplotlib.rcParams["mathtext.fontset"] = "cm"
+
+            def _latex_label(tex, fontsize=22, dpi=120):
+                fig = _plt.figure(figsize=(0.4, 0.4))
+                fig.text(0.5, 0.5, tex, fontsize=fontsize,
+                         ha="center", va="center", color="black")
+                buf = _BytesIO()
+                fig.savefig(buf, format="png", dpi=dpi, transparent=True,
+                            bbox_inches="tight", pad_inches=0.01)
+                _plt.close(fig)
+                buf.seek(0)
+                return _PILImage.open(buf).convert("RGBA")
+
+            for _apx, _apy, _altr, _adir in _arrow_px:
+                _lbl_img = _latex_label("$%s$" % _altr)
+                _lw, _lh = _lbl_img.size
+                _paste_x = _apx - _lw // 2
+                _paste_y = _apy - _lh // 2
+                _im_crop.paste(_lbl_img, (_paste_x, _paste_y), _lbl_img)
+
             _im_crop.save(OUT_QCRIT)
-            log("Path D top-crop: removed top %d px, new size %dx%d"
-                % (_top_cut, _w, _h - _top_cut))
+            log("Path D top-crop + arrow labels: new size %dx%d"
+                % (_w, _h - _top_cut))
         except Exception as _e:
-            log("Path D top-crop skipped: " + str(_e))
+            log("Path D post-process skipped: " + str(_e))
 
         Delete(renD)
         del renD

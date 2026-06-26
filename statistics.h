@@ -3,7 +3,7 @@
 
 // =====================================================================
 // statistics.h — High-order statistics accumulation kernels
-// Ported from Edit8_GILBM_advFrolich/statistics.h with curvilinear
+// Ported from prior version with curvilinear
 // Jacobian derivative formulation (MeanDerivatives).
 //
 // Contains:

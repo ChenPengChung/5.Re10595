@@ -34,6 +34,11 @@
 : "${BLACKLIST_MAX_PCT:=50}"
 : "${BAD_NODES_FILE:=restart/bad_nodes}"
 : "${GLOBAL_BAD_FILE:=$HOME/.bad_nodes_global}"
+# [PROJECT-LOCAL TRIM 2026-06-20] 硬覆寫: 改用 Edit12 自己的精簡黑名單(只留真壞 143/024),
+#   釋放 ~/.bad_nodes_global 裡 39 個其實 SLURM-健康(早被 NCHC 修好)的誤排節點 → 接棒時 Edit12
+#   可用節點池放寬、縮短 walltime 接棒 PENDING。★不動共用的 ~/.bad_nodes_global(別專案仍用)。
+#   可逆: 刪此行即還原成全域。判別壞節點=MLUPS陡降→reactive 加入 bad_nodes_global_local。
+GLOBAL_BAD_FILE="/home/s8313697/5.Re10595/Edit12_Krank56002/restart/bad_nodes_global_local"
 
 # ─────────────────────────────────────────────────────────────────────────
 # 內部 helper: 把 Slurm state 字串分類
@@ -135,8 +140,15 @@ bl_sync_with_nchc() {
             printf '%s\n' "$line" >> "$tmp"
             kept=$((kept+1))
         elif _bl_state_is_healthy "$state"; then
-            released=$((released+1))
-            printf '[blacklist] RELEASE %s (NCHC state=%s, 本地黑名單釋放)\n' "$node" "$state" >&2
+            local src; src=$(printf '%s' "$line" | cut -f4)
+            if [ "$src" = "manual-blacklist" ]; then
+                printf '%s\n' "$line" >> "$tmp"
+                kept=$((kept+1))
+                printf '[blacklist] KEEP %s (NCHC state=%s, manual-blacklist 不自動釋放)\n' "$node" "$state" >&2
+            else
+                released=$((released+1))
+                printf '[blacklist] RELEASE %s (NCHC state=%s, 本地黑名單釋放)\n' "$node" "$state" >&2
+            fi
         else
             printf '%s\n' "$line" >> "$tmp"
             kept=$((kept+1))
@@ -197,7 +209,33 @@ bl_local_list() {
 
 bl_global_list() {
     [ -f "$GLOBAL_BAD_FILE" ] || return 0
-    grep -v '^[[:space:]]*$' "$GLOBAL_BAD_FILE" 2>/dev/null | sort -u | paste -sd,
+    grep -vE '^[[:space:]]*(#|$)' "$GLOBAL_BAD_FILE" 2>/dev/null | sort -u | paste -sd,
+}
+
+# bl_add_global <node> — 把節點加入「本專案 project-local 持久黑名單」($GLOBAL_BAD_FILE,
+#   經 line 41 hard-override 指向 restart/bad_nodes_global_local)。純節點名 + dedup + sanitize
+#   (擋 #/空格/中文 → 防 comment-leak 洩漏進 sbatch --exclude 致鏈斷)。★只碰本專案檔, 絕不動共用
+#   ~/.bad_nodes_global(跨專案隔離)。用於「已知持久壞」節點(如 GPU 物理損壞 hgpn062)的 reactive/手動
+#   加入; transient/可疑壞不該用此(改用 bad_nodes TTL 或 jobscript fast-fail session-exclude, 避免
+#   node-starved 叢集永久誤殺稀缺健康節點)。回 0=已加或已存在, 1=非法節點名拒絕。
+bl_add_global() {
+    local node="${1:-}"
+    [ -n "$node" ] || { echo "[blacklist] bl_add_global: 空節點名, 拒絕" >&2; return 1; }
+    if ! printf '%s' "$node" | grep -qE '^[A-Za-z0-9._-]+$'; then
+        echo "[blacklist] bl_add_global: 非法節點名 '$node'(只允許 [A-Za-z0-9._-]), 拒絕(防洩漏)" >&2
+        return 1
+    fi
+    if [ -f "$GLOBAL_BAD_FILE" ] && grep -qxF "$node" "$GLOBAL_BAD_FILE" 2>/dev/null; then
+        echo "[blacklist] bl_add_global: $node 已在 project-local 持久黑名單, 略過" >&2
+        return 0
+    fi
+    mkdir -p "$(dirname "$GLOBAL_BAD_FILE")" 2>/dev/null || true
+    if printf '%s\n' "$node" >> "$GLOBAL_BAD_FILE"; then
+        echo "[blacklist] bl_add_global: $node → $GLOBAL_BAD_FILE (project-local 持久; 不碰共用全域)" >&2
+        return 0
+    fi
+    echo "[blacklist] bl_add_global: 寫入 $GLOBAL_BAD_FILE 失敗(磁碟滿/權限?), 未加入" >&2
+    return 1
 }
 
 bl_live_list() {
@@ -230,7 +268,12 @@ bl_effective_exclude() {
     global_bad=$(bl_global_list)
     live_bad=$(bl_live_list)
     merged=$( { printf '%s\n' "$local_bad"; printf '%s\n' "$global_bad"; printf '%s\n' "$live_bad"; } \
-              | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u )
+              | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u )
+    # ★sanitize(line 上): 只保留合法節點名 token(純 [A-Za-z0-9._-]) → 擋掉任何 #註解/空格/中文等
+    #   非節點 token 洩漏進 sbatch --exclude(2026-06-22 鏈斷根因: bad_nodes 檔註解整段塞進 --exclude →
+    #   sbatch "Unable to open file Edit12" → 自投+dispatcher 雙層全爆停鏈)。grep -E 同時也濾掉空行。
+    #   ★{ grep||true; }: 空黑名單時 grep 無 match 回 exit 1, 在呼叫端 set -eo pipefail 下會中止函式,
+    #   故包 || true 讓空集合正常回空(下游 n_merged=0 → return 空)。
     n_merged=$(printf '%s\n' "$merged" | grep -cv '^[[:space:]]*$')
     [ "$n_merged" -eq 0 ] && { printf ''; return; }
 
@@ -246,7 +289,7 @@ bl_effective_exclude() {
                        "$n_merged" "$partition" "$BLACKLIST_MAX_PCT" "$total" "$cap" >&2
                 printf '[blacklist]       截斷至 %d 個 (優先保留 NCHC live, 再按時間戳取最新 local)\n' "$cap" >&2
                 # Step 1: 保留 NCHC live (這些是 NCHC 當下真的壞)
-                local keep_live; keep_live=$(printf '%s\n' "$live_bad" | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u)
+                local keep_live; keep_live=$(printf '%s\n' "$live_bad" | tr ',' '\n' | { grep -E '^[A-Za-z0-9._-]+$' || true; } | sort -u)  # ★同 sanitize + ||true 防空集合 set -e 中止
                 local n_live; n_live=$(printf '%s\n' "$keep_live" | grep -cv '^[[:space:]]*$')
                 local picked
                 if [ "$n_live" -ge "$cap" ]; then
@@ -261,7 +304,7 @@ bl_effective_exclude() {
                                 | awk -F'\t' '{print $2}')
                     fi
                     picked=$( { printf '%s\n' "$keep_live"; printf '%s\n' "$extra"; } \
-                              | grep -v '^[[:space:]]*$' | awk '!seen[$0]++' | head -n "$cap")
+                              | { grep -E '^[A-Za-z0-9._-]+$' || true; } | awk '!seen[$0]++' | head -n "$cap")  # ★sanitize 合併 keep_live+extra(extra 未過濾)+ ||true 防空集合
                 fi
                 printf '%s\n' "$picked" | paste -sd,
                 return

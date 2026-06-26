@@ -2,7 +2,7 @@
 #define VARIABLES_FILE
 
 // ╔════════════════════════════════════════════════════════════════════╗
-// ║     GILBM Periodic Hill — Edit11 Configuration                    ║
+// ║     GILBM Periodic Hill — Edit3_Re5600newmesh Configuration        ║
 // ║     (Fröhlich curvilinear grid, D3Q19, Algorithm1 GTS-only)       ║
 // ║                                                                    ║
 // ║  架構 (Architecture):                                              ║
@@ -57,6 +57,66 @@
                                         // V100: 128KB L1 已吸收 η-row overlap → smem 無效益
                                         // P100: 24KB L1 不足 → smem ↓85% 3D DRAM reads
 
+// ── §1b-ITB. ITB-ISLBM streaming path (ported from Edit9) ──
+//   0 = current GILBM RK2 / contravariant interpolation path
+//   1 = precomputed physical-space isoparametric interpolation path
+// First pass keeps collision, wall BC, MPI, statistics, and dt_global unchanged.
+#ifndef USE_ITBLBM_STREAMING
+// [Edit12 2026-06-16] ITB-LBM → GILBM Algorithm2 變體:
+//   0 → 自動啟用 USE_GILBM_ALGORITHM2=1(precompute folded 表)+ GILBM2_DEPARTURE_RK4=1(RK4 預設)
+//   + GILBM_ALGO2_STORE=FOLDED(對標 ITBLBM 3.50ms)。對標 Edit11(ITB-LBM/Algorithm1/RK2)。
+#define     USE_ITBLBM_STREAMING    0
+#endif
+#ifndef ITBLBM_STRICT_PRECOMPUTE
+#define     ITBLBM_STRICT_PRECOMPUTE 1
+#endif
+#if USE_ITBLBM_STREAMING && USE_SMEM_INTERIOR
+#error "USE_ITBLBM_STREAMING first pass requires USE_SMEM_INTERIOR=0"
+#endif
+
+// ── §1b2. Algorithm2: GILBM RK2 預計算表 (production fast path) ──
+//   0 = Algorithm1 baseline / required when ITB streaming is enabled
+//   1 = Algorithm2: init 建表，runtime kernel 查表
+//
+//   If USE_GILBM_ALGORITHM2 is not specified explicitly:
+//     USE_ITBLBM_STREAMING=1 -> USE_GILBM_ALGORITHM2=0
+//     USE_ITBLBM_STREAMING=0 -> USE_GILBM_ALGORITHM2=1
+//
+//   production default when enabled:
+//     GILBM_ALGO2_STORE = GILBM2_STORE_WEIGHTS_FOLDED
+//   由 gilbm/precompute2.h 依 USE_GILBM_ALGORITHM2 自動選定；仍可用
+//   -DGILBM_ALGO2_STORE=0/1/2 顯式覆寫做診斷。
+//
+//   GILBM_ALGO2_VALIDATE:
+//     0 = skip Algorithm2 init validation
+//     1 = table vs Algorithm1 reference + class-map + host tolerance
+//     2 = strict: level 1 + folded k_idx shape + folded weight-sum checks
+#ifndef     USE_GILBM_ALGORITHM2
+#if USE_ITBLBM_STREAMING
+#define     USE_GILBM_ALGORITHM2    0
+#else
+#define     USE_GILBM_ALGORITHM2    1
+#endif
+#endif
+#ifndef     GILBM_ALGO2_VALIDATE
+#define     GILBM_ALGO2_VALIDATE    2
+#endif
+#if GILBM_ALGO2_VALIDATE < 0 || GILBM_ALGO2_VALIDATE > 2
+#error "GILBM_ALGO2_VALIDATE must be 0, 1, or 2"
+#endif
+#if defined(GILBM_ALGO2_STORE) && (GILBM_ALGO2_STORE < 0 || GILBM_ALGO2_STORE > 2)
+#error "GILBM_ALGO2_STORE must be 0(COORDS), 1(WEIGHTS), or 2(WEIGHTS_FOLDED)"
+#endif
+#if USE_ITBLBM_STREAMING && USE_GILBM_ALGORITHM2
+#error "USE_ITBLBM_STREAMING and USE_GILBM_ALGORITHM2 are mutually exclusive streaming paths"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_WENO7
+#error "Algorithm2 WEIGHTS_FOLDED requires USE_WENO7=0; zeta folding assumes linear Lagrange-7"
+#endif
+#if USE_GILBM_ALGORITHM2 && USE_SMEM_INTERIOR
+#error "Algorithm2 supports only the non-smem Buffer path; set USE_SMEM_INTERIOR=0"
+#endif
+
 // ── §1c. 自動推導開關 (勿手動修改) ──
 #define     USE_MRT      (COLLISION_MODE >= 1)
 
@@ -78,10 +138,10 @@
 // │  NX = 展向, NY = 流向 (需 (NY-1) % jp == 0), NZ = 法向     │
 // │  外部網格 .dat 格式: I = NY (流向), J = NZ (法向)           │
 // └──────────────────────────────────────────────────────────────┘
-#define     NX      257         // 展向格點
-#define     NY      513         // 流向格點 (需 (NY-1)%jp==0; 原 139→138%8≠0, 改 145→144/8=18)
-#define     NZ      257         // 法向格點
-#define     jp      16           //   GPU 數量 (流向分割)
+#define     NX      404        // 展向格點 (= Breuer 2009 Re5600 DNS span)
+#define     NY      769         // 流向格點 (Breuer DNS stream=765→769; 需 (NY-1)%jp==0; 768=32×24 ✓ jp=32)
+#define     NZ      750         // 法向格點 (= Breuer 2009 Re5600 DNS wall-normal; 同 2 階 FV → 對等比較)
+#define     jp      32         //  GPU 數量 (流向分割; 暫時鎖定 16gpus@32jp)
 
 // 含 ghost zone 的陣列維度 (自動計算, 勿手動修改)
 //   ghost 結構: [3 ghost | N nodes | 3 ghost]
@@ -105,13 +165,20 @@
 #error "FATAL: (NY-1) must be divisible by jp! Fix: change NY or jp in variables.h so that (NY-1) % jp == 0. For jp=8, valid NY: 9,17,25,...,129,137,145,153,..."
 #endif
 
-// ── 非均勻網格拉伸 ──
-//   GAMMA: Vinokur tanh 拉伸參數 (越大壁面越密, →0 趨近均勻)
+// ── 非均勻網格拉伸 (Abe 2001 / Shi & Lin 2020) ──
+//   STRETCH_A ∈ (0,1): tanh 拉伸參數
+//     a → 0: 均勻網格, a → 1: 壁面極密
+//     a=0.60 → 壁面 2x 密, a=0.80 → 3x, a=0.95 → 7.7x
+//   GAMMA = ln((1+a)/(1-a)) = 2·arctanh(a): 由 STRETCH_A 自動導出
 //   ALPHA: 拉伸對稱中心 (0.5 = 上下壁等密)
-//   minSize: 由 GAMMA 與 NZ 反推的最小壁面格距
-#define     GAMMA               3.0 //此版本直接透過指定一個拉伸參數，來反求 minSIze 
-#define     ALPHA               0.5
+//   minSize: 壁面最小格距 ≈ uniform_dz × Ratio (Ratio=0.5 時 a≈0.60)
+#define     STRETCH_A           0.893674
+#define     ALPHA               0.5     // 歷史遺留，固定 0.5，檔名不再包含 ALPHA
+#define     GAMMA               (log((1.0 + STRETCH_A) / (1.0 - STRETCH_A)))
+// ALPHA 必須為 0.5 — 若修改此值需同步驗證 minSize 與 grid 生成邏輯
+
 #define     CFL                 0.5
+
 #define     minSize             (                                              \
     (LZ-1.0) * 0.5 * (1.0 + tanh(GAMMA*(1.0/(double)(NZ-1) - ALPHA))              \
                             / tanh(GAMMA*ALPHA))                                   \
@@ -121,22 +188,36 @@
 #define     Uniform_In_Ydir     0       // y-z 平面非均勻 (外部網格)
 #define     Uniform_In_Zdir     0       // 法向非均勻 (壁面加密)
 
+// ── 網格間距比率限制 (Grid Spacing Ratio Limiter) ──
+//   grid_zeta_tool.py 使用: max(Δy,Δz)/min(Δy,Δz) ∈ [RATIO_LO, RATIO_HI]
+//   Δy = 流向 (streamwise) 相鄰格點 y 座標差的局部平均
+//   Δz = 法向 (wall-normal) 相鄰格點 z 座標差的局部平均
+//   全場全域搜索，超出範圍則自動調整 GAMMA 後才生成網格
+//   --auto 模式讀取此值; 互動模式可另行輸入
+#define     RATIO_LO     0.0    // 網格間距比率下限
+#define     RATIO_HI    20.0    // 網格間距比率上限
+
 // ── 展向映射參數 ──
 #define     LXi     (10.0)
 
 // ── 外部網格 (Fröhlich Periodic Hill grid) ──
 #define     GRID_DAT_DIR        "J_Frohlich"
 #define     GRID_DAT_REF        "3.fine grid.dat"
-
+/*
+// ── Variable gamma(y) 網格 (Mode 3, z+ < 1.0 everywhere) ──
+//   定義 UTAU_BOT_DAT / UTAU_TOP_DAT 後, --auto 自動使用 Mode 3
+//   不定義則 fallback 到 Mode 2 (Poisson + 均勻 GAMMA)
+#define     UTAU_BOT_DAT        "29.Re5600_j257_zplus_bottom_normal_spanavg_2nd.dat"
+#define     UTAU_TOP_DAT        "28.Re5600_j257_zplus_top_spanavg_2nd.dat"
+#define     UTAU_RE             5600        // u_tau 資料來源的 Re
+#define     ZP_TARGET           0.9         // z+ 設計目標 (< 1.0 含安全裕度)
+*/
 
 // ================================================================
 //  §4. 物理參數
 // ================================================================
-#define     Re      10595       // Reynolds number (基於 H_HILL 和 Uref)
-#define     Uref    0.015       // 參考速度 (bulk velocity)
-                                // Re700:0.0583, Re1400/2800:0.0776
-                                // Re5600:0.0464, Re10595:0.0878
-                                // 限制: Uref <= cs = 0.1732 (Ma < 1)
+#define     Re      5600       // Reynolds number (基於 H_HILL 和 Uref)
+#define     Uref    0.015       
 #define     niu     (Uref/Re)   // 運動黏度
 
 // 數學常數
@@ -158,22 +239,24 @@
 // ================================================================
 //  §5. 模擬控制
 // ================================================================
-#define     loop        50000000  // 最大時間步數
+#define     loop        500000000000  // 最大時間步數
 #define     NDTMIT      50        // 每 N 步輸出 monitor 資料
-#define     NDTFRC      50        // 每 N 步更新外力項
-#define     NDTBIN      1000   // 每 N 步輸出 binary checkpoint
-#define     NDTVTK      1000      // 每 N 步輸出 VTK
+#define     NDTFRC      1000      // 每 N 步更新外力項
+#define     NDTBIN      1577000  // 每 N 步輸出 binary checkpoint (≈1 FTT, 實測 SPF=1577102; 巢狀於 VTK 區塊; NDTVTK==NDTBIN → 兩者同頻每 1 FTT; checkpoint 不受 FTT gate, 永遠寫保崩潰恢復)
+#define     NDTVTK      1577000   // 每 N 步輸出 VTK (≈1 FTT; VTK 寫檔受 FTT>=FTT_STATS_START gate, 見 main.cu:2201)
 #define     NDTCONV     1000      // 每 N 步輸出收斂進度
 #define     NDTWENO     1000      // 每 N 步輸出 WENO 診斷 (USE_WENO7=1 時啟用)
 
 // ── FTT 閾值與統計控制 ──
 // Stage 0: FTT < FTT_STATS_START → 只跑瞬時場, 不累積統計量
 // Stage 1: FTT >= FTT_STATS_START → 所有 33 個統計量同時累積
-#define     FTT_STATS_START     40.0    // 統計量開始累積
-#define     FTT_STOP            130.0   // 模擬結束
+#define     FTT_STATS_START     10.0    // 統計量開始累積 (Edit11 warm-start regrid: interp 後 FTT=0/accu=0, ~6-8 FTT 重平衡後累積)
+#define     FTT_STOP            200.0   // 模擬結束
 
 // VTK 輸出等級
-// 0 = 基本 (13 SCALARS): 瞬時速度(3)+渦度(3)+U_mean+V_mean+RS(3)+k_TKE+P_mean
+// 0 = 基本: 瞬時(6) + 累積(7, accu>0 才輸出)
+//     瞬時: u/v/w_inst(3)+omega_u/v/w(3) — 每步都有
+//     累積: U_mean+V_mean+RS(3)+k_TKE+P_mean — FTT>=FTT_STATS_START 後才出現
 // 1 = 完整: Level 0 + W_mean(展向) + 展向RS + 平均渦度 + epsilon + Tturb + Pdiff + PP_RS
 #define     VTK_OUTPUT_LEVEL    0
 
@@ -247,6 +330,39 @@
 #define     USE_GUO_FORCING     1   // 預設關, Poiseuille 驗證通過後翻 1
 #endif
 
+#ifndef FORCE_HERMITE_ORDER
+#define     FORCE_HERMITE_ORDER 2   // 1 = 一階 Hermite: w_q·3·cy·F
+#endif                              // 2 = 二階 Hermite: + 9·(c·u)·c_y·F
+#if FORCE_HERMITE_ORDER != 1 && FORCE_HERMITE_ORDER != 2
+#error "FORCE_HERMITE_ORDER must be 1 or 2"
+#endif
+
+// ----------------------------------------------------------------
+//  §7b. 質量修正體積權重方法 (Cell Volume Method)
+// ----------------------------------------------------------------
+//   0 = Shoelace (離散多邊形精確面積, telescoping 保證)
+//   1 = Jacobian 3×3 Gauss-Legendre quadrature (O(h⁶), 捕捉曲率)
+#ifndef CELL_VOLUME_METHOD
+#define     CELL_VOLUME_METHOD  1
+#endif
+#if CELL_VOLUME_METHOD != 0 && CELL_VOLUME_METHOD != 1
+#error "CELL_VOLUME_METHOD must be 0 (Shoelace) or 1 (Jacobian 3x3 GL)"
+#endif
+
+// ================================================================
+//  §7.7 Ghost Zone 外推精度 (Ghost Zone Extrapolation Order)
+// ================================================================
+//   2 = 二次外推 (quadratic, 3-point), O(h³), Σ|c|_max=16 (d=3)
+//   3 = 三次外推 (cubic, 4-point),     O(h⁴), Σ|c|_max=34 (d=3)
+//   k=3 壁面點有 4 個 stencil 內部點 → cubic 為不擴展 stencil 的全域上限
+#define     GHOST_EXTRAP_ORDER  2
+#if GHOST_EXTRAP_ORDER < 2 || GHOST_EXTRAP_ORDER > 3
+#error "GHOST_EXTRAP_ORDER must be 2 (quadratic) or 3 (cubic)"
+#endif
+#if USE_ITBLBM_STREAMING && GHOST_EXTRAP_ORDER != 2
+#error "USE_ITBLBM_STREAMING first pass supports only GHOST_EXTRAP_ORDER=2"
+#endif
+
 
 // ================================================================
 //  §8. 重啟 (Restart) 配置
@@ -272,7 +388,7 @@
 // ── 計時 ──
 // USE_TIMING=1 啟用, TIMING_DETAIL=1 輸出 per-kernel 分解
 //
-// 計時區間對應 (Edit11 新流程):
+// 計時區間對應 (Edit3_Re5600newmesh 流程):
 //   ev_step1:  Step1+1.5 (interpolation + macro + feq)
 //   ev_step2:  Step2 (collision, 逐點 MRT/BGK)
 //   ev_mpi:    MPI(f_post) + periodicSW_fpost
@@ -287,14 +403,14 @@
 // ================================================================
 
 // ── WENO 診斷已一體化至 USE_WENO7 (§1b) ──
-// Edit11: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
+// Edit3_Re5600newmesh: 原 WENO_DIAG_SWITCH / WENO_VTK_SWITCH 已移除，
 //         全部由 USE_WENO7 統一控制（診斷 log + VTK contour + 啟用統計）。
 //         USE_WENO7=1 時自動啟用所有 WENO 診斷功能。
 
 // ── 效能診斷 ──
 // SKIP_MIDSTEP_MASSCORR: 跳過 even/odd sub-step 間的 mid-step mass correction
-//   0 = 保留 (與 Edit8 相同), 1 = 跳過 (減少 MPI barrier)
-#define     SKIP_MIDSTEP_MASSCORR    0
+//   0 = 保留, 1 = 跳過 (減少 MPI barrier)
+#define     SKIP_MIDSTEP_MASSCORR    1
 
 
 // ================================================================
@@ -345,19 +461,19 @@
       此「軸 code、純量 paper」混合是有意設計, 避免重新跑模擬.
     - W_mean 目前在 fileIO.h L1700-1717 未實作; Level 1 標記僅為設計意圖.
     - 過去 fileIO.h 曾以 W_mean 寫法向 (舊版), 已遷移為 V_mean (新版).
-      Re*/MRT*/plot_yplus_vs_xH.py 仍讀 W_mean, 在新 VTK 上會 KeyError.
+      Re-dir/MRT-dir/plot_yplus_vs_xH.py still reads W_mean, will KeyError on new VTK.
 
 鬆弛時間 (GTS):
   omega_global = 3*niu/dt_global + 0.5   (__constant__ GILBM_omega_global)
   s_visc       = 1/omega_global           (__constant__ GILBM_s_visc_global)
-  dt_global    = CFL × min(1/|ẽ^η|, 1/|ẽ^ξ|, 1/|ẽ^ζ|)  (__constant__ GILBM_dt)
+  dt_global    = CFL * min(1/|e^eta|, 1/|e^xi|, 1/|e^zeta|)  (__constant__ GILBM_dt)
 
-已移除項目 (Edit9 → Edit11):
-  KERNEL_ALG      — 固定為 Algorithm1, 已刪除 Algorithm2/3
-  USE_LTS         — 固定為 GTS, 已刪除 LTS 路徑
-  USE_TWO_PASS    — Algorithm2/3 專用, 已刪除
-  USE_ALG3_FUSED  — Algorithm3 專用, 已刪除
-  dt_local_d      — LTS 陣列, 已由 __constant__ dt_global 取代
-  omega_local_d   — LTS 陣列, 已由 __constant__ omega_global 取代
-  omegadt_local_d — LTS 陣列, 已刪除 (可由 omega*dt 即時計算)
+Removed items (prior versions):
+  KERNEL_ALG      - Algorithm1 only, removed Algorithm2/3
+  USE_LTS         - GTS only, removed LTS path
+  USE_TWO_PASS    - Algorithm2/3 only, removed
+  USE_ALG3_FUSED  - Algorithm3 only, removed
+  dt_local_d      - LTS array, replaced by __constant__ dt_global
+  omega_local_d   - LTS array, replaced by __constant__ omega_global
+  omegadt_local_d - LTS array, removed (omega*dt computed on the fly)
 */

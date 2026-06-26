@@ -59,6 +59,16 @@ if [ -f "$SENTINEL" ]; then
     fi
 fi
 
+# [robust dup-guard] sentinel 可能被誤刪/競態 → 再用 ps 掃「本專案」是否已有 submit_dispatcher daemon,
+# 避免重啟流程(sentinel 被清掉)留下孤兒又啟新的 → 雙 daemon。只比對本專案完整路徑 (跨專案安全)。
+_RUNNING_DAEMON=$(ps -eo pid,args 2>/dev/null \
+    | grep -F "$DAEMON" | grep -v 'bash -c' | awk '{print $1}' | head -1)
+if [ -n "$_RUNNING_DAEMON" ] && kill -0 "$_RUNNING_DAEMON" 2>/dev/null; then
+    echo "[dispatcher_start] ✗ 已有本專案 submit_dispatcher daemon 執行中 (PID=$_RUNNING_DAEMON, ps 偵測), 不重複啟動"
+    echo "$_RUNNING_DAEMON" > "$PID_FILE"   # 修正 pid 檔指向實際 daemon
+    exit 1
+fi
+
 # ── Binary 檢查 (早退省事) ──
 if [ ! -s "a.out.GB200" ] && [ ! -s "a.out.H200" ]; then
     echo "[dispatcher_start] ✗ 兩個 arch 的 binary 都不存在:"
@@ -95,6 +105,13 @@ if [ -f restart/STOP_NOCAPACITY ]; then
     echo "      rm restart/STOP_NOCAPACITY && NOCAPACITY_LIMIT=120 ./run dispatcher start"
     exit 6
 fi
+
+# ── [守護機制改用 systemd; 已脫離 crontab race] ──
+# 本專案 dispatcher 現由 systemd user service `edit12-dispatcher.service`(Restart=on-failure +
+# enable-linger)守護, 死了 systemd 自動重啟, 完全不碰 user crontab(避免與 Edit7/2.Re1400 搶寫
+# 同一 crontab 造成 lost-update→watchdog 消失的歷史故障)。安裝: bash chain_code/install_systemd.sh。
+# 本腳本(dispatcher_start.sh)保留為「無 systemd 環境」的手動 fallback, 不再自動裝 cron。
+echo "[dispatcher_start] (note) 守護建議用 systemd: bash chain_code/install_systemd.sh (Restart=on-failure, 不碰 crontab)"
 
 if [ "$FOREGROUND" -eq 1 ]; then
     echo "[dispatcher_start] 前景模式啟動 (Ctrl+C 可停)"

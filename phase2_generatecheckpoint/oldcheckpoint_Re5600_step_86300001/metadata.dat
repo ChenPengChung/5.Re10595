@@ -1,0 +1,14 @@
+checkpoint_version=2
+mpi_rank_count=32
+grid_dims=327,27,327
+step=86300001
+FTT=72.968478382807902
+accu_count=15337852
+Force=0.000002918400368
+Force_integral=0.000000000000000
+error_prev=0.000000000000000
+ctrl_initialized=0
+gehrke_activated=0
+dt_global=0.000507312705937
+gpu_time_ms=545277564.813476562500000
+cv_count=10000

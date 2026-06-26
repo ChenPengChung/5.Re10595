@@ -114,7 +114,11 @@ def parse_variables_h(path):
         expr = expr.replace("(double)", "")
 
         try:
-            result = eval(expr)  # noqa: S307 — only evaluates numeric expressions from our own header
+            import math as _math
+            _safe_ns = {"__builtins__": {}, "log": _math.log, "exp": _math.exp,
+                        "sqrt": _math.sqrt, "tanh": _math.tanh,
+                        "abs": abs, "pow": pow}
+            result = eval(expr, _safe_ns)  # noqa: S307 — only evaluates numeric expressions from our own header
             resolved[name] = result
             return result
         except Exception:
@@ -125,6 +129,12 @@ def parse_variables_h(path):
     for _ in range(10):
         for name in raw:
             try_resolve(name)
+
+    if 'GAMMA' not in resolved or not isinstance(resolved.get('GAMMA'), (int, float)):
+        sa = resolved.get('STRETCH_A')
+        if isinstance(sa, (int, float)) and abs(sa) < 1.0:
+            import math as _math
+            resolved['GAMMA'] = _math.log((1.0 + sa) / (1.0 - sa))
 
     return resolved
 

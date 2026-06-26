@@ -14,7 +14,18 @@
 #include <string>
 #include <iostream>
 #include <iomanip>  // setprecision, fixed
-using namespace std ; 
+#include <algorithm> // swap for byte-swap
+using namespace std ;
+
+static inline void vtk_swap_double(double *val) {
+    char *p = reinterpret_cast<char*>(val);
+    std::swap(p[0], p[7]); std::swap(p[1], p[6]);
+    std::swap(p[2], p[5]); std::swap(p[3], p[4]);
+}
+static inline void vtk_write_double_be(ofstream &out, double v) {
+    vtk_swap_double(&v);
+    out.write(reinterpret_cast<const char*>(&v), sizeof(double));
+} 
 void wirte_ASCII_of_str(char * str, FILE *file);
 
 /*第一段:創建資料夾*/
@@ -1577,25 +1588,30 @@ void fileIO_velocity_vtk_merged(int step) {
         
         ostringstream oss;
         oss << "./result/velocity_merged_" << setfill('0') << setw(6) << step << ".vtk";
-        ofstream out(oss.str().c_str());
-        
+        ofstream out(oss.str().c_str(), ios::binary);
+
         if( !out.is_open() ) {
             cerr << "ERROR: Cannot open VTK file: " << oss.str() << endl;
             free(u_global); free(v_global); free(w_global); free(y_global); free(z_global);
             free(u_local); free(v_local); free(w_local); free(y_local); free(z_local);
             return;
         }
-        
-        out << "# vtk DataFile Version 3.0\n";
-        out << "LBM Velocity Field (merged) step=" << step << " Force=" << scientific << setprecision(8) << Force_h[0] << " accu_count=" << accu_count << "\n";
-        out << "ASCII\n";
-        out << "DATASET STRUCTURED_GRID\n";
-        out << "DIMENSIONS " << nxLocal << " " << nyGlobal << " " << nzLocal << "\n";
-        
-        // 輸出座標點
-        out << "POINTS " << globalPoints << " double\n";
-        out << fixed << setprecision(6);
-        const int stride = nyLocal - 1;  // = 32 (unique y-points per rank, overlap=1)
+
+        // VTK header (text lines, even in BINARY mode)
+        {
+            ostringstream hdr;
+            hdr << "# vtk DataFile Version 3.0\n";
+            hdr << "LBM Velocity Field (merged) step=" << step << " Force=" << scientific << setprecision(8) << Force_h[0] << " accu_count=" << accu_count << "\n";
+            hdr << "BINARY\n";
+            hdr << "DATASET STRUCTURED_GRID\n";
+            hdr << "DIMENSIONS " << nxLocal << " " << nyGlobal << " " << nzLocal << "\n";
+            hdr << "POINTS " << globalPoints << " double\n";
+            string h = hdr.str();
+            out.write(h.c_str(), h.size());
+        }
+
+        // 輸出座標點 (binary, big-endian)
+        const int stride = nyLocal - 1;  // = (NY-1)/jp (unique y-points per rank, overlap=1)
         for( int k = 0; k < nzLocal; k++ ){
         for( int jg = 0; jg < nyGlobal; jg++ ){
         for( int i = 0; i < nxLocal; i++ ){
@@ -1603,21 +1619,26 @@ void fileIO_velocity_vtk_merged(int step) {
             if( gpu_id >= jp ) gpu_id = jp - 1;
             int j_local = jg - gpu_id * stride;
 
-            // y, z 座標在 gather 後的位置 (same layout: [gpu_id][j_local][k])
             int yz_gpu_offset = gpu_id * zLocalSize;
             int yz_local_idx = j_local * nzLocal + k;
             double y_val = y_global[yz_gpu_offset + yz_local_idx];
             double z_val = z_global[yz_gpu_offset + yz_local_idx];
 
-            out << x_h[i+3] << " " << y_val << " " << z_val << "\n";
+            vtk_write_double_be(out, x_h[i+3]);
+            vtk_write_double_be(out, y_val);
+            vtk_write_double_be(out, z_val);
         }}}
         
-        // 輸出速度向量 (已 ÷Uref 無因次化，分量順序=code u,v,w=span,stream,normal)
+        // 輸出速度向量 (binary, big-endian)
         double inv_Uref_vec = 1.0 / (double)Uref;
-        out << "\nPOINT_DATA " << globalPoints << "\n";
-        out << "VECTORS velocity double\n";
-        out << setprecision(15);
-        
+        {
+            ostringstream vhdr;
+            vhdr << "\nPOINT_DATA " << globalPoints << "\n";
+            vhdr << "VECTORS velocity double\n";
+            string vh = vhdr.str();
+            out.write(vh.c_str(), vh.size());
+        }
+
         for( int k = 0; k < nzLocal; k++ ){
         for( int jg = 0; jg < nyGlobal; jg++ ){
         for( int i = 0; i < nxLocal; i++ ){
@@ -1629,7 +1650,9 @@ void fileIO_velocity_vtk_merged(int step) {
             int local_idx = k * nyLocal * nxLocal + j_local * nxLocal + i;
             int global_idx = gpu_offset + local_idx;
 
-            out << u_global[global_idx] * inv_Uref_vec << " " << v_global[global_idx] * inv_Uref_vec << " " << w_global[global_idx] * inv_Uref_vec << "\n";
+            vtk_write_double_be(out, u_global[global_idx] * inv_Uref_vec);
+            vtk_write_double_be(out, v_global[global_idx] * inv_Uref_vec);
+            vtk_write_double_be(out, w_global[global_idx] * inv_Uref_vec);
         }}}
 
         // ================================================================
@@ -1638,10 +1661,10 @@ void fileIO_velocity_vtk_merged(int step) {
         // See coordinate mapping comment at top of this function
         // ================================================================
 
-        // Helper macro: write one SCALAR field over the global grid
+        // Helper macro: write one SCALAR field (binary, big-endian)
         #define VTK_WRITE_SCALAR(name, arr_global) \
-            out << "\nSCALARS " << (name) << " double 1\n"; \
-            out << "LOOKUP_TABLE default\n"; \
+            { string _sh = string("\nSCALARS ") + (name) + " double 1\nLOOKUP_TABLE default\n"; \
+              out.write(_sh.c_str(), _sh.size()); } \
             for( int kk = 0; kk < nzLocal; kk++ ){ \
             for( int jg = 0; jg < nyGlobal; jg++ ){ \
             for( int ii = 0; ii < nxLocal; ii++ ){ \
@@ -1649,45 +1672,30 @@ void fileIO_velocity_vtk_merged(int step) {
                 if( gid >= jp ) gid = jp - 1; \
                 int jl = jg - gid * stride; \
                 int gidx = gid * localPoints + kk * nyLocal * nxLocal + jl * nxLocal + ii; \
-                out << (arr_global)[gidx] << "\n"; \
+                vtk_write_double_be(out, (arr_global)[gidx]); \
             }}}
 
-        // [A] 瞬時速度 (3 SCALARS): u_inst=v_code/Uref (流向), v_inst=w_code/Uref (法向), w_inst=u_code/Uref (展向)
+        // [A] 瞬時速度 (3 SCALARS, binary): u_inst=v_code/Uref, v_inst=w_code/Uref, w_inst=u_code/Uref
         {
             double inv_Uref = 1.0 / (double)Uref;
-            out << "\nSCALARS u_inst double 1\n";
-            out << "LOOKUP_TABLE default\n";
-            for( int kk = 0; kk < nzLocal; kk++ ){
-            for( int jg = 0; jg < nyGlobal; jg++ ){
-            for( int ii = 0; ii < nxLocal; ii++ ){
-                int gid = jg / stride;
-                if( gid >= jp ) gid = jp - 1;
-                int jl = jg - gid * stride;
-                int gidx = gid * localPoints + kk * nyLocal * nxLocal + jl * nxLocal + ii;
-                out << v_global[gidx] * inv_Uref << "\n";  // streamwise = code v
-            }}}
-            out << "\nSCALARS v_inst double 1\n";
-            out << "LOOKUP_TABLE default\n";
-            for( int kk = 0; kk < nzLocal; kk++ ){
-            for( int jg = 0; jg < nyGlobal; jg++ ){
-            for( int ii = 0; ii < nxLocal; ii++ ){
-                int gid = jg / stride;
-                if( gid >= jp ) gid = jp - 1;
-                int jl = jg - gid * stride;
-                int gidx = gid * localPoints + kk * nyLocal * nxLocal + jl * nxLocal + ii;
-                out << w_global[gidx] * inv_Uref << "\n";  // wall-normal = code w (ERCOFTAC V)
-            }}}
-            out << "\nSCALARS w_inst double 1\n";
-            out << "LOOKUP_TABLE default\n";
-            for( int kk = 0; kk < nzLocal; kk++ ){
-            for( int jg = 0; jg < nyGlobal; jg++ ){
-            for( int ii = 0; ii < nxLocal; ii++ ){
-                int gid = jg / stride;
-                if( gid >= jp ) gid = jp - 1;
-                int jl = jg - gid * stride;
-                int gidx = gid * localPoints + kk * nyLocal * nxLocal + jl * nxLocal + ii;
-                out << u_global[gidx] * inv_Uref << "\n";  // spanwise = code u (ERCOFTAC W)
-            }}}
+
+            #define VTK_WRITE_SCALAR_SCALED(sname, arr, scale) \
+                { string _sh2 = string("\nSCALARS ") + (sname) + " double 1\nLOOKUP_TABLE default\n"; \
+                  out.write(_sh2.c_str(), _sh2.size()); } \
+                for( int kk = 0; kk < nzLocal; kk++ ){ \
+                for( int jg = 0; jg < nyGlobal; jg++ ){ \
+                for( int ii = 0; ii < nxLocal; ii++ ){ \
+                    int gid = jg / stride; \
+                    if( gid >= jp ) gid = jp - 1; \
+                    int jl = jg - gid * stride; \
+                    int gidx = gid * localPoints + kk * nyLocal * nxLocal + jl * nxLocal + ii; \
+                    vtk_write_double_be(out, (arr)[gidx] * (scale)); \
+                }}}
+
+            VTK_WRITE_SCALAR_SCALED("u_inst", v_global, inv_Uref)  // streamwise = code v
+            VTK_WRITE_SCALAR_SCALED("v_inst", w_global, inv_Uref)  // wall-normal = code w
+            VTK_WRITE_SCALAR_SCALED("w_inst", u_global, inv_Uref)  // spanwise = code u
+            #undef VTK_WRITE_SCALAR_SCALED
         }
 
         // [B] 瞬時渦度 (3 SCALARS): ERCOFTAC frame (omega_u=流向, omega_v=法向, omega_w=展向)

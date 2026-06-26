@@ -17,7 +17,7 @@
 #   - 登入節點 x86_64 + H200 計算節點 x86_64 → 原地編譯, 不需 salloc
 #   - nvcc -arch=sm_90 (Hopper H200), 非 sm_100 (Blackwell GB200)
 #   - HPC-SDK 路徑: Linux_x86_64/...x86_64-linux, 非 Linux_aarch64/...sbsa-linux
-#   - 投遞目標: jobscript_chain.slurm.H200 (1 node × 8 GPU, partition=dev)
+#   - 投遞目標: jobscript_chain.slurm.H200 (8 nodes × 8 GPU = 64 GPU, partition=h200)
 #
 # 路徑規範 (升級後):
 #   所有 chain state 集中於 restart/ (chain_jobid / chain_count / bad_nodes /
@@ -154,7 +154,9 @@ if [ -n "$EXISTING_JOBS" ]; then
     echo ""
     JOBIDS_TO_CANCEL=$(echo "$EXISTING_JOBS" | awk '{print $1}' | xargs)
     echo "  請先選一個做完再回來:"
-    echo "    (A) 停舊 chain:   scancel ${JOBIDS_TO_CANCEL}"
+    echo "    (A) 停本專案舊 chain: ./run job-guard scancel <jobid>"
+    echo "        候選 jobid: ${JOBIDS_TO_CANCEL}"
+    echo "        切勿直接 scancel 未驗證 jobid；避免干預其他專案"
     echo "    (B) 不投新的:     bash build_and_submit.sh.H200 --build-only  (只編不投)"
     echo "    (C) 強制覆蓋:     FORCE_SUBMIT=1 bash build_and_submit.sh.H200   (不建議)"
     echo ""
@@ -259,7 +261,8 @@ fi
 # stderr 重定向到 log 便於除錯, 同時保留 tty 回顯
 _BL_LOG="${BL_DIAG_LOG:-restart/blacklist.log}"
 mkdir -p "$(dirname "$_BL_LOG")"
-MERGED_BAD=$(bl_effective_exclude "dev" 2> >(tee -a "$_BL_LOG" >&2))
+_SUBMIT_PART="$(awk -F= '/^#SBATCH[[:space:]]+--partition=/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2); print $2; exit}' "$CHAIN_DIR/jobscript_chain.slurm.H200")"
+MERGED_BAD=$(bl_effective_exclude "${_SUBMIT_PART:-dev}" 2> >(tee -a "$_BL_LOG" >&2))
 EXCLUDE_ARG=""
 if [ -n "$MERGED_BAD" ]; then
     EXCLUDE_ARG="--exclude=$MERGED_BAD"

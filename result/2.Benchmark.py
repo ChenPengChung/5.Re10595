@@ -33,7 +33,7 @@ Benchmark 資料來源:
 
 層流 wall-normal 瞬時分量 w* = w / Uref（可選後處理）:
   啟動時自上一層目錄鏈尋找 variables.h 或 variable.h，解析 #define Uref（印出 U_REF）。
-  本檔位於 Edit 專案 result/：LAMINAR_W_DIVIDE_BY_UREF=False（與 fileIO 已 ÷Uref 一致）。
+  本檔位於 Edit12_Krank56002 result/：LAMINAR_W_DIVIDE_BY_UREF=False（與 fileIO 已 ÷Uref 一致）。
   若須於 Python 再 ÷Uref，改 True；或僅用 Desktop 根目錄 2.Benchmark.py（該檔預設 True）。
 """
 
@@ -63,6 +63,11 @@ except ImportError:
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) if "__file__" in dir() else os.getcwd()
 VTK_DIR = SCRIPT_DIR
 VTK_PATTERN = "velocity_merged_*.vtk"
+
+# ── benchmark 低記憶體: 湍流路徑全程不用的場 (verified: turbulent 用 U_mean/V_mean,
+#    velocity/u_inst/velocity_y 僅 LAMINAR fallback @ ~line 890; turbulent 硬寫 U_mean/V_mean) ──
+_BENCH_SKIP_FIELDS = {"velocity", "u_inst", "v_inst", "w_inst",
+                      "omega_u", "omega_v", "omega_w", "P_mean", "W_mean"}
 BENCH_DIR = os.path.join(SCRIPT_DIR, "benchmark")
 
 XH_STATIONS = [0.05, 0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
@@ -90,8 +95,8 @@ _DEFAULT_SCALES_LAMINAR = {
     "U": 0.8, "V": 3.2,    # V = wall-normal; 3.2 = 0.8 * 4.0
 }
 _DEFAULT_SCALES_TURBULENT = {
-    "U": 0.8, "V": 0.8,    # turbulent: V 量級較大，不需額外放大
-    "uu": 30, "vv": 30, "uv": 60, "k": 20,
+    "U": 1.0, "V": 8.0,
+    "uu": 30, "vv": 30, "uv": 60, "k": 30,
 }
 
 # 層流：VTK 法向速度（v_inst / velocity_z / V_mean）是否再 ÷ variables.h 的 Uref
@@ -192,7 +197,7 @@ BENCHMARK_SOURCES = {
         'dir_name':  'MGLET (Breuer et al. 2009)',
         'label':     r'$\mathit{MGLET}$-Breuer $\mathit{et\,al.}$',
         'delimiter': None,
-        'color':     '#DAA520',   # yellow (goldenrod)
+        'color':     '#228B22',   # green (forest green)
         'marker':    'D',         # diamond (body-fitted FVM family)
         'markersize': 3.5,
         'markevery':  4,
@@ -201,10 +206,20 @@ BENCHMARK_SOURCES = {
         'dir_name':  'MGLET (Manhart et al. 2011)',
         'label':     r'$\mathit{MGLET}$-Manhart $\mathit{et\,al.}$',
         'delimiter': None,
-        'color':     '#DAA520',   # yellow (goldenrod) — same as MGLET family
+        'color':     '#228B22',   # green (forest green) — same as MGLET family
         'marker':    'D',         # diamond — same as MGLET family
         'markersize': 3.5,
         'markevery':  4,
+    },
+    'Krank': {
+        'dir_name':  'Benjamin Krank et al. 2018',
+        'label':     r'Krank $\mathit{et\,al.}$',
+        'delimiter': ',',
+        'color':     '#7B2D8E',   # purple
+        'marker':    'o',         # circle
+        'markersize': 3.5,
+        'markevery':  4,
+        'format':    'krank',
     },
     'Experiment': {
         'dir_name':  'Exp. (Rapp et al. 2011)',
@@ -267,6 +282,11 @@ parser.add_argument(
     action='store_true',
     help='Turbulent: 使用預設 benchmark 數據密度，不互動詢問',
 )
+parser.add_argument(
+    '--lowmem',
+    action='store_true',
+    help='省記憶體: 湍流跳過未用場 + float32 讀入 (watcher inline 用; 預設 float64 零誤差)',
+)
 args, _ = parser.parse_known_args()
 
 U_REF, _VARIABLES_HEADER_PATH = resolve_uref_for_postprocess(SCRIPT_DIR)
@@ -283,16 +303,24 @@ if Re <= 150:
     XH_STATIONS = [0, 1, 2, 3, 4, 5, 6, 7, 8]  # No 0.05, 0.5 — 對應 LBM 分布
 print(f"[INFO] Re = {Re}  {'(laminar mode)' if LAMINAR else '(turbulent mode)'}")
 
+# ── benchmark dtype + skip 開關 (不帶 --lowmem ⇒ float64, benchmark 輸出與原行為一致) ──
+BENCH_LOWMEM   = bool(args.lowmem)
+_bench_dtype   = np.float32 if BENCH_LOWMEM else np.float64
+_bench_skip_on = (BENCH_LOWMEM and not LAMINAR)   # ★skip 受 --lowmem 閘控: 無 --lowmem(canonical)讀全場 float64 零誤差/位元不變; 帶 --lowmem 才跳湍流未用場省記憶體
+if BENCH_LOWMEM:
+    print("[INFO] --lowmem: float32 讀入 + 跳過湍流未用場 (峰值記憶體↓; ~6e-8 捨入 << 5% 比對精度)")
+
 # ── Benchmark 數據點密度控制 ──────────────────────────────────
 # 層流: 100% (全部顯示)
 # 紊流: 使用者選擇每個 benchmark 的顯示密度 (%)
 _DEFAULT_DENSITY = {
-    'LESOCC':        80,   # DNS/LES — 中等密度
-    'MGLET':         80,   # DNS — 中等密度
-    'MGLET_Manhart': 80,   # LES — 中等密度
-    'Experiment':    60,   # PIV 數據點多，預設較稀疏
-    'LBM':           100,  # 層流/少量數據點
-    'ISLBM':         100,  # 層流/少量數據點
+    'LESOCC':        6,
+    'MGLET':         2.5,
+    'MGLET_Manhart': 2.5,
+    'Krank':         20,
+    'Experiment':    80,
+    'LBM':           6,
+    'ISLBM':         6,
 }
 
 def subsample_uniform(y_arr, data_arr, density_pct):
@@ -338,7 +366,7 @@ def _init_benchmark_density(bench_sources_list, is_laminar):
             avg = src_stats.get(src_id, 0)
             d = density[src_id]
             n_show = max(2, int(round(avg * d / 100))) if avg > 0 else 0
-            print(f"  {info['label']:30s}  {d:3d}%  ({avg} -> ~{n_show} pts/station)")
+            print(f"  {info['label']:30s}  {d:>5g}%  ({avg} -> ~{n_show} pts/station)")
         print("="*60 + "\n")
         return density
 
@@ -464,24 +492,90 @@ def hill_function(Y):
 # ================================================================
 # VTK Parsing
 # ================================================================
-def parse_vtk(filepath):
-    """Read points, velocity, and scalar fields from ASCII STRUCTURED_GRID VTK.
+def _read_binary_stream(fh, count, src_dt, esize, out_dtype, chunk_elems=4 * 1024 * 1024):
+    """串流分塊讀 VTK binary 區塊: 預配置 out + 每次讀 ~chunk(預設 4M 元素) 邊讀邊轉,
+    消「f.read 整場 buf(src_dt) + astype 輸出(out_dtype)」的暫態翻倍 spike(login 20GB cgroup OOM rc=137 元凶)。
+    ★截斷守門: 短讀(got 累計 < count)→ ValueError; 否則截斷/半寫入 VTK 會回傳滿長度帶未初始化垃圾尾,
+      reshape 誤成功 → 靜默產錯圖。守門還原 loud-fail(上層 catch→跳過重試)。"""
+    out = np.empty(count, dtype=out_dtype)
+    i = 0
+    chunk_bytes = chunk_elems * esize
+    while i < count:
+        cbuf = fh.read(min(chunk_bytes, (count - i) * esize))
+        got = len(cbuf) // esize
+        if got == 0:
+            break
+        out[i:i + got] = np.frombuffer(cbuf, dtype=src_dt, count=got)
+        i += got
+    if i < count:
+        raise ValueError("truncated VTK binary block: expected %d elems, got %d" % (count, i))
+    return out
 
-    Streaming parser — reads line-by-line with numpy pre-allocation.
-    Avoids readlines() to keep memory usage ~O(npts) instead of O(file_size).
+
+def parse_vtk(filepath):
+    """Read points, velocity, and scalar fields from legacy STRUCTURED_GRID VTK.
+
+    Supports both BINARY (big-endian) and ASCII format. Header is parsed via
+    readline(); BINARY data blocks are read as raw bytes and decoded with
+    numpy (>f8 for double, >f4 for float).
     """
     dims = None
     npts = 0
     npts_from_dims = 0
     points = np.empty((0, 3))
     scalars = {}
+    is_binary = False
 
-    with open(filepath, "r") as f:
-        while True:
-            line = f.readline()
-            if not line:                       # EOF
+    def _np_dtype(token):
+        t = token.lower()
+        if t == "double":
+            return ">f8", 8
+        if t == "float":
+            return ">f4", 4
+        if t == "int":
+            return ">i4", 4
+        return ">f8", 8
+
+    def _read_ascii_block(f, n, stop_tokens):
+        arr = np.empty(n, dtype=np.float64)
+        idx = 0
+        while idx < n:
+            dline = f.readline()
+            if not dline:
                 break
-            sline = line.strip()
+            sline = dline.decode("latin-1", errors="ignore").strip()
+            if not sline:
+                continue
+            first = sline.split()[0]
+            if first.startswith(stop_tokens):
+                # rewind not supported; caller handles by re-checking next line
+                return arr[:idx], dline
+            for v in sline.split():
+                if idx < n:
+                    arr[idx] = float(v)
+                    idx += 1
+        return arr[:idx], None
+
+    with open(filepath, "rb") as f:
+        pushback = None
+        while True:
+            if pushback is not None:
+                raw = pushback
+                pushback = None
+            else:
+                raw = f.readline()
+            if not raw:
+                break
+            sline = raw.decode("latin-1", errors="ignore").strip()
+            if not sline:
+                continue
+
+            if sline == "BINARY":
+                is_binary = True
+                continue
+            if sline == "ASCII":
+                is_binary = False
+                continue
 
             if sline.startswith("DIMENSIONS"):
                 dims = tuple(int(v) for v in sline.split()[1:4])
@@ -491,47 +585,38 @@ def parse_vtk(filepath):
                 npts = int(sline.split()[1])
 
             elif sline.startswith("POINTS"):
-                n = int(sline.split()[1])
+                parts = sline.split()
+                n = int(parts[1])
+                dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 if npts == 0:
                     npts = n
-                pts = np.empty(n * 3, dtype=np.float64)
-                pidx = 0
-                while pidx < n * 3:
-                    dline = f.readline()
-                    if not dline:
-                        break
-                    vals = dline.split()
-                    if not vals:
-                        continue
-                    if vals[0].startswith(("SCALARS", "VECTORS", "POINT_DATA")):
-                        break
-                    for v in vals:
-                        if pidx < n * 3:
-                            pts[pidx] = float(v)
-                            pidx += 1
-                points = pts[:pidx].reshape(-1, 3)
+                if is_binary:
+                    points = _read_binary_stream(f, n * 3, dt, esize, _bench_dtype).reshape(-1, 3)
+                    f.readline()  # consume trailing newline after binary block
+                else:
+                    pts, leftover = _read_ascii_block(
+                        f, n * 3, ("SCALARS", "VECTORS", "POINT_DATA"))
+                    points = pts.reshape(-1, 3)
+                    pushback = leftover
 
             elif sline.startswith("VECTORS"):
                 if npts == 0 and npts_from_dims > 0:
                     npts = npts_from_dims
                 parts = sline.split()
                 vec_name = parts[1] if len(parts) > 1 else "velocity"
-                vec = np.empty(npts * 3, dtype=np.float64)
-                vidx = 0
-                while vidx < npts * 3:
-                    dline = f.readline()
-                    if not dline:
-                        break
-                    vals = dline.split()
-                    if not vals:
+                dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
+                if is_binary:
+                    if _bench_skip_on and vec_name in _BENCH_SKIP_FIELDS:
+                        f.seek(npts * 3 * esize, 1)   # 跳過未用場(湍流), 不讀進記憶體
+                        f.readline()                  # 吃掉 binary 區塊尾端換行, 對齊下一場標頭
                         continue
-                    if vals[0].startswith(("SCALARS", "VECTORS", "POINT_DATA")):
-                        break
-                    for v in vals:
-                        if vidx < npts * 3:
-                            vec[vidx] = float(v)
-                            vidx += 1
-                if vidx == npts * 3:
+                    vec = _read_binary_stream(f, npts * 3, dt, esize, _bench_dtype)
+                    f.readline()
+                else:
+                    vec, leftover = _read_ascii_block(
+                        f, npts * 3, ("SCALARS", "VECTORS", "POINT_DATA"))
+                    pushback = leftover
+                if vec.size == npts * 3:
                     scalars[f"{vec_name}_x"] = vec[0::3].copy()
                     scalars[f"{vec_name}_y"] = vec[1::3].copy()
                     scalars[f"{vec_name}_z"] = vec[2::3].copy()
@@ -541,23 +626,20 @@ def parse_vtk(filepath):
                     npts = npts_from_dims
                 parts = sline.split()
                 name = parts[1]
+                dt, esize = _np_dtype(parts[2] if len(parts) > 2 else "double")
                 f.readline()           # skip LOOKUP_TABLE line
-                arr = np.empty(npts, dtype=np.float64)
-                count = 0
-                while count < npts:
-                    dline = f.readline()
-                    if not dline:
-                        break
-                    vals = dline.split()
-                    if not vals:
+                if is_binary:
+                    if _bench_skip_on and name in _BENCH_SKIP_FIELDS:
+                        f.seek(npts * esize, 1)   # 跳過未用場(湍流), 不讀進記憶體
+                        f.readline()              # 吃掉 binary 區塊尾端換行, 對齊下一場標頭
                         continue
-                    if vals[0].startswith(("SCALARS", "VECTORS")):
-                        break
-                    for v in vals:
-                        if count < npts:
-                            arr[count] = float(v)
-                            count += 1
-                scalars[name] = arr[:count]
+                    arr = _read_binary_stream(f, npts, dt, esize, _bench_dtype)
+                    f.readline()
+                else:
+                    arr, leftover = _read_ascii_block(
+                        f, npts, ("SCALARS", "VECTORS"))
+                    pushback = leftover
+                scalars[name] = arr
 
     return dims, points, scalars
 
@@ -569,10 +651,10 @@ def check_vtk_completeness(filepath):
     total_lines = 0
     grid_npts = 0
 
-    with open(filepath, "r") as f:
-        for line in f:
+    with open(filepath, "rb") as f:
+        for raw in f:
             total_lines += 1
-            stripped = line.strip()
+            stripped = raw.decode("latin-1", errors="ignore").strip()
             if stripped.startswith("DIMENSIONS"):
                 markers["DIMENSIONS"] = True
                 parts = stripped.split()
@@ -703,6 +785,19 @@ def load_station_file(filepath, delimiter=None, fmt=None, xh_station=0.0,
                     "V": data[:, 3],        # w/Uref (wall-normal, code w → VTK V)
                     "uu": None, "vv": None, "uv": None, "k": None,
                 }
+        elif fmt == 'krank':
+            data = np.loadtxt(filepath, comments='%', delimiter=',')
+            if data.ndim < 2 or data.shape[1] < 9:
+                return None
+            return {
+                "y":  data[:, 0],
+                "U":  data[:, 1],
+                "V":  data[:, 2],
+                "uu": data[:, 4],
+                "vv": data[:, 5],
+                "uv": data[:, 7],
+                "k":  data[:, 8],
+            }
         else:
             data = np.loadtxt(filepath, comments="#", delimiter=delimiter)
     except Exception:
@@ -1419,7 +1514,7 @@ def _place_hill_legend(ax, field_label, scale, Re_val, legend_pos='bottom-left',
     # Target: each row occupies ~(MAX_Y1 - MAX_Y0) / n_rows in data coords
     row_h_data = (MAX_Y1 - MAX_Y0) / n_rows
     row_h_inch = (row_h_data / yr) * axes_h_inch
-    fontsize = max(8.0, min(row_h_inch * 72 * 0.80, 18.0))
+    fontsize = max(8.0, min(row_h_inch * 72 * 0.80, 12.0))
 
     # ── Layout constants (data-coord offsets relative to box left) ──
     PAD = 0.03            # internal padding around text content

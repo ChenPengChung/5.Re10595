@@ -3,12 +3,19 @@
 #include <cuda.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
+#include <dirent.h>
 #include <mpi.h>
 #include <stdarg.h>
 #include <signal.h>        // 必須在 variables.h 之前 — variables.h 定義 #define cs (1.0/sqrt(3))
                            // 會與 <bits/sigcontext.h> 的 cs 欄位衝突。先 include signal.h
                            // 讓 sigcontext struct 先被解析, 之後 macro 才生效不影響。
 #include "variables.h"
+#include "gilbm/precompute2.h"   // Algorithm2 table type/generator; needed before globals/memory.h
+#if USE_ITBLBM_STREAMING
+#include "itblbm/isoparametric_coeff.h"
+#endif
 using namespace std;
 /************************** Host Variables **************************/
 double  *fh_p[19]; //主機端一般態分佈函數
@@ -68,6 +75,17 @@ double *zeta_z_h, *zeta_z_d;     // [NYD6*NZ6]
 // Precomputed stencil base k [NZ6] (int, wall-clamped)
 int *bk_precomp_h, *bk_precomp_d;
 
+#if USE_ITBLBM_STREAMING
+ITB_YZCoeff *itb_yz_coeff_h = NULL;
+ITB_YZCoeff *itb_yz_coeff_d = NULL;
+#endif
+
+#if USE_GILBM_ALGORITHM2
+// Algorithm2: 預計算 departure 表 [GILBM2_NCLASS*NYD6*NZ6]
+//   production default: WEIGHTS_FOLDED (j0 + k_idx[7] + wr[7] + ws[7])
+GILBM2_Table *gilbm2_coords_h, *gilbm2_coords_d;
+#endif
+
 // Phase 3: Curvilinear global time step (runtime, from CFL on contravariant velocities)
 // NOTE: dt (= minSize) is derived from GAMMA in variables.h (tanh analytic formula).
 //       dt_global is the actual curvilinear time step, computed at runtime.
@@ -103,6 +121,8 @@ double *rho_modify_h, *rho_modify_d;
 
 // GPU reduction partial sums for mass conservation (replaces SendDataToCPU every step)
 double *rho_partial_h, *rho_partial_d;
+double *rho_cv_weight_h, *rho_cv_weight_d;  // control-volume weights for volume-weighted mass correction
+double rho_cv_global_volume = 0.0;          // Σ control-volume weights across all ranks
 
 // Time-average accumulation (FTT-gated)
 // u=spanwise, v=streamwise, w=wall-normal; GPU-side accumulation
@@ -212,6 +232,9 @@ int itag_f6[23] = {400,401,402,403,404,405,406,407,408,409,410,411,412,413,414,4
 #include "initialization.h"
 #include "gilbm/metric_terms.h"
 #include "gilbm/precompute.h"
+#if USE_ITBLBM_STREAMING
+#include "itblbm/isoparametric_precompute.h"
+#endif
 #include "gilbm/diagnostic_gilbm.h"
 #include "communication.h"
 #include "convergence.h"
@@ -235,6 +258,143 @@ bool g_timing_sample = false;
 #include "fileIO.h"
 #include "MRT_Matrix.h"
 #include "MRT_Process.h"
+#include "mrt_projection_host.h"
+
+// ── Runtime grid safety: checkpoint ↔ grid consistency check ──
+static void BuildCurrentGridDatPath(char *grid_dat_path, size_t n)
+{
+    char grid_ref_stem[256];
+    strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+    grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+    { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
+    snprintf(grid_dat_path, n,
+             "%s/adaptive_%s_I%d_J%d_s%.6f.dat",
+             GRID_DAT_DIR, grid_ref_stem,
+             NY, NZ, (double)STRETCH_A);
+}
+
+static void TrimLineValue(char *s)
+{
+    size_t len = strlen(s);
+    while (len > 0 && (s[len - 1] == '\n' || s[len - 1] == '\r' ||
+                       s[len - 1] == ' '  || s[len - 1] == '\t')) {
+        s[--len] = '\0';
+    }
+}
+
+static int ReadGridParamsSha256(const char *path, char *out, size_t out_n)
+{
+    FILE *fp = fopen(path, "r");
+    if (!fp) return 0;
+
+    const char *key = "GRID_PARAMS_SHA256=";
+    const size_t key_len = strlen(key);
+    char line[4096];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strstr(line, "DT=")) break;
+        char *p = strstr(line, key);
+        if (!p) continue;
+        p += key_len;
+        TrimLineValue(p);
+        strncpy(out, p, out_n - 1);
+        out[out_n - 1] = '\0';
+        found = 1;
+        break;
+    }
+    fclose(fp);
+    return found;
+}
+
+static int ReadCheckpointMetaValue(const char *checkpoint_dir,
+                                   const char *key,
+                                   char *out,
+                                   size_t out_n)
+{
+    char meta_path[1024];
+    if (checkpoint_dir && checkpoint_dir[0] == '/')
+        snprintf(meta_path, sizeof(meta_path), "%s/metadata.dat", checkpoint_dir);
+    else
+        snprintf(meta_path, sizeof(meta_path), "./%s/metadata.dat", checkpoint_dir);
+
+    FILE *fp = fopen(meta_path, "r");
+    if (!fp) return 0;
+
+    char prefix[256];
+    snprintf(prefix, sizeof(prefix), "%s=", key);
+    const size_t prefix_len = strlen(prefix);
+    char line[4096];
+    int found = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strncmp(line, prefix, prefix_len) != 0) continue;
+        char *value = line + prefix_len;
+        TrimLineValue(value);
+        strncpy(out, value, out_n - 1);
+        out[out_n - 1] = '\0';
+        found = 1;
+        break;
+    }
+    fclose(fp);
+    return found;
+}
+
+static void PrecheckCheckpointGridConsistency(const char *checkpoint_dir, int rank)
+{
+    if (rank != 0) return;
+
+    char match_flag[32] = {0};
+    if (ReadCheckpointMetaValue(checkpoint_dir, "interp_solver_grid_match",
+                                match_flag, sizeof(match_flag)) &&
+        strcmp(match_flag, "0") == 0) {
+        fprintf(stderr,
+                "\n[FATAL][GRID] checkpoint metadata says Phase 1 NEW grid did not match solver grid\n"
+                "  Checkpoint dir : %s\n"
+                "  Field          : interp_solver_grid_match=0\n"
+                "  Policy         : refuse to load checkpoint data.\n",
+                checkpoint_dir);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    char expected_fp[128] = {0};
+    int has_expected = ReadCheckpointMetaValue(
+        checkpoint_dir, "interp_solver_grid_params_sha256",
+        expected_fp, sizeof(expected_fp));
+    if (!has_expected) {
+        has_expected = ReadCheckpointMetaValue(
+            checkpoint_dir, "interp_new_grid_params_sha256",
+            expected_fp, sizeof(expected_fp));
+    }
+
+    char grid_dat_path[512];
+    BuildCurrentGridDatPath(grid_dat_path, sizeof(grid_dat_path));
+    char current_fp[128] = {0};
+    int has_current = ReadGridParamsSha256(grid_dat_path, current_fp, sizeof(current_fp));
+
+    if (has_expected && has_current && strcmp(expected_fp, current_fp) != 0) {
+        fprintf(stderr,
+                "\n[FATAL][GRID] grid parameter fingerprint mismatch before checkpoint load\n"
+                "  Checkpoint dir : %s\n"
+                "  Runtime grid   : %s\n"
+                "  checkpoint fp  : %s\n"
+                "  runtime fp     : %s\n"
+                "  Probable cause : Phase 1 and runtime grids were generated with different\n"
+                "                   Poisson/grid parameters (for example n_iter mismatch).\n"
+                "  Policy         : regenerate Phase 1 grids and checkpoint from shared grid_params.py.\n",
+                checkpoint_dir, grid_dat_path, expected_fp, current_fp);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    if (has_expected && !has_current) {
+        printf("[GRID] WARN: checkpoint has grid fingerprint but runtime .dat lacks one; legacy grid header, skipping hash check\n");
+    } else if (!has_expected && has_current) {
+        printf("[GRID] WARN: runtime grid has fingerprint but checkpoint metadata lacks one; legacy checkpoint, skipping hash check\n");
+    } else if (has_expected && has_current) {
+        printf("[GRID] Parameter fingerprint OK: %s\n", current_fp);
+    }
+}
+
+// ── Animation
 // ── Animation 自動渲染參數（可自由調整）──
 // 新 pipeline (v3 lossless MP4): 每次 VTK 輸出 → pipeline.py 背景呼叫
 //   → 產 2 張 4K PNG 到 animation/png_frames/ (永久保留, 續跑必備資料)
@@ -287,10 +447,21 @@ int main(int argc, char *argv[])
 
 	int iDeviceCount = 0;
     CHECK_CUDA( cudaGetDeviceCount( &iDeviceCount ) );
-    CHECK_CUDA( cudaSetDevice( myid % iDeviceCount ) );
+    MPI_Comm local_comm;
+    MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, myid, MPI_INFO_NULL, &local_comm);
+    int local_rank, local_size;
+    MPI_Comm_rank(local_comm, &local_rank);
+    MPI_Comm_size(local_comm, &local_size);
+    MPI_Comm_free(&local_comm);
+    if (iDeviceCount < local_size) {
+        fprintf(stderr, "[FATAL] Rank %d: node has %d GPUs but %d local ranks — GPU sharing detected.\n",
+                myid, iDeviceCount, local_size);
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+    CHECK_CUDA( cudaSetDevice( local_rank ) );
 
     if (myid == 0)  printf("\n%s running with %d GPUs...\n\n", argv[0], (int)(jp));          CHECK_MPI( MPI_Barrier(MPI_COMM_WORLD) );
-    printf( "[ Info ] Rank Rank %2d/%2d, localrank: %d/%d\n", myid, nProcs-1, myid, iDeviceCount );
+    printf( "[ Info ] Rank %2d/%2d, local_rank: %d/%d, GPUs_on_node: %d\n", myid, nProcs-1, local_rank, local_size, iDeviceCount );
 
     // ── Runtime 安全檢查:MPI 分解相容性 ──
     // [POLICY-C1] 分解 / grid 不匹配是 compile-time 配置錯誤,續跑也不會修好 → 停鏈
@@ -356,58 +527,157 @@ int main(int argc, char *argv[])
 
     // ════════════════════════════════════════════════════════════════
     //  Stage 1: 外部網格讀取 (取代舊的 GenerateMesh_Y / GenerateMesh_Z)
+    //
+    //  ── GRID PIPELINE REGULATION (規範) ─────────────────────────────
+    //
+    //  Production (本 stage 唯一接觸的路徑):
+    //    J_Frohlich/grid_zeta_tool.py    ← main 偵測到網格不存在/過期時呼叫
+    //    J_Frohlich/adaptive_*.dat        ← main 讀取的網格檔
+    //    J_Frohlich/grid_data_*.txt       ← 配套診斷檔
+    //
+    //  Phase 1/2 (與本 stage 完全隔離, main 永不觸碰):
+    //    phase1_generategrid/grid_zeta_tool.py
+    //        → 獨立工具, 輸出留在 phase1_generategrid/, 僅供 Phase 2 使用
+    //    phase2_generatecheckpoint/interp_checkpoint.py
+    //        → 唯一讀取 phase1_generategrid/ 輸出的程式
+    //
+    //  兩條 pipeline 的目的不同, 切勿混用 (執行路徑 / 輸出目錄 / 工具腳本).
+    //
+    //  檔名約定 (Python 與 C 必須一致):
+    //    adaptive_<grid_stem>_I<NY>_J<NZ>_s<STRETCH_A>.dat
+    //    grid_data_I<NY>_J<NZ>_s<STRETCH_A>.txt
     // ════════════════════════════════════════════════════════════════
 
-    // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在
+    // 1.1 啟動前 Guard: 檢查外部網格檔案是否存在 + 新鮮度檢查
     {
+        // 從 GRID_DAT_REF 擷取 stem (去掉 .dat 副檔名)
+        char grid_ref_stem[256];
+        strncpy(grid_ref_stem, GRID_DAT_REF, sizeof(grid_ref_stem) - 1);
+        grid_ref_stem[sizeof(grid_ref_stem) - 1] = '\0';
+        { char *ext = strrchr(grid_ref_stem, '.'); if (ext) *ext = '\0'; }
+
         char grid_dat_path[512];
         snprintf(grid_dat_path, sizeof(grid_dat_path),
-                 "%s/adaptive_%s_I%d_J%d_a%.1f.dat",
-                 GRID_DAT_DIR, "3.fine grid",
-                 NY, NZ, (double)ALPHA);
-                 // NY = 流向格點數, NZ = 法向格點數, I=NY, J=NZ
+                 "%s/adaptive_%s_I%d_J%d_s%.6f.dat",
+                 GRID_DAT_DIR, grid_ref_stem,
+                 NY, NZ, (double)STRETCH_A);
 
+        // need_generate: 0=OK, 1=missing, 2=stale(input newer), 3=diagnostics missing
+        int need_generate = 0;
         FILE *grid_test = fopen(grid_dat_path, "r");
+
         if (!grid_test) {
-            // 網格檔不存在 → rank 0 自動呼叫 Python 生成
+            need_generate = 1;
+        } else {
+            fclose(grid_test);
+            // 新鮮度: 只比較實際影響網格座標的資料依賴
+            // grid_zeta_tool.py 不列入 — 改註解/防呆不應觸發重生
+            struct stat grid_st, dep_st;
+            if (stat(grid_dat_path, &grid_st) == 0) {
+                const char *deps[] = {
+                    GRID_DAT_DIR "/" GRID_DAT_REF,
+#ifdef UTAU_BOT_DAT
+                    GRID_DAT_DIR "/" UTAU_BOT_DAT,
+#endif
+#ifdef UTAU_TOP_DAT
+                    GRID_DAT_DIR "/" UTAU_TOP_DAT,
+#endif
+                    NULL
+                };
+                for (int d = 0; deps[d]; d++) {
+                    int sr = stat(deps[d], &dep_st);
+                    if (sr != 0) {
+                        // 依賴檔遺失 → 觸發 regen, 讓 --auto fail loud
+                        need_generate = 2;
+                        if (myid == 0)
+                            fprintf(stderr, "[GRID] dep missing: %s\n", deps[d]);
+                    } else if (dep_st.st_mtime > grid_st.st_mtime) {
+                        need_generate = 2;
+                        if (myid == 0)
+                            fprintf(stderr, "[GRID] stale: %s is newer\n", deps[d]);
+                    }
+                }
+                // base topology: 掃描同 grid_key 同尺寸的其他 adaptive grid
+                if (!need_generate) {
+                    char prefix[512];
+                    snprintf(prefix, sizeof(prefix),
+                             "adaptive_%s_I%d_J%d_s%.6f", grid_ref_stem, NY, NZ, (double)STRETCH_A);
+                    int pfx_len = (int)strlen(prefix);
+                    DIR *dp = opendir(GRID_DAT_DIR);
+                    if (dp) {
+                        struct dirent *ent;
+                        char fpath[512];
+                        while ((ent = readdir(dp)) != NULL) {
+                            if (strncmp(ent->d_name, prefix, pfx_len) != 0) continue;
+                            snprintf(fpath, sizeof(fpath), "%s/%s",
+                                     GRID_DAT_DIR, ent->d_name);
+                            if (strcmp(fpath, grid_dat_path) == 0) continue;
+                            if (stat(fpath, &dep_st) == 0 &&
+                                dep_st.st_mtime > grid_st.st_mtime) {
+                                need_generate = 2;
+                                if (myid == 0)
+                                    fprintf(stderr, "[GRID] stale: base topology %s is newer\n",
+                                            ent->d_name);
+                                break;
+                            }
+                        }
+                        closedir(dp);
+                    }
+                }
+            }
+            // 診斷檔檢查: grid_data 不存在 → 補齊
+            if (!need_generate) {
+                char diag_path[512];
+                snprintf(diag_path, sizeof(diag_path),
+                         "%s/grid_data_I%d_J%d_s%.6f.txt",
+                         GRID_DAT_DIR, NY, NZ, (double)STRETCH_A);
+                if (stat(diag_path, &dep_st) != 0)
+                    need_generate = 3;
+            }
+        }
+
+        if (need_generate) {
             if (myid == 0) {
                 fprintf(stderr, "\n");
                 fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
-                fprintf(stderr, "║  Grid file not found — auto-generating ...              ║\n");
-                fprintf(stderr, "║  Expected: %s\n", grid_dat_path);
-                fprintf(stderr, "║  NY=%d (nodes), NZ=%d (nodes) → I=%d, J=%d, ALPHA=%.1f\n",
-                        NY, NZ, NY, NZ, (double)ALPHA);
+                if (need_generate == 1)
+                    fprintf(stderr, "║  Grid NOT FOUND — auto-generating ...                  ║\n");
+                else if (need_generate == 2)
+                    fprintf(stderr, "║  Grid STALE (input dependency newer) — regenerating ... ║\n");
+                else
+                    fprintf(stderr, "║  Grid OK, diagnostics missing — regenerating ...        ║\n");
+                fprintf(stderr, "║  Target: %s\n", grid_dat_path);
+                fprintf(stderr, "║  NY=%d, NZ=%d, STRETCH_A=%.6f, REF=%s\n",
+                        NY, NZ, (double)STRETCH_A, GRID_DAT_REF);
                 fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
 
                 char cmd[1024];
                 snprintf(cmd, sizeof(cmd),
-                         "python3 %s/grid_zeta_tool.py --auto",
-                         GRID_DAT_DIR);
+                         "python3 %s/grid_zeta_tool.py --auto", GRID_DAT_DIR);
                 fprintf(stderr, "  Running: %s\n", cmd);
                 int ret = system(cmd);
                 if (ret != 0) {
                     fprintf(stderr, "\n");
                     fprintf(stderr, "╔══════════════════════════════════════════════════════════╗\n");
                     fprintf(stderr, "║  FATAL: Python grid generation failed (exit=%d)         ║\n", ret);
-                    fprintf(stderr, "║  Please check %s/grid_zeta_tool.py             ║\n", GRID_DAT_DIR);
+                    fprintf(stderr, "║  Check: %s/grid_zeta_tool.py\n", GRID_DAT_DIR);
                     fprintf(stderr, "╚══════════════════════════════════════════════════════════╝\n");
                     MPI_Abort(MPI_COMM_WORLD, 1);
                 }
             }
             MPI_Barrier(MPI_COMM_WORLD);
 
-            // 重新嘗試開啟
-            grid_test = fopen(grid_dat_path, "r");
-            if (!grid_test) {
-                if (myid == 0) {
-                    fprintf(stderr, "FATAL: Grid file still not found after generation: %s\n",
+            FILE *grid_verify = fopen(grid_dat_path, "r");
+            if (!grid_verify) {
+                if (myid == 0)
+                    fprintf(stderr, "FATAL: Grid file not found after generation: %s\n",
                             grid_dat_path);
-                }
                 MPI_Abort(MPI_COMM_WORLD, 1);
             }
+            fclose(grid_verify);
         }
-        fclose(grid_test);
-        if (myid == 0) printf("GRID: Found external grid file: %s\n", grid_dat_path);
+        if (myid == 0) printf("GRID: %s external grid: %s\n",
+                              need_generate ? "Generated" : "Found", grid_dat_path);
     }
 
     // 1.2 生成均勻 x 座標 (不變)
@@ -415,6 +685,33 @@ int main(int argc, char *argv[])
 
     // 1.3 讀取外部二維 (y, z) 座標 (取代 GenerateMesh_Y + GenerateMesh_Z)
     ReadExternalGrid_YZ(y_2d_h, z_h, myid);
+
+#if USE_ITBLBM_STREAMING
+    double *itb_y_2d_geom_h = NULL;
+    double *itb_z_geom_h = NULL;
+    {
+        const size_t yz_bytes = (size_t)NYD6 * (size_t)NZ6 * sizeof(double);
+        itb_y_2d_geom_h = (double*)malloc(yz_bytes);
+        itb_z_geom_h    = (double*)malloc(yz_bytes);
+        if (!itb_y_2d_geom_h || !itb_z_geom_h) {
+            if (myid == 0) {
+                fprintf(stderr,
+                    "[ITB] FATAL: cannot allocate seam-continuous coordinate snapshot\n");
+            }
+            MPI_Abort(MPI_COMM_WORLD, 73);
+        }
+        memcpy(itb_y_2d_geom_h, y_2d_h, yz_bytes);
+        memcpy(itb_z_geom_h,    z_h,    yz_bytes);
+        if (myid == 0) {
+            printf("[ITB] Saved seam-continuous y-z coordinate snapshot before MPI ghost exchange.\n");
+        }
+    }
+#endif
+
+    // Mass correction uses physical control-volume weights from the curvilinear
+    // y-z grid. Build before the later coordinate MPI exchange because
+    // ReadExternalGrid_YZ still has the correct +/-LY periodic ghost offsets.
+    InitializeMassCorrectionWeights();
 
     // 初始化 monitor RS 代表點 (需在座標填充後)
     InitMonitorCheckPoint();
@@ -439,9 +736,10 @@ int main(int argc, char *argv[])
         int j_recv_left  = 0;
         int tag = 600;
 
-        // 交換 6 個陣列: xi_y, xi_z, zeta_y, zeta_z, y_2d, z
-        double *arrays_to_exchange[] = { xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, y_2d_h, z_h };
-        int n_arrays = 6;
+        // 交換 7 個陣列: xi_y, xi_z, zeta_y, zeta_z, y_2d, z, J_2D
+        // J_2D_h 加入交換：Jacobian GL quadrature 的 6 點 Lagrange stencil 需要 ghost row 的 J 值
+        double *arrays_to_exchange[] = { xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, y_2d_h, z_h, J_2D_h };
+        int n_arrays = 7;
         for (int a = 0; a < n_arrays; a++) {
             MPI_Sendrecv(&arrays_to_exchange[a][j_send_left],  ghost_count, MPI_DOUBLE, l_nbr, tag,
                          &arrays_to_exchange[a][j_recv_right], ghost_count, MPI_DOUBLE, r_nbr, tag,
@@ -460,8 +758,20 @@ int main(int argc, char *argv[])
                              J_2D_h, xi_y_h, xi_z_h, zeta_y_h, zeta_z_h,
                              y_2d_h, z_h, NYD6, NZ6, myid);
 
+    // 2.4 體積權重方法比較 + 3D 物理域體積驗證
+    {
+#if CELL_VOLUME_METHOD == 1
+        double shoelace_vol = 0.0;
+        ComputeJacobianMassCorrectionWeights(J_2D_h, &shoelace_vol);
+        VerifyPhysicalDomainVolume3D(shoelace_vol,          "Shoelace");
+        VerifyPhysicalDomainVolume3D(rho_cv_global_volume,  "Jacobian-GL");
+#else
+        VerifyPhysicalDomainVolume3D(rho_cv_global_volume,  "Shoelace");
+#endif
+    }
+
     // ════════════════════════════════════════════════════════════════
-    //  Stage 3: Global Time Step 
+    //  Stage 3: Global Time Step
     // ════════════════════════════════════════════════════════════════
 
     double dx_val = LX / (double)(NX6 - 7);
@@ -506,28 +816,173 @@ int main(int argc, char *argv[])
     CHECK_CUDA( cudaMemcpy(y_2d_d, y_2d_h, NYD6*NZ6*sizeof(double), cudaMemcpyHostToDevice) );
     // [REMOVED] delta_xi_d, delta_zeta_d GPU uploads — no longer exist
     // [REMOVED] GILBM_delta_eta, GILBM_L_eta_precomp __constant__ uploads — on-the-fly in kernel
-    // __constant__ symbols: dt_global + inv_dx (新增)
+    // __constant__ symbols: dt_global + inv_dx + shared eta weights
     CHECK_CUDA( cudaMemcpyToSymbol(GILBM_dt, &dt_global, sizeof(double)) );
     {
         double inv_dx_val = (double)(NX6 - 7) / LX;
+        double L_eta_shared_h[2][7];
+        PrecomputeGILBM_EtaSharedWeights(L_eta_shared_h, dt_global, inv_dx_val);
+
+        double eta_max_coeff_abs = 0.0;
+        double eta_max_interp_abs = 0.0;
+        VerifyGILBM_EtaSharedWeights(L_eta_shared_h, dt_global, inv_dx_val,
+                                     &eta_max_coeff_abs, &eta_max_interp_abs);
+        if (myid == 0) {
+            printf("GILBM eta shared weights verification:\n");
+            printf("  max coeff diff = %.17e\n", eta_max_coeff_abs);
+            printf("  max interp diff = %.17e\n", eta_max_interp_abs);
+        }
+        if (eta_max_coeff_abs > 1.0e-12 || eta_max_interp_abs > 1.0e-12) {
+            if (myid == 0) {
+                fprintf(stderr,
+                    "ERROR: shared eta weight verification failed: coeff=%.17e interp=%.17e\n",
+                    eta_max_coeff_abs, eta_max_interp_abs);
+            }
+            MPI_Abort(MPI_COMM_WORLD, 43);
+        }
+
         CHECK_CUDA( cudaMemcpyToSymbol(GILBM_inv_dx, &inv_dx_val, sizeof(double)) );
-        if (myid == 0) printf("GILBM-GTS: inv_dx = %.8e → __constant__ memory.\n", inv_dx_val);
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_L_eta_shared, L_eta_shared_h, sizeof(L_eta_shared_h)) );
+        if (myid == 0) {
+            printf("GILBM-GTS: inv_dx = %.8e and shared eta weights -> __constant__ memory.\n",
+                   inv_dx_val);
+        }
     }
+
+#if USE_ITBLBM_STREAMING
+    {
+        ITB_PrecomputeCoefficientsHost(itb_yz_coeff_h,
+                                       itb_y_2d_geom_h,
+                                       itb_z_geom_h,
+                                       dt_global, myid);
+        double itb_wx_h[2][ITB_X_ORDER];
+        ITB_PrecomputeXWeightsHost(itb_wx_h, dt_global);
+        const size_t itb_coeff_count =
+            (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6;
+        CHECK_CUDA( cudaMemcpy(itb_yz_coeff_d, itb_yz_coeff_h,
+                               itb_coeff_count * sizeof(ITB_YZCoeff),
+                               cudaMemcpyHostToDevice) );
+        CHECK_CUDA( cudaMemcpyToSymbol(ITB_WX, itb_wx_h, sizeof(itb_wx_h)) );
+        if (myid == 0) {
+            printf("[ITB] coefficients and x7 weights copied to GPU.\n");
+        }
+        free(itb_y_2d_geom_h);
+        free(itb_z_geom_h);
+        itb_y_2d_geom_h = NULL;
+        itb_z_geom_h = NULL;
+    }
+#endif
 
     // Precomputed stencil base k → GPU
     CHECK_CUDA( cudaMemcpy(bk_precomp_d, bk_precomp_h, NZ6*sizeof(int), cudaMemcpyHostToDevice) );
 
+#if USE_GILBM_ALGORITHM2
+    // ════════════════════════════════════════════════════════════════
+    //  Algorithm2: build folded departure table + hard validation gate
+    //  Required ordering:
+    //    (1) metric MPI ghost exchange complete
+    //    (2) dt_global uploaded to __constant__ GILBM_dt
+    //    (3) metric arrays and bk_precomp copied to device
+    // ════════════════════════════════════════════════════════════════
+    {
+        const size_t algo2_n  = (size_t)GILBM2_NCLASS * NYD6 * NZ6;
+        const int    algo2_nb = (int)((algo2_n + 255) / 256);
+        Algorithm2_BuildCoordsTable_Device<<<algo2_nb, 256>>>(gilbm2_coords_d,
+            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d);
+        CHECK_CUDA( cudaDeviceSynchronize() );
+
+        BuildGILBM2DepartureTableHost(gilbm2_coords_h,
+            xi_y_h, xi_z_h, zeta_y_h, zeta_z_h, bk_precomp_h, dt_global);
+
+#if GILBM_ALGO2_VALIDATE
+        GILBM2_ValidationResult algo2_vr;
+        int algo2_rc = Algorithm2_ValidateCoordsTable(gilbm2_coords_d,
+            xi_y_d, xi_z_d, zeta_y_d, zeta_z_d, bk_precomp_d,
+            gilbm2_coords_h, &algo2_vr, myid);
+        int algo2_rc_glob = 0;
+        CHECK_MPI( MPI_Allreduce(&algo2_rc, &algo2_rc_glob, 1, MPI_INT, MPI_MAX, MPI_COMM_WORLD) );
+        if (algo2_rc_glob != 0) {
+            if (myid == 0) fprintf(stderr,
+                "[ALGO2] FATAL: departure table validation FAILED (global rc=%d); abort before first step.\n",
+                algo2_rc_glob);
+            MPI_Abort(MPI_COMM_WORLD, 92);
+        }
+#endif
+        if (myid == 0) {
+            printf("GILBM Algorithm2: %s table built on DEVICE + validated, %zu entries (%zu B/entry, %.2f MiB/rank).\n",
+                   (GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS_FOLDED ? "WEIGHTS_FOLDED" :
+                    GILBM_ALGO2_STORE == GILBM2_STORE_WEIGHTS        ? "WEIGHTS" : "COORDS"),
+                   algo2_n, sizeof(GILBM2_Table),
+                   (double)(algo2_n * sizeof(GILBM2_Table)) / 1048576.0);
+        }
+    }
+#endif
+
 #if USE_MRT
-    // Phase 3.5: MRT transformation matrices → __constant__ memory
+    // Phase 3.5: MRT nonequilibrium projection tables -> __constant__ memory
     {
         Matrix;           // MRT_Matrix.h → double M[19][19] = { ... };
         Inverse_Matrix;   // MRT_Matrix.h → double Mi[19][19] = { ... };
-        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_M,  M,  sizeof(M)) );
-        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_Mi, Mi, sizeof(Mi)) );
+        double s_visc_val_mrt = 1.0 / omega_global;
+        double GILBM_MRT_K_h[19][19];
+        double GILBM_MRT_Fproj_h[19];
+        double GILBM_MRT_Fproj_u_h[19];
+        double GILBM_MRT_Fproj_v_h[19];
+        double GILBM_MRT_Fproj_w_h[19];
 
-        if (myid == 0) printf("GILBM-MRT: M, Mi copied to __constant__ memory.\n");
+        BuildMrtProjectionTablesHost(M, Mi, s_visc_val_mrt,
+                                     GILBM_MRT_K_h,
+                                     GILBM_MRT_Fproj_h,
+                                     GILBM_MRT_Fproj_u_h,
+                                     GILBM_MRT_Fproj_v_h,
+                                     GILBM_MRT_Fproj_w_h);
+
+        MrtProjectionVerification mrt_v =
+            VerifyMrtProjectionHost(M, Mi,
+                                    GILBM_MRT_K_h,
+                                    GILBM_MRT_Fproj_h,
+                                    GILBM_MRT_Fproj_u_h,
+                                    GILBM_MRT_Fproj_v_h,
+                                    GILBM_MRT_Fproj_w_h,
+                                    s_visc_val_mrt,
+                                    dt_global);
+
+        if (myid == 0) {
+            printf("GILBM-MRT projection verification (%d samples):\n", mrt_v.samples);
+            printf("  max |Mi*M-I|                 = %.17e\n", mrt_v.max_identity_error);
+            printf("  max |M*feq-meq|              = %.17e\n", mrt_v.max_equilibrium_moment_error);
+            printf("  max conserved |M_c*K|        = %.17e\n", mrt_v.max_conserved_relax_error);
+            printf("  max Guo basis split diff     = %.17e\n", mrt_v.max_force_basis_error);
+            printf("  max Guo projection split diff= %.17e\n", mrt_v.max_force_projection_error);
+            printf("  max conserved force moment   = %.17e\n", mrt_v.max_force_moment_error);
+            printf("  max collision abs diff       = %.17e\n", mrt_v.max_collision_abs_error);
+            printf("  max collision rel diff       = %.17e\n", mrt_v.max_collision_rel_error);
+        }
+        if (mrt_v.max_identity_error > 1.0e-12 ||
+            mrt_v.max_equilibrium_moment_error > 1.0e-12 ||
+            mrt_v.max_conserved_relax_error > 1.0e-12 ||
+            mrt_v.max_force_basis_error > 1.0e-12 ||
+            mrt_v.max_force_projection_error > 1.0e-12 ||
+            mrt_v.max_force_moment_error > 1.0e-12 ||
+            mrt_v.max_collision_abs_error > 1.0e-12) {
+            if (myid == 0) {
+                fprintf(stderr, "ERROR: MRT projection verification failed strict 1e-12 tolerance.\n");
+            }
+            MPI_Abort(MPI_COMM_WORLD, 42);
+        }
+
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_K, GILBM_MRT_K_h, sizeof(GILBM_MRT_K_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj, GILBM_MRT_Fproj_h, sizeof(GILBM_MRT_Fproj_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_u, GILBM_MRT_Fproj_u_h, sizeof(GILBM_MRT_Fproj_u_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_v, GILBM_MRT_Fproj_v_h, sizeof(GILBM_MRT_Fproj_v_h)) );
+        CHECK_CUDA( cudaMemcpyToSymbol(GILBM_MRT_Fproj_w, GILBM_MRT_Fproj_w_h, sizeof(GILBM_MRT_Fproj_w_h)) );
+
+        if (myid == 0) {
+            printf("GILBM-MRT: K and Guo forcing projections copied to __constant__ memory.\n");
+        }
     }
 #endif  // USE_MRT
+    if (myid == 0) printf("GILBM: FORCE_HERMITE_ORDER = %d\n", FORCE_HERMITE_ORDER);
 
     // ── GTS: 全場均一鬆弛常數存入 __constant__ memory ──
     // ★ BUG FIX: s_visc / omega 上傳原本被包在 #if USE_MRT 裡面，
@@ -568,6 +1023,7 @@ int main(int argc, char *argv[])
             "INIT=2 (VTK restart) 已移除。請改用 --restart=<checkpoint_dir>。");
     } else if ( g_init_runtime == 3 ) {
         printf("Initializing from binary checkpoint: %s\n", g_restart_bin_dir);
+        PrecheckCheckpointGridConsistency(g_restart_bin_dir, myid);
         LoadBinaryCheckpoint(g_restart_bin_dir);
 
         // ============================================================
@@ -942,13 +1398,51 @@ int main(int argc, char *argv[])
                        FTT_restart, FTT_STATS_START, accu_count);
             accu_count = 0;
             stage1_announced = false;
+
+            // Zero all 33 MeanVars+MeanDerivatives arrays (LOAD block overwrites memory.h zeros)
+            if ((int)TBSWITCH) {
+                CHECK_CUDA( cudaMemset(U,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(V,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(W,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(P,  0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(PP, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UUW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(UVW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(VVW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWU, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWV, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(WWW, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DUDZ2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DVDZ2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDX2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDY2, 0, tavg_bytes_gate) );
+                CHECK_CUDA( cudaMemset(DWDZ2, 0, tavg_bytes_gate) );
+            }
+            // Tavg mirrors (host + device)
             memset(u_tavg_h, 0, tavg_bytes_gate);
             memset(v_tavg_h, 0, tavg_bytes_gate);
             memset(w_tavg_h, 0, tavg_bytes_gate);
             CHECK_CUDA( cudaMemset(u_tavg_d, 0, tavg_bytes_gate) );
             CHECK_CUDA( cudaMemset(v_tavg_d, 0, tavg_bytes_gate) );
             CHECK_CUDA( cudaMemset(w_tavg_d, 0, tavg_bytes_gate) );
-            // Also clear vorticity mean
+            // Vorticity (host + device)
             if (ox_tavg_h) {
                 memset(ox_tavg_h, 0, tavg_bytes_gate);
                 memset(oy_tavg_h, 0, tavg_bytes_gate);
@@ -957,7 +1451,20 @@ int main(int argc, char *argv[])
                 CHECK_CUDA( cudaMemset(oy_tavg_d, 0, tavg_bytes_gate) );
                 CHECK_CUDA( cudaMemset(oz_tavg_d, 0, tavg_bytes_gate) );
             }
-            // TBSWITCH arrays already cudaMemset'd to 0 in AllocateMemory
+
+            // CV ring buffer + convergence state (loaded from checkpoint, must reset with statistics)
+            cv_idx = 0;
+            cv_buf_count = 0;
+            memset(uu_history,      0, sizeof(uu_history));
+            memset(k_history,       0, sizeof(k_history));
+            memset(ftt_cv_history,  0, sizeof(ftt_cv_history));
+            g_cv_uu       = 100.0;
+            g_cv_k        = 100.0;
+            g_conv_status = 0;
+            g_conv_count  = 0;
+
+            if (myid == 0)
+                printf("[FTT-GATE] CV buffer + convergence state reset to initial values.\n");
         }
     }
 
@@ -1035,9 +1542,9 @@ int main(int argc, char *argv[])
         // 輸出初始 VTK (驗證重啟載入正確 + 使用修正後的 stride mapping)
         fileIO_velocity_vtk_merged(restart_step);
     }
-    // VTK step 為奇數 (step%1000==1), for-loop 須從偶數開始
-    // 以確保 step+=1 後 monitoring 在奇數步 (step%N==1) 正確觸發
-    int loop_start = (restart_step > 0) ? restart_step + 1 : 0;
+    // GTS 雙步進: loop_start 必須為偶數, 確保 step+=1 後在奇數步觸發 step%N==1
+    // (restart_step+1)&~1: 奇數→+1=偶數, 偶數→+1=奇數→&~1=偶數(重算被中斷的 even sub-step)
+    int loop_start = (restart_step > 0) ? ((restart_step + 1) & ~1) : 0;
 
 #if USE_TIMING
     Timing_Init(loop_start, g_restored_gpu_ms);
@@ -1102,10 +1609,11 @@ int main(int argc, char *argv[])
             fprintf(fhdr, "# Col1: step          — time step number\n");
             fprintf(fhdr, "# Col2: FTT           — flow-through time\n");
             fprintf(fhdr, "# Col3: rho_target    — target density (always 1.0)\n");
-            fprintf(fhdr, "# Col4: rho_avg       — global average density (full precision)\n");
+            fprintf(fhdr, "# Col4: rho_avg       — global volume-weighted average density (full precision)\n");
             fprintf(fhdr, "# Col5: rho_drift     — rho_avg - 1.0 (positive = heavier than target)\n");
             fprintf(fhdr, "# Col6: rho_correction— mass correction applied NEXT step (= -rho_drift)\n");
             fprintf(fhdr, "# Col7: SKIP_MC       — 0=mass correction ON, 1=mid-step correction OFF\n");
+            fprintf(fhdr, "# NOTE: rho_avg uses control-volume weights from the curvilinear y-z grid.\n");
             fprintf(fhdr, "# NOTE: |Col5| == |Col6| is EXPECTED — both are computed from the same\n");
             fprintf(fhdr, "#       density field. Col6 = -Col5 because the correction exactly\n");
             fprintf(fhdr, "#       compensates the drift. Check Col5 trend for mass conservation.\n");
@@ -1188,36 +1696,15 @@ int main(int argc, char *argv[])
 
         // ===== Mid-step mass correction (between even and odd) =====
         // 由 SKIP_MIDSTEP_MASSCORR 開關控制 (variables.h)
-        // Edit8 也有此區塊 (main.cu line 1034-1057)
-        // 包含: ReduceRhoSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
+        // Mid-step mass correction 區塊
+        // 包含: ReduceRhoWeightedSum_Kernel → cudaMemcpy D2H → MPI_Reduce → MPI_Bcast → cudaMemcpy H2D
         // ★ 這是全域 MPI barrier, MPI_Wtime 計時可測量其實際開銷
 #if !SKIP_MIDSTEP_MASSCORR
         {
 #if USE_TIMING && TIMING_DETAIL
             double t_mc_start = MPI_Wtime();
 #endif
-            const int rho_total_mid = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads_mid = 256;
-            const int rho_blocks_mid = (rho_total_mid + rho_threads_mid - 1) / rho_threads_mid;
-
-            ReduceRhoSum_Kernel<<<rho_blocks_mid, rho_threads_mid, rho_threads_mid * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks_mid * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum_mid = 0.0;
-            for (int b = 0; b < rho_blocks_mid; b++) rho_LocalSum_mid += rho_partial_h[b];
-
-            double rho_GlobalSum_mid = 0.0;
-            MPI_Reduce(&rho_LocalSum_mid, &rho_GlobalSum_mid, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            if (myid == 0) {
-                // Bug fix: 使用實際 MPI 分解後的全域格點數 jp*(NYD6-7)，
-                // 而非 (NY6-7)=(NY-1)，避免 (NY-1)%jp!=0 時的虛假質量虧損。
-                // 此公式對任意 jp (1~8) 皆正確，無論 (NY-1) 是否整除 jp。
-                const double N_global_interior = (double)(NX6 - 7) * (double)(jp * (NYD6 - 7)) * (double)(NZ6 - 6);
-                double rho_global_mid = 1.0 * N_global_interior;
-                rho_modify_h[0] = (rho_global_mid - rho_GlobalSum_mid) / N_global_interior;
-            }
-            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
+            UpdateVolumeWeightedMassCorrection();
 
 #if USE_TIMING && TIMING_DETAIL
             g_timing.last_masscorr_ms = (MPI_Wtime() - t_mc_start) * 1000.0;
@@ -1711,65 +2198,36 @@ int main(int argc, char *argv[])
             }
 #endif
 
-            fileIO_velocity_vtk_merged( step );
+            // [FTT gate] VTK 寫檔 + animation 只在 FTT >= FTT_STATS_START 後輸出 (spin-up 期省 I/O);
+            //            checkpoint 不受此 gate — 永遠寫以保崩潰恢復
+            if ( FTT_now >= FTT_STATS_START ) {
+                fileIO_velocity_vtk_merged( step );
 
-            // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
-            AnimRenderAndRebuild( step );
+                // ===== Animation: pipeline.py render PNG + append to 2 GIFs (background) =====
+                AnimRenderAndRebuild( step );
+            }
 
-            // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU)
+            // Binary checkpoint (every NDTBIN steps, piggyback on VTK's SendDataToCPU) — 不 gate
             if (step % NDTBIN == 1) {
                 SaveBinaryCheckpoint( step );
             }
         }
 
-        // ===== Global Mass Conservation Modify (GPU reduction — no SendDataToCPU) =====
+        // ===== Global Mass Conservation Modify (volume-weighted GPU reduction — no SendDataToCPU) =====
         cudaDeviceSynchronize();
         cudaMemcpy(Force_h, Force_d, sizeof(double), cudaMemcpyDeviceToHost);
-        {
-            const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads = 256;
-            const int rho_blocks = (rho_total + rho_threads - 1) / rho_threads;
+        UpdateVolumeWeightedMassCorrection();
 
-            ReduceRhoSum_Kernel<<<rho_blocks, rho_threads, rho_threads * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum = 0.0;
-            for (int b = 0; b < rho_blocks; b++) rho_LocalSum += rho_partial_h[b];
-
-            double rho_GlobalSum = 0.0;
-            MPI_Reduce(&rho_LocalSum, &rho_GlobalSum, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-            if (myid == 0) {
-                // Bug fix: 同 mid-step，使用 jp*(NYD6-7) 取代 (NY6-7)
-                const double N_global_interior = (double)(NX6 - 7) * (double)(jp * (NYD6 - 7)) * (double)(NZ6 - 6);
-                double rho_global = 1.0 * N_global_interior;
-                rho_modify_h[0] = (rho_global - rho_GlobalSum) / N_global_interior;
-            }
-            // Broadcast mass correction to ALL ranks (Bug #16 fix: was rank 0 only)
-            MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
-            cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice);
-        }
-
-        // ===== Mass Conservation Check + NaN early stop (every 100 steps, GPU reduction) =====
+        // ===== Mass Conservation Check + NaN early stop (every 100 steps) =====
+        // rho_modify_h was just computed from the volume-weighted average:
+        //   rho_modify = 1 - <rho>_V  →  <rho>_V = 1 - rho_modify
         if (step % 100 == 1) {
-            const int rho_total_chk = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
-            const int rho_threads_chk = 256;
-            const int rho_blocks_chk = (rho_total_chk + rho_threads_chk - 1) / rho_threads_chk;
-
-            ReduceRhoSum_Kernel<<<rho_blocks_chk, rho_threads_chk, rho_threads_chk * sizeof(double)>>>(rho_d, rho_partial_d);
-            CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d, rho_blocks_chk * sizeof(double), cudaMemcpyDeviceToHost) );
-
-            double rho_LocalSum_chk = 0.0;
-            for (int b = 0; b < rho_blocks_chk; b++) rho_LocalSum_chk += rho_partial_h[b];
-            double rho_LocalAvg = rho_LocalSum_chk / ((NX6 - 7) * (NYD6 - 7) * (NZ6 - 6));
-
-            double rho_GlobalSum_chk = 0.0;
-            MPI_Reduce(&rho_LocalAvg, &rho_GlobalSum_chk, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-
             int nan_flag = 0;
+            double rho_avg_check = 0.0;
             if (myid == 0) {
-                double rho_avg_check = rho_GlobalSum_chk / (double)jp;
+                rho_avg_check = 1.0 - rho_modify_h[0];
                 if (std::isnan(rho_avg_check) || std::isinf(rho_avg_check) || fabs(rho_avg_check - 1.0) > 0.01) {
-                    printf("[FATAL] Divergence detected at step %d: rho_avg = %.6e, stopping.\n", step, rho_avg_check);
+                    printf("[FATAL] Divergence detected at step %d: rho_avg_V = %.6e, stopping.\n", step, rho_avg_check);
                     nan_flag = 1;
                 }
             }
@@ -1783,7 +2241,7 @@ int main(int argc, char *argv[])
 
             if (myid == 0) {
                 double FTT_rho = step * dt_global / (double)flow_through_time;
-                double rho_avg_out = rho_GlobalSum_chk / (double)jp;
+                double rho_avg_out = rho_avg_check;
                 FILE *checkrho = fopen("checkrho.dat", "a");
                 // step  FTT  rho_target  rho_avg  rho_drift  rho_correction  SKIP_MC
                 // NOTE: rho_correction = -rho_drift (by definition), see header for details

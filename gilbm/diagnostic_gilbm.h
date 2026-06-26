@@ -292,7 +292,7 @@ void DiagnoseGILBM_Phase1(
         C_alpha += du_y_dk * ((3.0*ey*ey - 1.0)*bc_ztay + (3.0*ey*ez)*bc_ztaz);
         C_alpha += du_z_dk * ((3.0*ez*ey)*bc_ztay + (3.0*ez*ez - 1.0)*bc_ztaz);
         // [GTS] CE 理論: f^neq ∝ -(τ-0.5)·Δt = -3ν
-        C_alpha *= -(omega_global - 0.5) * dt_global_val;
+        C_alpha *= -(omega_global) * dt_global_val;
 
         double f_CE = W[alpha] * rho3 * (1.0 + C_alpha);
         sum_f_CE += f_CE;

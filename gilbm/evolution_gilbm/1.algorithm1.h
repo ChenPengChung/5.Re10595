@@ -6,7 +6,7 @@
 // §S  Shared Helpers — 消除 2D/3D/smem 路徑間的代碼重複
 //
 //   gilbm_rk2_displacement:       RK2 midpoint → (d_xi, delta_zeta_q)     ~35 lines × 3 copies → 1
-//   gilbm_ghost_zone_extrapolate: interp2[7] ghost linear extrapolation   ~15 lines × 3 copies → 1
+//   gilbm_ghost_zone_extrapolate: interp2[7] ghost Lagrange extrapolation ~15 lines × 3 copies → 1
 //   gilbm_zeta_collapse:          ζ 7→1 (Lagrange or WENO7-Z)            ~20 lines × 3 copies → 1
 // ════════════════════════════════════════════════════════════════════════
 
@@ -58,38 +58,64 @@ __device__ __forceinline__ void gilbm_rk2_displacement(
     delta_zeta_out = dt_val * e_tzeta_half;
 }
 
-// ── Ghost zone 二次外推 (居中 stencil bk_min=0) ──
-// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部三點二次 Lagrange 外推替代
-// 二次外推公式 (距離 d = p0 - g):
-//   c0 = (d+1)(d+2)/2,  c1 = -d(d+2),  c2 = d(d+1)/2
-//   ghost[g] = c0 * f[p0] + c1 * f[p1] + c2 * f[p2]
-// 直接從 3 個內部點外推，不使用級聯（避免誤差累積）
+// ── Ghost zone Lagrange 外推 (GHOST_EXTRAP_ORDER 切換) ──
+// bk+s < 3 或 bk+s > NZ6-4 的 ghost 格點用內部點 Lagrange 外推替代
+// 直接從內部點外推，不使用級聯（避免誤差累積）
+//   GHOST_EXTRAP_ORDER=2 (quadratic, 3-point): c0=(d+1)(d+2)/2, ...
+//   GHOST_EXTRAP_ORDER=3 (cubic, 4-point):     c0=(d+1)(d+2)(d+3)/6, ...
+//     k=3 最壞情況有 4 個內部點 → cubic 全域可用，無需降階
 __device__ __forceinline__ void gilbm_ghost_zone_extrapolate(double interp2[7], int bk_val)
 {
     const int n_ghost_bot = (3 - bk_val > 0) ? (3 - bk_val) : 0;
     const int n_ghost_top = (bk_val + 6 > (int)NZ6 - 4) ? (bk_val + 6 - ((int)NZ6 - 4)) : 0;
     if (n_ghost_bot > 0) {
-        const int p0 = n_ghost_bot;      // 最近內部點
-        const int p1 = n_ghost_bot + 1;  // 第二內部點
-        const int p2 = n_ghost_bot + 2;  // 第三內部點
+        const int p0 = n_ghost_bot;
+        const int p1 = n_ghost_bot + 1;
+        const int p2 = n_ghost_bot + 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int p3 = n_ghost_bot + 3;
+#endif
         for (int g = n_ghost_bot - 1; g >= 0; g--) {
             const double d = (double)(p0 - g);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[p0] + c1 * interp2[p1]
+                       + c2 * interp2[p2] + c3 * interp2[p3];
+#else
             const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
             const double c1 = -d * (d + 2.0);
             const double c2 = d * (d + 1.0) * 0.5;
             interp2[g] = c0 * interp2[p0] + c1 * interp2[p1] + c2 * interp2[p2];
+#endif
         }
     }
     if (n_ghost_top > 0) {
-        const int pN  = 6 - n_ghost_top;      // 最近內部點
-        const int pN1 = 6 - n_ghost_top - 1;  // 第二內部點
-        const int pN2 = 6 - n_ghost_top - 2;  // 第三內部點
+        const int pN  = 6 - n_ghost_top;
+        const int pN1 = 6 - n_ghost_top - 1;
+        const int pN2 = 6 - n_ghost_top - 2;
+#if GHOST_EXTRAP_ORDER >= 3
+        const int pN3 = 6 - n_ghost_top - 3;
+#endif
         for (int g = pN + 1; g <= 6; g++) {
             const double d = (double)(g - pN);
+#if GHOST_EXTRAP_ORDER >= 3
+            const double d1 = d + 1.0, d2 = d + 2.0, d3 = d + 3.0;
+            const double c0 =  d1 * d2 * d3 / 6.0;
+            const double c1 = -d  * d2 * d3 / 2.0;
+            const double c2 =  d  * d1 * d3 / 2.0;
+            const double c3 = -d  * d1 * d2 / 6.0;
+            interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1]
+                       + c2 * interp2[pN2] + c3 * interp2[pN3];
+#else
             const double c0 = (d + 1.0) * (d + 2.0) * 0.5;
             const double c1 = -d * (d + 2.0);
             const double c2 = d * (d + 1.0) * 0.5;
             interp2[g] = c0 * interp2[pN] + c1 * interp2[pN1] + c2 * interp2[pN2];
+#endif
         }
     }
 }
@@ -148,6 +174,9 @@ __device__ void algorithm1_step1_GTS(
     double *u_out, double *v_out, double *w_out, double *rho_out_arr,
     double *rho_modify,
     const double *Force      // body force (streamwise, device pointer)
+#if USE_ITBLBM_STREAMING
+    , const ITB_YZCoeff *itb_yz_coeff_d
+#endif
 ) {
     const int nface = NX6 * NZ6;
     const int index = j * nface + k * NX6 + i;
@@ -159,11 +188,25 @@ __device__ void algorithm1_step1_GTS(
 
     const int bi = i - 3;
     const int bj = j - 3;
+#if USE_ITBLBM_STREAMING
+    (void)bi;
+    (void)bj;
+    const int bk = 0;
+    (void)bk;
+#else
     const int bk = bk_precomp_d[k];
+#endif
 
     // ★ 優化1: 讀 4 個 Jacobian 值 (2 次 DRAM read，register 重用於 18 個 q)
+#if USE_ITBLBM_STREAMING
+    const double xi_y_val = 0.0;
+    const double xi_z_val = 0.0;
+    (void)xi_y_val;
+    (void)xi_z_val;
+#else
     const double xi_y_val  = xi_y_d[idx_jk];
     const double xi_z_val  = xi_z_d[idx_jk];
+#endif
 
     // ── Wall BC pre-computation (6th-order one-sided FD) ──
     bool is_bottom = (k == 3);
@@ -242,6 +285,9 @@ __device__ void algorithm1_step1_GTS(
                     zeta_y_val, zeta_z_val,
                     omega_global, dt_global);
             } else {
+#if USE_ITBLBM_STREAMING
+                f_streamed = itb_stream_q(q, i, j, k, f_post_read, itb_yz_coeff_d);
+#else
                 // ── §3 優化: Per-Direction Specialized Loop ──
                 // ★ D3Q19 方向分組，按實際需要的插值維度特化迴圈:
                 //   1D (q=1,2):         ey=ez=0 → δξ=δζ=0 → 僅 η 方向 7-point (7 reads)
@@ -261,17 +307,12 @@ __device__ void algorithm1_step1_GTS(
                     //   ξ,ζ Lagrange 權重為 Kronecker delta → collapse to (gj=j, gk=k)
                     //   每方向僅 7 次 DRAM read (連續記憶體, 1 條 cache line)
                     // ═══════════════════════════════════════════════════════
-                    double delta_eta_q = dt_global * ex * GILBM_inv_dx;
-                    double t_eta = 3.0 - delta_eta_q;   // i - bi = 3 (always, bi = i-3)
-                    if (t_eta < 0.0) t_eta = 0.0;
-                    if (t_eta > 6.0) t_eta = 6.0;
-                    double L_eta[7];
-                    lagrange_7point_coeffs(t_eta, L_eta);
+                    const int eta_sign = (ex > 0.0) ? 0 : 1;
 
                     int base_1d = q_off + j * nface + k * NX6 + bi;
                     f_streamed = 0.0;
                     for (int si = 0; si < 7; si++)
-                        f_streamed += L_eta[si] * f_post_read[base_1d + si];
+                        f_streamed += GILBM_L_eta_shared[eta_sign][si] * f_post_read[base_1d + si];
 
                 } else {
                     // ═══════════════════════════════════════════════════════
@@ -331,12 +372,7 @@ __device__ void algorithm1_step1_GTS(
                         //     L1 cache 已自動處理 η-row overlap → smem 無額外效益
                         //     整條 η-row (39×8=312B) + 49 rows = 15KB << L1 24KB
                         // ═══════════════════════════════════════════════════════
-                        double delta_eta_q = dt_global * ex * GILBM_inv_dx;
-                        double t_eta = 3.0 - delta_eta_q;   // i - bi = 3
-                        if (t_eta < 0.0) t_eta = 0.0;
-                        if (t_eta > 6.0) t_eta = 6.0;
-                        double L_eta[7];
-                        lagrange_7point_coeffs(t_eta, L_eta);
+                        const int eta_sign = (ex > 0.0) ? 0 : 1;
 
                         for (int sk = 0; sk < 7; sk++) {
                             double acc = 0.0;
@@ -344,7 +380,7 @@ __device__ void algorithm1_step1_GTS(
                                 double row_val = 0.0;
                                 int base_idx = (bj + sj) * nface + (bk + sk) * NX6 + bi;
                                 for (int si = 0; si < 7; si++) {
-                                    row_val += L_eta[si] * f_post_read[q_off + base_idx + si];
+                                    row_val += GILBM_L_eta_shared[eta_sign][si] * f_post_read[q_off + base_idx + si];
                                 }
                                 acc += L_xi[sj] * row_val;
                             }
@@ -357,6 +393,7 @@ __device__ void algorithm1_step1_GTS(
                     f_streamed = gilbm_zeta_collapse(interp2, L_zeta,
                         t_zeta, bk, i, j, k, z_zeta_d, q);
                 }  // end 2D/3D branch
+#endif
             }
         }
 
@@ -384,6 +421,16 @@ __device__ void algorithm1_step1_GTS(
     double u_local = mx_stream / rho_local;
     double v_local = my_stream / rho_local;
     double w_local = mz_stream / rho_local;
+#endif
+
+    // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+    const bool is_wall = (is_bottom || is_top);
+#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
+    if (is_wall) {
+        u_local = 0.0;
+        v_local = 0.0;
+        w_local = 0.0;
+    }
 #endif
 
     // ── STEP 2: Collision (MRT/BGK) — 直接在 register 做, 零 DRAM 往返 ──
@@ -537,16 +584,11 @@ __device__ void algorithm1_step1_GTS_smem(
 
                     if (ey == 0.0 && ez == 0.0) {
                         // 1D: q=1,2
-                        double delta_eta_q = dt_global * ex * GILBM_inv_dx;
-                        double t_eta = 3.0 - delta_eta_q;
-                        if (t_eta < 0.0) t_eta = 0.0;
-                        if (t_eta > 6.0) t_eta = 6.0;
-                        double L_eta[7];
-                        lagrange_7point_coeffs(t_eta, L_eta);
+                        const int eta_sign = (ex > 0.0) ? 0 : 1;
                         int base_1d = q_off + j * nface + k * NX6 + bi;
                         f_streamed = 0.0;
                         for (int si = 0; si < 7; si++)
-                            f_streamed += L_eta[si] * f_post_read[base_1d + si];
+                            f_streamed += GILBM_L_eta_shared[eta_sign][si] * f_post_read[base_1d + si];
                     } else {
                         // 2D: q=3-6, 15-18 (ex==0) — RK2 + ξ×ζ interpolation
                         double d_xi, delta_zeta_q;
@@ -603,9 +645,10 @@ __device__ void algorithm1_step1_GTS_smem(
             const double ez = GILBM_e[q][2];
             const int q_off = q * GRID_SIZE;
 
-            double L_eta[7] = {0}, L_xi[7] = {0}, L_zeta[7] = {0};
+            double L_xi[7] = {0}, L_zeta[7] = {0};
             double t_zeta_3d = 3.0;  // 預設居中 (only overwritten by valid && !need_bc_3d)
             int bj_3d = bj, bk_3d = bk;
+            int eta_sign_3d = 0;
 
             if (valid && !need_bc_3d) {
                 // RK2 midpoint → d_xi, delta_zeta_q
@@ -614,16 +657,11 @@ __device__ void algorithm1_step1_GTS_smem(
                     xi_y_val, xi_z_val, zeta_y_val, zeta_z_val,
                     xi_y_d, xi_z_d, zeta_y_d, zeta_z_d,
                     d_xi, delta_zeta_q);
-                double delta_eta_q  = dt_global * ex * GILBM_inv_dx;
+                eta_sign_3d = (ex > 0.0) ? 0 : 1;
 
                 double t_xi  = (double)(j - bj) - d_xi;
                 if (t_xi  < 0.0) t_xi  = 0.0; if (t_xi  > 6.0) t_xi  = 6.0;
                 lagrange_7point_coeffs(t_xi, L_xi);
-
-                double t_eta = 3.0 - delta_eta_q;
-                if (t_eta < 0.0) t_eta = 0.0;
-                if (t_eta > 6.0) t_eta = 6.0;
-                lagrange_7point_coeffs(t_eta, L_eta);
 
                 double up_k = (double)k - delta_zeta_q;
                 if (up_k < 3.0)              up_k = 3.0;
@@ -665,7 +703,7 @@ __device__ void algorithm1_step1_GTS_smem(
                     for (int sj = 0; sj < 7; sj++) {
                         double row_val = 0.0;
                         for (int si = 0; si < 7; si++)
-                            row_val += L_eta[si] * smem_eta[sj][threadIdx.x + si];
+                            row_val += GILBM_L_eta_shared[eta_sign_3d][si] * smem_eta[sj][threadIdx.x + si];
                         acc += L_xi[sj] * row_val;
                     }
                     interp2[sk] = acc;
@@ -717,6 +755,16 @@ __device__ void algorithm1_step1_GTS_smem(
     double w_local = mz_stream / rho_local;
 #endif
 
+    // ── Wall no-slip: 壁面速度已知為零，直接強制 ──
+    const bool is_wall = (is_bottom || is_top);
+#ifndef DISABLE_WALL_MOMENTUM_CORRECTION
+    if (is_wall) {
+        u_local = 0.0;
+        v_local = 0.0;
+        w_local = 0.0;
+    }
+#endif
+
     // ── STEP 2: Collision ──
     double f_out[19];
     gilbm_collision_GTS(f_out, f_arr, rho_local, u_local, v_local, w_local,
@@ -747,6 +795,9 @@ __global__ void Algorithm1_FusedKernel_GTS_Buffer(
     const double *z_zeta_d,
     double *u_out, double *v_out, double *w_out, double *rho_out,
     double *rho_modify, const double *Force,
+#if USE_ITBLBM_STREAMING
+    const ITB_YZCoeff *itb_yz_coeff_d,
+#endif
     int start_j)
 {
     const int i = blockIdx.x * blockDim.x + threadIdx.x;
@@ -756,7 +807,11 @@ __global__ void Algorithm1_FusedKernel_GTS_Buffer(
     algorithm1_step1_GTS(i, j, k,
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d, xi_y_d, xi_z_d, bk_precomp_d, z_zeta_d,
-        u_out, v_out, w_out, rho_out, rho_modify, Force);
+        u_out, v_out, w_out, rho_out, rho_modify, Force
+#if USE_ITBLBM_STREAMING
+        , itb_yz_coeff_d
+#endif
+        );
 }
 
 // Interior SMEM kernel: 用於 P0v3 Phase 2 主 Interior launch

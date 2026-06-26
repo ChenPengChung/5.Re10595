@@ -60,6 +60,10 @@ void AllocateMemory() {
     }
 
     AllocateDeviceArray(nBytes, 4,  &rho_d, &u, &v, &w);
+    AllocateHostArray( nBytes, 1,  &rho_cv_weight_h );
+    AllocateDeviceArray(nBytes, 1,  &rho_cv_weight_d );
+    memset(rho_cv_weight_h, 0, nBytes);
+    CHECK_CUDA( cudaMemset(rho_cv_weight_d, 0, nBytes) );
     for( int i = 0; i < 19; i++ ) {
         CHECK_CUDA( cudaMalloc( &fd[i], nBytes ) );     CHECK_CUDA( cudaMemset( fd[i], 0.0, nBytes ) );
         CHECK_CUDA( cudaMalloc( &ft[i], nBytes ) );     CHECK_CUDA( cudaMemset( ft[i], 0.0, nBytes ) );
@@ -125,6 +129,32 @@ void AllocateMemory() {
     // Precomputed stencil base k [NZ6] (int array, wall-clamped, direct k indexing)
     CHECK_CUDA( cudaMallocHost((void**)&bk_precomp_h, NZ6 * sizeof(int)) );
     CHECK_CUDA( cudaMalloc(&bk_precomp_d, NZ6 * sizeof(int)) );
+
+#if USE_ITBLBM_STREAMING
+    {
+        const size_t itb_coeff_count =
+            (size_t)ITB_YZ_CLASS_COUNT * (size_t)NYD6 * (size_t)NZ6;
+        const size_t itb_coeff_bytes = itb_coeff_count * sizeof(ITB_YZCoeff);
+        CHECK_CUDA( cudaMallocHost((void**)&itb_yz_coeff_h, itb_coeff_bytes) );
+        CHECK_CUDA( cudaMalloc((void**)&itb_yz_coeff_d, itb_coeff_bytes) );
+        CHECK_CUDA( cudaMemset(itb_yz_coeff_d, 0, itb_coeff_bytes) );
+        if (myid == 0) {
+            printf("[Memory] ITB compact coord: %.2f MB/rank (%d yz classes x NYD6 x NZ6)\n",
+                   itb_coeff_bytes / 1048576.0, ITB_YZ_CLASS_COUNT);
+        }
+    }
+#endif
+
+#if USE_GILBM_ALGORITHM2
+    // Algorithm2 departure table [GILBM2_NCLASS*NYD6*NZ6].
+    // WEIGHTS_FOLDED is global memory, not __constant__ memory.
+    {
+        const size_t algo2_bytes =
+            (size_t)GILBM2_NCLASS * (size_t)NYD6 * (size_t)NZ6 * sizeof(GILBM2_Table);
+        CHECK_CUDA( cudaMallocHost((void**)&gilbm2_coords_h, algo2_bytes) );
+        CHECK_CUDA( cudaMalloc(&gilbm2_coords_d, algo2_bytes) );
+    }
+#endif
 
     // GILBM architecture arrays: f_post 雙緩衝 (一點一值)
     // [方案A] feq_d 已移除 — collision 自行計算 feq
@@ -264,6 +294,8 @@ void FreeSource() {
     // GPU reduction partial sums
     CHECK_CUDA( cudaFreeHost(rho_partial_h) );
     CHECK_CUDA( cudaFree(rho_partial_d) );
+    CHECK_CUDA( cudaFreeHost(rho_cv_weight_h) );
+    CHECK_CUDA( cudaFree(rho_cv_weight_d) );
 
     FreeHostArray(  1,  x_h);
     FreeDeviceArray(1,  x_d);
@@ -284,6 +316,17 @@ void FreeSource() {
     // Precomputed stencil base k
     CHECK_CUDA( cudaFreeHost(bk_precomp_h) );
     CHECK_CUDA( cudaFree(bk_precomp_d) );
+
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaFreeHost(itb_yz_coeff_h) );
+    CHECK_CUDA( cudaFree(itb_yz_coeff_d) );
+#endif
+
+#if USE_GILBM_ALGORITHM2
+    CHECK_CUDA( cudaFreeHost(gilbm2_coords_h) );
+    CHECK_CUDA( cudaFree(gilbm2_coords_d) );
+#endif
+
     // GILBM architecture arrays (GTS, 雙緩衝)
     CHECK_CUDA( cudaFree(f_post_d) );
     CHECK_CUDA( cudaFree(f_post_d2) );

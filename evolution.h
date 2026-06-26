@@ -4,13 +4,12 @@
 #include "MRT_Process.h"
 #include "MRT_Matrix.h"
 #include "gilbm/evolution_gilbm/1.algorithm1.h"   // Algorithm1_FusedKernel_GTS (方案B 融合 kernel)
+#include "gilbm/evolution_gilbm/2.algorithm2.h"   // Algorithm2 folded table consumer (dispatch below)
 
 
 // ===== GPU reduction kernel: sum rho_d over interior points =====
-// Maps 1D thread index to interior (i,j,k), writes partial block sums to partial_sums_d.
-// Host sums the partial results (typically 256-512 doubles = 2-4 KB) instead of
-// transferring the entire rho field (1.6 MB per rank) to CPU.
-__global__ void ReduceRhoSum_Kernel(double *rho_d, double *partial_sums_d) {
+// Legacy unweighted path retained for quick A/B diagnostics.
+__global__ void ReduceRhoSum_Kernel(const double *rho_d, double *partial_sums_d) {
     extern __shared__ double sdata[];
     const int tid = threadIdx.x;
     const int gid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -39,6 +38,418 @@ __global__ void ReduceRhoSum_Kernel(double *rho_d, double *partial_sums_d) {
     }
 
     if (tid == 0) partial_sums_d[blockIdx.x] = sdata[0];
+}
+
+// ===== GPU reduction kernel: sum rho_d * control-volume weight =====
+// Uses the same unique-node domain as the mass correction actually modifies:
+//   i = 3..NX6-5, j = 3..NYD6-5, k = 3..NZ6-4.
+// Weights are built from true curvilinear cell volumes on the host at startup.
+__global__ void ReduceRhoWeightedSum_Kernel(
+    const double *rho_d,
+    const double *rho_weight_d,
+    double *partial_sums_d)
+{
+    extern __shared__ double sdata[];
+    const int tid = threadIdx.x;
+    const int gid = blockIdx.x * blockDim.x + threadIdx.x;
+
+    const int ni = NX6 - 7;
+    const int nk = NZ6 - 6;
+    const int nj = NYD6 - 7;
+    const int total = ni * nj * nk;
+
+    double val = 0.0;
+    if (gid < total) {
+        int j = gid / (ni * nk) + 3;
+        int rem = gid % (ni * nk);
+        int k = rem / ni + 3;
+        int i = rem % ni + 3;
+        const int idx = j * NX6 * NZ6 + k * NX6 + i;
+        val = rho_d[idx] * rho_weight_d[idx];
+    }
+
+    sdata[tid] = val;
+    __syncthreads();
+
+    for (unsigned int s = blockDim.x / 2; s > 0; s >>= 1) {
+        if (tid < s) sdata[tid] += sdata[tid + s];
+        __syncthreads();
+    }
+
+    if (tid == 0) partial_sums_d[blockIdx.x] = sdata[0];
+}
+
+static inline double MassCorrectionCellVolume(const int i_cell, const int j_cell, const int k_cell)
+{
+    const double dx = x_h[i_cell + 1] - x_h[i_cell];
+
+    const int jk00 = j_cell * NZ6 + k_cell;
+    const int jk10 = (j_cell + 1) * NZ6 + k_cell;
+    const int jk11 = (j_cell + 1) * NZ6 + (k_cell + 1);
+    const int jk01 = j_cell * NZ6 + (k_cell + 1);
+
+    const double y0 = y_2d_h[jk00], z0 = z_h[jk00];
+    const double y1 = y_2d_h[jk10], z1 = z_h[jk10];
+    const double y2 = y_2d_h[jk11], z2 = z_h[jk11];
+    const double y3 = y_2d_h[jk01], z3 = z_h[jk01];
+
+    const double area_yz = 0.5 * fabs(
+          y0 * z1 - z0 * y1
+        + y1 * z2 - z1 * y2
+        + y2 * z3 - z2 * y3
+        + y3 * z0 - z3 * y0);
+
+    return fabs(dx) * area_yz;
+}
+
+void InitializeMassCorrectionWeights()
+{
+    const size_t grid_size = (size_t)NX6 * NYD6 * NZ6;
+    memset(rho_cv_weight_h, 0, grid_size * sizeof(double));
+
+    double local_weight_sum = 0.0;
+    double local_min_w = 1.0e300;
+    double local_max_w = 0.0;
+
+    for (int j = 3; j < NYD6 - 4; j++) {
+    for (int k = 3; k < NZ6  - 3; k++) {
+    for (int i = 3; i < NX6  - 4; i++) {
+        const int idx = j * NX6 * NZ6 + k * NX6 + i;
+
+        const int i_cells[2] = {
+            (i == 3) ? (NX6 - 5) : (i - 1),
+            i
+        };
+        const int j_cells[2] = { j - 1, j };
+        int k_cells[2];
+        int nk_cells = 0;
+        if (k > 3)       k_cells[nk_cells++] = k - 1;
+        if (k < NZ6 - 4) k_cells[nk_cells++] = k;
+
+        double weight = 0.0;
+        for (int jj = 0; jj < 2; jj++) {
+        for (int ii = 0; ii < 2; ii++) {
+        for (int kk = 0; kk < nk_cells; kk++) {
+            const double vol = MassCorrectionCellVolume(i_cells[ii], j_cells[jj], k_cells[kk]);
+            if (!(vol > 0.0) || !std::isfinite(vol)) {
+                fprintf(stderr,
+                        "[MASS-CORR] FATAL: invalid cell volume at rank=%d cell(i=%d,j=%d,k=%d): %.17e\n",
+                        myid, i_cells[ii], j_cells[jj], k_cells[kk], vol);
+                MPI_Abort(MPI_COMM_WORLD, 1);
+            }
+            weight += 0.125 * vol;
+        }}}
+
+        rho_cv_weight_h[idx] = weight;
+        local_weight_sum += weight;
+        if (weight < local_min_w) local_min_w = weight;
+        if (weight > local_max_w) local_max_w = weight;
+    }}}
+
+    CHECK_MPI( MPI_Allreduce(&local_weight_sum, &rho_cv_global_volume, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) );
+
+    double global_min_w = 0.0, global_max_w = 0.0;
+    CHECK_MPI( MPI_Allreduce(&local_min_w, &global_min_w, 1, MPI_DOUBLE, MPI_MIN, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Allreduce(&local_max_w, &global_max_w, 1, MPI_DOUBLE, MPI_MAX, MPI_COMM_WORLD) );
+
+    if (!(rho_cv_global_volume > 0.0) || !std::isfinite(rho_cv_global_volume)) {
+        if (myid == 0) {
+            fprintf(stderr, "[MASS-CORR] FATAL: invalid global control volume %.17e\n",
+                    rho_cv_global_volume);
+        }
+        MPI_Abort(MPI_COMM_WORLD, 1);
+    }
+
+    CHECK_CUDA( cudaMemcpy(rho_cv_weight_d, rho_cv_weight_h,
+                           grid_size * sizeof(double), cudaMemcpyHostToDevice) );
+
+    if (myid == 0) {
+        printf("[MASS-CORR] Volume-weighted density correction ON\n");
+        printf("[MASS-CORR]   global control volume = %.15e\n", rho_cv_global_volume);
+        printf("[MASS-CORR]   node weight range     = [%.6e, %.6e]\n",
+               global_min_w, global_max_w);
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Jacobian-based volume weighting: 3×3 Gauss-Legendre quadrature
+//  with 6th-order Lagrange interpolation of J_2D at Gauss points.
+//  Compile-time switch: CELL_VOLUME_METHOD (variables.h)
+// ═══════════════════════════════════════════════════════════════════
+
+static const double GL3_nodes[3] = {
+    0.5 * (1.0 - 0.7745966692414834),   // (1 - sqrt(3/5))/2 ≈ 0.1127
+    0.5,
+    0.5 * (1.0 + 0.7745966692414834)    // (1 + sqrt(3/5))/2 ≈ 0.8873
+};
+static const double GL3_weights[3] = {
+    5.0 / 18.0,    // ≈ 0.27778
+    8.0 / 18.0,    // ≈ 0.44444
+    5.0 / 18.0
+};
+
+static inline void Lagrange6Weights(double x, int start, double w[6])
+{
+    for (int m = 0; m < 6; m++) {
+        double L = 1.0;
+        double xm = (double)(start + m);
+        for (int r = 0; r < 6; r++) {
+            if (r != m) {
+                double xr = (double)(start + r);
+                L *= (x - xr) / (xm - xr);
+            }
+        }
+        w[m] = L;
+    }
+}
+
+static inline bool SelectStencilStart(int cell_idx, int lo, int hi, int *start_out)
+{
+    int ideal = cell_idx - 2;
+    int max_start = hi - 5;
+    if (max_start - lo < 0) return false;
+    *start_out = (ideal < lo) ? lo : (ideal > max_start) ? max_start : ideal;
+    return true;
+}
+
+static inline double InterpolateJ2D_Lagrange6(
+    double xi_pos, double zeta_pos, int sj, int sk,
+    const double *J_2D, int NZ6_local)
+{
+    double wj[6], wk[6];
+    Lagrange6Weights(xi_pos,   sj, wj);
+    Lagrange6Weights(zeta_pos, sk, wk);
+
+    double result = 0.0;
+    for (int m = 0; m < 6; m++) {
+        double row_sum = 0.0;
+        for (int n = 0; n < 6; n++)
+            row_sum += wk[n] * J_2D[(sj + m) * NZ6_local + (sk + n)];
+        result += wj[m] * row_sum;
+    }
+    return result;
+}
+
+#if CELL_VOLUME_METHOD == 1
+void ComputeJacobianMassCorrectionWeights(
+    const double *J_2D, double *shoelace_global_volume_out)
+{
+    // After MPI exchange, J_2D ghost rows (j=0..2, j=NYD6-3..NYD6-1) are valid.
+    // Keep k-stencils on physical wall-normal nodes only. k=2 and k=NZ6-3 are
+    // buffer-side metric rows, so near-wall GL cells use one-sided physical
+    // stencils k=3..8 and k=NZ6-9..NZ6-4.
+    const int j_lo_J = 0;
+    const int j_hi_J = NYD6 - 1;
+    const int k_lo_J = 3;
+    const int k_hi_J = NZ6  - 4;
+
+    double *shoelace_backup = nullptr;
+    const size_t grid_size = (size_t)NX6 * NYD6 * NZ6;
+
+    shoelace_backup = (double *)malloc(grid_size * sizeof(double));
+    memcpy(shoelace_backup, rho_cv_weight_h, grid_size * sizeof(double));
+    double shoelace_vol = rho_cv_global_volume;
+    if (shoelace_global_volume_out) *shoelace_global_volume_out = shoelace_vol;
+
+    memset(rho_cv_weight_h, 0, grid_size * sizeof(double));
+
+    double local_weight_sum = 0.0;
+    int local_fallback_count = 0;
+    double local_max_rel_diff = 0.0;
+    double local_sum_rel_diff = 0.0;
+    int    local_cell_count   = 0;
+
+    for (int j = 3; j < NYD6 - 4; j++) {
+    for (int k = 3; k < NZ6  - 3; k++) {
+    for (int i = 3; i < NX6  - 4; i++) {
+        const int idx = j * NX6 * NZ6 + k * NX6 + i;
+
+        const int i_cells[2] = {
+            (i == 3) ? (NX6 - 5) : (i - 1),
+            i
+        };
+        const int j_cells[2] = { j - 1, j };
+        int k_cells[2];
+        int nk_cells = 0;
+        if (k > 3)       k_cells[nk_cells++] = k - 1;
+        if (k < NZ6 - 4) k_cells[nk_cells++] = k;
+
+        double weight = 0.0;
+        for (int jj = 0; jj < 2; jj++) {
+        for (int ii = 0; ii < 2; ii++) {
+        for (int kk = 0; kk < nk_cells; kk++) {
+            const int jc = j_cells[jj];
+            const int kc = k_cells[kk];
+            const double dx = x_h[i_cells[ii] + 1] - x_h[i_cells[ii]];
+
+            int sj, sk;
+            bool sj_ok = SelectStencilStart(jc, j_lo_J, j_hi_J, &sj);
+            bool sk_ok = SelectStencilStart(kc, k_lo_J, k_hi_J, &sk);
+
+            double vol_jac;
+            bool used_fallback = false;
+
+            if (sj_ok && sk_ok) {
+                double area_jac = 0.0;
+                for (int a = 0; a < 3; a++) {
+                for (int b = 0; b < 3; b++) {
+                    double xi_pos   = (double)jc + GL3_nodes[a];
+                    double zeta_pos = (double)kc + GL3_nodes[b];
+                    double J_val = InterpolateJ2D_Lagrange6(
+                        xi_pos, zeta_pos, sj, sk, J_2D, NZ6);
+                    if (!std::isfinite(J_val) || J_val <= 0.0) {
+                        used_fallback = true;
+                        break;
+                    }
+                    area_jac += GL3_weights[a] * GL3_weights[b] * J_val;
+                }
+                if (used_fallback) break;
+                }
+                vol_jac = fabs(dx) * area_jac;
+            } else {
+                used_fallback = true;
+            }
+
+            if (used_fallback) {
+                vol_jac = MassCorrectionCellVolume(i_cells[ii], jc, kc);
+                local_fallback_count++;
+            }
+
+            double vol_shoe = MassCorrectionCellVolume(i_cells[ii], jc, kc);
+            if (vol_shoe > 0.0) {
+                double rd = fabs(vol_jac - vol_shoe) / vol_shoe;
+                if (rd > local_max_rel_diff) local_max_rel_diff = rd;
+                local_sum_rel_diff += rd;
+                local_cell_count++;
+            }
+
+            weight += 0.125 * vol_jac;
+        }}}
+
+        rho_cv_weight_h[idx] = weight;
+        local_weight_sum += weight;
+    }}}
+
+    CHECK_MPI( MPI_Allreduce(&local_weight_sum, &rho_cv_global_volume,
+               1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) );
+
+    CHECK_CUDA( cudaMemcpy(rho_cv_weight_d, rho_cv_weight_h,
+                           grid_size * sizeof(double), cudaMemcpyHostToDevice) );
+
+    int    global_fallback = 0;
+    double global_max_rd   = 0.0;
+    double global_sum_rd   = 0.0;
+    int    global_cells    = 0;
+    CHECK_MPI( MPI_Reduce(&local_fallback_count, &global_fallback, 1, MPI_INT,    MPI_SUM, 0, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Reduce(&local_max_rel_diff,   &global_max_rd,   1, MPI_DOUBLE, MPI_MAX, 0, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Reduce(&local_sum_rel_diff,   &global_sum_rd,   1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD) );
+    CHECK_MPI( MPI_Reduce(&local_cell_count,     &global_cells,    1, MPI_INT,    MPI_SUM, 0, MPI_COMM_WORLD) );
+
+    if (myid == 0) {
+        printf("[MASS-CORR] Jacobian 3x3 GL volume weighting ON\n");
+        printf("[MASS-CORR]   Shoelace  global volume = %.15e\n", shoelace_vol);
+        printf("[MASS-CORR]   Jacobian  global volume = %.15e\n", rho_cv_global_volume);
+        printf("[MASS-CORR]   Δ(Jac-Shoe)/Shoe        = %.6e\n",
+               fabs(rho_cv_global_volume - shoelace_vol) / shoelace_vol);
+        printf("[MASS-CORR]   Per-cell max  rel diff   = %.6e\n", global_max_rd);
+        printf("[MASS-CORR]   Per-cell mean rel diff   = %.6e\n",
+               (global_cells > 0) ? global_sum_rd / global_cells : 0.0);
+        printf("[MASS-CORR]   Fallback to Shoelace     = %d cells\n", global_fallback);
+    }
+
+    free(shoelace_backup);
+}
+#endif
+
+static inline double ComputeGlobalDiscreteShoelaceVolume3D()
+{
+    double local_volume = 0.0;
+
+    // Unique physical cells per rank:
+    //   i_cell = 3..NX6-5  (NX-1 spanwise cells)
+    //   j_cell = 3..NYD6-5 ((NY-1)/jp streamwise cells; periodic endpoint excluded)
+    //   k_cell = 3..NZ6-5  (NZ-1 wall-normal cells)
+    // This is the discrete mesh volume that Shoelace guarantees exactly.
+    for (int j_cell = 3; j_cell < NYD6 - 4; j_cell++) {
+    for (int k_cell = 3; k_cell < NZ6  - 4; k_cell++) {
+    for (int i_cell = 3; i_cell < NX6  - 4; i_cell++) {
+        local_volume += MassCorrectionCellVolume(i_cell, j_cell, k_cell);
+    }}}
+
+    double global_volume = 0.0;
+    CHECK_MPI( MPI_Allreduce(&local_volume, &global_volume, 1,
+                             MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD) );
+    return global_volume;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  3D 物理域體積驗證:
+//    primary: Σ dV vs LX × A_yz_discrete_mesh from unique Shoelace cells
+//    reference only: analytic HillFunction integral
+// ═══════════════════════════════════════════════════════════════════
+void VerifyPhysicalDomainVolume3D(double cv_global_volume, const char *method_name)
+{
+    const double V_discrete_mesh = ComputeGlobalDiscreteShoelaceVolume3D();
+
+    if (myid != 0) return;
+
+    const int N_QUAD = 10000;
+    const double dy = (double)LY / N_QUAD;
+    double hill_integral = 0.0;
+    for (int m = 0; m <= N_QUAD; m++) {
+        double y_val = m * dy;
+        double w_simp = (m == 0 || m == N_QUAD) ? 1.0 :
+                        (m % 2 == 1) ? 4.0 : 2.0;
+        hill_integral += w_simp * HillFunction(y_val);
+    }
+    hill_integral *= dy / 3.0;
+
+    double V_physical = (double)LX * ((double)LY * (double)LZ - hill_integral);
+
+    double rel_err_discrete = fabs(cv_global_volume - V_discrete_mesh) / V_discrete_mesh;
+    double rel_err_analytic = fabs(cv_global_volume - V_physical) / V_physical;
+    double mesh_vs_analytic = fabs(V_discrete_mesh - V_physical) / V_physical;
+
+    printf("[VOL-CHECK] === 3D Physical Domain Volume Verification (%s) ===\n", method_name);
+    printf("[VOL-CHECK]   V_discrete_mesh = Σ unique Shoelace cells = %.15e\n", V_discrete_mesh);
+    printf("[VOL-CHECK]   Σ weights (%s)                       = %.15e\n", method_name, cv_global_volume);
+    printf("[VOL-CHECK]   RelErr vs discrete mesh              = %.6e\n", rel_err_discrete);
+    printf("[VOL-CHECK]   %s\n", (rel_err_discrete < 1e-12) ? "PASS" : "WARNING: differs from discrete mesh volume");
+    printf("[VOL-CHECK]   Reference: ∫₀^LY h(y)dy               = %.15e  (Simpson N=%d)\n", hill_integral, N_QUAD);
+    printf("[VOL-CHECK]   Reference: LX×(LY×LZ − ∫h)           = %.15e\n", V_physical);
+    printf("[VOL-CHECK]   RelErr vs analytic HillFunction      = %.6e\n", rel_err_analytic);
+    printf("[VOL-CHECK]   Discrete mesh vs analytic reference  = %.6e\n", mesh_vs_analytic);
+}
+
+static inline double ComputeVolumeWeightedRhoAverageRoot()
+{
+    const int rho_total = (NX6 - 7) * (NYD6 - 7) * (NZ6 - 6);
+    const int rho_threads = 256;
+    const int rho_blocks = (rho_total + rho_threads - 1) / rho_threads;
+
+    ReduceRhoWeightedSum_Kernel<<<rho_blocks, rho_threads, rho_threads * sizeof(double)>>>(
+        rho_d, rho_cv_weight_d, rho_partial_d);
+    CHECK_CUDA( cudaMemcpy(rho_partial_h, rho_partial_d,
+                           rho_blocks * sizeof(double), cudaMemcpyDeviceToHost) );
+
+    double rho_LocalWeightedMass = 0.0;
+    for (int b = 0; b < rho_blocks; b++) rho_LocalWeightedMass += rho_partial_h[b];
+
+    double rho_GlobalWeightedMass = 0.0;
+    MPI_Reduce(&rho_LocalWeightedMass, &rho_GlobalWeightedMass,
+               1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
+
+    return (myid == 0) ? (rho_GlobalWeightedMass / rho_cv_global_volume) : 0.0;
+}
+
+static inline void UpdateVolumeWeightedMassCorrection()
+{
+    const double rho_avg = ComputeVolumeWeightedRhoAverageRoot();
+    if (myid == 0) {
+        rho_modify_h[0] = 1.0 - rho_avg;
+    }
+    MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    CHECK_CUDA( cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice) );
 }
 
 // ===== Unpack f_post (flat interleaved) → fh_p[q] (host) for D2H transfer =====
@@ -309,7 +720,7 @@ __global__ void periodicSW_macro(
 //   省掉: Step3 重複巨觀量計算
 //
 // 三層優化流水線:
-//   [P0 v3] Buffer-先行 (精簡版) + Interior-expanded：
+//    [P0 v3] Buffer-先行 (精簡版) + Interior-expanded：
 //     Phase 1: Buffer kernel 只算 MPI 需要的 6 行（省去 j=3, j=NYD6-4）
 //              獨佔 GPU → ~0.15-0.4 ms 完成 (vs v2: ~0.5 ms)
 //     Phase 2: Interior 3 launches (j=3, j=7..NYD6-8, j=NYD6-4) 與 MPI overlap
@@ -340,6 +751,20 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     dim3 griddimSW(  1,      NYD6/NT+1, NZ6);
     dim3 blockdimSW( 3, NT,        1 );
 
+#if USE_ITBLBM_STREAMING
+    // [P0 v4] Buffer grid: keep blockDim.y=1.
+    // The fused ITB kernel is register-heavy; using blockDim=(NT,3,1)
+    // can exceed per-block resources and silently leave buffer rows stale
+    // unless launch errors are checked immediately.
+    dim3 griddimBuf(NX6/NT+1, 3, NZ6);
+    dim3 blockdimBuf(NT, 1, 1);
+
+    // [P0 v4] Interior grid: j=7..NYD6-8, 每 block 1 row.
+    // When NYD6==14 (128-GPU large case), this range is empty; do not
+    // launch a zero-grid kernel.
+    const int nInteriorRows = NYD6 - 14;
+    dim3 griddimInt(NX6/NT+1, (nInteriorRows > 0 ? nInteriorRows : 1), NZ6);
+#else
     // [P0 v3] Buffer grid: 3 rows of j per launch, blockDim.y=3
     //   只算 MPI 實際需要打包的行（省去 j=3 和 j=NYD6-4 的白做）
     //   j=3, j=NYD6-4 移到 Interior (stream0) 與 MPI 重疊
@@ -350,6 +775,7 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     //   NYD6-14 interior rows (NYD6=23 → 9 rows → 639 blocks)
     //   start_j=7, gridDim.y=NYD6-14 (每 block 1 row j)
     dim3 griddimInt(NX6/NT+1, NYD6 - 14, NZ6);
+#endif
     dim3 blockdimInt(NT, 1, 1);
 
     // [P0 v3] 從 Buffer 移出的 2 行：j=3 和 j=NYD6-4，各 1 row
@@ -376,6 +802,17 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     // ═══════════════════════════════════════════════════════════════
 
     // Left boundary: j = 4..6 (3 rows, MPI iToLeft 精確範圍)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        4);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -383,9 +820,31 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         4);
+#endif
+
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+
+    // [PERF rank1] pack+start LEFT halo (j=4..6 done) — MPI-left now in flight, overlaps Buf-right below
+    MPI_FPost_PackStart_Left(f_post_write, mpi_send_buf_left_d, req_persist, stream1);
+#endif
 
     // Right boundary: j = NYD6-7..NYD6-5 (3 rows, MPI iToRight 精確範圍)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        NYD6 - 7);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimBuf, blockdimBuf, 0, stream1>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -393,10 +852,23 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         NYD6 - 7);
+#endif
 
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+
+    // [PERF rank1] pack+start RIGHT halo (j=NYD6-7..-5 done) — MPI-right now in flight
+    MPI_FPost_PackStart_Right(f_post_write, mpi_send_buf_right_d, req_persist, stream1);
+    // (原 global cudaStreamSynchronize(stream1) 移除: 兩 MPI 已在途; PackStart 內部已同步各自 pack;
+    //  下方 free rows 在 stream0 與在途 MPI 重疊 → 回收暴露的 MPI)
+#else
     // ── 等 Buffer 獨佔完成（GPU 空閒 → 快速 sync）──
     CHECK_CUDA( cudaStreamSynchronize(stream1) );
+#endif
 
 #if USE_TIMING && TIMING_DETAIL
     // Buffer 完成: 記錄 Buffer 獨佔時間 (launch + kernel + sync)
@@ -423,6 +895,17 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     // ═══════════════════════════════════════════════════════════════
 
     // [P0 v3] Launch 1: j=3 (從 Buffer 移出的左邊界行)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        3);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -430,9 +913,20 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         3);
+#endif
+
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+#endif
 
     // [P0 v3] Launch 2: j=7..NYD6-8 (主 Interior)
+#if USE_ITBLBM_STREAMING
+    if (nInteriorRows > 0) {
+#endif
 #if USE_SMEM_INTERIOR
     //   P100 路徑: Shared Memory Cooperative η-Row Loading
     //     smem_eta[7][NT+6] 消除 3D 方向 85% DRAM reads
@@ -450,6 +944,17 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     //   V100 高速路徑 (預設): non-smem, 無 __syncthreads 開銷
     //     V100 128KB L1 已在硬體層級處理 η-row overlap
     //     實測: non-smem 10.3 ms vs smem 17.3 ms → non-smem 快 67%
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimInt, blockdimInt, 0, stream0>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        7);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimInt, blockdimInt, 0, stream0>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -457,10 +962,29 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         7);
+#endif
+#endif
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+    }
 #endif
 
     // [P0 v3] Launch 3: j=NYD6-4 (從 Buffer 移出的右邊界行)
+#if USE_GILBM_ALGORITHM2
+    Algorithm2_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
+        f_post_read, f_post_write,
+        zeta_z_d, zeta_y_d,
+        xi_y_d, xi_z_d, bk_precomp_d,
+        z_zeta_d,
+        u, v, w, rho_d,
+        rho_modify_d, Force_d,
+        gilbm2_coords_d,
+        NYD6 - 4);
+#else
     Algorithm1_FusedKernel_GTS_Buffer<<<griddimRow1, blockdimInt, 0, stream0>>>(
         f_post_read, f_post_write,
         zeta_z_d, zeta_y_d,
@@ -468,7 +992,15 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
         z_zeta_d,
         u, v, w, rho_d,
         rho_modify_d, Force_d,
+#if USE_ITBLBM_STREAMING
+        itb_yz_coeff_d,
+#endif
         NYD6 - 4);
+#endif
+
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+#endif
 
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_step1_stop, stream0);
@@ -486,11 +1018,17 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     if (g_timing_sample) t_mpi_wtime_start = MPI_Wtime();
 #endif
 
+#if USE_ITBLBM_STREAMING
+    // [PERF rank1] wait + unpack both halves (MPIs were started during buffer/free-row compute)
+    MPI_FPost_WaitUnpack_Left (f_post_write, mpi_recv_buf_left_d,  req_persist, stream1);
+    MPI_FPost_WaitUnpack_Right(f_post_write, mpi_recv_buf_right_d, req_persist, stream1);
+#else
     MPI_Exchange_FPost_Packed(
         f_post_write,
         mpi_send_buf_left_d,  mpi_send_buf_right_d,
         mpi_recv_buf_left_d,  mpi_recv_buf_right_d,
         req_persist, stream1);
+#endif
 
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample)
@@ -514,6 +1052,9 @@ void Launch_CollisionStreaming(double *f_post_read, double *f_post_write) {
     if (g_timing_sample) cudaEventRecord(g_timing.ev_psw_start, stream0);
 #endif
     periodicSW_fpost<<<griddimSW, blockdimSW, 0, stream0>>>(f_post_write, GRID_SIZE);
+#if USE_ITBLBM_STREAMING
+    CHECK_CUDA( cudaGetLastError() );
+#endif
 #if USE_TIMING && TIMING_DETAIL
     if (g_timing_sample) cudaEventRecord(g_timing.ev_psw_stop, stream0);
 #endif
@@ -567,7 +1108,7 @@ void Launch_ModifyForcingTerm()
     // ====================================================================
     // Mode 0: Simple Proportional Controller (C.A. Lin, original)
     // ====================================================================
-    double beta = fmax(0.001, 3.0/(double)Re);
+    double beta = fmax(0.001, 1.0/(double)Re);
     Force_h[0] = Force_h[0] + beta * ((double)Uref - Ub_avg) * (double)Uref / (double)LZ;
 
     // MPI average Force across all ranks
