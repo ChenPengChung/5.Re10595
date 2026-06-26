@@ -1,0 +1,1726 @@
+\documentclass[11pt]{article}
+
+% ---------------------------------------------------------------------------
+%  A Jacobian-Weighted Volumetric Density Correction for Mass Conservation
+%  in Curvilinear Lattice-Boltzmann Flows
+%
+%  Compiles with: pdflatex (1-2 passes). No bibtex required.
+% ---------------------------------------------------------------------------
+
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage[margin=1in]{geometry}
+\usepackage{booktabs}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{graphicx}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+% --- CJK (Traditional Chinese abstract). Use CJKutf8 which ships with TeX Live
+%     and works with pdflatex without external setup. ---
+\usepackage{CJKutf8}
+
+% --- Theorem environments ---
+\newtheorem{proposition}{Proposition}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{corollary}{Corollary}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{remark}
+\newtheorem{remark}{Remark}
+
+% --- Listings configuration for C++/CUDA ---
+\definecolor{codegray}{gray}{0.5}
+\definecolor{codekw}{rgb}{0.13,0.13,0.6}
+\definecolor{codecomment}{rgb}{0.0,0.45,0.0}
+\definecolor{codestr}{rgb}{0.6,0.1,0.1}
+\lstset{
+  language=C++,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{codekw}\bfseries,
+  commentstyle=\color{codecomment}\itshape,
+  stringstyle=\color{codestr},
+  numbers=left,
+  numberstyle=\tiny\color{codegray},
+  numbersep=6pt,
+  breaklines=true,
+  breakatwhitespace=false,
+  showstringspaces=false,
+  tabsize=2,
+  frame=single,
+  columns=fullflexible,
+  captionpos=b
+}
+
+% --- Path / inline-code convenience macro ---
+\providecommand{\path}[1]{\texttt{#1}}
+
+\title{A Jacobian-Weighted Volumetric Density Correction for\\
+       Mass Conservation in Curvilinear Lattice-Boltzmann Flows}
+
+\author{%
+  Corresponding author\\
+  \small Periodic-Hill D3Q19 GILBM Solver Group
+}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+% ===========================================================================
+%  ABSTRACT (English) + 摘要 (Traditional Chinese) + Keywords
+% ===========================================================================
+\begin{abstract}
+\noindent
+Body-fitted (curvilinear) lattice-Boltzmann (LBM) simulations of wall-bounded
+turbulence accumulate a slow, mesh-dependent drift of the global mean density.
+The drift is not a physical mass source but the residual compressibility error
+of the weakly-compressible time stepping, and on a stretched grid it cannot be
+removed by the naive device of summing nodal densities with unit weight: such a
+sum integrates over \emph{computational} space and weights each physical region
+by the inverse local Jacobian, biasing the controlled mean toward the
+node-clustered (small-cell) zones. We formulate the only mesh-invariant remedy:
+a \emph{volume-weighted} density governor that regulates the genuinely physical
+mass $M=\int_\Omega\rho\,dV$. Each lattice node is assigned a median-dual
+control volume $w_p$, and the volume-weighted mean
+$\langle\rho\rangle_V=\sum_p w_p\rho_p/\sum_p w_p$ is restored to unity by a
+single, spatially uniform shift injected into the rest population $f_0$. We prove
+three exact properties of the corrector: the median-dual weights form an exact
+partition of unity ($\sum_p w_p=V_{\mathrm{mesh}}$), the shift is
+momentum-silent (the rest velocity is $\mathbf e_0=\mathbf0$), and the unit mean
+is recovered in a single application (unit-gain fixed point). The cell volumes
+that build $w_p$ are computed two ways: an exact straight-chord Shoelace area
+(Method~0) and a $3\times3$ Gauss--Legendre quadrature of the in-plane Jacobian
+$J_{2D}$ reconstructed by degree-5 Lagrange interpolation (Method~1). A
+host-only verification harness confirms the Gauss--Legendre rule is exact through
+degree~5, that Method~1 converges at sixth order on a curved, genuinely
+two-dimensional (non-separable) test map while the chorded Method~0 is locked at
+$O(h^2)$, and that the mass
+governor restores $\langle\rho\rangle_V=1$ to reduction-rounding precision
+($\sim\!10^{-12}$ at production scale, $\sim\!10^{-16}$ in the small verification
+harness) while preserving momentum exactly. We give a complete
+theory$\leftrightarrow$code map for the D3Q19 GILBM implementation and an
+independent record verifying that the MRT collision operator and Guo forcing
+inject no spurious mass, leaving the volumetric corrector as the sole, controlled
+mass channel.
+\end{abstract}
+
+\begin{center}
+\begin{CJK}{UTF8}{bsmi}
+\textbf{摘要}\\[4pt]
+\end{CJK}
+\begin{minipage}{0.92\textwidth}
+\begin{CJK}{UTF8}{bsmi}
+\small
+貼體（曲線）格子波茲曼（LBM）模擬牆束湍流時，全域平均密度會隨時間緩慢漂移，且此漂移與網格相關。
+該漂移並非物理質量源，而是弱可壓縮時間推進殘留的可壓縮性誤差；在拉伸網格上，無法以「對節點密度取單位權重求和」這種素樸方式消除：此種求和實為在計算空間上積分，會以局部 Jacobian 的倒數加權每個物理區域，使受控平均偏向節點密集（小網格）區。本文提出唯一與網格無關的修正法：以體積加權的密度調節器，調控真正的物理質量
+$M=\int_\Omega\rho\,dV$。每個格點賦予中位對偶（median-dual）控制體積 $w_p$，並透過注入靜止分布
+$f_0$ 的單一均勻位移，將體積加權平均
+$\langle\rho\rangle_V=\sum_p w_p\rho_p/\sum_p w_p$ 一次回復為 1。我們證明修正子的三項精確性質：中位對偶權重構成精確的單位分割（$\sum_p w_p=V_{\mathrm{mesh}}$）、位移不影響動量（靜止速度 $\mathbf e_0=\mathbf0$）、以及單次套用即回復單位平均（單位增益不動點）。建立 $w_p$ 所需的網格體積以兩法計算：精確直弦 Shoelace 面積（方法 0），以及對以五次 Lagrange 內插重建之平面內 Jacobian $J_{2D}$ 施以 $3\times3$ Gauss--Legendre 求積（方法 1）。獨立主機端驗證確認該求積對五次以下多項式精確，方法 1 在一個真正二維（不可分離）的曲線測試映射上達六階收斂、而直弦方法 0 鎖在 $O(h^2)$，且質量調節器在保持動量精確守恆下將 $\langle\rho\rangle_V$ 回復至約化捨入精度（生產規模約 $\sim\!10^{-12}$、小型驗證程式約 $\sim\!10^{-16}$）。文中並給出 D3Q19 GILBM 實作的完整理論$\leftrightarrow$程式碼對照，以及驗證 MRT 碰撞算子與 Guo 體積力不注入任何虛假質量的獨立紀錄，使體積修正子成為方案中唯一受控的質量通道。
+\end{CJK}
+\end{minipage}
+\end{center}
+
+\vspace{4pt}
+\noindent\textbf{Keywords:} lattice Boltzmann method; mass conservation;
+curvilinear / body-fitted mesh; median-dual control volume; Gauss--Legendre
+quadrature; Jacobian metric; partition of unity; periodic hill; MRT collision;
+Guo forcing.
+
+\tableofcontents
+
+% ===========================================================================
+\section{Introduction}
+\label{sec:intro}
+
+The lattice-Boltzmann method (LBM) has matured into a competitive solver for
+wall-bounded turbulence, particularly in the weakly-compressible,
+single-relaxation- or multiple-relaxation-time (MRT) form
+\cite{Qian1992,dHumieres2002,Kruger2017,Succi2001}. Its native Cartesian lattice, however,
+is awkward for the smooth, curved walls that characterise canonical separated
+flows such as the periodic-hill benchmark \cite{Frohlich2005,Breuer2009}. Two
+classical routes restore geometric flexibility: interpolation-supplemented LBM
+on body-fitted meshes \cite{He1997,FilippovaHanel1998}, and finite-volume
+formulations on unstructured/curvilinear grids \cite{Barth1991}. In all of these
+the populations are advanced on a logical (computational) lattice whose physical
+image is stretched and curved.
+
+A subtle consequence of this stretching is a slow, mesh-dependent drift of the
+global mean density. In a weakly-compressible scheme the density is a dynamical
+field, and the time stepping leaves a residual compressibility error that, on a
+non-uniform body-fitted grid, accumulates into a global offset of
+$\langle\rho\rangle$ away from its lattice reference value of unity. Left
+unchecked, this offset perturbs the pressure (through the equation of state
+$p=c_s^2\rho$) and contaminates long-time turbulence statistics.
+
+The naive cure---summing the nodal densities with \emph{unit} weight and
+shifting the field to drive that sum to a target---is \emph{wrong} on a stretched
+mesh. As we show in \S\ref{sec:T1}, a unit-weight sum is a quadrature of the
+density over \emph{computational} space, and therefore weights each physical
+sub-region by the \emph{inverse} local Jacobian. Where grid lines cluster (near
+the wall and in the lee of the hill) the metric is small and the unit-weight sum
+over-counts; where cells are coarse it under-counts. Regulating such a biased
+surrogate drives the density toward a spatially skewed mean and injects a
+spurious, mesh-dependent body force into the momentum equation.
+
+The correct invariant to monitor is the genuinely physical mass
+$M=\int_\Omega\rho\,dV$, whose discrete form requires each node to carry a
+\emph{physical control volume} $w_p$. This paper develops, analyses, verifies,
+and documents the implementation of a \emph{Jacobian-weighted volumetric density
+corrector} built on this principle. Its contributions are:
+\begin{itemize}
+\item a continuous/discrete theory (\S\ref{sec:theory}) showing that only the
+  volume-weighted mean $\langle\rho\rangle_V$ is a mesh-invariant target, and
+  proving that a uniform shift into the rest population $f_0$ restores
+  $\langle\rho\rangle_V=1$ in one step while preserving momentum exactly;
+\item a median-dual control-volume construction with an exact
+  partition-of-unity identity (\S\ref{sec:weights});
+\item two quadratures of the per-cell area---an exact straight-chord Shoelace
+  area and a $3\times3$ Gauss--Legendre integration of the in-plane Jacobian
+  reconstructed by degree-5 Lagrange interpolation---together with a full error
+  budget (\S\ref{sec:quadrature}--\S\ref{sec:numerical-analysis})
+  \cite{StoerBulirsch2002,DavisRabinowitz1984};
+\item an independent host-only verification harness confirming GL-3 exactness,
+  sixth-order convergence of the Jacobian method, and algebraically exact,
+  momentum-preserving mass restoration (\S\ref{sec:experiments});
+\item a faithful theory$\leftrightarrow$code map for the D3Q19 GILBM solver
+  (\S\ref{sec:impl}) and a verification record for the MRT collision operator and
+  Guo forcing \cite{GuoZhengShi2002} establishing that the corrector is the sole
+  controlled mass channel (\S\ref{sec:mrt}, Appendix~\ref{app:mrt}).
+\end{itemize}
+
+% ===========================================================================
+\section{Governing framework and notation}
+\label{sec:framework}
+
+\paragraph{Lattice and moments.}
+The solver advances a D3Q19 lattice-Boltzmann scheme with $N_Q=19$ discrete
+velocities $\mathbf e_q$ ($q=0,\dots,18$), rest velocity
+$\mathbf e_0=(0,0,0)$, and lattice weights $W_q$ with $W_0=\tfrac13$. The
+hydrodynamic moments are the velocity-space sums
+\begin{equation}
+\rho=\sum_{q=0}^{18} f_q,
+\qquad
+\rho\,\mathbf u=\sum_{q=0}^{18}\mathbf e_q\,f_q .
+\label{eq:moments-master}
+\end{equation}
+Collision is performed by an MRT operator on the moment basis $M$ with
+relaxation matrix $S$, projected to velocity space as $K=M^{-1}SM$; the body
+force is applied by Guo forcing \cite{GuoZhengShi2002} at a compile-time Hermite
+order \texttt{FORCE\_HERMITE\_ORDER}. The conserved (density and momentum)
+moments are relaxed at rate zero; the verification of this property is recorded
+in \S\ref{sec:mrt} and Appendix~\ref{app:mrt}.
+
+\paragraph{Curvilinear map (unified convention).}
+Throughout the paper we use a single coordinate convention. Let
+$(\xi,\eta,\zeta)$ be the logical (computational) coordinates, identified with
+the integer lattice indices $(j,i,k)$ as
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+logical coordinate & lattice index & role \\
+\midrule
+$\xi$ & $j$ & streamwise \\
+$\eta$ & $i$ & spanwise (homogeneous) \\
+$\zeta$ & $k$ & wall-normal (carries the hill) \\
+\bottomrule
+\end{tabular}
+\end{center}
+The body-fitted mesh is an \emph{extrusion}: the spanwise physical coordinate
+depends on the spanwise index alone, $x=x(\eta)$, with straight grid lines and
+(non-uniform) spacing $\Delta x_i=x_{i+1}-x_i$, while the cross-section
+$(y,z)=\bigl(y(\xi,\zeta),\,z(\xi,\zeta)\bigr)$ is a genuinely two-dimensional
+curvilinear plane, $z$ being the wall-normal physical coordinate. The map is
+\begin{equation}
+\Phi:\;(\xi,\eta,\zeta)\;\longmapsto\;\bigl(x(\eta),\,y(\xi,\zeta),\,z(\xi,\zeta)\bigr).
+\label{eq:map}
+\end{equation}
+Because $x$ depends on the spanwise variable only and $(y,z)$ on the in-plane
+variables only, the $3\times3$ Jacobian is block-diagonal and its determinant
+factors:
+\begin{equation}
+\mathcal{J}_{3}
+\;=\;\det\frac{\partial(x,y,z)}{\partial(\xi,\eta,\zeta)}
+\;=\;\pm\,x'(\eta)\,J_{2D},
+\qquad
+J_{2D}\;\equiv\;\frac{\partial(y,z)}{\partial(\xi,\zeta)}
+\;=\;y_{\xi}z_{\zeta}-y_{\zeta}z_{\xi},
+\label{eq:jacobian-block}
+\end{equation}
+where subscripts denote partial derivatives and $J_{2D}$ is the in-plane
+(cross-section) Jacobian computed and stored by the solver (code symbol
+\texttt{J\_2D}). The overall sign of $\mathcal{J}_3$ is orientation-dependent
+(here $x'(\eta)$ occupies the second column, contributing a cofactor sign
+$(-1)^{1+2}$); it is immaterial in practice because the code builds the volume
+element from the absolute value (\texttt{fabs}). The physical volume element is
+therefore
+\begin{equation}
+dV \;=\; |\mathcal{J}_{3}|\,d\xi\,d\eta\,d\zeta
+      \;=\; |x'(\eta)|\,J_{2D}\,d\xi\,d\eta\,d\zeta ,
+\label{eq:dV}
+\end{equation}
+i.e.\ a physical cell volume is the spanwise chord length $|\Delta x_i|$ times an
+area measured in the $(y,z)$ cross-section. Nodes are indexed $p=(i,j,k)$ and
+mesh cells $c=(i_c,j_c,k_c)$; $h$ denotes a representative physical cell size,
+$n\sim10^6$ the number of interior reduction nodes, and
+$\varepsilon=2.2\times10^{-16}$ the double-precision unit roundoff.
+
+% ===========================================================================
+\section{Volumetric mass-conservation theory}
+\label{sec:theory}
+
+\subsection{The physical mass invariant}
+\label{sec:T1}
+
+The conserved invariant of the incompressible/weakly-compressible flow is the
+\emph{physical} mass
+\begin{equation}
+M \;=\; \int_{\Omega} \rho\,dV
+     \;=\; \int_{\Omega_c} \rho\,|\mathcal{J}_{3}|\,d\xi\,d\eta\,d\zeta,
+\label{eq:M-physical}
+\end{equation}
+where $\Omega\subset\mathbb{R}^3$ is the physical fluid domain and $\Omega_c$ its
+logical pre-image, a uniform cuboid in $(\xi,\eta,\zeta)$.
+
+A naive ``mass'' formed by summing the nodal density over computational indices
+with \emph{unit} weight,
+\begin{equation}
+\widetilde{M}
+\;=\;\sum_{p}\rho_p
+\;\approx\;\int_{\Omega_c}\rho\,d\xi\,d\eta\,d\zeta
+\;=\;\int_{\Omega}\frac{\rho}{|\mathcal{J}_{3}|}\,dV ,
+\label{eq:Mtilde-wrong}
+\end{equation}
+is \emph{not} a discretization of \eqref{eq:M-physical}: it integrates over
+computational space and therefore weights each physical sub-region by the inverse
+local Jacobian $|\mathcal{J}_3|^{-1}$. On a stretched body-fitted mesh the metric
+varies strongly---grid lines cluster near the wall and in the lee of the hill
+where $|\mathcal{J}_3|$ is small---so $\widetilde{M}$ over-counts the
+node-clustered (small-cell) regions and under-counts the coarse-cell regions.
+Controlling $\widetilde{M}$ would drive the density field toward a spatially
+\emph{biased} mean and inject a spurious, mesh-dependent body force into the
+momentum equation. Only the genuinely physical functional \eqref{eq:M-physical},
+weighted by $|\mathcal{J}_3|$, is the correct invariant to monitor and to
+regulate.
+
+\subsection{Quadrature of the physical mass and the mean density}
+\label{sec:T2}
+
+Discretize \eqref{eq:M-physical} by a nodal quadrature rule. Let $p=(i,j,k)$
+index the unique interior lattice nodes and let $w_p>0$ be the \emph{physical
+control volume} assigned to node $p$ (constructed in \S\ref{sec:weights}). The
+mass and total volume are approximated by
+\begin{align}
+M &\;\approx\; \sum_{p} \rho_p\, w_p ,
+\label{eq:M-quad}\\[2pt]
+V &\;=\; \sum_{p} w_p
+   \;\approx\; \int_{\Omega} dV \;=\; |\Omega| ,
+\label{eq:V-quad}
+\end{align}
+and the \emph{volume-weighted mean density} is their ratio,
+\begin{equation}
+\langle\rho\rangle_V
+\;\equiv\;\frac{M}{V}
+\;=\;\frac{\sum_{p}\rho_p\,w_p}{\sum_{p}w_p}.
+\label{eq:rho-mean}
+\end{equation}
+By construction $\langle\rho\rangle_V$ is the exact discrete average that equals
+unity when $\rho_p\equiv 1$ for all $p$, \emph{independently of the mesh
+stretching}, because the same weights $w_p$ appear in numerator and denominator.
+This is the defining property the unit-weight surrogate \eqref{eq:Mtilde-wrong}
+lacks. In the implementation the weighted sum $\sum_p \rho_p w_p$ is evaluated by
+a GPU reduction over the unique interior node set $i\in[3,N_x{-}5]$,
+$j\in[3,N_{y,d}{-}5]$, $k\in[3,N_z{-}4]$, summed across MPI ranks, and divided by
+the precomputed global volume $V=\sum_p w_p$ to yield $\langle\rho\rangle_V$ on
+the root rank. The fidelity of \eqref{eq:rho-mean} as a model of
+\eqref{eq:M-physical} rests entirely on how faithfully $w_p$ reproduces the
+physical control volume, constructed in \S\ref{sec:weights}.
+
+\subsection{The correction operator: a discrete mass governor}
+\label{sec:T4}
+
+\subsubsection{Definition}
+At every time step the solver forms $\langle\rho\rangle_V$ from
+\eqref{eq:rho-mean} and defines the scalar correction
+\begin{equation}
+\delta\rho \;\equiv\; 1-\langle\rho\rangle_V ,
+\label{eq:deltarho}
+\end{equation}
+the target reference density being unity in lattice units. The root rank computes
+$\delta\rho$ and broadcasts it to all ranks. It is then applied as a
+\emph{uniform} additive shift, injected entirely into the rest population $f_0$
+at every interior node $p$:
+\begin{equation}
+\rho_p \;\leftarrow\; \rho_p + \delta\rho,
+\qquad
+f_{0,p} \;\leftarrow\; f_{0,p} + \delta\rho .
+\label{eq:apply}
+\end{equation}
+We now establish three exact properties.
+
+\subsubsection{(a) Mass change is exactly \texorpdfstring{$\delta\rho$}{drho} per node}
+Since $\rho_p=\sum_q f_{q,p}$ and only $f_0$ is altered,
+\begin{equation}
+\Delta\rho_p \;=\; \sum_q \Delta f_{q,p}
+\;=\; \Delta f_{0,p} \;=\; \delta\rho .
+\label{eq:mass-change}
+\end{equation}
+The increment is identical at every node, so the change in the discrete
+volume-weighted mass is
+\begin{equation}
+\Delta M
+=\sum_p w_p\,\Delta\rho_p
+=\delta\rho\sum_p w_p
+=\delta\rho\,V .
+\label{eq:DeltaM}
+\end{equation}
+
+\subsubsection{(b) Momentum is exactly invariant}
+The D3Q19 rest velocity is $\mathbf{e}_0=(0,0,0)$. The momentum moment changes by
+\begin{equation}
+\Delta(\rho u_\alpha)_p
+=\sum_q e_{q,\alpha}\,\Delta f_{q,p}
+=e_{0,\alpha}\,\delta\rho
+=0,
+\qquad \alpha\in\{x,y,z\}.
+\label{eq:momentum-invariant}
+\end{equation}
+Because the carrier population has zero lattice velocity, the injected mass
+carries \emph{no} momentum: the correction lives in the kernel of every momentum
+moment. This is precisely why the rest population $f_0$, and not any moving
+population, is chosen as the carrier---any $\mathbf{e}_q\ne\mathbf 0$ would couple
+the mass governor to the momentum equation and perturb the velocity field.
+
+\subsubsection{(c) One-shot restoration of the unit mean}
+Apply \eqref{eq:apply} and recompute the mean using \eqref{eq:rho-mean} and the
+constancy of $\delta\rho$,
+\begin{equation}
+\langle\rho\rangle_V^{\,\mathrm{new}}
+=\frac{\sum_p w_p(\rho_p+\delta\rho)}{\sum_p w_p}
+=\frac{\sum_p w_p\rho_p}{\sum_p w_p}+\delta\rho
+=\langle\rho\rangle_V+\bigl(1-\langle\rho\rangle_V\bigr)
+=1 .
+\label{eq:one-shot}
+\end{equation}
+A spatially uniform shift moves the volume-weighted mean by exactly its own
+magnitude, so the target $\langle\rho\rangle_V=1$ is reached in a \emph{single}
+application; no iteration is required. The only residual is the floating-point
+rounding of the parallel reduction that forms $\langle\rho\rangle_V$.
+
+\subsubsection{Control-theoretic interpretation}
+Equations \eqref{eq:deltarho}--\eqref{eq:one-shot} constitute a discrete
+proportional ``mass governor'' with \emph{unit feedback gain}. Writing
+$\chi^{(n)}=\langle\rho\rangle_V$ at step $n$ before correction, the corrector
+realizes the fixed-point map
+\begin{equation}
+\chi \;\longmapsto\; \chi + (1-\chi),
+\label{eq:fixed-point}
+\end{equation}
+whose unique fixed point $\chi^{\star}=1$ is reached in one step with zero
+contraction remainder (the error multiplier is $1-\mathrm{gain}=0$). The scheme
+is unconditionally stable in this idealized sense: it neither under- nor
+over-shoots, and introduces no oscillatory feedback mode. In the running solver
+the correction is applied with a one-step lag---$\langle\rho\rangle_V$ is measured
+at the end of step $n$ and the shift is applied at step $n{+}1$---so the governor
+removes the compressibility drift accumulated over a single streaming/collision
+update each step, holding the global mean density pinned at unity to
+reduction-rounding precision throughout the simulation.
+
+\subsection{Relation to the lattice-Boltzmann moments and forcing}
+\label{sec:T5}
+
+The corrector is consistent with the moment structure of the LBM. A perturbation
+$\Delta f_q=\delta\rho\,\delta_{q0}$ has moment signature
+\begin{equation}
+\sum_q \Delta f_q=\delta\rho,
+\qquad
+\sum_q \mathbf{e}_q\,\Delta f_q=\mathbf{e}_0\,\delta\rho=\mathbf{0},
+\label{eq:injection-moments}
+\end{equation}
+so the injection populates the density moment alone and lies in the common kernel
+of all three momentum moments: it is a pure, momentum-silent density shift. This
+is the moment-space statement of \eqref{eq:momentum-invariant}.
+
+The mass governor is complementary to the body force. The solver applies Guo
+forcing \cite{GuoZhengShi2002} with Hermite expansion order controlled at compile
+time. At first order the forcing population is
+\begin{equation}
+F_q \;=\; W_q\,\bigl(3\,c_{q,y}\bigr)\,\mathcal{F},
+\label{eq:guo1}
+\end{equation}
+(pure lattice-velocity weighting, with $\mathcal F$ the driving force and
+$c_{q,y}=e_{q,y}$), whose density moment vanishes identically,
+\begin{equation}
+\sum_q F_q
+=3\,\mathcal{F}\sum_q W_q\,c_{q,y}=0
+\quad\Longleftrightarrow\quad
+\sum_q W_q\,e_{q,y}=0 ,
+\label{eq:guo1-massmoment}
+\end{equation}
+the identity holding by the lattice isotropy of the weights. Hence the
+first-order body force injects \emph{no} net mass; the full second-order Guo
+form, $F_q=W_q\,\mathcal F[\,3(c_{q,y}-u_y)+9(\mathbf c_q\!\cdot\mathbf u)c_{q,y}\,]$,
+likewise carries zero density moment by the same weight identities. The
+accumulated unit-mean drift that the governor removes is therefore \emph{not}
+forcing-induced mass; it is the residual compressibility error of the
+weakly-compressible LBM time stepping on the stretched curvilinear mesh. The
+volume-weighted corrector \eqref{eq:deltarho}--\eqref{eq:apply} is the discrete
+device that removes exactly this drift, in one momentum-preserving step per
+iteration, against the physically correct invariant $M=\int_\Omega\rho\,dV$ of
+\S\ref{sec:T1}.
+
+% ===========================================================================
+\section{Control-volume weights and the partition-of-unity identity}
+\label{sec:weights}
+
+\subsection{Cell volumes}
+\label{sec:T3-cells}
+The mesh cell $c=(i_c,j_c,k_c)$ is the hexahedron spanned by logical indices
+$[i_c,i_c{+}1]\times[j_c,j_c{+}1]\times[k_c,k_c{+}1]$. By the block structure
+\eqref{eq:jacobian-block}, its physical volume separates into the spanwise chord
+times a cross-sectional area,
+\begin{equation}
+V_c \;=\; |\Delta x_{i_c}|\;A_c,
+\qquad
+\Delta x_{i_c}=x_{i_c+1}-x_{i_c}.
+\label{eq:Vc-split}
+\end{equation}
+Two equivalent constructions of $A_c$ are provided; their detailed numerical
+analysis is deferred to \S\ref{sec:quadrature}--\S\ref{sec:numerical-analysis}.
+
+\paragraph{Method~0 (Shoelace / surveyor area).}
+The four cross-section corners $(y_a,z_a)$, $a=0,\dots,3$, taken cyclically at
+logical positions $(j_c,k_c),(j_c{+}1,k_c),(j_c{+}1,k_c{+}1),(j_c,k_c{+}1)$,
+define a planar quadrilateral whose exact area is the Gauss/shoelace formula
+\begin{equation}
+A_c^{\mathrm{Shoe}}
+\;=\;\tfrac12\Bigl|\sum_{a=0}^{3}\bigl(y_a z_{a+1}-z_a y_{a+1}\bigr)\Bigr|,
+\qquad (a{+}1)\ \mathrm{mod}\ 4 .
+\label{eq:shoelace}
+\end{equation}
+This is the \emph{exact} area of the straight-chord quadrilateral. When the $V_c$
+of adjacent cells are summed, the line integrals along shared edges cancel
+pairwise (opposite orientation), so the total telescopes to the exact area of the
+piecewise-linear mesh polygon. Hence Method~0 reproduces the discrete
+(piecewise-linear) mesh volume \emph{exactly}; its only error is the $O(h^2)$
+geometric chording of the truly curved boundary.
+
+\paragraph{Method~1 (Jacobian, $3\times3$ Gauss--Legendre).}
+Alternatively the area is the metric integral
+\begin{equation}
+A_c^{\mathrm{Jac}}
+=\!\int_{j_c}^{j_c+1}\!\!\int_{k_c}^{k_c+1}\!\! J_{2D}(\xi,\zeta)\,d\xi\,d\zeta
+\;\approx\;\sum_{a=1}^{3}\sum_{b=1}^{3} W_a W_b\,
+J_{2D}\!\bigl(j_c+\xi_a,\,k_c+\zeta_b\bigr),
+\label{eq:Ajac}
+\end{equation}
+a tensor-product $3$-point Gauss--Legendre (GL-3) rule. On the reference cell
+$[0,1]$ the nodes and weights are
+\begin{equation}
+\{\xi_a\}=\Bigl\{\tfrac{1-\sqrt{3/5}}{2},\ \tfrac12,\ \tfrac{1+\sqrt{3/5}}{2}\Bigr\},
+\qquad
+\{W_a\}=\Bigl\{\tfrac{5}{18},\ \tfrac{8}{18},\ \tfrac{5}{18}\Bigr\}.
+\label{eq:GL3}
+\end{equation}
+GL-$n$ integrates polynomials of degree $\le 2n{-}1$ exactly; for $n=3$ the rule
+is exact through degree $5$ per direction \cite{StoerBulirsch2002,DavisRabinowitz1984}.
+Because the nodes \eqref{eq:GL3} are off-grid, $J_{2D}$ at a Gauss point is
+reconstructed by a $6$-point (degree-$5$) tensor Lagrange interpolation of nodal
+$J_{2D}$ values,
+\begin{equation}
+J_{2D}(\xi,\zeta)\;\approx\;\sum_{m=0}^{5}\sum_{n=0}^{5}
+\ell_m(\xi)\,\ell_n(\zeta)\,J_{2D}\bigl(s_j{+}m,\,s_k{+}n\bigr),
+\qquad
+\ell_m(\xi)=\!\!\prod_{\substack{r=0\\ r\ne m}}^{5}\frac{\xi-(s+r)}{(s{+}m)-(s{+}r)},
+\label{eq:lagrange6}
+\end{equation}
+with a centered, wall-clamped stencil start $s$. The reconstruction is $O(h^6)$
+in $J_{2D}$, exactly matching the degree-$5$ exactness of GL-3, so the
+interpolation does \emph{not} lower the quadrature order. If the $6$-wide stencil
+is unavailable (domain edge) or the reconstructed $J_{2D}$ is non-finite or
+$\le 0$, the cell falls back to the Shoelace value \eqref{eq:shoelace}. Either way
+the nodal cell volume is $V_c=|\Delta x_{i_c}|A_c$, and a verification routine
+(\texttt{VerifyPhysicalDomainVolume3D}) checks the assembled weight-sum against the
+discrete mesh volume: Method~0 reproduces it to relative error below $10^{-12}$
+(printing \texttt{PASS}), whereas Method~1 \emph{deliberately} departs by the
+$O(h^2)$ boundary-curvature term and the routine prints a \texttt{WARNING}. The
+routine only prints \texttt{PASS}/\texttt{WARNING}; it does not assert or abort.
+
+\subsection{Median-dual nodal weight}
+\label{sec:T3-weight}
+The control volume of node $p$ is the median-dual (vertex-centered finite-volume)
+cell \cite{Barth1991}: each of the (at most eight) mesh cells touching $p$
+contributes one eighth of its volume,
+\begin{equation}
+w_p \;=\; \frac{1}{8}\sum_{c\,\ni\,p} V_c ,
+\label{eq:median-dual}
+\end{equation}
+the factor $1/8$ being the fraction of a hexahedral cell nearest one of its eight
+corners. Two boundary adaptations are made without altering the weight's meaning:
+(i) in the periodic spanwise direction the wrap is closed by mapping the first
+interior layer's left cell $i=3$ to the cell index $N_x{-}5$, so the two physical
+cells adjacent to the periodic seam are both counted exactly once; (ii) at a
+solid wall in $k$ a node has cells on one side only, so the inner sum runs over
+the available (one) cell rather than two.
+
+\subsection{Partition-of-unity proof}
+\label{sec:T3-pou}
+\begin{proposition}[Exact volume closure]
+\label{prop:pou}
+With $w_p$ defined by \eqref{eq:median-dual}, the nodal weights sum to the total
+mesh volume,
+\begin{equation}
+\sum_{p} w_p \;=\; \sum_{c} V_c \;=\; V_{\mathrm{mesh}} .
+\label{eq:pou}
+\end{equation}
+\end{proposition}
+\begin{proof}
+Substitute \eqref{eq:median-dual} and exchange the order of summation,
+\begin{equation}
+\sum_{p} w_p
+=\frac{1}{8}\sum_{p}\ \sum_{c\,\ni\,p} V_c
+=\frac{1}{8}\sum_{c} V_c\,\bigl|\{\,p : p\ \text{is a corner of}\ c\,\}\bigr| .
+\label{eq:pou-swap}
+\end{equation}
+Every interior hexahedral cell $c$ has exactly eight corner nodes, so the
+incidence count is $|\{p:\,p\in c\}|=8$ and the prefactor $1/8$ cancels it
+identically, giving $\sum_p w_p=\sum_c V_c$. The pairing of the $\tfrac18$ shares
+with the $8$ corners is a telescoping over the cell--node incidence relation and
+is therefore exact in floating point up to the order of summation; it does not
+depend on cell shape, stretching, or curvature. This closure is an
+exact-arithmetic identity for a periodic mesh whose seam is \emph{bit-closed};
+the production streamwise grid seam is in fact open by $\sim\!3\times10^{-6}$,
+which adds a small $\sim\!10^{-7}$ geometric residual to \eqref{eq:pou},
+measured and decomposed in \S\ref{sec:E4}.
+
+The boundary adaptations preserve the count. For the periodic spanwise seam,
+remapping $i=3\to N_x{-}5$ relabels which cell supplies a corner share but leaves
+each physical cell with exactly its eight one-eighth contributions, so no cell is
+double-counted or dropped and the incidence count stays $8$. At a solid wall, a
+boundary node legitimately borders fewer cells; the missing neighbours lie
+outside $\Omega$ and contribute no volume, so the telescoping still assigns each
+\emph{existing} cell's eighth-shares to its existing corner nodes. In every case
+each cell contributes its full $V_c$ exactly once, proving \eqref{eq:pou}.
+\end{proof}
+Consequently the denominator in \eqref{eq:rho-mean}, $V=\sum_p w_p$ (assembled by
+an MPI all-reduce into the global control volume), equals the exact discrete mesh
+volume, and $\langle\rho\rangle_V$ is a true volume average.
+
+% ===========================================================================
+\section{Cell-volume quadrature: Shoelace vs.\ Jacobian GL-3}
+\label{sec:quadrature}
+
+Both cell-volume estimators are quadratures of the \emph{same} area integral
+\begin{equation}
+  A(j,k) \;=\; \int_{j}^{\,j+1}\!\!\int_{k}^{\,k+1}
+  J_{2D}(\xi,\zeta)\,\mathrm{d}\xi\,\mathrm{d}\zeta ,
+  \qquad
+  V_{\mathrm{cell}}(i,j,k)=\lvert\Delta x_i\rvert\,A(j,k),
+  \label{eq:na-Adef}
+\end{equation}
+and differ only in the order to which they resolve the curvature of $J_{2D}$.
+
+\subsection{N1: two quadratures of the same area integral}
+\label{sec:na-N1}
+
+\paragraph{Method~0 --- Shoelace (exact straight-chord area).}
+The first estimator (\texttt{MassCorrectionCellVolume}) replaces the curved cell
+boundary by its four straight chords and computes the exact area of the resulting
+planar quadrilateral with the surveyor (Gauss/shoelace) formula \eqref{eq:shoelace}.
+Equation~\eqref{eq:shoelace} is the exact integral of $J_{2D}$ for a \emph{bilinear}
+map whose edges are straight, i.e.\ for the piecewise-linear (``discrete'') mesh.
+When adjacent quadrilaterals are summed, every interior edge contributes with
+opposite sign in the two cells that share it and cancels; the sum therefore
+telescopes to the exact area of the discrete-mesh polygon. As a consequence
+Method~0 reproduces the discrete-mesh volume to machine precision \emph{on a
+bit-closed periodic mesh} (this is precisely what
+\texttt{VerifyPhysicalDomainVolume3D} checks; see \S\ref{sec:na-N4}); on the
+production grid the streamwise periodic seam is not bit-closed and contributes a
+$\sim\!10^{-7}$ geometric residual that exceeds the verifier's $10^{-12}$ pass
+gate, quantified in \S\ref{sec:E4}. However, the chords are an $O(h^2)$ approximation of the true
+curved boundary, so Method~0 carries a fixed \emph{geometric} discretisation error
+\begin{equation}
+  A^{\mathrm{Shoe}}(j,k) - A(j,k) = O(h^2)\cdot \kappa ,
+  \label{eq:na-shoe-error}
+\end{equation}
+where $\kappa$ measures the local boundary curvature. This error does not vanish
+as the quadrature is refined per cell --- it is a property of the chorded domain,
+not of the integration rule.
+
+\paragraph{Method~1 --- Jacobian $3\times3$ Gauss--Legendre.}
+The second estimator (\texttt{ComputeJacobianMassCorrectionWeights}) integrates
+the in-plane metric $J_{2D}$ with the tensor-product GL-3 rule
+\eqref{eq:Ajac}--\eqref{eq:GL3}. The decisive point for the error analysis is that
+the solver does \emph{not} feed a closed-form $J_{2D}$ to the quadrature: the Gauss
+abscissae are off-grid, so at every Gauss point $J_{2D}$ is first \emph{reconstructed}
+from nodal samples by the $6$-point (degree-$5$) tensor Lagrange interpolation of
+\S\ref{sec:na-N2}, and GL-3 then integrates \emph{that} reconstruction. A 1D
+$n$-point Gauss rule is exact for polynomials of degree $\le 2n-1$; with $n=3$ this is
+degree~5 per direction, and the reconstruction is itself a degree-5 polynomial per
+direction. \emph{GL-3 therefore integrates the degree-5 reconstruction exactly}: the
+Gauss remainder is identically zero on the quantity actually integrated, so the
+quadrature contributes \emph{no} error to leading order. The convergence-limiting
+error of Method~1 is consequently the degree-5 \emph{Lagrange reconstruction} error of
+the sampled metric,
+\begin{equation}
+  A^{\mathrm{Jac}}(j,k)-A(j,k)
+  \;=\; \int_{j}^{j+1}\!\!\int_{k}^{k+1}\!\!
+        \bigl(\tilde J_{2D}-J_{2D}\bigr)\,\mathrm{d}\xi\,\mathrm{d}\zeta
+  \;=\; O(h^{6})\,J_{2D}^{(6)},
+  \label{eq:na-method1-error}
+\end{equation}
+i.e.\ the per-cell interpolation defect \eqref{eq:na-interp-error} integrated over the
+cell. Summed over the $O(h^{-2})$ cells of the cross-section the global area error of
+Method~1 is $O(h^{6})$---interpolation-limited, not quadrature-limited---versus the
+$O(h^{2})$ geometric chord bias of Method~0. This sixth-order rate is confirmed
+empirically in Section~\ref{sec:experiments} (the measured orders are $\approx 6.0$
+down to the round-off floor).
+
+\paragraph{Scope of the Gauss remainder.}
+For completeness we record the classical 1D Gauss remainder
+\begin{equation}
+  R_n \;=\; \frac{(b-a)^{2n+1}\,(n!)^4}
+                 {(2n+1)\,\bigl((2n)!\bigr)^3}\,
+            f^{(2n)}(\theta),\qquad \theta\in(a,b),
+  \label{eq:na-gauss-remainder}
+\end{equation}
+which for $n=3$ on the computational cell $b-a=1$ gives the closed-form constant
+\begin{equation}
+  R_3 = \frac{(3!)^4}{7\,\bigl(6!\bigr)^3}\,J_{2D}^{(6)}(\theta)
+      = \frac{1296}{7\cdot 373{,}248{,}000}\,J_{2D}^{(6)}(\theta)
+      = \frac{1296}{2{,}612{,}736{,}000}\,J_{2D}^{(6)}(\theta)
+      \approx 4.96\times10^{-7}\,J_{2D}^{(6)}(\theta).
+  \label{eq:na-R3}
+\end{equation}
+Equation~\eqref{eq:na-R3} bounds the quadrature-\emph{only} error that would arise if
+a general smooth $J_{2D}$ with degree-$>5$ content were fed \emph{directly} to GL-3.
+In the solver it is \emph{not} the operative error: the integrand is the degree-5
+reconstruction, on which $R_3\equiv0$. It is retained only as the bound on the (here
+null) quadrature contribution; the binding term is the interpolation error
+\eqref{eq:na-method1-error}. The implementation falls back to \eqref{eq:shoelace} for
+any cell where the 6-wide interpolation stencil is unavailable or where the
+reconstructed $J_{2D}$ is non-finite or $\le0$, guaranteeing a strictly positive,
+finite weight everywhere.
+
+\subsection{N2: degree-5 Lagrange reconstruction at the Gauss points}
+\label{sec:na-N2}
+
+The Gauss abscissae $j+\xi_a$, $k+\zeta_b$ are non-nodal, so $J_{2D}$ must be
+reconstructed there from the nodal metric. The code
+(\texttt{InterpolateJ2D\_Lagrange6}) uses the tensor product
+\eqref{eq:lagrange6}. The interpolation error of a degree-5 reconstruction is
+\begin{equation}
+  J_{2D}-\tilde{J}_{2D}
+  = \frac{J_{2D}^{(6)}(\theta)}{6!}\prod_{r=0}^{5}\bigl(\xi-(s+r)\bigr)
+  = O(h^6)\,J_{2D}^{(6)} .
+  \label{eq:na-interp-error}
+\end{equation}
+This interpolation defect is the \emph{binding} (dominant) error term of Method~1.
+GL-3 has degree of exactness~5 and the reconstruction \eqref{eq:lagrange6} is a
+degree-5 polynomial, so the quadrature \eqref{eq:Ajac} integrates the reconstruction
+\emph{exactly} and adds nothing to leading order---the Gauss remainder
+\eqref{eq:na-R3} is null on the reconstruction. What survives is precisely the gap
+between the reconstruction and the true metric, $\tilde{J}_{2D}-J_{2D}=O(h^6)$ of
+\eqref{eq:na-interp-error}; integrated over each cell and summed it sets the global
+$O(h^6)$ rate \eqref{eq:na-method1-error}. Method~1 thus integrates a degree-5
+polynomial reconstruction of the smooth metric, capturing the sub-cell curvature that
+the straight chord of Method~0 ignores, and its accuracy is limited not by the
+quadrature but by how well that degree-5 reconstruction approximates $J_{2D}$, i.e.\
+by $J_{2D}^{(6)}h^6$.
+
+\paragraph{Stencil placement.}
+\texttt{SelectStencilStart} centres the 6-point window on the target cell by
+choosing $s=\mathrm{cell}-2$ and clamping to $[\,\text{lo},\,\text{hi}-5\,]$, so
+that interior cells receive a symmetric stencil while near-boundary cells degrade
+gracefully to a one-sided stencil rather than reaching past the valid data. In the
+wall-normal direction the $\zeta$-stencils are restricted to physical nodes
+($k=3,\dots,N_z{-}4$): the buffer rows $k=2$ and $k=N_z{-}3$ hold metric values
+that are not part of the physical domain, so near-wall GL cells use the one-sided
+physical stencils $k=3..8$ and $k=N_z{-}9..N_z{-}4$. Because an interior cell's
+centred stencil reaches two rows into the neighbouring MPI subdomain in the
+streamwise ($\xi$) direction, the ghost rows of $J_{2D}$ ($j=0,1,2$ and
+$j=N_y{-}3,\dots,N_y{-}1$) must be exchanged across ranks before the quadrature
+loop. The solver performs exactly this halo exchange of $J_{2D}$ prior to invoking
+Method~1; without it, partition-boundary cells would silently fall back to the
+lower-order shoelace estimate.
+
+% ===========================================================================
+\section{Numerical analysis and error budget}
+\label{sec:numerical-analysis}
+
+\subsection{N3: floating-point exactness of the correction}
+\label{sec:na-N3}
+
+\paragraph{Nodal control volumes and partition of unity.}
+Each interior node $p$ is assigned the median-dual weight
+$w_p=\tfrac18\sum_{c\ni p}V_{\mathrm{cell}}(c)$ of \eqref{eq:median-dual}, with the
+periodic-$x$ wrap and one-sided near-wall stencils handled explicitly. Since each
+cell is shared by its eight corner nodes, the weights form a partition of unity
+that is exact in floating point up to summation order
+(Proposition~\ref{prop:pou}),
+\begin{equation}
+  \sum_p w_p = \sum_c V_{\mathrm{cell}}(c) = V ,
+  \label{eq:na-pou}
+\end{equation}
+where $V$ is obtained once at start-up by \texttt{MPI\_Allreduce}.
+
+\paragraph{One-shot algebraic exactness.}
+At every step the solver forms $\langle\rho\rangle_V=\tfrac1V\sum_p w_p\rho_p$ and
+$\delta\rho=1-\langle\rho\rangle_V$, then applies the uniform shift
+$\rho\leftarrow\rho+\delta\rho$ together with $f_0\leftarrow f_0+\delta\rho$ at
+every interior node. Because the lattice rest velocity is
+$\mathbf{e}_0=\mathbf{0}$, the shift injects mass but \emph{no} momentum
+(\eqref{eq:momentum-invariant}). Applying the uniform shift and using
+\eqref{eq:na-pou} gives
+\begin{equation}
+  \langle\rho\rangle_V^{\text{new}}
+  = \frac{1}{V}\sum_p w_p\,(\rho_p+\delta\rho)
+  = \langle\rho\rangle_V + \delta\rho\,\frac{\sum_p w_p}{V}
+  = \langle\rho\rangle_V + \delta\rho = 1 ,
+  \label{eq:na-oneshot}
+\end{equation}
+so the mean density is restored to unity in a \emph{single} application; the only
+residual is the floating-point rounding of the reduction.
+
+\paragraph{Conditioning of the reduction.}
+The reduced quantity $S=\sum_p w_p\rho_p$ is a sum of strictly positive terms
+($w_p>0$, $\rho_p>0$), so there is no catastrophic cancellation: the condition
+number $\bigl(\sum_p\lvert w_p\rho_p\rvert\bigr)/\lvert\sum_p w_p\rho_p\rvert=1$.
+A naive sequential accumulation has a worst-case relative error $O(n\varepsilon)$.
+The device reduction is, however, only \emph{two-level}: the kernel
+(\texttt{ReduceRhoWeightedSum\_Kernel}) performs a balanced binary-tree reduction
+\emph{within} each $B{=}256$-thread block, after which the $\sim n/B$ block partials
+are summed \emph{sequentially} on the host
+(\texttt{ComputeVolumeWeightedRhoAverageRoot}:
+\texttt{for(b) rho\_LocalWeightedMass += rho\_partial\_h[b]}), followed by a
+cross-rank \texttt{MPI\_Reduce}. The intra-block tree therefore lowers the rounding
+floor only to $O(\varepsilon\,n/B)$ with $B{=}256$---\emph{not} to the full
+$O(\varepsilon\log_2 n)$ of a single balanced tree. For $n\sim10^6$ nodes in double
+precision,
+\begin{equation}
+  n\varepsilon \approx 2.2\times10^{-10},
+  \qquad
+  \frac{n}{B}\,\varepsilon \approx \frac{10^{6}}{256}\,\varepsilon \approx 9\times10^{-13},
+  \label{eq:na-rounding}
+\end{equation}
+i.e.\ the intra-block tree buys roughly a factor $B=256$ over the naive sequential
+sum (a realistic floor $\sim\!10^{-12}$ at production scale), well short of the
+$\sim\!4\times10^{-15}$ that a single fully balanced tree would reach. The remaining
+caveat is determinism: floating-point addition is non-associative, so the
+across-rank \texttt{MPI\_Reduce} is bit-reproducible only for a fixed rank order
+and fixed local reduction tree. The implementation preserves both, so a given run
+is reproducible, while a change in rank count perturbs $\delta\rho$ at the
+$O(\varepsilon\,n/B)$ level seen in \eqref{eq:na-rounding}.
+
+\paragraph{Mass governor interpretation.}
+With \texttt{FORCE\_HERMITE\_ORDER}${=}2$ (full Guo forcing) or its first-order
+variant, the body force carries zero density moment (\eqref{eq:guo1-massmoment}),
+so it injects no net mass; the residual compressibility drift accumulated by the
+LBM time stepping is what the corrector removes. Equation \eqref{eq:na-oneshot} is
+therefore a discrete mass governor with unit feedback gain and a one-step lag,
+whose closed-loop fixed point is $\langle\rho\rangle_V=1$.
+
+\subsection{N4: why the curved domain prefers Method~1}
+\label{sec:na-N4}
+
+It is tempting to call Method~0 ``exact'' and stop there, but the two estimators
+are exact for \emph{different} domains. Method~0 is exact for the chorded,
+piecewise-linear mesh; Method~1 converges to the true curved physical domain as
+the metric is resolved. For a periodic hill whose lower wall is a smooth curve,
+the chorded domain is \emph{not} the physical domain, and the $O(h^2)$ bias of
+\eqref{eq:na-shoe-error} contaminates every control volume $w_p$ and hence the
+weighted mean \eqref{eq:rho-mean}. Method~1, by integrating the smooth mapping
+\eqref{eq:jacobian-block}, produces weights that converge to the true physical
+control volumes; this is why the default is \texttt{CELL\_VOLUME\_METHOD}${=}1$.
+
+This also explains the design of \texttt{VerifyPhysicalDomainVolume3D}. The check
+compares the summed weights against $V_{\mathrm{discrete\,mesh}}$, the exact
+discrete-mesh volume formed from unique shoelace cells. For Method~0 the relative
+difference is required to pass the $<10^{-12}$ tolerance --- it \emph{is} the
+discrete-mesh volume (telescoping, \S\ref{sec:na-N1}). For Method~1 the routine is
+expected to report a \emph{nonzero} difference of the order of the
+boundary-curvature term \eqref{eq:na-shoe-error}: Method~1 deliberately departs
+from the chorded volume to recover the curved physical volume, and the routine
+additionally prints the analytic
+$L_X\bigl(L_Y L_Z - \int_0^{L_Y} h(y)\,\mathrm{d}y\bigr)$ reference (Simpson,
+$N{=}10^4$) so that the discrete-vs-analytic gap can be read off directly. A
+``WARNING: differs from discrete mesh volume'' for Method~1 is therefore the
+intended, physically correct behaviour, not a failure.
+
+\subsection{Error budget}
+\label{sec:na-budget}
+
+Table~\ref{tab:na-budget} collects the leading error contributions. The geometric
+bias of Method~0 dominates and does not shrink under per-cell quadrature refinement
+(it converges only under mesh refinement, at the $O(h^2)$ rate); Method~1 removes it
+down to the degree-5 Lagrange reconstruction error $O(h^6)$ of
+\eqref{eq:na-method1-error} (the binding term---GL-3 integrates that reconstruction
+exactly, so the Gauss remainder \eqref{eq:na-R3} is non-binding here), which in turn
+falls to the floating-point floor of the parallel reduction by the finest grids. The
+corrector itself is algebraically exact \eqref{eq:na-oneshot}, so the overall
+mass-closure error is set by the conditioning analysis of \S\ref{sec:na-N3}.
+
+\begin{table}[t]
+  \centering
+  \caption{Error budget for the curvilinear mass-conservation corrector.
+  $h$ is the cell size, $n\sim10^6$ the number of interior reduction nodes,
+  $\varepsilon=2.2\times10^{-16}$ the double-precision unit roundoff. ``Per cell''
+  errors refer to the area integral $A(j,k)$ of \eqref{eq:na-Adef}; ``Global''
+  aggregates over the $O(h^{-2})$ cross-section cells or the $n$ nodes.}
+  \label{tab:na-budget}
+  \small
+  \resizebox{\textwidth}{!}{%
+  \begin{tabular}{@{}llll@{}}
+    \toprule
+    Source & Mechanism & Per-cell order & Global magnitude \\
+    \midrule
+    Method~0 chord vs.\ curve     & geometric, $O(h^2)$ boundary chord & $O(h^2)\kappa$ & $O(h^2)$ chord bias (mesh-converging) \\
+    Lagrange-6 reconstruction (\textbf{binding}) & degree-5 interp.\ \eqref{eq:na-interp-error} & $O(h^6)\,J^{(6)}_{2D}$ & $O(h^6)$ --- \textbf{dominant}, sets the global rate \\
+    Method~1 GL-3 quadrature      & Gauss remainder \eqref{eq:na-R3}   & exact on the deg-5 reconstr. & non-binding (null on the reconstruction) \\
+    Partition-of-unity closure    & $\sum_p w_p = V$ \eqref{eq:na-pou} & exact (telescoping) & $O(\varepsilon\,n/B)$ \\
+    Correction algebra            & one-shot shift \eqref{eq:na-oneshot} & exact & exact ($\to\langle\rho\rangle_V=1$) \\
+    Reduction (naive sequential)  & accumulation roundoff               & --- & $O(n\varepsilon)\approx2.2\times10^{-10}$ \\
+    Reduction (two-level: block tree + host seq.) & intra-block tree, then sequential host sum & --- & $O(\varepsilon\,n/B)\approx9\times10^{-13}$ ($B{=}256$) \\
+    Cross-rank \texttt{MPI\_Reduce} & non-associative FP, fixed order   & --- & reproducible; $O(\varepsilon\,n/B)$ jitter on rank-count change \\
+    \bottomrule
+  \end{tabular}}
+\end{table}
+
+\noindent
+In summary, Method~1 replaces a fixed $O(h^2)$ geometric modelling error by an
+interpolation-limited $O(h^6)$ error (the degree-5 Lagrange reconstruction, which
+GL-3 integrates exactly) several orders of magnitude smaller and convergent under
+mesh refinement, while the median-dual partition of unity and the momentum-preserving
+rest-population shift make the resulting mass corrector algebraically exact, with a
+residual governed only by the well-conditioned, tree-summed parallel reduction.
+
+% ===========================================================================
+\section{Numerical experiments}
+\label{sec:experiments}
+
+The theory of \S\ref{sec:theory}--\S\ref{sec:numerical-analysis} is validated by
+an \emph{independent, host-only verification harness} (a standalone C++ program,
+compiled with g++ 11.5.0 and \texttt{-O2 -std=c++17}, that re-implements the
+solver-identical quadrature, interpolation, and corrector arithmetic). The harness
+exercises three checks: (E1) polynomial exactness of the GL-3 rule, (E2)
+$h$-refinement convergence of the two area estimators on a curved, genuinely
+two-dimensional (non-separable) curvilinear map, and (E3) one-shot mass
+restoration with momentum preservation. It
+is deliberately decoupled from the GPU solver so that the mathematical properties
+are tested in isolation from the production code path.
+
+\subsection{E1: GL-3 polynomial exactness}
+
+\begin{table}[t]
+\centering
+\caption{Polynomial exactness of the tensor 3-point Gauss--Legendre rule
+($\int_0^1\xi^m\,d\xi$) used in the cell-volume scheme. Machine-zero error for
+$m\le5$ confirms the $2n-1=5$ degree of exactness; the $m=6$ error matches the
+analytic Gauss remainder $C\,f^{(6)}$ with $C=(3!)^4/[7\,(6!)^3]=4.96\times10^{-7}$.}
+\label{tab:gl3_exactness}
+\begin{tabular}{c r r r}
+\toprule
+$m$ & {Exact $1/(m{+}1)$} & {GL-3 quadrature} & {Abs.\ error} \\
+\midrule
+0 & 1.0000000000000000 & 1.0000000000000000 & 0.000e+00 \\
+1 & 0.5000000000000000 & 0.5000000000000000 & 0.000e+00 \\
+2 & 0.3333333333333333 & 0.3333333333333334 & 5.551e-17 \\
+3 & 0.2500000000000000 & 0.2500000000000000 & 0.000e+00 \\
+4 & 0.2000000000000000 & 0.2000000000000000 & 0.000e+00 \\
+5 & 0.1666666666666667 & 0.1666666666666667 & 2.776e-17 \\
+6 & 0.1428571428571428 & 0.1425000000000000 & 3.571e-04 \\
+7 & 0.1250000000000000 & 0.1237500000000000 & 1.250e-03 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Table~\ref{tab:gl3_exactness} confirms the tensor GL-3 rule is exact to machine
+precision for polynomials of degree $\le5$ and first errs at degree~6 by
+$3.571\times10^{-4}$, which reproduces the analytic Gauss remainder $C\,f^{(6)}$
+(with $f=\xi^6$, $f^{(6)}=720$, $C\cdot720=3.571\times10^{-4}$) to all printed
+digits. The quadrature therefore has exactly the claimed $2n-1=5$ degree of
+exactness.
+
+\subsection{E2: \texorpdfstring{$h$}{h}-refinement convergence}
+
+\begin{table}[t]
+\centering
+\caption{Grid-convergence of the cross-section area on a genuinely two-dimensional,
+\emph{non-separable} curvilinear $y$--$z$ map: $y=\xi$,
+$z=\zeta\,(1-a\sin\pi\xi)+(C-D\sin\pi\xi)(1-\cos\pi\zeta)/\pi$, giving the in-plane
+Jacobian $J_{2D}=1-a\sin(\pi\xi)+C\sin(\pi\zeta)-D\sin(\pi\xi)\sin(\pi\zeta)$
+($a=0.30,\,C=0.20,\,D=0.10$; $J_{2D}\in[0.7,1.2]>0$ everywhere; exact area
+$1-0.2/\pi-0.4/\pi^2=0.8958095493$). The $\xi\zeta$ cross term makes $J_{2D}$ vary in
+\emph{both} directions, so the wall-normal Lagrange interpolation is genuinely
+exercised. Method~0 is the straight-chord Shoelace area; Method~1 is the Jacobian
+$3\times3$ Gauss--Legendre quadrature of the $6$-point Lagrange interpolation of
+\emph{sampled} nodal $J_{2D}$ (solver-identical). Observed order
+$p=\log_2(e_{h}/e_{h/2})$.}
+\label{tab:gl3_convergence}
+\begin{tabular}{c c r c r c}
+\toprule
+$N$ & $h$ & {Method 0 error} & {order} & {Method 1 error} & {order} \\
+\midrule
+  8 & 0.125000 & 2.983e-03 & {--}   & 2.636e-06 & {--}   \\
+ 16 & 0.062500 & 7.443e-04 & 2.00   & 3.053e-08 & 6.43   \\
+ 32 & 0.031250 & 1.860e-04 & 2.00   & 4.268e-10 & 6.16   \\
+ 64 & 0.015625 & 4.649e-05 & 2.00   & 6.464e-12 & 6.04   \\
+128 & 0.007813 & 1.162e-05 & 2.00   & 1.040e-13 & 5.96   \\
+256 & 0.003906 & 2.905e-06 & 2.00   & 1.887e-15 & {$\dagger$} \\
+\bottomrule
+\end{tabular}
+\par\smallskip
+\footnotesize $\dagger$ At $N{=}256$ Method~1 has reached the
+$\sim\!2\times10^{-15}$ floating-point (reduction-rounding) floor; the error has
+dropped into the round-off band, so the apparent ``order'' there is no longer a
+genuine convergence rate. $N{=}128$ ($1.040\times10^{-13}$, order $5.96$) is still a
+genuine sixth-order step, so saturation first appears at $N{=}256$.
+\end{table}
+
+Table~\ref{tab:gl3_convergence} cleanly separates the two schemes. The test map is
+\emph{non-separable}---its in-plane Jacobian $J_{2D}$ carries a genuine $\xi\zeta$
+cross term and varies in both the streamwise ($\xi$) and wall-normal ($\zeta$)
+directions---so the tensor $6$-point Lagrange reconstruction is genuinely exercised
+in the wall-normal direction as well, not merely streamwise (a separable $J_{2D}(\xi)$
+would make the $\zeta$-interpolation trivially exact and leave that path untested).
+The straight-chord Shoelace (Method~0) converges at a textbook $O(h^2)$ (observed
+order $2.00$ at every level) because its piecewise-linear facets chord the curved
+(one-signed) top wall (an Euler--Maclaurin trapezoid error), whereas the Jacobian
+GL-3 scheme (Method~1) converges at the predicted sixth order (observed orders
+$6.43,6.16,6.04,5.96$ from $N{=}8$ to $N{=}128$). The binding error is the degree-5
+\emph{Lagrange reconstruction} of the sampled metric, which GL-3 integrates exactly,
+so the reconstruction---not the quadrature---sets the $O(h^6)$ rate. At $N{=}256$ the
+Method~1 error has fallen to $1.887\times10^{-15}$, i.e.\ into the
+$\sim\!2\times10^{-15}$ reduction-rounding floor (marked $\dagger$); $N{=}128$
+($1.040\times10^{-13}$, order $5.96$) is still a genuine sixth-order step, so the
+saturation first appears at $N{=}256$, one level beyond the last clean rate. Because
+the analytic map keeps $J_{2D}\in[0.7,1.2]$ strictly positive everywhere, the
+solver's \texttt{isfinite}/${\le}0$ Shoelace fallback is never triggered in this test
+(fallback count $=0$): it is a never-exercised safety path here, which we report
+honestly as untested rather than claim as validated. This confirms the error-budget
+claim that Method~1 replaces a fixed $O(h^2)$ geometric bias with a convergent,
+interpolation-limited $O(h^6)$ error several orders of magnitude smaller.
+
+\subsection{E3: one-shot mass restoration and momentum preservation}
+
+On a $16\times16$ curvilinear patch, median-dual weights were built with each
+volume method, the nodal density was perturbed, and the correction
+$\delta\rho=1-\langle\rho\rangle_V$ was injected into the rest population $f_0$.
+For both methods the perturbed mean $\langle\rho\rangle_V=0.99700000$
+($\delta\rho=+3.0\times10^{-3}$) returned to unity after a single application to
+within the reduction-rounding floor: Method~0 (Shoelace, $V=0.8965538$) gave
+$|1-\langle\rho\rangle_V^{\mathrm{new}}|=1.110\times10^{-15}$ and Method~1 (Jacobian
+GL-3, $V=0.8958096$, agreeing with the analytic area $0.8958095$ to the
+$\sim\!3\times10^{-8}$ Method-1 area error at this $N{=}16$ resolution) gave
+$2.220\times10^{-16}$. The Method-1 path again recorded zero Shoelace fallbacks (the
+smooth $J_{2D}>0$ never trips the \texttt{isfinite}/${\le}0$ guard). A separate
+momentum test injected $\delta\rho=0.0123456789$ into $f_0$ of a D3Q19 stencil
+($\mathbf e_0=\mathbf0$): the density rose by exactly $\delta\rho$ while the momentum
+$\sum_q\mathbf e_q f_q$ stayed at $(0,0,0)$ \emph{exactly}. This validates the
+one-shot algebraic exactness \eqref{eq:na-oneshot} and confirms that the rest
+population is the correct, momentum-silent mass carrier. The harness artefacts reside
+under \path{docs/numexp/} (\path{verify_gl3.cpp}, \path{gl3_results.txt}).
+
+% ---------------------------------------------------------------------------
+\subsection{E4: partition-of-unity on the production grid --- a bit-exactness audit}
+\label{sec:E4}
+
+Experiments E1--E3 exercise the quadrature on analytic patches. E4 closes the
+loop on the \emph{actual} $\mathrm{Re}_h{=}2800$ production grid
+(\path{J_Frohlich/adaptive_3.fine grid_I513_J257_s0.950000.dat};
+$N_x{\times}N_y{\times}N_z=257{\times}513{\times}257$, hence
+$256{\times}512{\times}256=3.36\times10^{7}$ cells) and answers one question with
+hard data: is the start-up control volume $\Sigma_w=\sum_p w_p$ (the
+$\tfrac18$-split dual weights of \texttt{InitializeMassCorrectionWeights})
+\emph{bit-exactly} equal to the discrete main-field volume
+$V_{\mathrm{disc}}=\sum_c V_c$ (\texttt{ComputeGlobalDiscreteShoelaceVolume3D})?
+A self-contained host harness (\path{docs/numexp/test_volume_partition.cpp},
+single process, $jp{=}1$ whole-domain so the per-rank slice equals the global
+array) reads the real grid through a byte-faithful copy of the solver's
+\texttt{GenerateMesh\_X}\,/\,\texttt{ReadExternalGrid\_YZ} and evaluates both sums
+in the solver's exact loop order and with its exact constants ($0.125$, the
+Shoelace formula). The full transcript is in
+\path{docs/numexp/partition_results.txt}.
+
+\paragraph{The four bit-exactness metrics (Method~0).}
+On the production grid,
+\begin{equation}
+\begin{aligned}
+V_{\mathrm{disc}} &= 1.14358939042152798\times 10^{2}, &
+\Sigma_w &= 1.14358953365302284\times 10^{2},\\[2pt]
+\text{(i) exact }(==) &: \ \textbf{FALSE}, &
+\text{(ii) ULP gap} &= 1{,}007{,}902{,}042 \approx 1.0\times10^{9},\\[2pt]
+\text{(iii) }|\Sigma_w-V_{\mathrm{disc}}| &= 1.432\times10^{-5}, &
+\text{(iv) rel} &= 1.252\times10^{-7}.
+\end{aligned}
+\label{eq:E4-metrics}
+\end{equation}
+The two doubles are \textbf{not} bit-identical (\textsc{bit-exact: no}), and,
+decisively, the gap ($\sim\!10^{-7}$ relative, $\sim\!10^{9}$ ULP) sits five to
+eight orders of magnitude \emph{above} the IEEE rounding floor. It is therefore
+\emph{not} mere summation non-associativity --- there is a genuine, geometric
+cause, isolated next.
+
+\paragraph{Cause: the streamwise periodic seam is not bit-closed.}
+The $\tfrac18$ dual telescopes \emph{exactly} in two of three directions: the
+spanwise $x$ wrap is closed by the explicit remap $i{=}3\!\to\!N_x{-}5$ onto a
+\emph{real} interior cell (and the in-plane area is $x$-independent, so all $256$
+spanwise copies are bit-identical), and the wall-normal $k$ stencil is one-sided
+at the walls with no periodic image required. The streamwise $y$ direction,
+however, is closed only \emph{implicitly}, through the periodic ghost: the seam
+node ($j{=}3$, Fr\"ohlich $I{=}0$) draws its left dual cell from the wrapped ghost
+cell $j_{\mathrm{cell}}{=}2$, whereas $V_{\mathrm{disc}}$ counts the real last
+cell $j_{\mathrm{cell}}{=}514$ (between nodes $I{=}512$ and the seam). These two
+cells are translates by $L_y$ \emph{only if} the grid is bit-periodic. The
+production Fr\"ohlich grid is not: nodes $I{=}0$ and $I{=}512$ differ from exact
+periodic images by
+\[
+\max_k\bigl|y_{I=0}{+}L_y-y_{I=512}\bigr| = 3.285\times10^{-6},
+\qquad \max_k|z_{I=0}-z_{I=512}| = 0 ,
+\]
+so the seam ghost area and the real last-cell area differ by up to
+$2.62\times10^{-4}$ per wall-normal layer. Carrying that mismatch through the
+$\tfrac12$ seam coefficient $\times\,(N_x{-}1)\,\Delta x$ predicts a closure
+defect of $1.432306\times10^{-5}$, which reproduces the \emph{measured}
+$\Sigma_w-V_{\mathrm{disc}}=1.432315\times10^{-5}$ to a relative
+$6.5\times10^{-6}$. The seam thus accounts for essentially the entire gap.
+
+\paragraph{Summation order (MPI non-associativity) is a sub-effect.}
+Re-summing the same per-cell values in the real run's $jp{=}32$ grouping ($32$
+contiguous streamwise rank-blocks of $16$, reduced in rank order to mimic
+\texttt{MPI\_Reduce}) shifts each total only in its last bits:
+$\Sigma_w$ moves by $28{,}313$ ULP ($4.02\times10^{-10}$ abs,
+$3.52\times10^{-12}$ rel) and $V_{\mathrm{disc}}$ by $21{,}543$ ULP
+($3.06\times10^{-10}$ abs, $2.68\times10^{-12}$ rel) --- the genuine
+floating-point non-associativity caveat, of the order $n\varepsilon$ anticipated
+in \eqref{eq:na-rounding}, and $\sim\!5$ orders smaller than the seam.
+
+\paragraph{Closed-seam control: the Proposition holds to rounding.}
+Forcing perfect periodic closure (node $I{=}0:=$ node $I{=}512-L_y$) and
+recomputing \emph{both} sums on the closed grid collapses the discrepancy to the
+rounding floor:
+\[
+|\Sigma_w-V_{\mathrm{disc}}|_{\text{closed}} = 9.27\times10^{-11},\quad
+\text{rel}=8.11\times10^{-13}\ (<10^{-12}),\quad 6{,}522\ \text{ULP},
+\]
+i.e.\ the real-grid $1.25\times10^{-7}$ falls to $8.1\times10^{-13}$ once the seam
+is bit-closed. This is the clean experimental statement of
+Proposition~\ref{prop:pou}: $\sum_p w_p=\sum_c V_c$ is an \emph{exact-arithmetic}
+identity that holds to IEEE-double rounding ($\sim\!10^{-13}$) --- \emph{not}
+bitwise --- on a bit-closed periodic mesh, and is degraded only by the grid's own
+seam-closure tolerance, not by the algorithm.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+contribution to $\Sigma_w-V_{\mathrm{disc}}$ & abs & rel & ULP \\
+\midrule
+streamwise grid seam non-closure (geometry) & $1.43\times10^{-5}$ & $1.25\times10^{-7}$ & $1.0\times10^{9}$ \\
+$jp{=}1$ vs $jp{=}32$ summation order (MPI)  & $\sim\!4\times10^{-10}$ & $\sim\!3\times10^{-12}$ & $\sim\!2$--$3\times10^{4}$ \\
+IEEE rounding floor (closed-seam control)    & $9.3\times10^{-11}$ & $8.1\times10^{-13}$ & $6.5\times10^{3}$ \\
+\bottomrule
+\end{tabular}
+\caption{Three-tier decomposition of the Method-0 partition-of-unity gap on the
+production grid. The measured $1.25\times10^{-7}$ closure defect is
+\emph{geometry}, dominated by the grid's streamwise seam ($\sim\!3\times10^{-6}$
+non-closure); floating-point non-associativity (summation/MPI order) is the
+$\sim\!10^{-12}$ sub-effect, and the bit-closed mesh recovers the
+$\sim\!10^{-13}$ rounding floor.}
+\label{tab:E4-tiers}
+\end{table}
+
+\paragraph{Comparison to the analytic hill volume.}
+The continuum reference $V_{\mathrm{phys}}=L_x\bigl(L_yL_z-\int_0^{L_y}h\,\mathrm
+dy\bigr)=1.143590335916\times10^{2}$ (Simpson, $N{=}10^4$, mirroring
+\texttt{VerifyPhysicalDomainVolume3D}) is approached by both discrete volumes at
+the $O(h^2)$ chord level: $V_{\mathrm{disc}}$ differs from $V_{\mathrm{phys}}$ by
+$8.27\times10^{-7}$ (rel) and $\Sigma_w$ by $7.02\times10^{-7}$ --- the expected
+geometric chord error of the curved hill, an order of magnitude larger than the
+seam defect and three orders larger than the FP floor.
+
+\paragraph{Method~1 (the default) departs by design.}
+The shipped configuration is \texttt{CELL\_VOLUME\_METHOD}${=}1$. Reproducing the
+real metric-term FD stencil (\texttt{ComputeMetricTerms\_Full}; six-order
+Fornberg in $k$, six-order central in $j$, periodic-$j$ ghost) to obtain $J_{2D}$
+on the production grid and applying the GL-3 / Lagrange-6 weight sum gives
+$\Sigma_w^{\mathrm{M1}}=1.14359016044\times10^{2}$, which departs from
+$V_{\mathrm{disc}}$ by $6.73\times10^{-7}$ (rel) --- a \emph{deliberate} $O(h^2)$
+difference, not a rounding effect, because Method~1 integrates the curved
+$J_{2D}$ rather than its straight chords (per-cell $|J\!-\!\text{Shoe}|/\text{Shoe}$
+up to $1.78\times10^{-2}$, mean $9.21\times10^{-5}$; zero Shoelace fallbacks, the
+smooth $J_{2D}{>}0$ never tripping the guard). Consistently with E2 and
+\S\ref{sec:na-N1}, Method~1 lies \emph{closer} to the continuum volume:
+$|\Sigma_w^{\mathrm{M1}}-V_{\mathrm{phys}}|/V_{\mathrm{phys}}=1.53\times10^{-7}$
+versus Method~0's $8.27\times10^{-7}$.
+
+\paragraph{Reconciliation and verdict.}
+The audit confirms the precise status of the partition-of-unity identity on real
+hardware. \emph{It is not bitwise} (\,$==$ is \textsc{false}, $\sim\!10^{9}$
+ULP\,): $\Sigma_w$ equals the discrete main-field volume to a relative
+$1.25\times10^{-7}$, dominated by the production grid's streamwise seam
+non-closure ($\sim\!3\times10^{-6}$ in $y$) and \emph{not} by the
+$\sim\!10^{-12}$ floating-point non-associativity of the $\tfrac18$-split
+re-summation (the latter amplified, as a caveat, by \texttt{MPI\_Reduce} rank
+order). Because $1.25\times10^{-7}$ (Method~0) --- and $6.73\times10^{-7}$ for
+the default Method~1 --- both exceed the solver's documented $10^{-12}$ gate,
+\texttt{VerifyPhysicalDomainVolume3D} emits its \texttt{WARNING}, not
+\texttt{PASS}, on this grid; the warning is faithful, reporting a real
+($O(h^2)$/seam-level) geometric reality, not a defect of the weight algebra. The
+closed-seam control (rel $8.1\times10^{-13}{<}10^{-12}$,
+Table~\ref{tab:E4-tiers}) shows Proposition~\ref{prop:pou} holds to rounding the
+instant the mesh is bit-closed, exactly as the exact-arithmetic proof predicts.
+
+% ===========================================================================
+\section{Implementation: mapping the mathematics to source code}
+\label{sec:impl}
+
+This section maps every symbol of the volume-weighted mass-correction formulation
+to the concrete C++/CUDA that realizes it. All references are to the Periodic-Hill
+D3Q19 GILBM solver (\path{Edit13_2800ITBLBM}); line numbers are 1-indexed into the
+cited files.
+
+\subsection{Theory\texorpdfstring{$\leftrightarrow$}{<->}code correspondence}
+\label{sec:impl:table}
+
+\begin{table}[ht]
+\centering
+\small
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{@{}lll@{}}
+\toprule
+Symbol / step & Realizing function & Location \\
+\midrule
+$V_{\text{cell}}=|\Delta x_i|\,A_{\text{quad}}$ (Shoelace) & \texttt{MassCorrectionCellVolume} & \path{evolution.h}:82--103 \\
+$w_p=\tfrac18\sum_{c\ni p}V_{\text{cell}}$ (median-dual) & \texttt{InitializeMassCorrectionWeights} & \path{evolution.h}:105--172 \\
+GL-3 nodes $\xi_a$, weights $W_a$ on $[0,1]$ & \texttt{GL3\_nodes}, \texttt{GL3\_weights} & \path{evolution.h}:180--189 \\
+Degree-5 Lagrange basis $\ell_m(x)$ & \texttt{Lagrange6Weights} & \path{evolution.h}:191--204 \\
+Centered/clamped 6-wide stencil start & \texttt{SelectStencilStart} & \path{evolution.h}:206--213 \\
+$\tilde J_{2D}=\sum_{m,n}\ell_m\ell_n J_{2D}$ & \texttt{InterpolateJ2D\_Lagrange6} & \path{evolution.h}:215--231 \\
+$A_{\text{jac}}\approx\sum_{a,b}W_aW_b\tilde J_{2D}$ & \texttt{ComputeJacobianMassCorrectionWeights} & \path{evolution.h}:233--362 \\
+$V_{\text{mesh}}=\sum_c V_{\text{cell}}$ (discrete check) & \texttt{ComputeGlobalDiscreteShoelaceVolume3D} & \path{evolution.h}:364--383 \\
+RelErr $<10^{-12}$ vs.\ discrete mesh & \texttt{VerifyPhysicalDomainVolume3D} & \path{evolution.h}:390--422 \\
+$\sum_p w_p\rho_p$ (interior reduction) & \texttt{ReduceRhoWeightedSum\_Kernel} & \path{evolution.h}:47--80 \\
+$\langle\rho\rangle_V=(\sum_p w_p\rho_p)/V$ & \texttt{ComputeVolumeWeightedRhoAverageRoot} & \path{evolution.h}:424--443 \\
+$\delta\rho=1-\langle\rho\rangle_V$ + \texttt{MPI\_Bcast} & \texttt{UpdateVolumeWeightedMassCorrection} & \path{evolution.h}:445--453 \\
+$\rho\!\leftarrow\!\rho+\delta\rho$, $f_0\!\leftarrow\!f_0+\delta\rho$ & fused collision kernel (apply site) & \path{gilbm/evolution\_gilbm/1.algorithm1.h}:407--411 \\
+$V=\sum_p w_p$ via \texttt{MPI\_Allreduce} & \texttt{rho\_cv\_global\_volume} & \path{evolution.h}:149,333 \\
+$J_{2D}=\det\partial(y,z)/\partial(\xi,\zeta)$ & \texttt{ComputeMetricTerms\_Full} & \path{gilbm/metric\_terms.h}:160--161 (\#incl.\ at \path{main.cu}:233) \\
+ghost-row exchange of $J_{2D}$ (6-pt stencil) & \texttt{MPI\_Sendrecv} loop & \path{main.cu}:743--749 (list :741) \\
+method selection + verification wiring & init block & \path{main.cu}:763--769 \\
+compile-time method switch (default $1$) & \texttt{CELL\_VOLUME\_METHOD} & \path{variables.h}:342--347 \\
+\bottomrule
+\end{tabular}}
+\caption{Each mathematical object maps to exactly one function/line range in the
+source.}
+\label{tab:corr}
+\end{table}
+
+\subsection{Key kernels (verbatim)}
+\label{sec:impl:listings}
+
+\noindent\emph{Note.} In the listings below the executable lines are reproduced
+verbatim from the solver source; only the inline comments have been translated from
+the original Traditional-Chinese for readability (e.g.\ the apply-site comment in
+\path{gilbm/evolution\_gilbm/1.algorithm1.h}:407--411).
+
+\subsubsection{Shoelace cell volume}
+The planar quadrilateral area uses the surveyor (Gauss) formula on the four corners
+$(y,z)$ at $(j,k),(j{+}1,k),(j{+}1,k{+}1),(j,k{+}1)$, multiplied by the spanwise
+width.
+
+\begin{lstlisting}[caption={Shoelace cell volume (\texttt{evolution.h}:82--103).}]
+static inline double MassCorrectionCellVolume(const int i_cell, const int j_cell, const int k_cell)
+{
+    const double dx = x_h[i_cell + 1] - x_h[i_cell];
+
+    const int jk00 = j_cell * NZ6 + k_cell;
+    const int jk10 = (j_cell + 1) * NZ6 + k_cell;
+    const int jk11 = (j_cell + 1) * NZ6 + (k_cell + 1);
+    const int jk01 = j_cell * NZ6 + (k_cell + 1);
+
+    const double y0 = y_2d_h[jk00], z0 = z_h[jk00];
+    const double y1 = y_2d_h[jk10], z1 = z_h[jk10];
+    const double y2 = y_2d_h[jk11], z2 = z_h[jk11];
+    const double y3 = y_2d_h[jk01], z3 = z_h[jk01];
+
+    const double area_yz = 0.5 * fabs(
+          y0 * z1 - z0 * y1
+        + y1 * z2 - z1 * y2
+        + y2 * z3 - z2 * y3
+        + y3 * z0 - z3 * y0);
+
+    return fabs(dx) * area_yz;
+}
+\end{lstlisting}
+
+\noindent\textbf{Annotation.} The four \texttt{jk}* indices fetch the corner
+coordinates from the $y$--$z$ section arrays \texttt{y\_2d\_h}/\texttt{z\_h}.
+\texttt{area\_yz} is the cyclic Shoelace sum
+$\tfrac12\big|\sum y_a z_{a{+}1}-z_a y_{a{+}1}\big|$, the \emph{exact} area of the
+straight-chord quadrilateral. The return value $|\Delta x_i|\cdot A_{\text{quad}}$
+realizes $V_{\text{cell}}=|\Delta x_i|\,A_{\text{quad}}$. Because adjacent quads
+share edges that cancel, $\sum_c V_{\text{cell}}$ telescopes to the exact
+discrete-mesh polygon volume; this is precisely the quantity
+\texttt{VerifyPhysicalDomainVolume3D} checks against (printing \texttt{PASS}) to $<10^{-12}$.
+
+\subsubsection{GL-3 data, Lagrange basis, and \texorpdfstring{$J_{2D}$}{J2D} reconstruction}
+
+\begin{lstlisting}[caption={GL-3 nodes/weights, degree-5 Lagrange basis, and tensor reconstruction (\texttt{evolution.h}:180--231).}]
+static const double GL3_nodes[3] = {
+    0.5 * (1.0 - 0.7745966692414834),   // (1 - sqrt(3/5))/2 ~ 0.1127
+    0.5,
+    0.5 * (1.0 + 0.7745966692414834)    // (1 + sqrt(3/5))/2 ~ 0.8873
+};
+static const double GL3_weights[3] = {
+    5.0 / 18.0,    // ~ 0.27778
+    8.0 / 18.0,    // ~ 0.44444
+    5.0 / 18.0
+};
+
+static inline void Lagrange6Weights(double x, int start, double w[6])
+{
+    for (int m = 0; m < 6; m++) {
+        double L = 1.0;
+        double xm = (double)(start + m);
+        for (int r = 0; r < 6; r++) {
+            if (r != m) {
+                double xr = (double)(start + r);
+                L *= (x - xr) / (xm - xr);
+            }
+        }
+        w[m] = L;
+    }
+}
+
+static inline double InterpolateJ2D_Lagrange6(
+    double xi_pos, double zeta_pos, int sj, int sk,
+    const double *J_2D, int NZ6_local)
+{
+    double wj[6], wk[6];
+    Lagrange6Weights(xi_pos,   sj, wj);
+    Lagrange6Weights(zeta_pos, sk, wk);
+
+    double result = 0.0;
+    for (int m = 0; m < 6; m++) {
+        double row_sum = 0.0;
+        for (int n = 0; n < 6; n++)
+            row_sum += wk[n] * J_2D[(sj + m) * NZ6_local + (sk + n)];
+        result += wj[m] * row_sum;
+    }
+    return result;
+}
+\end{lstlisting}
+
+\noindent\textbf{Annotation.} The constant \texttt{0.7745966692414834} is
+$\sqrt{3/5}$, so \texttt{GL3\_nodes} are the three Gauss--Legendre abscissae mapped
+onto $[0,1]$, $\{(1-\sqrt{3/5})/2,\ \tfrac12,\ (1+\sqrt{3/5})/2\}$, with weights
+$\{\tfrac{5}{18},\tfrac{8}{18},\tfrac{5}{18}\}$ written exactly as
+\texttt{5.0/18.0} etc. GL-3 is exact for polynomials of degree $\le 5$ per
+direction. \texttt{Lagrange6Weights} builds the six cardinal degree-5 basis
+functions $\ell_m(x)=\prod_{r\neq m}(x-x_r)/(x_m-x_r)$ on integer nodes
+$\{start,\dots,start{+}5\}$. \texttt{InterpolateJ2D\_Lagrange6} forms the tensor
+product $\tilde J_{2D}=\sum_{m}w_j[m]\sum_{n}w_k[n]\,J_{2D}[(s_j{+}m,s_k{+}n)]$.
+Since the reconstruction is degree-5 and GL-3 integrates degree-5 exactly, the
+interpolation does \emph{not} reduce the quadrature order.
+
+\subsubsection{Jacobian-GL nodal weights (core triple loop)}
+
+\begin{lstlisting}[caption={Median-dual assembly with GL-3 cells and Shoelace fallback (\texttt{evolution.h}:233--362, excerpt).}]
+for (int j = 3; j < NYD6 - 4; j++) {
+for (int k = 3; k < NZ6  - 3; k++) {
+for (int i = 3; i < NX6  - 4; i++) {
+    const int idx = j * NX6 * NZ6 + k * NX6 + i;
+
+    const int i_cells[2] = { (i == 3) ? (NX6 - 5) : (i - 1), i };   // periodic x wrap
+    const int j_cells[2] = { j - 1, j };
+    int k_cells[2]; int nk_cells = 0;
+    if (k > 3)       k_cells[nk_cells++] = k - 1;   // one-sided near wall
+    if (k < NZ6 - 4) k_cells[nk_cells++] = k;
+
+    double weight = 0.0;
+    for (int jj = 0; jj < 2; jj++) {
+    for (int ii = 0; ii < 2; ii++) {
+    for (int kk = 0; kk < nk_cells; kk++) {
+        const int jc = j_cells[jj];
+        const int kc = k_cells[kk];
+        const double dx = x_h[i_cells[ii] + 1] - x_h[i_cells[ii]];
+
+        int sj, sk;
+        bool sj_ok = SelectStencilStart(jc, j_lo_J, j_hi_J, &sj);
+        bool sk_ok = SelectStencilStart(kc, k_lo_J, k_hi_J, &sk);
+
+        double vol_jac; bool used_fallback = false;
+        if (sj_ok && sk_ok) {
+            double area_jac = 0.0;
+            for (int a = 0; a < 3; a++) {
+            for (int b = 0; b < 3; b++) {
+                double xi_pos   = (double)jc + GL3_nodes[a];
+                double zeta_pos = (double)kc + GL3_nodes[b];
+                double J_val = InterpolateJ2D_Lagrange6(xi_pos, zeta_pos, sj, sk, J_2D, NZ6);
+                if (!std::isfinite(J_val) || J_val <= 0.0) { used_fallback = true; break; }
+                area_jac += GL3_weights[a] * GL3_weights[b] * J_val;
+            }
+            if (used_fallback) break;
+            }
+            vol_jac = fabs(dx) * area_jac;
+        } else { used_fallback = true; }
+
+        if (used_fallback) {
+            vol_jac = MassCorrectionCellVolume(i_cells[ii], jc, kc);   // Shoelace fallback
+            local_fallback_count++;
+        }
+
+        double vol_shoe = MassCorrectionCellVolume(i_cells[ii], jc, kc);
+        if (vol_shoe > 0.0) {
+            double rd = fabs(vol_jac - vol_shoe) / vol_shoe;
+            if (rd > local_max_rel_diff) local_max_rel_diff = rd;
+            local_sum_rel_diff += rd; local_cell_count++;
+        }
+        weight += 0.125 * vol_jac;
+    }}}
+    rho_cv_weight_h[idx] = weight;
+    local_weight_sum += weight;
+}}}
+\end{lstlisting}
+
+\noindent\textbf{Annotation.} The loop visits each interior unique node \texttt{idx}
+and accumulates the median-dual weight $w_p=\tfrac18\sum_{c\ni p}V_{\text{cell}}$ via
+the \texttt{0.125 * vol\_jac} contribution of up to eight surrounding cells
+(\texttt{jj,ii,kk}). The periodic $x$ wrap is the ternary
+\texttt{(i == 3) ? (NX6 - 5) : (i - 1)}; near-wall $k$ degrades to a one-sided
+single cell (\texttt{nk\_cells} can be $1$). For each cell the inner $3\times3$ loop
+forms $A_{\text{jac}}=\sum_{a,b}W_aW_b\,\tilde J_{2D}(jc{+}\xi_a,\ kc{+}\zeta_b)$ with
+$\tilde J_{2D}$ from \texttt{InterpolateJ2D\_Lagrange6}, and the cell volume is
+$|\Delta x|\cdot A_{\text{jac}}$. Any non-finite or non-positive reconstructed $J$
+trips \texttt{used\_fallback}, which substitutes the exact Shoelace volume and
+increments \texttt{local\_fallback\_count}. Independently, every cell records the
+per-cell relative difference $|V_{\text{jac}}-V_{\text{shoe}}|/V_{\text{shoe}}$
+feeding the \texttt{[MASS-CORR]} max/mean report.
+
+\subsubsection{Average, correction, and the rest-population apply site}
+
+\begin{lstlisting}[caption={Correction scalar, broadcast, and the rest-population apply site (\texttt{evolution.h}:445--453; \texttt{gilbm/evolution\_gilbm/1.algorithm1.h}:407--411).}]
+// evolution.h:445-453  --- delta_rho = 1 - <rho>_V, broadcast to all ranks
+static inline void UpdateVolumeWeightedMassCorrection()
+{
+    const double rho_avg = ComputeVolumeWeightedRhoAverageRoot();  // (sum w*rho)/V on root
+    if (myid == 0) {
+        rho_modify_h[0] = 1.0 - rho_avg;
+    }
+    MPI_Bcast(rho_modify_h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
+    CHECK_CUDA( cudaMemcpy(rho_modify_d, rho_modify_h, sizeof(double), cudaMemcpyHostToDevice) );
+}
+
+// gilbm/evolution_gilbm/1.algorithm1.h:407-411  --- apply at every interior node, in the fused kernel
+    // -- STEP 1.5: Macroscopic (mass correction) --
+    if (i < NX6 - 4 && j < NYD6 - 4) {
+        rho_stream += rho_modify[0];
+        f_arr[0]   += rho_modify[0];   // correct f_arr[0] held in register
+    }
+\end{lstlisting}
+
+\noindent\textbf{Annotation.} \texttt{rho\_modify\_h[0] = 1.0 - rho\_avg}
+implements $\delta\rho=1-\langle\rho\rangle_V$ on the root rank; the
+\texttt{MPI\_Bcast} distributes the single scalar so every rank applies an
+identical shift. At the apply site the density moment receives
+$\rho\!\leftarrow\!\rho+\delta\rho$ and the \emph{rest} population receives
+$f_0\!\leftarrow\!f_0+\delta\rho$. Because $\mathbf e_0=(0,0,0)$, the injected
+momentum is $\Delta(\rho u_\alpha)=\sum_q e_{q,\alpha}\Delta f_q=0$: mass is
+injected, momentum is exactly preserved. The shift is spatially uniform, so the new
+average is $\langle\rho\rangle_V+\delta\rho=1$ in a single application (the only
+residual is floating-point rounding of the parallel reduction)---a discrete ``mass
+governor'' with unit feedback gain.
+
+\subsection{Implementation notes}
+\label{sec:impl:notes}
+
+\paragraph{Compile-time method switch and \texttt{\#error} guard.}
+\path{variables.h}:342--347 defines the selector with a hard guard:
+\begin{lstlisting}[caption={Method selector with compile-time guard (\texttt{variables.h}:342--347).}]
+#ifndef CELL_VOLUME_METHOD
+#define     CELL_VOLUME_METHOD  1
+#endif
+#if CELL_VOLUME_METHOD != 0 && CELL_VOLUME_METHOD != 1
+#error "CELL_VOLUME_METHOD must be 0 (Shoelace) or 1 (Jacobian 3x3 GL)"
+#endif
+\end{lstlisting}
+The default is \texttt{1} (Jacobian-GL). The entire
+\texttt{ComputeJacobianMassCorrectionWeights} body is wrapped in
+\texttt{\#if CELL\_VOLUME\_METHOD == 1} (\path{evolution.h}:233--362), so Method~0
+builds compile only \texttt{InitializeMassCorrectionWeights}. \path{main.cu}:763--769
+wires the choice: under Method~1 it calls
+\texttt{ComputeJacobianMassCorrectionWeights(J\_2D\_h, \&shoelace\_vol)} then verifies
+\emph{both} the Shoelace and Jacobian-GL volumes; otherwise it verifies the single
+Shoelace volume.
+
+\paragraph{Shoelace fallback path and diagnostics.}
+Method~1 falls back to the exact Shoelace area whenever the 6-wide Lagrange stencil
+is unavailable (\texttt{SelectStencilStart} returns \texttt{false} near a partition
+edge: it needs \texttt{max\_start = hi - 5} with \texttt{max\_start - lo >= 0}) or
+whenever a reconstructed $J_{2D}$ value is non-finite or $\le 0$. The root rank
+prints the audit block (\path{evolution.h}:348--358): \texttt{Shoelace global
+volume}, \texttt{Jacobian global volume}, $\Delta(\text{Jac-Shoe})/\text{Shoe}$,
+\texttt{Per-cell max rel diff}, \texttt{Per-cell mean rel diff}, and
+\texttt{Fallback to Shoelace = N cells}. \texttt{VerifyPhysicalDomainVolume3D}
+additionally checks $\sum_p w_p$ against the telescoped discrete-mesh volume
+\texttt{ComputeGlobalDiscreteShoelaceVolume3D}, prints \texttt{PASS} when
+\texttt{rel\_err\_discrete < 1e-12} else a \texttt{WARNING}, and reports the
+analytic $L_X(L_Y L_Z-\!\int_0^{L_Y}\!h\,\mathrm dy)$ Hill integral (Simpson,
+$N=10000$) as a reference only.
+
+\paragraph{MPI reductions.}
+Total control volume $V=\sum_p w_p$ is a collective \texttt{MPI\_Allreduce}
+(\path{evolution.h}:149 for Method~0, :333 for Method~1) into
+\texttt{rho\_cv\_global\_volume} so every rank holds $V$. The weighted mass
+$\sum_p w_p\rho_p$ is gathered by an \texttt{MPI\_Reduce} to root in
+\texttt{ComputeVolumeWeightedRhoAverageRoot} (\path{evolution.h}:439); root forms
+$\langle\rho\rangle_V$ and $\delta\rho$, then \texttt{MPI\_Bcast}
+(\path{evolution.h}:451) distributes the scalar. The 6-point Lagrange stencil
+reaches into neighbouring streamwise partitions, so the seven-array list at
+\path{main.cu}:741 includes \texttt{J\_2D\_h} and the ghost-row
+\texttt{MPI\_Sendrecv} loop at \path{main.cu}:743--749 exchanges
+$\{$\texttt{xi\_y\_h, xi\_z\_h, zeta\_y\_h, zeta\_z\_h, y\_2d\_h, z\_h, J\_2D\_h}$\}$;
+the Jacobian-weight code then allows $j$-stencils into the ghost rows
+(\texttt{j\_lo\_J = 0}, \texttt{j\_hi\_J = NYD6-1}) while keeping $k$-stencils on
+physical wall-normal nodes (\texttt{k\_lo\_J = 3}, \texttt{k\_hi\_J = NZ6-4}).
+
+\paragraph{The \texorpdfstring{$f_0$}{f0} rest-population injection invariant.}
+The reduction kernel \texttt{ReduceRhoWeightedSum\_Kernel}
+(\path{evolution.h}:47--80) sums $\rho_p\,w_p$ over exactly the interior unique-node
+box that the corrector later modifies ($i=3..\text{NX6}{-}5$,
+$j=3..\text{NYD6}{-}5$, $k=3..\text{NZ6}{-}4$), guaranteeing the averaged and
+corrected sets coincide. With D3Q19 ($N_Q=19$, $W_0=1/3$, $\mathbf e_0=\mathbf0$)
+and the current \texttt{FORCE\_HERMITE\_ORDER = 2} (full Guo, whose first-order
+density moment vanishes), the body force injects no net mass; the corrector's
+$f_0\mathrel{+}=\delta\rho$ is the sole, momentum-neutral channel that drains the
+accumulated compressibility drift back to $\langle\rho\rangle_V=1$.
+
+% ===========================================================================
+\section{Verification of the collision operator}
+\label{sec:mrt}
+
+For the volumetric corrector to be the \emph{sole} controlled mass source, the
+collision operator and the body force must inject no spurious mass. We verified
+this for the MRT collision on the conserved-moment basis of the D3Q19 transform
+$M$, whose rows were checked numerically (not by annotation): row $k{=}0$ is the
+all-ones density vector and rows $k{=}3,5,7$ equal the lattice-velocity components
+$e_x,e_y,e_z$. The corresponding relaxation rates are pinned to zero,
+$s_0{=}s_3{=}s_5{=}s_7{=}0$, so the precomputed projection $K=M^{-1}SM$ leaves these
+moments untouched; we confirmed
+$\max_{k\in\{0,3,5,7\}}\|M_k K\|_\infty = 1.66\times10^{-15}$, i.e.\ the collision
+exactly conserves mass and momentum to machine precision. The Guo body force,
+injected at second Hermite order
+$F_i = W_i\,\mathcal{F}\,[\,3(c_{y}-v)+9(\mathbf{c}\!\cdot\!\mathbf{u})c_{y}\,]$ via
+the split tables $(F_{\mathrm{proj}},F_{\mathrm{proj}}^{u,v,w})$ with the half-force
+factor $(1-s_k/2){=}1$, satisfies $\sum_i F_i = \mathcal{O}(10^{-17})$ (zero net mass
+source) while delivering exactly the prescribed streamwise momentum
+$\sum_i F_i c_{y}=1$. Consequently the lattice collision contributes no spurious
+mass, and the volumetric density corrector of \S\ref{sec:theory} remains the sole
+controlled source of mass in the scheme. The full machine-checked record is
+reproduced in Appendix~\ref{app:mrt}.
+
+% ===========================================================================
+\section{Discussion and limitations}
+\label{sec:discussion}
+
+\paragraph{Why volume weighting is not optional.}
+The central message is structural: on a stretched body-fitted mesh, the only
+mesh-invariant target for a density governor is the volume-weighted mean
+$\langle\rho\rangle_V$. Regulating the unit-weight sum $\widetilde M$ of
+\eqref{eq:Mtilde-wrong} is not a milder approximation but a qualitatively wrong
+control objective---it pins a metric-biased functional and feeds a spurious,
+mesh-dependent momentum source. The median-dual weights make the correct objective
+computable at the cost of one precomputed weight array and one extra reduction per
+step.
+
+\paragraph{Cost.}
+The corrector adds a single global reduction ($\sum_p w_p\rho_p$), a scalar
+broadcast, and a per-node add fused into the existing collision kernel. The weight
+array $w_p$ and the volume $V$ are built once at start-up; the GL-3/Lagrange
+machinery is therefore amortised entirely into initialisation and does not enter
+the time-stepping cost.
+
+\paragraph{Limitations.}
+(i) The correction is \emph{uniform}: it removes the global mean drift but does not
+redistribute mass spatially, so a genuinely spatially-structured mass error (e.g.\
+from a defective boundary condition) would not be cured---only its global mean. (ii)
+The one-shot exactness \eqref{eq:na-oneshot} holds for the volume-weighted mean; the
+residual is the non-associative parallel-reduction rounding of
+\eqref{eq:na-rounding}, which makes $\delta\rho$ reproducible only at fixed rank
+count and fixed reduction tree. (iii) Method~1's sixth-order accuracy presumes a
+\emph{smooth} metric $J_{2D}$; near a geometric singularity the degree-5 Lagrange
+reconstruction loses order and the code (correctly) falls back to the exact
+straight-chord Shoelace area, recovering the discrete-mesh volume but reintroducing
+the $O(h^2)$ geometric bias there. (iv) The whole construction exploits the block
+factorisation \eqref{eq:jacobian-block} of the extruded geometry; a fully
+three-dimensional curvilinear map would require a $3\times3$ Jacobian quadrature
+rather than the present area$\times$chord separation, though the median-dual and
+corrector theory carry over unchanged. (v) The host-only verification harness of
+\S\ref{sec:experiments} reproduces the solver kernels (the GL-3 nodes/weights, the
+degree-5 Lagrange basis, the centred/clamped stencil selector, the tensor
+reconstruction, and the Shoelace area) as \emph{hand-copied snapshots}, because the
+originals are CUDA/MPI-coupled and cannot be linked into a standalone program; the
+harness must therefore be kept in manual sync with \path{evolution.h} and will
+otherwise silently validate stale code---a known limitation that a shared header
+would remove, at the cost of editing the solver source.
+
+\paragraph{Generality.}
+Nothing in \S\ref{sec:theory}--\S\ref{sec:weights} is specific to D3Q19 beyond the
+existence of a zero-velocity rest population to carry the momentum-silent shift; any
+lattice with $\mathbf e_0=\mathbf0$ admits the identical corrector, and any
+body-fitted/finite-volume discretisation with a partition-of-unity nodal volume
+admits the identical volume-weighted mean.
+
+% ===========================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+We have formulated, analysed, verified, and documented a Jacobian-weighted
+volumetric density corrector for mass conservation in curvilinear lattice-Boltzmann
+flows. The theory establishes that the physical mass $M=\int_\Omega\rho\,dV$, and
+hence the volume-weighted mean $\langle\rho\rangle_V$, is the only mesh-invariant
+target, and proves that a uniform shift into the rest population $f_0$ restores
+$\langle\rho\rangle_V=1$ in a single, momentum-preserving step. The median-dual
+control volumes satisfy an exact partition-of-unity identity, and the cell areas
+that build them are integrated either exactly (straight-chord Shoelace) or to sixth
+order (Jacobian $3\times3$ Gauss--Legendre of a degree-5 Lagrange reconstruction of
+the in-plane metric). An independent host-only harness confirms GL-3 degree-5
+exactness, sixth-order convergence of the Jacobian method against a textbook
+$O(h^2)$ for the chorded method, and algebraically exact, momentum-preserving mass
+restoration to the reduction-rounding floor ($\sim\!10^{-16}$ in the small
+verification harness, $\sim\!10^{-12}$ at production scale). A complete
+theory$\leftrightarrow$code map ties
+every symbol to the D3Q19 GILBM source, and a machine-checked record establishes
+that the MRT collision and Guo forcing inject no spurious mass---leaving the
+volumetric corrector as the sole, controlled mass channel. The result is a mass
+governor that is mesh-invariant by construction, exact in one step in exact
+arithmetic, and limited in practice only by the well-conditioned, tree-summed
+parallel reduction.
+
+% ===========================================================================
+\appendix
+\section{MRT collision verification record}
+\label{app:mrt}
+
+The following is the verbatim machine-checked verification record for the MRT
+collision operator and Guo forcing used by the solver (mixed
+English/Traditional-Chinese audit log, reproduced as run).
+
+\begin{CJK}{UTF8}{bsmi}
+\small
+\begin{verbatim}
+=== MRT/LBM Collision 啟動驗證 ===
+結論: 正確
+
+Conserved Moment Indices (由 M 矩陣數值證明，非靠變數名/註解):
+  k=0  density  (s=0, M row = {1,1,1,...,1} 全為 1)
+  k=3  rho*u_x  (s=0, M row == e_x = {0,1,-1,0,0,0,0,1,-1,1,-1,1,-1,1,-1,0,0,0,0})
+  k=5  rho*u_y  (s=0, M row == e_y = {0,0,0,1,-1,0,0,1,1,-1,-1,0,0,0,0,1,-1,1,-1})  <- streamwise
+  k=7  rho*u_z  (s=0, M row == e_z = {0,0,0,0,0,1,-1,0,0,0,0,1,1,-1,-1,1,1,-1,-1})
+
+檢查結果:
+  [v] Relaxation rates: conserved s[0]=s[3]=s[5]=s[7]=0.0
+  [v] Collision: conserved moments 不被 relax (projection f_out=f_B-K(f-feq))
+  [v] K 矩陣: max|M_conserved.K| = 1.66e-15 < 1e-12 (k=0,3,5,7 四列全部 ~0)
+  [v] Forcing: density 矩=0 (sum_i F0=0)，y-momentum 矩=1，(1-s_k/2)=1 因 s_k=0
+  [v] Force 未被覆蓋: f_out[a]=f_B[a]-relax 之後 += dt*Force0*(Fproj+u*Fu+v*Fv+w*Fw)
+  [v] 註解正確性: u/v/w = spanwise/streamwise/wall-normal 標註正確
+
+FORCE_HERMITE_ORDER=2 驗證:
+  二階完整 Guo: F_i = w_q*Force*[3(c_y-v) + 9(c.u)c_y]
+  sum_i F_i = 1.4e-17 ~ 0 (質量守恆)，sum_i F_i*c_y = 1.0 (y-動量守恆)
+  Host 拆成 4 基底 F0=w*3c_y, Fu=w*9c_x c_y, Fv=w*(9c_y^2-3), Fw=w*9c_z c_y
+  kernel 線性重組 Fproj + u*Fu + v*Fv + w*Fw 等價於完整二階 (容差 1e-12)
+  一階若啟用為 w_q*3*c_y*Force（無 -v 項）
+
+相關檔案:
+  MRT matrix:     MRT_Matrix.h:26 (M), :48 (Mi), :4 (Relaxation s)
+  Relaxation:     mrt_projection_host.h:20, variables.h:118 (USE_MRT), :331 (FORCE_HERMITE_ORDER=2)
+  Collision:      gilbm/evolution_gilbm/0.collision.h:38-78, :65 (K), :69-73 (Guo force)
+  Forcing build:  mrt_projection_host.h:127-170 (K+Fproj), :103-125, :264-416 (Verify)
+  Constants:      gilbm/evolution_gilbm/0.shared_code.h:48-52 (__constant__ K, Fproj*)
+
+Bug (若有): 無。質量與動量守恆矩、conserved s=0、K 投影零化、force 注入與半力係數、
+            二階 Guo 拆解全部通過 1e-12 容差。
+
+驗證細節: 以 numpy 重建 M、解析 Mi (Mi.M 恆等誤差 1.35e-15)、s=diag(0,1.19,...)，
+          組 K=Mi.S.M。M[k].K 對 k in {0,3,5,7} 最大 1.66e-15。二階直接 Guo 力
+          sum=1.4e-17、sum.c_y=1，確認 split 基底重組無誤。
+\end{verbatim}
+\end{CJK}
+
+% ===========================================================================
+\begin{thebibliography}{99}
+
+\bibitem{Qian1992}
+Y.~H. Qian, D.~d'Humi\`eres, and P.~Lallemand,
+\newblock Lattice BGK models for Navier--Stokes equation,
+\newblock \emph{Europhysics Letters} \textbf{17}(6), 479--484, 1992.
+
+\bibitem{dHumieres2002}
+D.~d'Humi\`eres, I.~Ginzburg, M.~Krafczyk, P.~Lallemand, and L.-S. Luo,
+\newblock Multiple-relaxation-time lattice Boltzmann models in three dimensions,
+\newblock \emph{Philosophical Transactions of the Royal Society A} \textbf{360}(1792),
+360--451, 2002.
+
+\bibitem{GuoZhengShi2002}
+Z.~Guo, C.~Zheng, and B.~Shi,
+\newblock Discrete lattice effects on the forcing term in the lattice Boltzmann method,
+\newblock \emph{Physical Review E} \textbf{65}(4), 046308, 2002.
+
+\bibitem{Kruger2017}
+T.~Kr\"uger, H.~Kusumaatmaja, A.~Kuzmin, O.~Shardt, G.~Silva, and E.~M. Viggen,
+\newblock \emph{The Lattice Boltzmann Method: Principles and Practice},
+\newblock Springer, Cham, 2017.
+
+\bibitem{He1997}
+X.~He and L.-S. Luo,
+\newblock Theory of the lattice Boltzmann method: From the Boltzmann equation to the
+lattice Boltzmann equation,
+\newblock \emph{Physical Review E} \textbf{56}(6), 6811--6817, 1997.
+
+\bibitem{FilippovaHanel1998}
+O.~Filippova and D.~H\"anel,
+\newblock Grid refinement for lattice-BGK models,
+\newblock \emph{Journal of Computational Physics} \textbf{147}(1), 219--228, 1998.
+
+\bibitem{StoerBulirsch2002}
+J.~Stoer and R.~Bulirsch,
+\newblock \emph{Introduction to Numerical Analysis}, 3rd ed.,
+\newblock Springer, New York, 2002.
+
+\bibitem{DavisRabinowitz1984}
+P.~J. Davis and P.~Rabinowitz,
+\newblock \emph{Methods of Numerical Integration}, 2nd ed.,
+\newblock Academic Press, Orlando, 1984.
+
+\bibitem{Barth1991}
+T.~J. Barth,
+\newblock Aspects of unstructured grids and finite-volume solvers for the Euler and
+Navier--Stokes equations,
+\newblock \emph{AGARD/VKI Lecture Series} 1991-05 (von Karman Institute), 1991.
+
+\bibitem{Frohlich2005}
+J.~Fr\"ohlich, C.~P. Mellen, W.~Rodi, L.~Temmerman, and M.~A. Leschziner,
+\newblock Highly resolved large-eddy simulation of separated flow in a channel with
+streamwise periodic constrictions,
+\newblock \emph{Journal of Fluid Mechanics} \textbf{526}, 19--66, 2005.
+
+\bibitem{Breuer2009}
+M.~Breuer, N.~Peller, C.~Rapp, and M.~Manhart,
+\newblock Flow over periodic hills---Numerical and experimental study in a wide range
+of Reynolds numbers,
+\newblock \emph{Computers \& Fluids} \textbf{38}(2), 433--457, 2009.
+
+\bibitem{Succi2001}
+S.~Succi,
+\newblock \emph{The Lattice Boltzmann Equation for Fluid Dynamics and Beyond},
+\newblock Oxford University Press, Oxford, 2001.
+
+\end{thebibliography}
+
+\end{document}
