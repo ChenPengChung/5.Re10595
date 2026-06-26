@@ -19,7 +19,7 @@ for u in "${NEW_UNITS[@]}"; do
 done
 
 mkdir -p "$ROOT/restart"
-printf 'dev\n' > "$ROOT/restart/h200_partition"
+printf '16gpus\n' > "$ROOT/restart/h200_partition"
 
 loginctl enable-linger "$USER" 2>/dev/null || echo "(enable-linger 失敗, 無 linger 仍可運行於登入期間)"
 systemctl --user daemon-reload

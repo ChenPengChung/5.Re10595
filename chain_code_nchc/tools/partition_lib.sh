@@ -37,7 +37,7 @@ h200_partition_walltime() {
 }
 # [EDIT13] H200 鎖定 16gpus@jp32 (2026-06-25 換鎖: 32gpus tier10→dev tier15, account→114 避 MaxGRES)；其他 H200 partition 保留於 walltime/cap map,
 # 但 CLI/dispatcher 候選只暴露 16gpus，避免誤切。
-h200_known_partitions() { echo "dev"; }
+h200_known_partitions() { echo "16gpus"; }
 
 h200_partition_cap() {   # static per-account GPU cap (QOS MaxTRESPerAccount, verified 2026-06-05)
     case "$1" in 8gpus|16gpus|32gpus) echo 32 ;; 64gpus) echo 64 ;; dev) echo 32 ;; *) echo 0 ;; esac

@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=Edit13_2800ITBLBM
 #SBATCH --account=MST115169
-#SBATCH --partition=dev
+#SBATCH --partition=16gpus
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
@@ -10,7 +10,7 @@
 #             可由 sbatch --time= 覆寫 / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=04:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append

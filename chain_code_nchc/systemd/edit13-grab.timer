@@ -1,0 +1,13 @@
+[Unit]
+Description=Edit13 復機自動搶投 timer (~30s; 視窗 06/28 12:00→06/29 12:00 由 poller 內閘控)
+
+[Timer]
+# 開機後 60s 起跑, 之後每 ~30s 一 tick (積極搶位; 視窗外 poller 便宜 exit)
+OnBootSec=60
+OnUnitActiveSec=30
+# Persistent: login 節點 reboot/維護後補跑 (撐過停機; 配 enable-linger)
+Persistent=true
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

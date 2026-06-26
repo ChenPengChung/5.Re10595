@@ -1,0 +1,11 @@
+[Unit]
+Description=Edit13 復機自動搶投 poller (one tick; 視窗外便宜 exit)
+After=network-online.target
+
+[Service]
+Type=oneshot
+# poller 自鎖 ROOT; 視窗閘/存活檢查/Pass-0 fail-closed 全在腳本內
+ExecStart=/bin/bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/grab_poller.sh
+# 單次 tick 不該久跑 (Pass-0 唯讀或一次 warm 投); 給寬限上限
+TimeoutStartSec=300
+Nice=5

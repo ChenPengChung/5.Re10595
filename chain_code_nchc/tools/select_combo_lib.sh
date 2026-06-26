@@ -39,7 +39,7 @@ SC_ACCT="${SC_ACCT:-MST115169}"
 # [本專案 partition@jp 政策] jp 鎖定 32 (= 32 GPU = 4 H200 node)，partition 鎖定
 #   32gpus。selector 仍保留既有評估/稽核流程，但候選集只有 32gpus@jp32。
 SC_VALID_JP="${SC_VALID_JP:-32}"
-SC_PARTITIONS="${SC_PARTITIONS:-dev}"
+SC_PARTITIONS="${SC_PARTITIONS:-16gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
 SC_JS="${SC_JS:-$SC_CHAIN_DIR/jobscript_chain.slurm.H200}"
