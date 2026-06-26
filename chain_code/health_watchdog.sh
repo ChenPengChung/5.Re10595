@@ -109,6 +109,29 @@ case "${st:-}" in
     *) [ -z "$sqstate" ] && problems+=("job $JID 終態=$st 且不在佇列 → 確認 dispatcher 已續投下一輪(防斷鏈)") ;;
 esac
 
+# ---------- 3.5 停機前 checkpoint 備援 (NCHC 維護 2026-06-27 09:00 ~ 06-28 14:00) ----------
+# session-independent 第二道防線: 停機前閘窗(06-27 07:00 起)每個 timer tick(每10min)嘗試一次,
+# 把最新 checkpoint 鏡像到 Edit12x + 三大 log gzip 備份(idempotent; in-sync 則快速 no-op)。
+# 窗外完全跳過(僅兩次 date 比較, 零開銷)。並行序列化靠 preshutdown_backup.sh 自身 flock(不在此處鎖)。
+# `timeout -k`: SIGTERM 後再 SIGKILL, 防 D-state NFS hang 卡死 watchdog tick。備份 rc 回收進 problems[]
+# → 失敗會走既有 alert/push(否則 session 不在時靜默漏備)。子shell 隔離確保絕不中止上方健康巡檢。
+# 取捨(已評估): 真要 cp 129GB 時此 tick 同步等待(~5-15min, in-sync 則 ms);期間後續 tick 被 systemd
+#   合併略過 → semantic 檢查延遲一輪。可接受: (a) daemon 程序存活由 systemd Restart=on-failure 獨立守;
+#   (b) 停機前夕 semantic 延遲後果小(叢集本就將於 09:00 停);(c) 僅 Edit12x 落後時發生(每新 ckpt 一次)。
+# (窗口 end 延伸到 06-28 14:00, 純為「若 07-09 窗漏跑則復機後立即補鏡」, 期間 no-op 無害。)
+_psb_now=$(date +%s 2>/dev/null || echo 0)
+_psb_s=$(date -d '2026-06-27 07:00:00' +%s 2>/dev/null || echo 0)
+_psb_e=$(date -d '2026-06-28 14:00:00' +%s 2>/dev/null || echo 0)
+if [ "$_psb_s" -gt 0 ] && [ "$_psb_now" -ge "$_psb_s" ] && [ "$_psb_now" -lt "$_psb_e" ] \
+   && [ -f chain_code/preshutdown_backup.sh ]; then
+    echo "[$(TS)] [preshutdown] 停機前備援窗內 → 執行 preshutdown_backup.sh" >> "$LOG"
+    _psb_rc=0
+    { PSB_FORCE_LOGS=1 timeout -k 120 5400 bash chain_code/preshutdown_backup.sh >> live/preshutdown_backup.log 2>&1 ; } || _psb_rc=$?
+    if [ "$_psb_rc" -ne 0 ]; then
+        problems+=("preshutdown_backup rc=$_psb_rc (Edit12x 鏡像/三大 log 備份未完成) → 查 live/preshutdown_backup.log")
+    fi
+fi
+
 # ---------- 4. 報告 ----------
 if [ ${#problems[@]} -eq 0 ]; then
     echo "[$(TS)] OK  dispatcher=$da/$dc  watcher=$wa/$wc  png=${png_age}m  job=${JID}:${st:-?}/${sqstate:-—}" >> "$LOG"
