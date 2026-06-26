@@ -1,0 +1,94 @@
+############################################################
+#  Partition-of-unity bit-exactness audit on the REAL grid #
+#  Edit13_2800ITBLBM  D3Q19 GILBM Periodic-Hill (Re2800)   #
+#  host-only, single process, jp=1 whole-domain            #
+############################################################
+
+GRID  NX=257 NY=513 NZ=257  NX6=263 NYD6=519(=NY6=519) NZ6=263
+      LX=4.500 LY=9.000 LZ=3.036  bfr=3
+      unique cells = (NX-1)x(NY-1)x(NZ-1) = 256 x 512 x 256 = 33554432
+
+GRID: Dimension check PASSED: I=513 (=NY), J=257 (=NZ)
+GRID: h_physical = 2.800001038888889e-02  grid_scale = 35.714272463156838
+GRID: code-y range [-0.000000, 9.000000] (expect LY=9.0)
+GRID: code-z range [1.000000, 3.036000] (expect LZ=3.036)
+
+============================================================
+ METHOD 0 (Shoelace)  --  partition-of-unity bit-exactness
+============================================================
+  V_discrete (Sigma_cells V_cell)   = 1.14358939042152798e+02
+  Sigma_w    (Sigma_p w_p, 1/8 dual)= 1.14358953365302284e+02
+  bits(V_discrete) = 0x405c96f8db75d372
+  bits(Sigma_w)    = 0x405c96f9178930cc
+  ------------------------------------------------------------
+  (i)   exact ==            : FALSE
+  (ii)  ULP gap |a-b|_bits  : 1007902042
+  (iii) abs diff            : 1.432e-05
+  (iv)  rel diff            : 1.252e-07
+  ------------------------------------------------------------
+  BIT-EXACT: NO
+
+  --- jp=32 MPI_Reduce-order emulation (32 rank-blocks x 16) ---
+  Sigma_w   (jp=1 single sum) = 1.14358953365302284e+02
+  Sigma_w   (jp=32 reduced)   = 1.14358953364899932e+02
+  V_discrete(jp=1 single sum) = 1.14358939042152798e+02
+  V_discrete(jp=32 reduced)   = 1.14358939041846654e+02
+  ULP(Sigma_w   jp1 vs jp32)  = 28313   (abs 4.024e-10)
+  ULP(V_discrete jp1 vs jp32) = 21543   (abs 3.061e-10)
+  ULP(Sigma_w_jp32 vs V_discrete_jp32) = 1007895272   (abs 1.432e-05, rel 1.252e-07)
+
+  --- seam decomposition (streamwise periodic closure) ---
+  node3(I=0)+LY vs node515(I=512): max|dy|=3.285308e-06  max|dz|=0.000000e+00 (grid seam NOT bit-closed)
+  Sum_kc area(ghost cell j=2) = 3.42311021615962149e-02
+  Sum_kc area(real  cell j=514)= 3.42247363585030939e-02
+  per-kc max rel area mismatch = 2.620763e-04
+  predicted seam term 0.5*(NX-1)*dx*dSumA = 1.432306e-05
+  measured Sigma_w - V_discrete           = 1.432315e-05
+  |predicted - measured| / |measured|     = 6.460e-06  (seam fully explains the gap)
+
+============================================================
+ ANALYTIC reference  V_phys = LX*(LY*LZ - integral_0^LY h)
+============================================================
+  integral_0^LY h(y) dy (Simpson N=10000) = 1.910881424084230e+00
+  V_phys = LX*(LY*LZ - integral)       = 1.143590335916210e+02
+  V_discrete vs V_phys : abs 9.454947e-05  rel 8.267774e-07
+  Sigma_w    vs V_phys : abs 8.022632e-05  rel 7.015302e-07
+
+============================================================
+ METHOD 1 (Jacobian 3x3 GL)  --  real metric_terms.h FD J_2D
+============================================================
+  Sigma_w (Method1, GL-3)             = 1.14359016043976823e+02
+  V_discrete (Method0 Shoelace)       = 1.14358939042152798e+02
+  Method1 vs V_discrete : abs 7.700182e-05  rel 6.733345e-07
+  Method1 vs V_phys     : abs 1.754764e-05  rel 1.534434e-07
+  per-cell |Jac-Shoe|/Shoe : max 1.778716e-02  mean 9.207368e-05
+  Shoelace fallback cells  : 0
+  (closer to V_phys than Method0? YES)
+
+============================================================
+ CLOSED-SEAM CONTROL (force node I=0 := node I=512 - LY)
+============================================================
+  V_discrete (closed seam)            = 1.14358967688266716e+02
+  Sigma_w    (closed seam)            = 1.14358967688359400e+02
+  exact ==                            : FALSE
+  ULP gap                             : 6522
+  abs diff                            : 9.268e-11
+  rel diff                            : 8.105e-13
+  -> real-grid rel 1.252e-07 collapses to 8.105e-13 once the seam is closed
+
+============================================================
+ ASSERTIONS
+============================================================
+  [FAIL (real grid, seam)] solver gate: Method-0 rel_err < 1e-12        (rel=1.252e-07)
+       ^ NOT met on the production grid: VerifyPhysicalDomainVolume3D
+         would print WARNING, not PASS.  Cause = streamwise seam
+         non-closure (~3e-6 in y), NOT algorithm / NOT FP order.
+  [PASS] EXPECT bit-exact (==) is FALSE               (== is FALSE)
+  [PASS] seam fully explains the gap                  (|pred-meas|/meas=6.460e-06)
+  [PASS] jp1-vs-jp32 summation order is rounding-level (Sw 3.518e-12, Vd 2.677e-12 rel)
+  [PASS] closed-seam control: rel_err < 1e-12          (rel=8.105e-13)
+  ----------------------------------------------------------
+  Verified understanding (not bit-exact; gap = grid seam;
+  FP order = rounding; identity holds to rounding on closed grid): PASS
+  Solver 1e-12 PASS gate on production grid: NOT MET (rel=1.252e-07)
+############################  DONE  #########################

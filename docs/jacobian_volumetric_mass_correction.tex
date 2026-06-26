@@ -589,7 +589,11 @@ incidence count is $|\{p:\,p\in c\}|=8$ and the prefactor $1/8$ cancels it
 identically, giving $\sum_p w_p=\sum_c V_c$. The pairing of the $\tfrac18$ shares
 with the $8$ corners is a telescoping over the cell--node incidence relation and
 is therefore exact in floating point up to the order of summation; it does not
-depend on cell shape, stretching, or curvature.
+depend on cell shape, stretching, or curvature. This closure is an
+exact-arithmetic identity for a periodic mesh whose seam is \emph{bit-closed};
+the production streamwise grid seam is in fact open by $\sim\!3\times10^{-6}$,
+which adds a small $\sim\!10^{-7}$ geometric residual to \eqref{eq:pou},
+measured and decomposed in \S\ref{sec:E4}.
 
 The boundary adaptations preserve the count. For the periodic spanwise seam,
 remapping $i=3\to N_x{-}5$ relabels which cell supplies a corner share but leaves
@@ -630,9 +634,12 @@ map whose edges are straight, i.e.\ for the piecewise-linear (``discrete'') mesh
 When adjacent quadrilaterals are summed, every interior edge contributes with
 opposite sign in the two cells that share it and cancels; the sum therefore
 telescopes to the exact area of the discrete-mesh polygon. As a consequence
-Method~0 reproduces the discrete-mesh volume to machine precision (this is
-precisely what \texttt{VerifyPhysicalDomainVolume3D} checks; see
-\S\ref{sec:na-N4}). However, the chords are an $O(h^2)$ approximation of the true
+Method~0 reproduces the discrete-mesh volume to machine precision \emph{on a
+bit-closed periodic mesh} (this is precisely what
+\texttt{VerifyPhysicalDomainVolume3D} checks; see \S\ref{sec:na-N4}); on the
+production grid the streamwise periodic seam is not bit-closed and contributes a
+$\sim\!10^{-7}$ geometric residual that exceeds the verifier's $10^{-12}$ pass
+gate, quantified in \S\ref{sec:E4}. However, the chords are an $O(h^2)$ approximation of the true
 curved boundary, so Method~0 carries a fixed \emph{geometric} discretisation error
 \begin{equation}
   A^{\mathrm{Shoe}}(j,k) - A(j,k) = O(h^2)\cdot \kappa ,
@@ -1015,6 +1022,157 @@ $\sum_q\mathbf e_q f_q$ stayed at $(0,0,0)$ \emph{exactly}. This validates the
 one-shot algebraic exactness \eqref{eq:na-oneshot} and confirms that the rest
 population is the correct, momentum-silent mass carrier. The harness artefacts reside
 under \path{docs/numexp/} (\path{verify_gl3.cpp}, \path{gl3_results.txt}).
+
+% ---------------------------------------------------------------------------
+\subsection{E4: partition-of-unity on the production grid --- a bit-exactness audit}
+\label{sec:E4}
+
+Experiments E1--E3 exercise the quadrature on analytic patches. E4 closes the
+loop on the \emph{actual} $\mathrm{Re}_h{=}2800$ production grid
+(\path{J_Frohlich/adaptive_3.fine grid_I513_J257_s0.950000.dat};
+$N_x{\times}N_y{\times}N_z=257{\times}513{\times}257$, hence
+$256{\times}512{\times}256=3.36\times10^{7}$ cells) and answers one question with
+hard data: is the start-up control volume $\Sigma_w=\sum_p w_p$ (the
+$\tfrac18$-split dual weights of \texttt{InitializeMassCorrectionWeights})
+\emph{bit-exactly} equal to the discrete main-field volume
+$V_{\mathrm{disc}}=\sum_c V_c$ (\texttt{ComputeGlobalDiscreteShoelaceVolume3D})?
+A self-contained host harness (\path{docs/numexp/test_volume_partition.cpp},
+single process, $jp{=}1$ whole-domain so the per-rank slice equals the global
+array) reads the real grid through a byte-faithful copy of the solver's
+\texttt{GenerateMesh\_X}\,/\,\texttt{ReadExternalGrid\_YZ} and evaluates both sums
+in the solver's exact loop order and with its exact constants ($0.125$, the
+Shoelace formula). The full transcript is in
+\path{docs/numexp/partition_results.txt}.
+
+\paragraph{The four bit-exactness metrics (Method~0).}
+On the production grid,
+\begin{equation}
+\begin{aligned}
+V_{\mathrm{disc}} &= 1.14358939042152798\times 10^{2}, &
+\Sigma_w &= 1.14358953365302284\times 10^{2},\\[2pt]
+\text{(i) exact }(==) &: \ \textbf{FALSE}, &
+\text{(ii) ULP gap} &= 1{,}007{,}902{,}042 \approx 1.0\times10^{9},\\[2pt]
+\text{(iii) }|\Sigma_w-V_{\mathrm{disc}}| &= 1.432\times10^{-5}, &
+\text{(iv) rel} &= 1.252\times10^{-7}.
+\end{aligned}
+\label{eq:E4-metrics}
+\end{equation}
+The two doubles are \textbf{not} bit-identical (\textsc{bit-exact: no}), and,
+decisively, the gap ($\sim\!10^{-7}$ relative, $\sim\!10^{9}$ ULP) sits five to
+eight orders of magnitude \emph{above} the IEEE rounding floor. It is therefore
+\emph{not} mere summation non-associativity --- there is a genuine, geometric
+cause, isolated next.
+
+\paragraph{Cause: the streamwise periodic seam is not bit-closed.}
+The $\tfrac18$ dual telescopes \emph{exactly} in two of three directions: the
+spanwise $x$ wrap is closed by the explicit remap $i{=}3\!\to\!N_x{-}5$ onto a
+\emph{real} interior cell (and the in-plane area is $x$-independent, so all $256$
+spanwise copies are bit-identical), and the wall-normal $k$ stencil is one-sided
+at the walls with no periodic image required. The streamwise $y$ direction,
+however, is closed only \emph{implicitly}, through the periodic ghost: the seam
+node ($j{=}3$, Fr\"ohlich $I{=}0$) draws its left dual cell from the wrapped ghost
+cell $j_{\mathrm{cell}}{=}2$, whereas $V_{\mathrm{disc}}$ counts the real last
+cell $j_{\mathrm{cell}}{=}514$ (between nodes $I{=}512$ and the seam). These two
+cells are translates by $L_y$ \emph{only if} the grid is bit-periodic. The
+production Fr\"ohlich grid is not: nodes $I{=}0$ and $I{=}512$ differ from exact
+periodic images by
+\[
+\max_k\bigl|y_{I=0}{+}L_y-y_{I=512}\bigr| = 3.285\times10^{-6},
+\qquad \max_k|z_{I=0}-z_{I=512}| = 0 ,
+\]
+so the seam ghost area and the real last-cell area differ by up to
+$2.62\times10^{-4}$ per wall-normal layer. Carrying that mismatch through the
+$\tfrac12$ seam coefficient $\times\,(N_x{-}1)\,\Delta x$ predicts a closure
+defect of $1.432306\times10^{-5}$, which reproduces the \emph{measured}
+$\Sigma_w-V_{\mathrm{disc}}=1.432315\times10^{-5}$ to a relative
+$6.5\times10^{-6}$. The seam thus accounts for essentially the entire gap.
+
+\paragraph{Summation order (MPI non-associativity) is a sub-effect.}
+Re-summing the same per-cell values in the real run's $jp{=}32$ grouping ($32$
+contiguous streamwise rank-blocks of $16$, reduced in rank order to mimic
+\texttt{MPI\_Reduce}) shifts each total only in its last bits:
+$\Sigma_w$ moves by $28{,}313$ ULP ($4.02\times10^{-10}$ abs,
+$3.52\times10^{-12}$ rel) and $V_{\mathrm{disc}}$ by $21{,}543$ ULP
+($3.06\times10^{-10}$ abs, $2.68\times10^{-12}$ rel) --- the genuine
+floating-point non-associativity caveat, of the order $n\varepsilon$ anticipated
+in \eqref{eq:na-rounding}, and $\sim\!5$ orders smaller than the seam.
+
+\paragraph{Closed-seam control: the Proposition holds to rounding.}
+Forcing perfect periodic closure (node $I{=}0:=$ node $I{=}512-L_y$) and
+recomputing \emph{both} sums on the closed grid collapses the discrepancy to the
+rounding floor:
+\[
+|\Sigma_w-V_{\mathrm{disc}}|_{\text{closed}} = 9.27\times10^{-11},\quad
+\text{rel}=8.11\times10^{-13}\ (<10^{-12}),\quad 6{,}522\ \text{ULP},
+\]
+i.e.\ the real-grid $1.25\times10^{-7}$ falls to $8.1\times10^{-13}$ once the seam
+is bit-closed. This is the clean experimental statement of
+Proposition~\ref{prop:pou}: $\sum_p w_p=\sum_c V_c$ is an \emph{exact-arithmetic}
+identity that holds to IEEE-double rounding ($\sim\!10^{-13}$) --- \emph{not}
+bitwise --- on a bit-closed periodic mesh, and is degraded only by the grid's own
+seam-closure tolerance, not by the algorithm.
+
+\begin{table}[t]
+\centering
+\small
+\begin{tabular}{lccc}
+\toprule
+contribution to $\Sigma_w-V_{\mathrm{disc}}$ & abs & rel & ULP \\
+\midrule
+streamwise grid seam non-closure (geometry) & $1.43\times10^{-5}$ & $1.25\times10^{-7}$ & $1.0\times10^{9}$ \\
+$jp{=}1$ vs $jp{=}32$ summation order (MPI)  & $\sim\!4\times10^{-10}$ & $\sim\!3\times10^{-12}$ & $\sim\!2$--$3\times10^{4}$ \\
+IEEE rounding floor (closed-seam control)    & $9.3\times10^{-11}$ & $8.1\times10^{-13}$ & $6.5\times10^{3}$ \\
+\bottomrule
+\end{tabular}
+\caption{Three-tier decomposition of the Method-0 partition-of-unity gap on the
+production grid. The measured $1.25\times10^{-7}$ closure defect is
+\emph{geometry}, dominated by the grid's streamwise seam ($\sim\!3\times10^{-6}$
+non-closure); floating-point non-associativity (summation/MPI order) is the
+$\sim\!10^{-12}$ sub-effect, and the bit-closed mesh recovers the
+$\sim\!10^{-13}$ rounding floor.}
+\label{tab:E4-tiers}
+\end{table}
+
+\paragraph{Comparison to the analytic hill volume.}
+The continuum reference $V_{\mathrm{phys}}=L_x\bigl(L_yL_z-\int_0^{L_y}h\,\mathrm
+dy\bigr)=1.143590335916\times10^{2}$ (Simpson, $N{=}10^4$, mirroring
+\texttt{VerifyPhysicalDomainVolume3D}) is approached by both discrete volumes at
+the $O(h^2)$ chord level: $V_{\mathrm{disc}}$ differs from $V_{\mathrm{phys}}$ by
+$8.27\times10^{-7}$ (rel) and $\Sigma_w$ by $7.02\times10^{-7}$ --- the expected
+geometric chord error of the curved hill, an order of magnitude larger than the
+seam defect and three orders larger than the FP floor.
+
+\paragraph{Method~1 (the default) departs by design.}
+The shipped configuration is \texttt{CELL\_VOLUME\_METHOD}${=}1$. Reproducing the
+real metric-term FD stencil (\texttt{ComputeMetricTerms\_Full}; six-order
+Fornberg in $k$, six-order central in $j$, periodic-$j$ ghost) to obtain $J_{2D}$
+on the production grid and applying the GL-3 / Lagrange-6 weight sum gives
+$\Sigma_w^{\mathrm{M1}}=1.14359016044\times10^{2}$, which departs from
+$V_{\mathrm{disc}}$ by $6.73\times10^{-7}$ (rel) --- a \emph{deliberate} $O(h^2)$
+difference, not a rounding effect, because Method~1 integrates the curved
+$J_{2D}$ rather than its straight chords (per-cell $|J\!-\!\text{Shoe}|/\text{Shoe}$
+up to $1.78\times10^{-2}$, mean $9.21\times10^{-5}$; zero Shoelace fallbacks, the
+smooth $J_{2D}{>}0$ never tripping the guard). Consistently with E2 and
+\S\ref{sec:na-N1}, Method~1 lies \emph{closer} to the continuum volume:
+$|\Sigma_w^{\mathrm{M1}}-V_{\mathrm{phys}}|/V_{\mathrm{phys}}=1.53\times10^{-7}$
+versus Method~0's $8.27\times10^{-7}$.
+
+\paragraph{Reconciliation and verdict.}
+The audit confirms the precise status of the partition-of-unity identity on real
+hardware. \emph{It is not bitwise} (\,$==$ is \textsc{false}, $\sim\!10^{9}$
+ULP\,): $\Sigma_w$ equals the discrete main-field volume to a relative
+$1.25\times10^{-7}$, dominated by the production grid's streamwise seam
+non-closure ($\sim\!3\times10^{-6}$ in $y$) and \emph{not} by the
+$\sim\!10^{-12}$ floating-point non-associativity of the $\tfrac18$-split
+re-summation (the latter amplified, as a caveat, by \texttt{MPI\_Reduce} rank
+order). Because $1.25\times10^{-7}$ (Method~0) --- and $6.73\times10^{-7}$ for
+the default Method~1 --- both exceed the solver's documented $10^{-12}$ gate,
+\texttt{VerifyPhysicalDomainVolume3D} emits its \texttt{WARNING}, not
+\texttt{PASS}, on this grid; the warning is faithful, reporting a real
+($O(h^2)$/seam-level) geometric reality, not a defect of the weight algebra. The
+closed-seam control (rel $8.1\times10^{-13}{<}10^{-12}$,
+Table~\ref{tab:E4-tiers}) shows Proposition~\ref{prop:pou} holds to rounding the
+instant the mesh is bit-closed, exactly as the exact-arithmetic proof predicts.
 
 % ===========================================================================
 \section{Implementation: mapping the mathematics to source code}

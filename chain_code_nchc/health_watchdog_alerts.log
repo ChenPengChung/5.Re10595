@@ -2504,3 +2504,55 @@ unknown 本專案實例=0
   + tail slurm_.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
   → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
 ---
+## [2026-06-26 17:41:08] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=:PENDING/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-26 17:50:55] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=:PENDING/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-26 18:51:09] Edit13 health_watchdog ALERT (2 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/2 png=0m job=:PENDING/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+  - watcher 多實例(spin/重複): 本專案實例=2
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+  - 已 bash /home/s8313697/5.Re10595/Edit13_2800ITBLBM/chain_code_nchc/daemon_reset.sh 清成單一 systemd watcher
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
+## [2026-06-26 19:00:31] Edit13 health_watchdog ALERT (1 問題)
+狀態: dispatcher=inactive
+unknown/0 watcher=active/1 png=0m job=:PENDING/—
+問題點:
+  - dispatcher 死亡/異常: service=inactive
+unknown 本專案實例=0
+已自動補救(watchdog 能安全做的):
+  - 已 systemctl --user restart edit13-dispatcher.service
+對應解法(需 Claude / Route A 在 session 內): 讀 live/health_watchdog.log + journalctl --user -u <service> -n50
+  + tail slurm_.log → 定位 code-level 死因 → 修 submit_dispatcher.sh/select_combo_lib.sh/hill_watcher*.sh
+  → bash -n 驗證 → systemctl --user restart → 逐檔 git add(不 -A)+ commit(繁中,含問題點+解法)+ push。
+---
