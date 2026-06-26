@@ -65,10 +65,24 @@ scancel 一律 `./run job-guard scancel <id>`(驗 WorkDir);殺/數 daemon 用 `/
   cp 進手足由 write_guard 放行(Bash cp 允許),為使用者授權備援、非跨專案違規。
   **只在 Edit12x 無 active job 時複製**(`squeue` 確認),避免撞它自己的 restart;大檔可背景跑。
 - **停機前硬閘(2026-06-27 07:00~08:00,即停機前 1~2 小時)**: 必須確認
-  `Edit12x/.../checkpoint/latest` == 本專案 `latest`;落後就立即補齊(must-pass)。
+  `Edit12x/.../checkpoint/latest` == 本專案 `latest`、**且第(8)的三大 log 已做最新快照**;
+  落後就立即補齊(must-pass)。
 - 詳見記憶 `project_edit12_nchc_downtime_0627`。
+
+(8) **★三大紀錄檔備份(append-only log,~152M→~26M gzip;git 禁推→走檔案備份)**:
+三檔 `Ustar_Force_record.dat` / `timing_log.dat` / `checkrho.dat`。每輪檢查 marker
+`live/.last_log_backup`(epoch);**距今 >12h 或處於停機前窗口(06-27 07:00~09:00)才執行**,
+否則回報「跳過(距上次 Nh)」。執行步驟:
+- 壓縮主份: `gzip -c <f> > ~/log_backups/edit12_Krank56002/<stem>_<TS>_step<N>.dat.gz`
+  (TS=`date +%Y%m%d_%H%M%S`,N=latest checkpoint step);逐檔 `gzip -t` 驗。
+- 次份: `cp -a` 到 `/work/s8313697/edit12_log_backups/`;`md5sum` 兩地核對一致。
+- 輪替: 每個 stem **各只留最近 7 份**(`ls -t <stem>_*.gz | tail -n +8 | xargs -r rm -f`),兩地都做。
+- 更新 marker: `date +%s > live/.last_log_backup`。
+- 主份在 /home 專案樹外(抗 reset/clean/cold-start 清 log);/work 為次(注意 scratch 可能清)。
+  warm 重啟會 append 延續、不清;cold/clean 才清→這正是備份要防的。
+- **停機前硬閘(同第(7),06-27 07:00~08:00)**: 強制再做一次(不管 12h),確保停機前最後資料入袋。
 
 ## 回報格式(精簡表格)
 job state(partition@account) / Reason 或 ETA、FTT 進度(Step/FTT/Re%/Ma_max/Error)、
 daemon heartbeat(dispatcher/watcher 秒數)、checkpoint+marker、
-**Edit12x 同步(latest=step_<N>,== 或 落後本專案)**、有無異常。
+**Edit12x 同步(latest=step_<N>,== 或 落後本專案)**、**log 備份(TS 或 跳過)**、有無異常。
