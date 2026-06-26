@@ -3,7 +3,7 @@
 # grab_poller.sh — Edit13 復機自動搶投 (option-A 薄包裝; 與 Edit11 session 對齊)
 # ----------------------------------------------------------------------------
 # 由 edit13-grab.timer (~30s) 觸發。架構 = robot 專屬外殼 + 共用 grab 引擎:
-#   ① 視窗閘 (robot-specific): 只在 6/28 12:00→6/29 12:00 內動作; 窗外便宜 exit。
+#   ① 視窗閘 (robot-specific): 只在 06/27 10:00→06/29 12:00 (CST) 內動作; 窗外便宜 exit。
 #   ② 冪等: restart/.grab_disarmed 存在 = 已成功搶投過 → 直接 exit, 不再呼叫。
 #   ③ source ~/.lbm_nchc_grab.sh → 呼叫 `lbm-grab edit13` (= 你手動 `ll edit13` 的
 #      同一引擎: Pass-0 fail-closed + alive 雙源 + Gate-A/B + cfg 守鎖 + warm 投 +
@@ -32,10 +32,16 @@ log(){ printf '[%s] %s\n' "$(date '+%F %T')" "$*" >> "$LOG"; }
 # ① 視窗閘 (robot-specific; 窗外便宜 exit, 絕不干擾)
 WINDOW_START="2026-06-27 10:00:00"; WINDOW_END="2026-06-29 12:00:00"
 NOW=$(date +%s)
-WS=$(date -d "$WINDOW_START" +%s 2>/dev/null || echo 0)
-WE=$(date -d "$WINDOW_END" +%s 2>/dev/null || echo 0)
+WS=$(date -d "$WINDOW_START" +%s 2>/dev/null || echo "")
+WE=$(date -d "$WINDOW_END" +%s 2>/dev/null || echo "")
 if [ "${LBM_GRAB_FORCE_WINDOW:-0}" != 1 ]; then
-    { [ "$NOW" -lt "$WS" ] || [ "$NOW" -gt "$WE" ]; } && exit 0
+    if [ -z "$WS" ] || [ -z "$WE" ]; then
+        # fail-OPEN: 視窗時間解析失敗時「絕不」靜默永久 dormant(那會害 14:00 不觸發);
+        # 改略過視窗閘, 交 lbm-grab 的 Pass-0 fail-closed / alive / HEAD.lockdir 把關。
+        log "WARN: 視窗時間解析失敗 (WS='$WS' WE='$WE') → fail-open 略過視窗閘"
+    elif [ "$NOW" -lt "$WS" ] || [ "$NOW" -gt "$WE" ]; then
+        exit 0
+    fi
 fi
 
 # ② 已成功搶投過 → 冪等 exit (不再呼叫 lbm-grab)

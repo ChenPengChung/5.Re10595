@@ -1,11 +1,13 @@
 [Unit]
-Description=Edit13 復機自動搶投 timer (~30s; 視窗 06/28 12:00→06/29 12:00 由 poller 內閘控)
+Description=Edit13 復機自動搶投 timer (~30s; 視窗 06/27 10:00→06/29 12:00 由 poller 內閘控)
 
 [Timer]
 # 開機後 60s 起跑, 之後每 ~30s 一 tick (積極搶位; 視窗外 poller 便宜 exit)
 OnBootSec=60
 OnUnitActiveSec=30
-# Persistent: login 節點 reboot/維護後補跑 (撐過停機; 配 enable-linger)
+# 撐過 reboot 靠 enable-linger 讓 user-manager 開機自啟; reboot 後 timer 從 OnBootSec
+# 重新起算 (非補跑錯過 tick)。Persistent 對純 monotonic timer(無 OnCalendar)是 no-op,
+# 留著無害但「不是」停機存活的依據 — 真正存活 = linger + rearm 登入自癒。
 Persistent=true
 AccuracySec=5s
 
