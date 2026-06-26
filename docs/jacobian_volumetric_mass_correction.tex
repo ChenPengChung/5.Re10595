@@ -267,6 +267,104 @@ mesh cells $c=(i_c,j_c,k_c)$; $h$ denotes a representative physical cell size,
 $n\sim10^6$ the number of interior reduction nodes, and
 $\varepsilon=2.2\times10^{-16}$ the double-precision unit roundoff.
 
+The next lemma justifies why the in-plane factor $J_{2D}$ of
+\eqref{eq:jacobian-block} is the correct \emph{area density} of the cross-section:
+it is precisely the square root of the determinant of the first fundamental form,
+so the determinant---not the product of the per-direction scale factors---is the
+quantity that the cell-volume quadratures of \S\ref{sec:quadrature} must integrate.
+
+\begin{lemma}[Metric form of the in-plane area element]
+\label{lem:area-metric}
+Let the in-plane map $(\xi,\zeta)\mapsto\bigl(y(\xi,\zeta),z(\xi,\zeta)\bigr)$ of
+\eqref{eq:map} have covariant basis vectors
+$\mathbf r_\xi=(y_\xi,z_\xi)$ and $\mathbf r_\zeta=(y_\zeta,z_\zeta)$, with scale
+factors (Lam\'e coefficients)
+\begin{equation}
+h_\xi=|\mathbf r_\xi|=\sqrt{y_\xi^2+z_\xi^2},
+\qquad
+h_\zeta=|\mathbf r_\zeta|=\sqrt{y_\zeta^2+z_\zeta^2},
+\label{eq:lame}
+\end{equation}
+and first-fundamental-form (metric) components
+$g_{\xi\xi}=h_\xi^2$, $g_{\zeta\zeta}=h_\zeta^2$, and
+$g_{\xi\zeta}=\mathbf r_\xi\!\cdot\!\mathbf r_\zeta=y_\xi y_\zeta+z_\xi z_\zeta$.
+Then the physical area element of the cross-section is
+\begin{equation}
+dA=\sqrt{\det g}\;d\xi\,d\zeta,
+\qquad
+\det g=g_{\xi\xi}\,g_{\zeta\zeta}-g_{\xi\zeta}^{\,2},
+\label{eq:area-metric}
+\end{equation}
+and its area density equals the in-plane Jacobian of \eqref{eq:jacobian-block} in
+absolute value,
+\begin{equation}
+\sqrt{\det g}
+=\bigl|y_\xi z_\zeta-y_\zeta z_\xi\bigr|
+=|J_{2D}|
+=h_\xi h_\zeta\sin\varphi,
+\label{eq:area-jac}
+\end{equation}
+where $\varphi$ is the angle between the coordinate-line tangents
+$\mathbf r_\xi$ and $\mathbf r_\zeta$. In particular
+$|J_{2D}|=h_\xi h_\zeta$ (the scale-factor product) holds if and only if the
+coordinate lines are orthogonal, i.e.\ $g_{\xi\zeta}=0$, $\varphi=\pi/2$.
+\end{lemma}
+
+\begin{proof}
+Expand the determinant of the metric directly,
+\begin{equation}
+\det g
+=(y_\xi^2+z_\xi^2)(y_\zeta^2+z_\zeta^2)
+ -(y_\xi y_\zeta+z_\xi z_\zeta)^2 .
+\label{eq:detg-expand}
+\end{equation}
+Expanding,
+$(y_\xi^2+z_\xi^2)(y_\zeta^2+z_\zeta^2)=y_\xi^2 y_\zeta^2+y_\xi^2 z_\zeta^2+z_\xi^2 y_\zeta^2+z_\xi^2 z_\zeta^2$
+and
+$(y_\xi y_\zeta+z_\xi z_\zeta)^2=y_\xi^2 y_\zeta^2+2\,y_\xi y_\zeta z_\xi z_\zeta+z_\xi^2 z_\zeta^2$.
+The pure terms $y_\xi^2 y_\zeta^2$ and $z_\xi^2 z_\zeta^2$ cancel between the two,
+leaving
+\begin{equation}
+\det g
+=y_\xi^2 z_\zeta^2+z_\xi^2 y_\zeta^2-2\,y_\xi z_\zeta\,y_\zeta z_\xi
+=\bigl(y_\xi z_\zeta-y_\zeta z_\xi\bigr)^2
+=J_{2D}^{\,2},
+\label{eq:lagrange-collapse}
+\end{equation}
+which is the two-dimensional Lagrange identity
+$|\mathbf a|^2|\mathbf b|^2-(\mathbf a\!\cdot\!\mathbf b)^2=(\mathbf a\times\mathbf b)^2$
+for $\mathbf a=\mathbf r_\xi$, $\mathbf b=\mathbf r_\zeta$. Taking the positive
+square root gives $\sqrt{\det g}=|J_{2D}|$, and the standard surface-area element
+$dA=\sqrt{\det g}\,d\xi\,d\zeta$ then yields \eqref{eq:area-metric}--\eqref{eq:area-jac}.
+Finally, writing $\cos\varphi=g_{\xi\zeta}/(h_\xi h_\zeta)$,
+\begin{equation}
+\det g
+=h_\xi^2 h_\zeta^2\bigl(1-\cos^2\varphi\bigr)
+=\bigl(h_\xi h_\zeta\sin\varphi\bigr)^2,
+\label{eq:detg-sin}
+\end{equation}
+so $|J_{2D}|=h_\xi h_\zeta\sin\varphi$, with equality to $h_\xi h_\zeta$ exactly
+when $\sin\varphi=1$, i.e.\ $g_{\xi\zeta}=0$.
+\end{proof}
+
+\begin{remark}[Why the scale-factor product over-counts a skewed grid]
+\label{rem:skew}
+The naive product $h_\xi h_\zeta\,d\xi\,d\zeta$ is the area of the
+\emph{rectangle} with sides $h_\xi\,d\xi$ and $h_\zeta\,d\zeta$; the actual cell
+is the \emph{parallelogram} spanned by $\mathbf r_\xi\,d\xi$ and
+$\mathbf r_\zeta\,d\zeta$, whose area is $h_\xi h_\zeta\sin\varphi=|J_{2D}|$ by
+\eqref{eq:area-jac}. The two agree only on an orthogonal grid; on a skewed grid
+($g_{\xi\zeta}\ne0$) the scale-factor product over-counts the area by the factor
+$1/\sin\varphi$. The Steger--Sorenson elliptic (Poisson) generator promotes but
+does not enforce orthogonality, so in general $g_{\xi\zeta}\neq0$ (the grid is only
+near-orthogonal); wherever $g_{\xi\zeta}\neq0$ the determinant $J_{2D}$, and not the
+product $h_\xi h_\zeta$, is the correct area density. The discrete Shoelace area
+(Method~0) likewise returns the true straight-chord parallelogram/quadrilateral
+area and so also accounts for skew; both cell-volume estimators of
+\S\ref{sec:quadrature} therefore integrate the metric area element $|J_{2D}|$ of
+Lemma~\ref{lem:area-metric}, never the scale-factor product.
+\end{remark}
+
 % ===========================================================================
 \section{Volumetric mass-conservation theory}
 \label{sec:theory}
@@ -1580,9 +1678,8 @@ independent statements, only the first of which bears on correctness:
 \item[(iii)] \emph{Field fidelity}: $\Sigma_w$ equals $V_{\mathrm{phys}}$, the
   volume of the continuum straight-boundary periodic-hill domain. This is
   \emph{never} exact---the discrete boundary is a curve, and the
-  outlet wall-normal rows land at, e.g., $y\approx 8.9999967$ rather than the
-  exact period $y=L_y=9$ for interior rows (the two walls register exactly $9$
-  only because one is the read-time normalization anchor). The discrepancy is the
+  interior outlet rows land at, e.g., $y\approx 8.9999967$ rather than $y=L_y$
+  (the read-time normalization pins the anchor row exactly). The discrepancy is the
   $O(h^2)$ chord error of the curved hill plus the single-precision streamwise
   seam non-closure.
 \end{enumerate}
@@ -1604,17 +1701,16 @@ sees or can conserve.
 
 \paragraph{The seam discrepancy is a geometric diagnostic, not a defect.}
 It follows that the \texttt{VOL-CHECK} discrepancy reported in the E4 audit
-($\Sigma_w$ versus $\sum_c V_c$, relative $\sim\!1.25\times10^{-7}$,
+($\Sigma_w$ versus $\sum_c V_c$, relative $\sim\!10^{-7}$,
 \eqref{eq:E4-metrics}) is a \emph{geometric diagnostic of streamwise periodic
 closure}---it flags that the production grid's outlet is not bit-closed onto its
 inlet---and is \emph{not} a mass-conservation defect. The corrector never reads
 $\sum_c V_c$; it reads $\Sigma_w$ in both numerator and denominator, so the seam
 gap cancels identically in \eqref{eq:rho-mean} and cannot bias $\delta\rho$.
-Closing the seam---forcing the outlet nodes to the exact periodic image of the
-inlet ($N_I=513$ streamwise nodes, so node $N_I{-}1=512$ is the outlet),
-$y(N_I{-}1):=y(0)+L_y$ using the grid's own coordinates---makes (ii) exact:
-the E4 closed-seam control collapses the discrepancy from $1.25\times10^{-7}$ to
-$8.1\times10^{-13}$ (\textsc{pass}, Table~\ref{tab:E4-tiers}) and additionally
+Closing the seam---E4's control, node $I{=}0:=$ node $I{=}512-L_y$, i.e.\ making
+the two boundary edges exact periodic images using the grid's own
+coordinates---makes (ii) exact: it collapses the discrepancy to the rounding floor
+(\textsc{pass}, \S\ref{sec:E4}, Table~\ref{tab:E4-tiers}) and additionally
 renders the grid bit-periodic. But this is a cleanliness and diagnostic
 refinement, \emph{not} a correctness fix: the corrector was already
 self-consistent and mass-conserving before closure. The grid is not ``wrong''---it
