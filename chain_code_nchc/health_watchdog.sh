@@ -32,6 +32,11 @@ WATCHDOG_TIMER="edit13-watchdog.timer"
 mkdir -p live
 TS(){ date '+%F %T'; }
 
+# [STOP_CHAIN 尊重] Edit13 刻意暫停時(restart/STOP_CHAIN 存在), dispatcher/watcher inactive 是
+# 「故意的」→ watchdog 不可當 daemon 死亡而重啟/re-enable(否則重啟 dispatcher 可能提前重投, 破壞
+# 暫停; 2026-06-26 事故根因)。PAUSED=1 → 仍做 unit 檔 self-heal, 但略過存活重啟。
+PAUSED=0; [ -f "$ROOT/restart/STOP_CHAIN" ] && PAUSED=1
+
 # [self-heal] 若本專案 systemd unit 檔被別專案 reset 清掉(歷史 cross-project 故障類別),
 # 趁此次仍被 timer 拉起時補回檔案 + 重載 + 重新 enable, 確保 timer/daemon 不會默默消失。
 # (僅在缺檔時動作; 不影響別專案 unit。)
@@ -44,8 +49,8 @@ done
 if [ "$_need_reload" = 1 ]; then
     systemctl --user daemon-reload 2>/dev/null || true
     systemctl --user enable --now "$WATCHDOG_TIMER" 2>/dev/null || true
-    systemctl --user enable --now "$DISPATCHER_SERVICE" "$WATCHER_SERVICE" 2>/dev/null || true
-    echo "[$(TS)] self-heal: 補回缺失的 systemd unit 檔 + daemon-reload + re-enable" >> "$LOG"
+    [ "$PAUSED" = 0 ] && { systemctl --user enable --now "$DISPATCHER_SERVICE" "$WATCHER_SERVICE" 2>/dev/null || true; }
+    echo "[$(TS)] self-heal: 補回缺失的 systemd unit 檔 + daemon-reload$([ "$PAUSED" = 1 ] && echo ' (PAUSED: 不 re-enable dispatcher/watcher)' || echo ' + re-enable')" >> "$LOG"
 fi
 
 # 本專案實例計數 (絕對+相對路徑都涵蓋; 跨專案安全; 末參=腳本才算真正 daemon)
@@ -61,7 +66,9 @@ actions=()    # watchdog 已自動補救
 # ---------- 1. dispatcher ----------
 da=$(systemctl --user is-active "$DISPATCHER_SERVICE" 2>/dev/null || echo unknown)
 dc=$(cnt_cwd submit_dispatcher.sh)
-if [ "$da" != "active" ] || [ "$dc" -lt 1 ]; then
+if [ "$PAUSED" = 1 ]; then
+    actions+=("Edit13 刻意暫停(STOP_CHAIN) → dispatcher inactive 屬預期, 略過重啟(防提前重投)")
+elif [ "$da" != "active" ] || [ "$dc" -lt 1 ]; then
     problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc")
     systemctl --user reset-failed "$DISPATCHER_SERVICE" 2>/dev/null || true
     if systemctl --user restart "$DISPATCHER_SERVICE" 2>/dev/null; then
@@ -76,7 +83,9 @@ wa=$(systemctl --user is-active "$WATCHER_SERVICE" 2>/dev/null || echo unknown)
 wc=$(cnt_cwd hill_watcher.sh)
 png_age=99999
 [ -f live/monitor_latest.png ] && png_age=$(( ($(date +%s) - $(stat -c %Y live/monitor_latest.png 2>/dev/null)) / 60 ))
-if [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
+if [ "$PAUSED" = 1 ]; then
+    actions+=("Edit13 刻意暫停(STOP_CHAIN) → watcher inactive 屬預期, 略過重啟")
+elif [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
     problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc")
     systemctl --user reset-failed "$WATCHER_SERVICE" 2>/dev/null || true
     if systemctl --user restart "$WATCHER_SERVICE" 2>/dev/null; then
@@ -110,7 +119,7 @@ esac
 
 # ---------- 4. 報告 ----------
 if [ ${#problems[@]} -eq 0 ]; then
-    echo "[$(TS)] OK  dispatcher=$da/$dc  watcher=$wa/$wc  png=${png_age}m  job=${JID}:${st:-?}/${sqstate:-—}" >> "$LOG"
+    echo "[$(TS)] OK$([ "$PAUSED" = 1 ] && echo ' [PAUSED:STOP_CHAIN→daemon inactive 屬預期]')  dispatcher=$da/$dc  watcher=$wa/$wc  png=${png_age}m  job=${JID}:${st:-?}/${sqstate:-—}" >> "$LOG"
     exit 0
 fi
 
