@@ -1,0 +1,75 @@
+############################################################
+#  GL-3 Jacobian cell-volume scheme validation             #
+#  mirrors evolution.h of Edit13_2800ITBLBM (D3Q19 GILBM)   #
+############################################################
+
+============================================================
+ E1  GL-3 polynomial exactness  (integral_0^1 xi^m dxi)
+     GL-3 nodes = {0.1127016653792583, 0.5000000000000000, 0.8872983346207417}
+     GL-3 wts   = {5/18, 8/18, 5/18}; exact for degree <= 5
+------------------------------------------------------------
+   m |     exact 1/(m+1) |    GL-3 quadrature |   abs error
+------------------------------------------------------------
+   0 | 1.0000000000000000e+00 | 1.0000000000000000e+00 | 0.000e+00   (deg<=5: machine zero)
+   1 | 5.0000000000000000e-01 | 5.0000000000000000e-01 | 0.000e+00   (deg<=5: machine zero)
+   2 | 3.3333333333333331e-01 | 3.3333333333333337e-01 | 5.551e-17   (deg<=5: machine zero)
+   3 | 2.5000000000000000e-01 | 2.5000000000000000e-01 | 0.000e+00   (deg<=5: machine zero)
+   4 | 2.0000000000000001e-01 | 2.0000000000000001e-01 | 0.000e+00   (deg<=5: machine zero)
+   5 | 1.6666666666666666e-01 | 1.6666666666666669e-01 | 2.776e-17   (deg<=5: machine zero)
+   6 | 1.4285714285714285e-01 | 1.4250000000000002e-01 | 3.571e-04   (deg>=6: nonzero, predicted)
+   7 | 1.2500000000000000e-01 | 1.2375000000000001e-01 | 1.250e-03   (deg>=6: nonzero, predicted)
+------------------------------------------------------------
+   1D Gauss-3 remainder constant C = (3!)^4/(7*(6!)^3) = 4.960317e-07
+   For f=xi^6: f^{(6)}=720 -> predicted |E_6| = C*720 = 3.571429e-04
+
+============================================================
+ E2  h-refinement convergence on a genuinely-2D smooth y-z map
+     y = xi ; z = zeta*(1-a*sin(pi*xi)) + (C-D*sin(pi*xi))*(1-cos(pi*zeta))/pi
+     J_2D = 1 - a*sin(pi*xi) + C*sin(pi*zeta) - D*sin(pi*xi)*sin(pi*zeta)
+            (a=0.30 C=0.20 D=0.10 ; NON-separable cross term -> varies in xi AND zeta)
+     TRUE area (exact closed form 1-0.2/pi-0.4/pi^2) = 0.895809549306307
+     cross-check (composite GL-3 of closed-form J, M=256) = 0.895809549306308  |err|=8.882e-16
+     Method 0 = straight-chord Shoelace ; Method 1 = GL-3 of
+     6-pt Lagrange interp of SAMPLED nodal J (solver-identical)
+------------------------------------------------------------------------------------
+    N |    h     |  Method0 err  | ord |  Method1 err  | ord
+------------------------------------------------------------------------------------
+    8 | 0.125000 | 2.982878e-03 |  -  | 2.635846e-06 |  -
+   16 | 0.062500 | 7.442790e-04 | 2.00 | 3.052697e-08 |  6.43
+   32 | 0.031250 | 1.859800e-04 | 2.00 | 4.267601e-10 |  6.16
+   64 | 0.015625 | 4.648941e-05 | 2.00 | 6.464496e-12 |  6.04
+  128 | 0.007812 | 1.162200e-05 | 2.00 | 1.040279e-13 |  5.96
+  256 | 0.003906 | 2.905479e-06 | 2.00 | 1.887379e-15 |  5.78
+------------------------------------------------------------------------------------
+  EXPECT: Method 0 ~ O(h^2) ; Method 1 ~ 6th order until the round-off floor
+  (Lagrange-6 reconstruction of the SAMPLED metric is the binding error term).
+  min sampled J_2D over all N = 0.700000  (> 0 assert PASSED)
+  Method-1 Shoelace-fallback count (all N) = 0  (expected 0: smooth map keeps J>0, never-triggered safety path)
+
+[E2-CSV] N,h,err0,ord0,err1,ord1
+[E2-CSV] 8,1.25000000e-01,2.98287767e-03,0.0000,2.63584588e-06,0.0000
+[E2-CSV] 16,6.25000000e-02,7.44279018e-04,2.0028,3.05269736e-08,6.4320
+[E2-CSV] 32,3.12500000e-02,1.85980040e-04,2.0007,4.26760072e-10,6.1605
+[E2-CSV] 64,1.56250000e-02,4.64894076e-05,2.0002,6.46449561e-12,6.0447
+[E2-CSV] 128,7.81250000e-03,1.16220018e-05,2.0000,1.04027897e-13,5.9575
+[E2-CSV] 256,3.90625000e-03,2.90547858e-06,2.0000,1.88737914e-15,5.7844
+
+============================================================
+ E3  one-shot mass restoration + momentum preservation
+------------------------------------------------------------
+  Method0 (Shoelace) V=8.965538283248e-01  <rho>_V=0.9970000000000000
+                     delta_rho=1-<rho>_V = +3.000e-03 ; AFTER apply <rho>_V=1.0000000000000011 ; |1-new|=1.110e-15
+  Method1 (Jac GL-3)  V=8.958095798333e-01  <rho>_V=0.9970000000000001
+                     delta_rho=1-<rho>_V = +3.000e-03 ; AFTER apply <rho>_V=0.9999999999999998 ; |1-new|=2.220e-16
+------------------------------------------------------------
+  Momentum (D3Q19, e0=0, inject delta_rho=0.0123456789 into f[0]):
+    rho:  before=1.0000000000000000  after=1.0123456789000003  (Delta=0.0123456789000003 = delta_rho)
+    momentum before = ( 0.000e+00,  0.000e+00,  0.000e+00)
+    momentum after  = ( 0.000e+00,  0.000e+00,  0.000e+00)
+    |Delta momentum|= ( 0.000e+00,  0.000e+00,  0.000e+00)  -> EXACTLY preserved
+------------------------------------------------------------
+  One-shot restoration residual |1-<rho>_V_new|: Method0=1.110e-15  Method1=2.220e-16
+  Method-1 Shoelace-fallback count (E3 patch) = 0 (expected 0: smooth J>0)
+  (residual is pure FP rounding of the weighted reduction; ~1e-16)
+
+############################  DONE  #########################
