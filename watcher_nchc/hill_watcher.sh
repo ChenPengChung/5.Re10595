@@ -260,6 +260,26 @@ run_tauwall() {
     return 0
 }
 
+# [auto-push benchmark 圖 — 使用者要求 2026-06-29] 每次 benchmark 更新後把比對圖推遠端(附 git fetch)。
+# 全程 fail-safe(subshell + timeout + || true): git 任何問題(網路/non-ff/衝突)絕不阻塞或中斷 watcher 主循環。
+# 註: benchmark 圖在 .gitignore → 用 git add -f; 無內容變更則 git diff --cached --quiet 跳過(不產生空 commit)。
+# 註: 使用者已知並接受 repo 會因此持續膨脹(每更新 ~2.4MB)。
+push_benchmark_figs() {
+    ( cd "$PROJECT_DIR" 2>/dev/null || exit 0
+      timeout 30 git fetch origin >/dev/null 2>&1 || true
+      git add -f live/fig_mean_u.png live/fig_mean_v.png live/fig_uu.png live/fig_vv.png live/fig_uv.png live/fig_k.png \
+                  "live/tau_wall_signed_Re${RE}_cf.png" "live/tau_wall_signed_Re${RE}_cp.png" 2>/dev/null || true
+      git diff --cached --quiet 2>/dev/null && exit 0
+      git commit -q -m "benchmark 比對圖自動推送 (watcher; vs Re${RE} DNS)" \
+                    -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" 2>/dev/null || exit 0
+      if ! timeout 30 git push >/dev/null 2>&1; then
+          timeout 20 git fetch origin >/dev/null 2>&1 || true
+          git rebase origin/Edit13_2800ITBLBM >/dev/null 2>&1 || { git rebase --abort >/dev/null 2>&1; exit 0; }
+          timeout 30 git push >/dev/null 2>&1 || true
+      fi
+    ) >/dev/null 2>&1 || true
+}
+
 log "=========================================="
 log "Periodic Hill Re$RE watcher started"
 log "  pid=$$  ppid=$PPID  poll=${POLL_SEC}s"
@@ -310,6 +330,7 @@ while :; do
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
+                    push_benchmark_figs || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe, 使用者要求)
                     last_bench_step="$step"
                 fi
             else
