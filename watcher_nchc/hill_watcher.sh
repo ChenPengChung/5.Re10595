@@ -276,13 +276,14 @@ run_tauwall() {
 # 註: benchmark 圖在 .gitignore → 用 git add -f; 無內容變更則 git diff --cached --quiet 跳過(不產生空 commit)。
 # 註: 使用者已知並接受 repo 會因此持續膨脹(每更新 ~2.4MB)。
 push_benchmark_figs() {
+    local _ftt="${1:-?}" _step="${2:-?}"
     ( cd "$PROJECT_DIR" 2>/dev/null || exit 0
       timeout 30 git fetch origin >/dev/null 2>&1 || true
       git add -f live/fig_mean_u.png live/fig_mean_v.png live/fig_uu.png live/fig_vv.png live/fig_uv.png live/fig_k.png \
                   "live/tau_wall_signed_Re${RE}_cf.png" "live/tau_wall_signed_Re${RE}_cp.png" \
                   live/l2_history.dat 2>/dev/null || true
       git diff --cached --quiet 2>/dev/null && exit 0
-      git commit -q -m "benchmark 比對圖自動推送 (watcher; vs Re${RE} DNS)" \
+      git commit -q -m "benchmark 比對圖+L2 自動推送 (watcher; FTT=${_ftt} step=${_step}, ITB-ISLBM vs Re${RE} DNS)" \
                     -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" 2>/dev/null || exit 0
       if ! timeout 30 git push >/dev/null 2>&1; then
           timeout 20 git fetch origin >/dev/null 2>&1 || true
@@ -342,7 +343,7 @@ while :; do
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
-                    push_benchmark_figs || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe, 使用者要求)
+                    push_benchmark_figs "$ftt" "$step" || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe, 使用者要求; commit 訊息含 FTT)
                     last_bench_step="$step"
                 fi
             else
