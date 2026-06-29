@@ -12,7 +12,7 @@
 #   push 的 parent 永遠是「剛 fetch 的 origin」→ 對遠端永遠 fast-forward;origin 若在 race 中前進,
 #   push 失敗 → 重新 fetch+重建+重試(最多 3 次);仍失敗 → 留待下個 VTK 重試,**絕不 --force**。
 #
-# 守門:只本專案、只這 8 張 benchmark 圖、不碰三大紀錄檔、不碰別專案;單例 flock 防並發。
+# 守門:只本專案、這 8 張 benchmark 圖 + L2 趨勢檔(live/l2_history.dat)、不碰三大紀錄檔、不碰別專案;單例 flock 防並發。
 # 用法:bash chain_code/push_benchmark_figs.sh [<step>]
 set -uo pipefail
 SELF="$(readlink -f "$0")"; ROOT="$(cd "$(dirname "$SELF")/.." && pwd)"; cd "$ROOT" || exit 0
@@ -24,7 +24,11 @@ RE=$(awk '$1=="#define"&&$2=="Re"{print $3;exit}' variables.h 2>/dev/null | tr -
 FIGS=(result/fig_mean_u.png result/fig_mean_v.png result/fig_uu.png result/fig_vv.png result/fig_uv.png \
       result/fig_k.png "result/tau_wall_signed_Re${RE}_cf.png" "result/tau_wall_signed_Re${RE}_cp.png")
 present=(); for f in "${FIGS[@]}"; do [ -f "$f" ] && present+=("$f"); done
-[ ${#present[@]} -eq 0 ] && { echo "[$(TS)] 無 benchmark 圖檔存在,跳過" >>"$LOG"; exit 0; }
+# [2026-06-29] L2 趨勢檔隨 benchmark 一起推遠端(watcher 每次成功 benchmark append 一行)。
+#   live/ 雖被 gitignore,但本腳本走 git plumbing(hash-object + update-index --cacheinfo)直接塞
+#   blob,不受 gitignore 影響;首推後該檔在 origin 與本地 HEAD 皆 tracked,之後每輪比對 blob 變動續推。
+[ -f live/l2_history.dat ] && present+=(live/l2_history.dat)
+[ ${#present[@]} -eq 0 ] && { echo "[$(TS)] 無 benchmark 圖檔/L2 檔存在,跳過" >>"$LOG"; exit 0; }
 
 # 單例鎖(防 watcher 連續呼叫 / 多實例同時 push);live/ 已 gitignore
 exec 9>"live/.push_figs.lock" 2>/dev/null || exit 0
@@ -65,6 +69,9 @@ while [ "$attempt" -lt 3 ]; do
             fi
         fi
         echo "[$(TS)] ✅ pushed FTT-${ftt} (step ${step}) commit=${commit:0:8}" >>"$LOG"
+        # [2026-06-29 使用者規則] 推送成功 → Edit11/Edit12/Edit13 三專案都 fetch origin 同步
+        #   (唯讀;不碰工作樹/index/checkpoint/job;單一失敗不影響推送本身)。
+        LOG="$LOG" bash "$ROOT/chain_code/fetch_all_projects.sh" 2>/dev/null || true
         exit 0
     fi
     echo "[$(TS)] push attempt $attempt 失敗(origin 在 race 中前進?)→ 重新 fetch 重建" >>"$LOG"
