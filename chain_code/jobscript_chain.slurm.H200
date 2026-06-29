@@ -5,7 +5,7 @@
 # [Edit11 2026-06-14] 強制排除 25a-hgpn052: interp macro 內插為單執行緒 memory-bound,
 #   該節點單核 ~1.7x 慢 (48min vs 28min/macro)。SBATCH --exclude 不受 blacklist NCHC-health 釋放影響。
 #   (種子生成完成後此節點對純 solver 續投無妨, 可日後移除此行。)
-#SBATCH --partition=64gpus
+#SBATCH --partition=16gpus
 #SBATCH --nodes=4
 #SBATCH --ntasks-per-node=8
 #SBATCH --gres=gpu:8
@@ -19,7 +19,7 @@
 #             可由 sbatch --time= 覆寫 / 或 ./run partition 改變。
 #             →  本 jobscript 的 TIMEOUT 於 runtime 由 scontrol 自動偵測,
 #                任何 partition / 任何 --time 都能正確啟動 walltime 救援。
-#SBATCH --time=1-00:00:00
+#SBATCH --time=2-00:00:00
 #SBATCH --output=slurm_%j.log
 #SBATCH --error=slurm_%j.err
 #SBATCH --open-mode=append
@@ -96,6 +96,25 @@ export HPCX_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/comm_libs/13.0/hpcx/hpcx-
 source $HPCX_HOME/hpcx-init.sh
 hpcx_load
 export OMPI_MCA_coll_hcoll_enable=0
+
+# ===== [HOTFIX 2026-06-29] NCHC H200 環境回歸: compute-node /tmp 不可寫 + cuda/13.0 module 消失 =====
+# 症狀: 09:25 起每輪 mpirun 1s 秒崩 RC=1 → fast-fail 重投迴圈. .err 顯示:
+#   "TMPDIR [/tmp] is not writeable" + "mkdir /tmp/ompi.*: Permission denied" → orte_session_dir failed
+#   + "module(s) are unknown: cuda/13.0" (與 /tmp 同時於 09:25 損壞).
+# (1) OMPI session dir 改指 node-local 可寫 tmpfs (/dev/shm), 退而求其次 /work scratch.
+for _TB in /dev/shm /work/s8313697/tmp; do
+    if mkdir -p "$_TB" 2>/dev/null && [ -w "$_TB" ]; then
+        export TMPDIR="$_TB"
+        export OMPI_MCA_orte_tmpdir_base="$_TB"
+        echo "[$(date '+%F %T')] [HOTFIX] OMPI tmpdir base -> $_TB ($(hostname))"
+        break
+    fi
+done
+# (2) cuda/13.0 module 已失效 → 直接補回 HPC-SDK CUDA/compiler/math runtime 路徑
+#     (module 若日後復原此 export 仍相容; MPI libs 由上方 hpcx_load 提供).
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/compilers/lib:$MATH_LIBS/lib:${LD_LIBRARY_PATH:-}"
+export PATH="$CUDA_HOME/bin:$PATH"
+# ===== [/HOTFIX 2026-06-29] =====
 
 # ===== 0. Legacy migration: 舊 layout (root-level) -> restart/ (冪等) =====
 mkdir -p restart/

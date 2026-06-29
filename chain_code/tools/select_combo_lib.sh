@@ -46,8 +46,10 @@ SC_ACCT="${SC_ACCT:-MST114348}"
 #   (dev cap=4 < 32、64gpus 需 jp64 + 更細網格; 兩者皆不在候選集。)
 #   帳號手足 job 佔滿某 partition 的 cap 時該組 QOS-BLOCK 罰分不投, 換有空檔的 partition (never-idle)。
 SC_VALID_JP="${SC_VALID_JP:-32}"
-# [Edit12 temporary lock] jp 鎖定 32, 暫時只使用 16gpus partition。
-SC_PARTITIONS="${SC_PARTITIONS:-64gpus}"
+# [Edit12 temporary lock] jp 鎖定 32, 暫時只使用 16gpus partition (2-day walltime)。
+# [2026-06-29] dispatcher backstop 候選集釘死 16gpus → 與 jobscript header/pin 一致;
+#   防整鏈死掉時 dispatcher 補投漂回 64gpus(1-day)打掉 16gpus 鎖。要解鎖改回多 partition 候選集即可。
+SC_PARTITIONS="${SC_PARTITIONS:-16gpus}"
 SC_GPN="${SC_GPN:-8}"                          # GPU per H200 node
 SC_BADNODE="${SC_BADNODE:-25a-hgpn207}"
 # ★sanitize SC_BADNODE(env-overridable)→ 只留合法節點名 token, 防污染(#/中文/空格)進 sbatch
