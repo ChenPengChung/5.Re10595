@@ -24,7 +24,8 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" || { echo "[$(TS)] 無�
 
 RE=$(awk '$1=="#define"&&$2=="Re"{print $3;exit}' variables.h 2>/dev/null | tr -d '[:space:]'); RE=${RE:-5600}
 FIGS=(result/fig_mean_u.png result/fig_mean_v.png result/fig_uu.png result/fig_vv.png result/fig_uv.png \
-      result/fig_k.png "result/tau_wall_signed_Re${RE}_cf.png" "result/tau_wall_signed_Re${RE}_cp.png")
+      result/fig_k.png "result/tau_wall_signed_Re${RE}_cf.png" "result/tau_wall_signed_Re${RE}_cp.png" \
+      live/l2_history.dat)   # ★2026-06-29 L2 趨勢檔隨 benchmark 推遠端(plumbing update-index 繞過 live/ gitignore)
 present=(); for f in "${FIGS[@]}"; do [ -f "$f" ] && present+=("$f"); done
 [ ${#present[@]} -eq 0 ] && { echo "[$(TS)] 無 benchmark 圖檔存在,跳過" >>"$LOG"; exit 0; }
 
@@ -68,6 +69,9 @@ while [ "$attempt" -lt 3 ]; do
             fi
         fi
         echo "[$(TS)] ✅ pushed FTT-${ftt} (step ${step}) commit=${commit:0:8}" >>"$LOG"
+        # [2026-06-29 使用者規則] 推送成功 → Edit11/Edit12/Edit13 三專案都 fetch origin 同步
+        #   (唯讀;不碰工作樹/index/checkpoint/job;單一失敗不影響推送本身)。
+        LOG="$LOG" bash "$ROOT/chain_code/fetch_all_projects.sh" 2>/dev/null || true
         exit 0
     fi
     echo "[$(TS)] push attempt $attempt 失敗(origin 在 race 中前進?)→ 重新 fetch 重建" >>"$LOG"
