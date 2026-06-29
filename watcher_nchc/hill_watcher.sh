@@ -226,6 +226,17 @@ run_benchmark() {
     done
     rm -f "$before_marker"
 
+    # ★L2 歷史追蹤 (對齊 Edit11): benchmark 成功時從 stdout 抽 3b L2-error 的 <avg> 行記入 live/l2_history.dat
+    #   (供 /edit13 監控 L2 趨勢; 隨 benchmark 一起推遠端)。Re2800 DNS 參考 = LESOCC + MGLET (Breuer 2009);
+    #   欄序 U,V,uu,vv,uv,k × 2 來源。2 階 LBM vs 高階 DNS 在 ~4-6% 方法地板會 plateau = 正常;
+    #   只看 (a) 是否異常『上升』(統計可能失效) (b) 統計尾巴是否還在微降。FTT = step/952885 (SPF, variables.h)。
+    if printf '%s' "$capture" | grep -q 'Quantitative L2-error'; then
+        local ftt_l avgs
+        ftt_l=$(awk -v s="$step" 'BEGIN{printf "%.2f", s/952885}' 2>/dev/null || echo '?')
+        avgs=$(printf '%s' "$capture" | grep '<avg>' | grep -oE '[0-9.]+%' | tr '\n' ' ')
+        [[ -n "$avgs" ]] && echo "$(date '+%F %T') step=$step FTT=$ftt_l L2avg[LESOCC:U,V,uu,vv,uv,k|MGLET:U,V,uu,vv,uv,k]= $avgs" >> "$LIVE_DIR/l2_history.dat"
+    fi
+
     log "BENCH step=$step  Re=$RE  outputs:${copied:- (none)}"
     return 0
 }
@@ -268,7 +279,8 @@ push_benchmark_figs() {
     ( cd "$PROJECT_DIR" 2>/dev/null || exit 0
       timeout 30 git fetch origin >/dev/null 2>&1 || true
       git add -f live/fig_mean_u.png live/fig_mean_v.png live/fig_uu.png live/fig_vv.png live/fig_uv.png live/fig_k.png \
-                  "live/tau_wall_signed_Re${RE}_cf.png" "live/tau_wall_signed_Re${RE}_cp.png" 2>/dev/null || true
+                  "live/tau_wall_signed_Re${RE}_cf.png" "live/tau_wall_signed_Re${RE}_cp.png" \
+                  live/l2_history.dat 2>/dev/null || true
       git diff --cached --quiet 2>/dev/null && exit 0
       git commit -q -m "benchmark 比對圖自動推送 (watcher; vs Re${RE} DNS)" \
                     -m "Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>" 2>/dev/null || exit 0
