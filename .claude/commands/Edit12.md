@@ -48,6 +48,17 @@ squeue -u $USER -o "%.10i %.12P %.30j %.8T %.10M %.6D %R"   # 看本專案 + 手
   **每個健康 job 的 .err 都有它 → 絕不可當 fast-fail 訊號**(故上面 grep 不含 `module(s) are unknown`)。
 - 真正陽性 = `restart/chain.log` 在**本輪 sacct Start 之後**出現 `FAST-FAIL detected: <nodes> died in <N>s (RC=<rc>)`(RC=1=/tmp+module、RC=126=E2BIG)。
 - `restart/dispatcher.log` 的 `RC=42 [POLICY-C1] unavoidable stop. dispatcher 收工` **只在它是最新一行 + sacct 顯示 chain_jobid 終態**時才=鏈死;否則是已復原的歷史殘留(勿誤判)。
+
+**★FTT ETA(到 2026-07-01 00:00 — 使用者指定 deadline;每輪報)**:用本輪 job 進度算穩態速率再外推:
+```
+JID=$(cat restart/chain_jobid); NOW=$(date +%s); TGT=$(date -d "2026-07-01 00:00:00" +%s)
+F=$(grep -E '\[Step ' "slurm_$JID.log"|tail -1|grep -oE 'FTT=[0-9.]+'|cut -d= -f2)
+F0=$(grep -m1 'Restart from' "slurm_$JID.log"|grep -oE 'FTT=[0-9.]+'|cut -d= -f2)
+S=$(date -d "$(sacct -j $JID -n -o Start|head -1|tr T ' ')" +%s)
+python3 -c "n=$NOW;t=$TGT;f=$F;s=$S;f0=$F0;h=(n-s)/3600;r=(f-f0)/h if h>0.3 else 0.134;hl=(t-n)/3600;print(f'rate={r:.3f}FTT/h 剩{hl:.1f}h -> 理想{f+r*hl:.1f} / 務實~{f+r*hl-0.3:.1f} FTT')"
+```
+(穩態基準 ~0.134 FTT/hr = 7.4 h/FTT;本輪窗 <0.3h 時用 0.134 fallback;務實已扣偶發 node-hang ~0.3 FTT。
+2 天 walltime 故 deadline 前無 walltime 缺口。deadline 過了或要改目標 → 更新此處日期。)
 注意:log 內 `[ALGO2] ... dev-vs-Algo1ref bitwise mismatch`(max~3.8e-7, tol_fail=0, MAP OK)
 是**預期的 RK4-vs-Algo1RK2 權重差,非失敗**,勿誤判。
 
@@ -92,6 +103,7 @@ bash chain_code/preshutdown_backup.sh            # (A) Edit12x 落後且無 job 
 
 ## 回報格式(精簡表格)
 job state(partition@account,**應 16gpus@mst114348**)/ Reason 或 ETA、FTT 進度(Step/FTT/Re%/Ma_max/Error)、
+**FTT ETA(→2026-07-01 00:00,理想/務實 + 當前速率)**、
 **fast_fail_count(本輪)+ 本輪 .err 的 fast-fail 訊號有無(RC=1/RC=126/E2BIG/TMPDIR;不含良性 cuda/13.0 Lmod 警告)**、
 **HOTFIX 區塊在否**(grep `[HOTFIX 2026-06-29]` jobscript)、**三層 partition 鎖一致(16gpus)**、
 daemon heartbeat(dispatcher/watcher 秒數;owner 認 nodelock)、checkpoint+marker、Edit12x 同步(optional)、有無異常。
