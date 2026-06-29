@@ -50,14 +50,22 @@ cnt_cwd(){ local c=0 p l w; for p in $(pgrep -f "$1" 2>/dev/null); do
         case "$w" in "$ROOT"|"$ROOT"/*) c=$((c+1)) ;; esac ;; esac
   done; echo "$c"; }
 
+# [跨節點 heartbeat 權威 — 2026-06-29] daemon 可能跑在別 login node; 心跳檔(共享 home)新鮮=跨節點存活,
+# 只有凍結(>HB_STALE)才視為真死後 restart。避免本機 is-active 誤判 → 跨節點搶 nodelock / 重複 watcher。
+HB_STALE=300
+hb_fresh(){ local f="$1" max="${2:-$HB_STALE}" age; [ -f "$f" ] || return 1
+    age=$(( $(date +%s) - $(stat -c %Y "$f" 2>/dev/null || echo 0) ))
+    [ "$age" -lt "$max" ]; }
+
 problems=()   # 問題點
 actions=()    # watchdog 已自動補救
 
 # ---------- 1. dispatcher ----------
 da=$(systemctl --user is-active edit12-dispatcher.service 2>/dev/null || echo unknown)
 dc=$(cnt_cwd submit_dispatcher.sh)
-if [ "$da" != "active" ] || [ "$dc" -lt 1 ]; then
-    problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc")
+# ★heartbeat 新鮮 → 跨節點存活(單例可能非本節點)→ 不重啟; 只有凍結才視為真死後 restart。
+if ! hb_fresh restart/dispatcher.heartbeat && { [ "$da" != "active" ] || [ "$dc" -lt 1 ]; }; then
+    problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc heartbeat 凍結>${HB_STALE}s")
     systemctl --user reset-failed edit12-dispatcher.service 2>/dev/null || true
     if systemctl --user restart edit12-dispatcher.service 2>/dev/null; then
         actions+=("已 systemctl --user restart edit12-dispatcher.service")
@@ -71,8 +79,9 @@ wa=$(systemctl --user is-active edit12-watcher.service 2>/dev/null || echo unkno
 wc=$(cnt_cwd hill_watcher.sh)
 png_age=99999
 [ -f live/monitor_latest.png ] && png_age=$(( ($(date +%s) - $(stat -c %Y live/monitor_latest.png 2>/dev/null)) / 60 ))
-if [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
-    problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc")
+# ★heartbeat 新鮮 → 跨節點存活 → 不重啟; 只有凍結才視為真死後 restart。
+if ! hb_fresh live/watcher.heartbeat && { [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; }; then
+    problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc heartbeat 凍結>${HB_STALE}s")
     systemctl --user reset-failed edit12-watcher.service 2>/dev/null || true
     if systemctl --user restart edit12-watcher.service 2>/dev/null; then
         actions+=("已 systemctl --user restart edit12-watcher.service")
