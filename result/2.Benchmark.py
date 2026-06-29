@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 ERCOFTAC UFR 3-30 Periodic Hill Benchmark Comparison
-GILBM vs multiple benchmark sources (DNS/LES/Experiment)
+ITB-ISLBM vs multiple benchmark sources (DNS/LES/Experiment)
 =====================================================
 用法:
   python3 2.Benchmark.py               # 互動詢問 Re
@@ -163,7 +163,7 @@ def resolve_uref_for_postprocess(script_dir, fallback=0.0503):
 #  │                                                                 │
 #  │   Source       Color      Marker  markevery                     │
 #  │   ──────────   ─────────  ──────  ─────────                     │
-#  │   GILBM(sim)   black      (none)  — (solid line)               │
+#  │   ITB-ISLBM(sim)   black      (none)  — (solid line)               │
 #  │   LESOCC       blue       □ s     4                             │
 #  │   MGLET        green      ◇ D     4                             │
 #  │   Experiment   magenta    ○ o     3                             │
@@ -704,7 +704,7 @@ def load_station_file(filepath, delimiter=None, fmt=None, xh_station=0.0,
                       tecplot_variant='new', w_prescale=1.0):
     """Load one station .dat file and return pure physical values.
 
-    fmt='tecplot': Tecplot format (LBM/ISLBM/GILBM combinepltv2 output)
+    fmt='tecplot': Tecplot format (LBM/ISLBM/ITB-ISLBM combinepltv2 output)
         tecplot_variant='legacy':
             舊版 combinepltv2 格式: col2 = station + U/Uref, col3 = station + w_prescale × W/Uref
             → 減去 station offset，除以 w_prescale，回傳物理值。
@@ -1388,7 +1388,7 @@ mpl.rcParams.update({
 })
 
 # ── Simulation colour ──
-# Red solid line for GILBM (present work) — high contrast vs benchmark blues/greens.
+# Red solid line for ITB-ISLBM (present work) — high contrast vs benchmark blues/greens.
 c_sim = "#CC2222"  # red
 
 
@@ -1434,8 +1434,8 @@ def _place_hill_legend(ax, field_label, scale, Re_val, legend_pos='bottom-left',
 
     legend_entries = []   # (type, label, color, marker_char)
     if HAS_VTK:
-        # GILBM = our own code, keep plain (non-italic) text
-        legend_entries.append(('line', 'GILBM', c_sim, None))
+        # ITB-ISLBM = our own code, keep plain (non-italic) text
+        legend_entries.append(('line', 'ITB-ISLBM', c_sim, None))
     for _, info, bdata in bench_sources:
         # Only include benchmark sources that have data for the current field
         if field_bench is not None:
