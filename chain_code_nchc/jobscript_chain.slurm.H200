@@ -84,6 +84,25 @@ source $HPCX_HOME/hpcx-init.sh
 hpcx_load
 export OMPI_MCA_coll_hcoll_enable=0
 
+# ===== [HOTFIX 2026-06-29] NCHC H200 環境回歸: compute-node /tmp 不可寫 + cuda/13.0 module 消失 =====
+# 症狀: 09:25 起每輪 mpirun 1s 秒崩 RC=1 → fast-fail 重投迴圈. .err 顯示:
+#   "TMPDIR [/tmp] is not writeable" + "mkdir /tmp/ompi.*: Permission denied" → orte_session_dir failed
+#   + "module(s) are unknown: cuda/13.0" (與 /tmp 同時於 09:25 損壞).
+# (1) OMPI session dir 改指 node-local 可寫 tmpfs (/dev/shm), 退而求其次 /work scratch.
+for _TB in /dev/shm /work/s8313697/tmp; do
+    if mkdir -p "$_TB" 2>/dev/null && [ -w "$_TB" ]; then
+        export TMPDIR="$_TB"
+        export OMPI_MCA_orte_tmpdir_base="$_TB"
+        echo "[$(date '+%F %T')] [HOTFIX] OMPI tmpdir base -> $_TB ($(hostname))"
+        break
+    fi
+done
+# (2) cuda/13.0 module 已失效 → 直接補回 HPC-SDK CUDA/compiler/math runtime 路徑
+#     (module 若日後復原此 export 仍相容; MPI libs 由上方 hpcx_load 提供).
+export LD_LIBRARY_PATH="$CUDA_HOME/lib64:/opt/nvidia/hpc_sdk/Linux_x86_64/25.9/compilers/lib:$MATH_LIBS/lib:${LD_LIBRARY_PATH:-}"
+export PATH="$CUDA_HOME/bin:$PATH"
+# ===== [/HOTFIX 2026-06-29] =====
+
 # ===== 0. Legacy migration: 舊 layout (root-level) -> restart/ (冪等) =====
 mkdir -p restart/
 [ -f .chain_jobid ]     && mv -n .chain_jobid     restart/chain_jobid     2>/dev/null

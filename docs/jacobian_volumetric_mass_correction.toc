@@ -1,0 +1,72 @@
+\contentsline {section}{\numberline {1}Introduction}{3}{section.1}%
+\contentsline {section}{\numberline {2}Governing framework and notation}{4}{section.2}%
+\contentsline {paragraph}{Lattice and moments.}{4}{section*.2}%
+\contentsline {paragraph}{Curvilinear map (unified convention).}{4}{section*.3}%
+\contentsline {section}{\numberline {3}Volumetric mass-conservation theory}{6}{section.3}%
+\contentsline {subsection}{\numberline {3.1}The physical mass invariant}{6}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}Quadrature of the physical mass and the mean density}{7}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}The correction operator: a discrete mass governor}{7}{subsection.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.1}Definition}{7}{subsubsection.3.3.1}%
+\contentsline {subsubsection}{\numberline {3.3.2}(a) Mass change is exactly $\delta \rho $ per node}{7}{subsubsection.3.3.2}%
+\contentsline {subsubsection}{\numberline {3.3.3}(b) Momentum is exactly invariant}{8}{subsubsection.3.3.3}%
+\contentsline {subsubsection}{\numberline {3.3.4}(c) One-shot restoration of the unit mean}{8}{subsubsection.3.3.4}%
+\contentsline {subsubsection}{\numberline {3.3.5}Control-theoretic interpretation}{8}{subsubsection.3.3.5}%
+\contentsline {subsection}{\numberline {3.4}Relation to the lattice-Boltzmann moments and forcing}{8}{subsection.3.4}%
+\contentsline {section}{\numberline {4}Control-volume weights and the partition-of-unity identity}{9}{section.4}%
+\contentsline {subsection}{\numberline {4.1}Cell volumes}{9}{subsection.4.1}%
+\contentsline {paragraph}{Method~0 (Shoelace / surveyor area).}{9}{section*.4}%
+\contentsline {paragraph}{Method~1 (Jacobian, $3\times 3$ Gauss--Legendre).}{9}{section*.5}%
+\contentsline {subsection}{\numberline {4.2}Median-dual nodal weight}{10}{subsection.4.2}%
+\contentsline {subsection}{\numberline {4.3}Partition-of-unity proof}{10}{subsection.4.3}%
+\contentsline {section}{\numberline {5}Cell-volume quadrature: Shoelace vs.\ Jacobian GL-3}{11}{section.5}%
+\contentsline {subsection}{\numberline {5.1}N1: two quadratures of the same area integral}{11}{subsection.5.1}%
+\contentsline {paragraph}{Method~0 --- Shoelace (exact straight-chord area).}{11}{section*.6}%
+\contentsline {paragraph}{Method~1 --- Jacobian $3\times 3$ Gauss--Legendre.}{11}{section*.7}%
+\contentsline {paragraph}{Scope of the Gauss remainder.}{12}{section*.8}%
+\contentsline {subsection}{\numberline {5.2}N2: degree-5 Lagrange reconstruction at the Gauss points}{12}{subsection.5.2}%
+\contentsline {paragraph}{Stencil placement.}{13}{section*.9}%
+\contentsline {section}{\numberline {6}Numerical analysis and error budget}{13}{section.6}%
+\contentsline {subsection}{\numberline {6.1}N3: floating-point exactness of the correction}{13}{subsection.6.1}%
+\contentsline {paragraph}{Nodal control volumes and partition of unity.}{13}{section*.10}%
+\contentsline {paragraph}{One-shot algebraic exactness.}{13}{section*.11}%
+\contentsline {paragraph}{Conditioning of the reduction.}{13}{section*.12}%
+\contentsline {paragraph}{Mass governor interpretation.}{14}{section*.13}%
+\contentsline {subsection}{\numberline {6.2}N4: why the curved domain prefers Method~1}{14}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}Error budget}{14}{subsection.6.3}%
+\contentsline {section}{\numberline {7}Numerical experiments}{15}{section.7}%
+\contentsline {subsection}{\numberline {7.1}E1: GL-3 polynomial exactness}{15}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}E2: $h$-refinement convergence}{15}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}E3: one-shot mass restoration and momentum preservation}{16}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}E4: partition-of-unity on the production grid --- a bit-exactness audit}{17}{subsection.7.4}%
+\contentsline {paragraph}{The four bit-exactness metrics (Method~0).}{17}{section*.14}%
+\contentsline {paragraph}{Cause: the streamwise periodic seam is not bit-closed.}{17}{section*.15}%
+\contentsline {paragraph}{Summation order (MPI non-associativity) is a sub-effect.}{17}{section*.16}%
+\contentsline {paragraph}{Closed-seam control: the Proposition holds to rounding.}{18}{section*.17}%
+\contentsline {paragraph}{Comparison to the analytic hill volume.}{18}{section*.18}%
+\contentsline {paragraph}{Method~1 (the default) departs by design.}{18}{section*.19}%
+\contentsline {paragraph}{Reconciliation and verdict.}{18}{section*.20}%
+\contentsline {section}{\numberline {8}Implementation: mapping the mathematics to source code}{19}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Theory$\leftrightarrow $code correspondence}{19}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Key kernels (verbatim)}{19}{subsection.8.2}%
+\contentsline {subsubsection}{\numberline {8.2.1}Shoelace cell volume}{19}{subsubsection.8.2.1}%
+\contentsline {subsubsection}{\numberline {8.2.2}GL-3 data, Lagrange basis, and $J_{2D}$ reconstruction}{20}{subsubsection.8.2.2}%
+\contentsline {subsubsection}{\numberline {8.2.3}Jacobian-GL nodal weights (core triple loop)}{21}{subsubsection.8.2.3}%
+\contentsline {subsubsection}{\numberline {8.2.4}Average, correction, and the rest-population apply site}{22}{subsubsection.8.2.4}%
+\contentsline {subsection}{\numberline {8.3}Implementation notes}{23}{subsection.8.3}%
+\contentsline {paragraph}{Compile-time method switch and \texttt {\#error} guard.}{23}{section*.21}%
+\contentsline {paragraph}{Shoelace fallback path and diagnostics.}{23}{section*.22}%
+\contentsline {paragraph}{MPI reductions.}{23}{section*.23}%
+\contentsline {paragraph}{The $f_0$ rest-population injection invariant.}{24}{section*.24}%
+\contentsline {section}{\numberline {9}Verification of the collision operator}{24}{section.9}%
+\contentsline {section}{\numberline {10}Discussion and limitations}{24}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Discrete self-consistency, not field fidelity, is the correctness criterion}{24}{subsection.10.1}%
+\contentsline {paragraph}{The corrector is unconditionally self-consistent.}{24}{section*.25}%
+\contentsline {paragraph}{Three distinct notions of ``volume agreement'' must not be conflated.}{25}{section*.26}%
+\contentsline {paragraph}{Only (i) is required for correctness.}{25}{section*.27}%
+\contentsline {paragraph}{The seam discrepancy is a geometric diagnostic, not a defect.}{25}{section*.28}%
+\contentsline {paragraph}{Why volume weighting is not optional.}{25}{section*.29}%
+\contentsline {paragraph}{Cost.}{26}{section*.30}%
+\contentsline {paragraph}{Limitations.}{26}{section*.31}%
+\contentsline {paragraph}{Generality.}{26}{section*.32}%
+\contentsline {section}{\numberline {11}Conclusion}{26}{section.11}%
+\contentsline {section}{\numberline {A}MRT collision verification record}{27}{section.A}%
