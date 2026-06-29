@@ -97,6 +97,21 @@ source $HPCX_HOME/hpcx-init.sh
 hpcx_load
 export OMPI_MCA_coll_hcoll_enable=0
 
+# [Edit11 2026-06-29] NCHC 維護(06/27 09:00~06/28 14:00)後 compute node /tmp 不可寫:
+#   slurmstepd 報 "TMPDIR [/tmp] is not writeable" + OpenMPI mkdir /tmp/ompi.* Permission denied
+#   → orte_init 秒崩 RC=1 (連環 fast-fail 338 次, 全叢集同症). 改用節點本地 tmpfs /dev/shm 當
+#   OpenMPI session-dir base 避開壞掉的 /tmp; /dev/shm 不可寫才退回 project-local restart/tmp
+#   (共享 FS 保底可寫). NCHC 修好 /tmp 後此段無害(仍會優先選可寫的 /dev/shm), 可日後移除。
+for _tb in /dev/shm "$PROJECT_ROOT/restart/tmp"; do
+    if mkdir -p "$_tb" 2>/dev/null && [ -w "$_tb" ]; then
+        export TMPDIR="$_tb"
+        export OMPI_MCA_orte_tmpdir_base="$_tb"
+        echo "[TMPDIR-FIX] /tmp 不可寫 → TMPDIR=$_tb  OMPI_MCA_orte_tmpdir_base=$_tb"
+        break
+    fi
+done
+unset _tb
+
 # ===== 0. Legacy migration: 舊 layout (root-level) -> restart/ (冪等) =====
 mkdir -p restart/
 [ -f .chain_jobid ]     && mv -n .chain_jobid     restart/chain_jobid     2>/dev/null

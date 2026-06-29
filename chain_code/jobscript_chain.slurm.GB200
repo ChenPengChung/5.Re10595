@@ -70,6 +70,18 @@ CHAIN_DIR="$PROJECT_ROOT/chain_code"
 cd "$PROJECT_ROOT" || { echo "[jobscript.GB200] FATAL: cannot cd to $PROJECT_ROOT" >&2; exit 1; }
 JOBSCRIPT_SELF="$CHAIN_DIR/jobscript_chain.slurm.GB200"
 
+# [2026-06-29] NCHC 維護後 compute node /tmp 不可寫 → OpenMPI orte_init 秒崩(同 H200 修補);
+#   改用節點本地 tmpfs /dev/shm 當 session-dir base, 退回 project-local restart/tmp(保底可寫)。
+for _tb in /dev/shm "$PROJECT_ROOT/restart/tmp"; do
+    if mkdir -p "$_tb" 2>/dev/null && [ -w "$_tb" ]; then
+        export TMPDIR="$_tb"
+        export OMPI_MCA_orte_tmpdir_base="$_tb"
+        echo "[TMPDIR-FIX] /tmp 不可寫 → TMPDIR=$_tb  OMPI_MCA_orte_tmpdir_base=$_tb"
+        break
+    fi
+done
+unset _tb
+
 # ===== 0. Legacy migration: 舊 layout (root-level) -> restart/ (冪等) =====
 mkdir -p restart/
 [ -f .chain_jobid ]     && mv -n .chain_jobid     restart/chain_jobid     2>/dev/null
