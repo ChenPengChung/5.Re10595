@@ -66,10 +66,24 @@ actions=()    # watchdog 已自動補救
 # ---------- 1. dispatcher ----------
 da=$(systemctl --user is-active "$DISPATCHER_SERVICE" 2>/dev/null || echo unknown)
 dc=$(cnt_cwd submit_dispatcher.sh)
+# [跨節點 heartbeat 權威 — 2026-06-29] dispatcher 可能跑在另一台 login node (systemd --user 狀態
+# 為 per-node; nodelock owner 可為他節點)。依專案規則「daemon 存活 = 跨節點 heartbeat 權威, 非
+# node-local is-active」: 若 restart/dispatcher.heartbeat 新鮮(<DHB_STALE_S s), 視為他節點上活著 →
+# 本機「絕不」重啟(否則會與該節點 dispatcher 搶 nodelock → 抖動/孤兒, 危及 production chain)。
+DHB_STALE_S=180
+_dhb_epoch=$(awk -F: 'NF{print $NF}' "$ROOT/restart/dispatcher.heartbeat" 2>/dev/null | tail -1)
+case "$_dhb_epoch" in
+    ''|*[!0-9]*) _dhb_age=999999 ;;
+    *)           _dhb_age=$(( $(date +%s) - _dhb_epoch )) ;;
+esac
 if [ "$PAUSED" = 1 ]; then
     actions+=("Edit13 刻意暫停(STOP_CHAIN) → dispatcher inactive 屬預期, 略過重啟(防提前重投)")
-elif [ "$da" != "active" ] || [ "$dc" -lt 1 ]; then
-    problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc")
+elif [ "$da" = "active" ] && [ "$dc" -ge 1 ]; then
+    : # dispatcher 本機 systemd 正常運作
+elif [ "$_dhb_age" -lt "$DHB_STALE_S" ]; then
+    actions+=("dispatcher 本機非 active(service=$da 實例=$dc) 但跨節點 heartbeat 新鮮(${_dhb_age}s<${DHB_STALE_S}s, owner=$(cat "$ROOT/restart/dispatcher.nodelock/owner" 2>/dev/null)) → 他節點上活著, 略過本機重啟(防搶 nodelock 抖動)")
+else
+    problems+=("dispatcher 死亡/異常: service=$da 本專案實例=$dc heartbeat_age=${_dhb_age}s")
     systemctl --user reset-failed "$DISPATCHER_SERVICE" 2>/dev/null || true
     if systemctl --user restart "$DISPATCHER_SERVICE" 2>/dev/null; then
         actions+=("已 systemctl --user restart $DISPATCHER_SERVICE")
@@ -81,22 +95,35 @@ fi
 # ---------- 2. watcher ----------
 wa=$(systemctl --user is-active "$WATCHER_SERVICE" 2>/dev/null || echo unknown)
 wc=$(cnt_cwd hill_watcher.sh)
+# [跨節點 heartbeat 權威 — 2026-06-29] watcher 同樣可能跑在別 login node (systemd --user per-node)。
+# 用 live/watcher.heartbeat 新鮮度判活: 新鮮(<WHB_STALE_S)即視為他節點上活著 → 本機不重啟
+# (否則本機會再起一個 → 跨節點重複 watcher = explosion 根因)。本機多實例(wc>1)仍 daemon_reset。
+WHB_STALE_S=240
+_whb_epoch=$(awk -F: 'NF{print $NF}' "$ROOT/live/watcher.heartbeat" 2>/dev/null | tail -1)
+case "$_whb_epoch" in
+    ''|*[!0-9]*) _whb_age=999999 ;;
+    *)           _whb_age=$(( $(date +%s) - _whb_epoch )) ;;
+esac
 png_age=99999
 [ -f live/monitor_latest.png ] && png_age=$(( ($(date +%s) - $(stat -c %Y live/monitor_latest.png 2>/dev/null)) / 60 ))
 if [ "$PAUSED" = 1 ]; then
     actions+=("Edit13 刻意暫停(STOP_CHAIN) → watcher inactive 屬預期, 略過重啟")
-elif [ "$wa" != "active" ] || [ "$wc" -lt 1 ]; then
-    problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc")
+elif [ "$wc" -gt 1 ]; then
+    problems+=("watcher 本機多實例(spin/重複): 本專案實例=$wc")
+    bash "$CHAIN_DIR/daemon_reset.sh" >> "$LOG" 2>&1 || true
+    actions+=("已 bash $CHAIN_DIR/daemon_reset.sh 清成單一 systemd watcher")
+elif [ "$wa" = "active" ] && [ "$wc" -ge 1 ]; then
+    : # watcher 本機 systemd 正常運作
+elif [ "$_whb_age" -lt "$WHB_STALE_S" ]; then
+    actions+=("watcher 本機非 active(service=$wa 實例=$wc) 但跨節點 heartbeat 新鮮(${_whb_age}s<${WHB_STALE_S}s) → 他節點上活著, 略過本機重啟(防跨節點重複)")
+else
+    problems+=("watcher 死亡/異常: service=$wa 本專案實例=$wc heartbeat_age=${_whb_age}s")
     systemctl --user reset-failed "$WATCHER_SERVICE" 2>/dev/null || true
     if systemctl --user restart "$WATCHER_SERVICE" 2>/dev/null; then
         actions+=("已 systemctl --user restart $WATCHER_SERVICE")
     else
         actions+=("watcher restart 失敗 → 需 Claude journalctl --user -u ${WATCHER_SERVICE%.service} 診斷+修碼")
     fi
-elif [ "$wc" -gt 1 ]; then
-    problems+=("watcher 多實例(spin/重複): 本專案實例=$wc")
-    bash "$CHAIN_DIR/daemon_reset.sh" >> "$LOG" 2>&1 || true
-    actions+=("已 bash $CHAIN_DIR/daemon_reset.sh 清成單一 systemd watcher")
 fi
 [ "$png_age" -gt 15 ] && problems+=("watcher live 圖過舊: ${png_age} 分 (應<15; watcher 卡住或長時間無新 VTK)")
 
