@@ -304,6 +304,7 @@ log "=========================================="
 
 last_processed=""
 last_bench_step=""
+last_bench_bucket=""          # ★每 2 FTT 節流: 上次 benchmark 的 floor(FTT/2) 桶號 (使用者要求 2026-06-30)
 
 while :; do
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
@@ -339,12 +340,19 @@ while :; do
             #   otherwise RS fields are too noisy (statistics not yet meaningful).
             bench_gate=$(get_bench_gate_ftt)
             if awk -v f="$ftt" -v g="$bench_gate" 'BEGIN{exit !(f>=g && g>0)}'; then
-                if [[ "$last_bench_step" != "$step" ]]; then
-                    log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (accu=$accu)"
+                # ★節流: 每 2 FTT(整數)才跑+推一次 benchmark — 以 floor(FTT/2) 桶號控制
+                #   (使用者要求 2026-06-30; 原本每個新 VTK=每 0.5 FTT, 改為每 2 FTT → 推送量約 1/4)。
+                #   重啟後第一個新 VTK 會先跑一次(桶號空), 之後對齊偶數整數 FTT (52,54,56,…)。
+                cur_bucket=$(awk -v f="$ftt" 'BEGIN{printf "%d", int(f/2)}')
+                if [[ "$last_bench_step" != "$step" ]] && { [[ -z "$last_bench_bucket" ]] || [ "$cur_bucket" -gt "$last_bench_bucket" ]; }; then
+                    log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (bucket=$cur_bucket ×2FTT, accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
-                    push_benchmark_figs "$ftt" "$step" || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe, 使用者要求; commit 訊息含 FTT)
+                    push_benchmark_figs "$ftt" "$step" || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe; commit 訊息含 FTT)
                     last_bench_step="$step"
+                    last_bench_bucket="$cur_bucket"
+                else
+                    log "BENCH throttled: FTT=$ftt bucket=$cur_bucket (每2FTT節流, 等下一個偶數整數 FTT)"
                 fi
             else
                 log "BENCH skipped: FTT=$ftt < G2=$bench_gate (accu=$accu, CV window not full)"
