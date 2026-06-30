@@ -54,8 +54,13 @@ if [ "$_need_reload" = 1 ]; then
 fi
 
 # 本專案實例計數 (絕對+相對路徑都涵蓋; 跨專案安全; 末參=腳本才算真正 daemon)
-cnt_cwd(){ local c=0 p l w; for p in $(pgrep -f "$1" 2>/dev/null); do
-    l=$(tr '\0' '\n' </proc/"$p"/cmdline 2>/dev/null | tail -1)
+cnt_cwd(){ local c=0 p l w full; for p in $(pgrep -f "$1" 2>/dev/null); do
+    [ "$p" = "$$" ] && continue
+    full=$(tr '\0' ' ' </proc/"$p"/cmdline 2>/dev/null)
+    # 排除 grep/pgrep/bash -c 自我匹配幻影 → 否則把巡檢用的 pgrep 也算成一個實例,
+    # 誤判 wc>1 → 觸發 daemon_reset → watcher 反覆重啟 churn (修 2026-06-30)。
+    case "$full" in *pgrep*|*' grep '*|*' -c '*) continue ;; esac
+    l=$(printf '%s' "$full" | tr ' ' '\n' | tail -1)
     case "$l" in *"$1") w=$(readlink /proc/"$p"/cwd 2>/dev/null)
         case "$w" in "$ROOT"|"$ROOT"/*) c=$((c+1)) ;; esac ;; esac
   done; echo "$c"; }
