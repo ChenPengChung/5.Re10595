@@ -400,8 +400,22 @@ submit_round() {
     local jobscript="chain_code/jobscript_chain.slurm.H200"
 
     if [ ! -f "$jobscript" ]; then
-        log "ERROR: 找不到 $jobscript"
-        return 2
+        # [SELF-HEAL 2026-07-01] chain_code/ 若被誤刪(非 git rm 的檔案系統刪除), 嘗試從 git HEAD
+        # 自動補回「缺的」tracked 檔再續投, 取代過去「rc=2 後沉默、續投鏈失去 jobscript」。
+        # 只還原 deleted 檔(不覆寫任何已修改檔); git 不可用則照舊報錯放棄本輪。
+        log "WARN: 找不到 $jobscript — 嘗試從 git HEAD 自動還原 chain_code/ 缺檔"
+        if command -v git >/dev/null 2>&1 && git -C "$PROJECT_ROOT" ls-files --deleted -- chain_code/ 2>/dev/null | grep -q .; then
+            git -C "$PROJECT_ROOT" ls-files --deleted -z -- chain_code/ 2>/dev/null \
+                | xargs -0 -r timeout 30 git -C "$PROJECT_ROOT" restore --source=HEAD --worktree -- 2>/dev/null \
+                || git -C "$PROJECT_ROOT" ls-files --deleted -z -- chain_code/ 2>/dev/null \
+                | xargs -0 -r timeout 30 git -C "$PROJECT_ROOT" checkout HEAD -- 2>/dev/null || true
+        fi
+        if [ -f "$jobscript" ]; then
+            log "[SELF-HEAL] chain_code/ 已從 HEAD 還原, $jobscript 復原 → 繼續本輪投遞 (請 Claude 查 chain_code 為何遺失)"
+        else
+            log "ERROR: 找不到 $jobscript 且自動還原失敗 (chain_code 整個遺失/非 git tracked) — 放棄本輪"
+            return 2
+        fi
     fi
 
     # ═════ [LAYER 2] pre-submit HEAD.lockdir fast-path ═════

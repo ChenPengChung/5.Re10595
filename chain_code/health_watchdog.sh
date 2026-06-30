@@ -32,7 +32,9 @@ TS(){ date '+%F %T'; }
 # (僅在缺檔時動作; 不影響別專案 unit。)
 UDIR="$HOME/.config/systemd/user"; _need_reload=0
 for _u in edit12-dispatcher.service edit12-watcher.service edit12-watchdog.service edit12-watchdog.timer; do
-    if [ ! -f "$UDIR/$_u" ] && [ -f "chain_code/systemd/$_u" ]; then
+    # 缺檔(歷史 cross-project 清除) 或 內容與 template 不一致(例: watchdog ExecStart 改指 chain_code_guard.sh)
+    # 都同步 template→live, 確保每個登入節點 ≤10min 收斂到最新 unit 定義。
+    if [ -f "chain_code/systemd/$_u" ] && { [ ! -f "$UDIR/$_u" ] || ! cmp -s "chain_code/systemd/$_u" "$UDIR/$_u"; }; then
         mkdir -p "$UDIR"; cp -f "chain_code/systemd/$_u" "$UDIR/" 2>/dev/null && _need_reload=1
     fi
 done
