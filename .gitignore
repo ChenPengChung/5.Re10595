@@ -1,7 +1,7 @@
 # Compiled binaries
 a.out
 a.out.*
-
+Edit6_5600DNS_modeling
 # Python cache
 __pycache__/
 *.pyc
@@ -13,7 +13,7 @@ __pycache__/
 # Simulation runtime outputs
 restart/
 statistics/
-live/
+
 slurm_*.log
 slurm_*.err
 nan_monitor_log.txt
@@ -38,7 +38,7 @@ animation/flow_*.mp4
 animation/short_*.mp4
 animation/*.gif
 animation/*.log
-png_frames/
+
 
 # Result data files (keep Python scripts)
 result/*.dat
