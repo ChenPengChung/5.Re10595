@@ -72,3 +72,9 @@ J_Frohlich/__pycache__/
 run_local_*.log
 .cfdq_wrapper.log
 build_local.log
+
+# --- (2026-07-01) 誤入庫的執行期備份 / 演練快照; 不追蹤 (本地保留) ---
+# 來源: 06-25 account/partition/jp 遷移時改檔引擎留的 *.bak.<tag>.<ts> + 整目錄演練快照,
+# 被 commit f627435 一次性 git add 收進 repo, 違反「排除 *.bak.* 執行期產物」規則。
+*.bak*
+*_bak_*/
