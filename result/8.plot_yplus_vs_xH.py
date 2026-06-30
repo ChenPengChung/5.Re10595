@@ -21,7 +21,7 @@ from matplotlib import rcParams
 
 # ============================================================ USER-TUNABLE
 H,         U_b       = 1.0, 1.0
-LINELABEL            = "GILBM"
+LINELABEL            = "ITB-ISLBM"
 SCRIPT_DIR           = Path(__file__).parent.resolve()
 
 

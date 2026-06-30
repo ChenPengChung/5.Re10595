@@ -684,9 +684,9 @@ def main(argv=None):
             # ── (a) cf ──
             fig_cf, ax_cf = plt.subplots(figsize=(9, 4.8))
             ax_cf.plot(y_wall, cf_bot, "-", color="#D62728", lw=1.6,
-                       label=r"GILBM (bot)")
+                       label=r"ITB-ISLBM (bot)")
             ax_cf.plot(y_wall, cf_top, "-", color="#1F77B4", lw=1.6,
-                       label=r"GILBM (top)")
+                       label=r"ITB-ISLBM (top)")
             ax_cf.axhline(0, color="k", lw=0.5, ls="--")
             for idx in sign_changes:
                 y_cross = y_wall[idx] + (y_wall[idx+1]-y_wall[idx]) * (
@@ -708,9 +708,9 @@ def main(argv=None):
             if cp_bot is not None:
                 fig_cp, ax_cp = plt.subplots(figsize=(9, 4.8))
                 ax_cp.plot(y_wall, cp_bot, "-", color="#D62728", lw=1.6,
-                           label=r"GILBM (bot)")
+                           label=r"ITB-ISLBM (bot)")
                 ax_cp.plot(y_wall, cp_top, "-", color="#1F77B4", lw=1.6,
-                           label=r"GILBM (top)")
+                           label=r"ITB-ISLBM (top)")
                 ax_cp.axhline(0, color="k", lw=0.5, ls="--")
                 _bench_scatter(ax_cp, 'cp')
                 ax_cp.set_xlabel(r"$y \,/\, h$")
