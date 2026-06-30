@@ -260,7 +260,9 @@ chain_has_active_job() {
     for id in "$cur_id" "$lock_id"; do
         [ -z "$id" ] && continue
         [[ "$id" =~ ^[0-9]+$ ]] || continue
-        state="$(squeue -h -j "$id" -o '%T' 2>/dev/null | head -1)"
+        # [SQUEUE-BLIND FIX] 走 _head_squeue_state (squeue→sacct fallback), 否則 NCHC h200
+        # failover 盲窗時 squeue 查無 → 誤判「無 active job」→ 在 running job 上重複投遞.
+        state="$(_head_squeue_state "$id")"
         case "$state" in
             RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
                 if [ "$id" != "$cur_id" ]; then
@@ -463,7 +465,7 @@ submit_round() {
     cur_id="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
     if [[ "$cur_id" =~ ^[0-9]+$ ]]; then
         local cur_state
-        cur_state="$(squeue -h -j "$cur_id" -o '%T' 2>/dev/null | tr -d '[:space:]')"
+        cur_state="$(_head_squeue_state "$cur_id")"   # [SQUEUE-BLIND FIX] squeue→sacct fallback
         case "$cur_state" in
             PENDING|RUNNING|CONFIGURING|COMPLETING)
                 log "[LAYER 2b] legacy chain_jobid=$cur_id 仍 active (state=$cur_state), 放棄本次投遞"
@@ -474,7 +476,7 @@ submit_round() {
     if [ -d restart/RUNNING.lockdir ]; then
         local lk_id lk_state
         lk_id="$(grep '^jobid=' restart/RUNNING.lockdir/owner 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
-        lk_state="$(squeue -h -j "$lk_id" -o '%T' 2>/dev/null | tr -d '[:space:]')"
+        lk_state="$(_head_squeue_state "$lk_id")"   # [SQUEUE-BLIND FIX] squeue→sacct fallback
         case "$lk_state" in
             PENDING|RUNNING|CONFIGURING|COMPLETING)
                 log "[LAYER 2b] legacy RUNNING.lockdir 被 jobid=$lk_id 持有 (state=$lk_state), 放棄本次投遞"

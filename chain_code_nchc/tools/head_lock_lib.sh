@@ -47,7 +47,29 @@ _head_squeue_state() {
         echo ""
         return
     fi
-    squeue -h -j "$jid" -o '%T' 2>/dev/null | tr -d '[:space:]'
+    local _st
+    _st="$(squeue -h -j "$jid" -o '%T' 2>/dev/null | head -1 | tr -d '[:space:]')"
+    case "$_st" in
+        RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
+            printf '%s' "$_st"; return ;;
+    esac
+    # [SQUEUE-BLIND FALLBACK] NCHC h200 在 slurmctld failover / cross-cluster federation
+    # 盲窗時, squeue -h -j 可能查不到「仍在跑」的 job (回空字串) → 誤判 job 已結束.
+    # 三道 single-head guard (chain_has_active_job / LAYER 2 / verify_am_head Case-c) 都靠
+    # 本函式; 盲窗一到就同時 fail-open → 重複投遞, 或後到的 job 搶 head 造成雙跑撞 checkpoint.
+    # 修法: squeue 查無 active 時改用 sacct (authoritative on NCHC h200) 覆核; 只有 squeue
+    # 與 sacct 皆非 active 才回該狀態. 比照同 codebase 既有範本 presubdep_successor_alive().
+    if command -v sacct >/dev/null 2>&1; then
+        local _sst
+        _sst="$(sacct -X -n -j "$jid" -o State 2>/dev/null | head -1 | awk '{print $1}' | tr -d '[:space:]')"
+        case "$_sst" in
+            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
+                printf '%s' "$_sst"; return ;;
+        esac
+        # squeue 回空但 sacct 有明確終態 → 回 sacct 終態, 讓 caller 照常判定已結束
+        [ -n "$_sst" ] && { printf '%s' "$_sst"; return; }
+    fi
+    printf '%s' "$_st"
 }
 
 # 內部: 寫 staging owner
