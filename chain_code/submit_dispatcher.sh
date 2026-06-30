@@ -245,44 +245,87 @@ check_partition_idle() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# Helper: 單一 jobid 的權威存活判定 → 印出 ACTIVE / TERMINAL / UNKNOWN
+#   [2026-07-01 根因修復] 舊版 chain_has_active_job 只靠單次 `squeue -j`; NCHC
+#   控制器 failover / federation 抖動時 squeue 會「瞬間回空」→ 誤判 head 已死 →
+#   對還在跑的 head 幻影重投(160542 / 160600 重複 job 事件)。
+#   改為: squeue(快路徑) → 回空才用 sacct State(權威) 交叉確認, 並 retry 數次
+#   騎過暫態; 兩者都查不到 → UNKNOWN(由 caller fail-safe, 寧可不投也不重複投)。
+# ─────────────────────────────────────────────────────────────────────────
+_job_liveness() {
+    local id="$1" attempt sq sa
+    [[ "$id" =~ ^[0-9]+$ ]] || { echo UNKNOWN; return; }
+    for attempt in 1 2 3; do
+        sq="$(squeue -h -j "$id" -o '%T' 2>/dev/null | head -1 | tr -d '[:space:]')"
+        case "$sq" in
+            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|STOPPED|REQUEUED)
+                echo ACTIVE; return ;;
+        esac
+        # squeue 回空/非 active → 用 sacct State(權威, 不受 federation 顯示 quirk 影響)確認
+        sa="$(sacct -X -n -j "$id" -o State 2>/dev/null | head -1 | tr -d '[:space:]')"
+        case "$sa" in
+            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|REQUEUED)
+                echo ACTIVE; return ;;
+            CANCELLED*|COMPLETED|FAILED|TIMEOUT|NODE_FAIL|OUT_OF_MEMORY|BOOT_FAIL|DEADLINE|PREEMPTED|REVOKED|SPECIAL_EXIT)
+                echo TERMINAL; return ;;
+        esac
+        sleep 2   # squeue 與 sacct 皆空 = SLURM 控制器暫態抖動 → 重試, 不要據此判死
+    done
+    echo UNKNOWN   # retry 後仍無法確認 → caller 須 fail-safe(視為 active, 絕不重投)
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # Helper: 本 chain 是否已有 active job 在 queue (running/pending)
-#   - 讀 restart/chain_jobid 拿最近的 jobid
-#   - squeue 確認該 jobid 狀態
+#   - 同時檢查 chain_jobid 與 HEAD.lockdir owner(single-head 權威記錄); 任何路徑
+#     續投(含 jobscript Layer 2 自投)都會更新 lock, chain_jobid 可能落後。
+#   - 用 _job_liveness 權威判定: 任一 ACTIVE → 有 active(並把 chain_jobid 同步到該 job)
+#   - 任一 UNKNOWN(SLURM 抖動查不到) → fail-safe 視為 active, 絕不幻影重投
+#   - 只有「所有 id 都確認 TERMINAL」才回報「無 active job」(才會進到 pick_cluster 重投)
 # ─────────────────────────────────────────────────────────────────────────
 chain_has_active_job() {
-    # [robustness 修補] 同時檢查 chain_jobid 與 HEAD.lockdir owner(single-head 權威記錄)。
-    # 任何路徑續投(含 jobscript Layer 2 自投)都會更新 lock; chain_jobid 可能落後 →
-    # 只信 chain_jobid 會誤判「無 active job」而每 30s busy-retry 試投(被 lock 擋)。
-    # 任一指向 RUNNING/PENDING 的 job 即視為 active, 並把 chain_jobid 同步到該 live job。
-    local cur_id lock_id id state
+    local cur_id lock_id id live saw_unknown=0 unknown_id=
     cur_id="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
     lock_id="$(grep '^jobid=' restart/HEAD.lockdir/owner 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
     for id in "$cur_id" "$lock_id"; do
         [ -z "$id" ] && continue
         [[ "$id" =~ ^[0-9]+$ ]] || continue
-        state="$(squeue -h -j "$id" -o '%T' 2>/dev/null | head -1)"
-        case "$state" in
-            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
+        live="$(_job_liveness "$id")"
+        case "$live" in
+            ACTIVE)
                 if [ "$id" != "$cur_id" ]; then
                     printf '%s\n' "$id" > restart/chain_jobid.tmp 2>/dev/null && mv -f restart/chain_jobid.tmp restart/chain_jobid 2>/dev/null
                 fi
                 return 0 ;;
+            UNKNOWN)
+                saw_unknown=1; unknown_id="$id" ;;
         esac
     done
+    if [ "$saw_unknown" -eq 1 ]; then
+        log "[liveness] WARN: job $unknown_id squeue+sacct 皆無法確認狀態(SLURM 抖動?) → fail-safe 視為 active, 本輪不重投" 2>/dev/null || true
+        return 0
+    fi
     return 1
 }
 
 # 取得本 chain 最後一輪 job 的 exit code (若已結束)
 chain_last_exit_code() {
-    local cur_id
+    local cur_id state ec
     cur_id="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
     [ -z "$cur_id" ] && { echo ""; return; }
+
+    # [2026-07-01 防禦] 先確認 job 已達終態才回報 exit code。RUNNING job 的 sacct
+    # ExitCode 是 "0:0" → 舊版會把還在跑的 head 誤判為「乾淨退出 exit 0」→ 幻影重投。
+    # State 仍 active 或查不到 → 回空字串, caller 跳過 exit-code 判定, 不會誤觸續投。
+    state="$(sacct -X -n -j "$cur_id" -o State 2>/dev/null | head -1 | tr -d '[:space:]')"
+    case "$state" in
+        ''|RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|REQUEUED)
+            echo ""; return ;;
+    esac
 
     # [BUGFIX] sacct ExitCode 格式是 "<exit_code>:<signal>" (例如 "1:0" = exit 1, signal 0).
     # 舊版註解寫反了 ("<signal>:<exit_code>"), 所以 "${ec##*:}" 取冒號"後"段, 其實取到 signal.
     # 結果 jobscript 的 "exit 1" (FATAL) 被回報成 "exit 0" (自然停止) → dispatcher 不停鏈.
     # 正確: 用 "${ec%%:*}" 取冒號"前"段才是真實 exit code.
-    local ec
     ec="$(sacct -X -n -j "$cur_id" -o ExitCode 2>/dev/null | head -1 | tr -d '[:space:]')"
     echo "${ec%%:*}"
 }
