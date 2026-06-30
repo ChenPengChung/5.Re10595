@@ -248,86 +248,130 @@ check_partition_idle() {
 # Helper: 單一 jobid 的權威存活判定 → 印出 ACTIVE / TERMINAL / UNKNOWN
 #   [2026-07-01 根因修復] 舊版 chain_has_active_job 只靠單次 `squeue -j`; NCHC
 #   控制器 failover / federation 抖動時 squeue 會「瞬間回空」→ 誤判 head 已死 →
-#   對還在跑的 head 幻影重投(160542 / 160600 重複 job 事件)。
-#   改為: squeue(快路徑) → 回空才用 sacct State(權威) 交叉確認, 並 retry 數次
-#   騎過暫態; 兩者都查不到 → UNKNOWN(由 caller fail-safe, 寧可不投也不重複投)。
+#   對還在跑的 head 幻影重投(160542 / 160600 重複 job 事件)。改為:
+#     squeue(快路徑) → 回空才用 sacct State(權威) 交叉確認, retry 數次騎過暫態;
+#     兩者都查不到 → UNKNOWN(由 caller fail-safe, 寧可不投也不重複投)。
+#   [2026-07-01 嚴謹強化, 對抗驗證所得 — 三 lens review]
+#     (a) sacct `-o State` 預設欄寬僅 10 → OUT_OF_MEMORY/SPECIAL_EXIT 被截成
+#         'OUT_OF_ME+'/'SPECIAL_E+' 漏判 terminal → UNKNOWN → fail-safe 卡住不重投
+#         (OOM head 永遠不續投=chain stall)。用 `State%30` 防截斷 + 前綴比對雙保險。
+#     (b) requeue 會讓同一 jobid 多列 → 掃所有列: 任一 active→ACTIVE, 否則任一
+#         terminal→TERMINAL(prefer-active, 不被舊列誤判 terminal)。
+#     (c) squeue/sacct 一律 `timeout` 包住 → 控制器硬中斷時不卡死主迴圈 / 不拖垮
+#         跨節點 heartbeat 觸發 lock 搶奪 churn(逾時回空 → 走 UNKNOWN fail-safe)。
 # ─────────────────────────────────────────────────────────────────────────
 _job_liveness() {
     local id="$1" attempt sq sa
     [[ "$id" =~ ^[0-9]+$ ]] || { echo UNKNOWN; return; }
     for attempt in 1 2 3; do
-        sq="$(squeue -h -j "$id" -o '%T' 2>/dev/null | head -1 | tr -d '[:space:]')"
+        sq="$(timeout 10 squeue -h -j "$id" -o '%T' 2>/dev/null | head -1 | tr -d '[:space:]')"
         case "$sq" in
             RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|STOPPED|REQUEUED)
                 echo ACTIVE; return ;;
         esac
-        # squeue 回空/非 active → 用 sacct State(權威, 不受 federation 顯示 quirk 影響)確認
-        sa="$(sacct -X -n -j "$id" -o State 2>/dev/null | head -1 | tr -d '[:space:]')"
-        case "$sa" in
-            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|REQUEUED)
-                echo ACTIVE; return ;;
-            CANCELLED*|COMPLETED|FAILED|TIMEOUT|NODE_FAIL|OUT_OF_MEMORY|BOOT_FAIL|DEADLINE|PREEMPTED|REVOKED|SPECIAL_EXIT)
-                echo TERMINAL; return ;;
-        esac
-        sleep 2   # squeue 與 sacct 皆空 = SLURM 控制器暫態抖動 → 重試, 不要據此判死
+        # squeue 回空/非 active → sacct State(權威, 不受 federation 顯示 quirk);
+        # State%30 防欄寬截斷; 掃所有列前綴比對(相容截斷 + 'CANCELLED by <uid>' + requeue 多列);
+        # active 補齊 STOPPED/SIGNALING/STAGE_OUT/REQUEUE(否則 squeue 空時誤判 UNKNOWN 灌 streak);
+        # REVOKED 不列 terminal(federation 上 sibling REVOKED 可能對應另一叢集仍 RUNNING)→ UNKNOWN fail-safe
+        sa="$(timeout 20 sacct -X -n -j "$id" -o State%30 2>/dev/null | tr -d ' \t')"
+        if grep -qE '^(RUNNING|PENDING|CONFIGURI|COMPLETING|RESIZING|SUSPENDED|STOPPED|SIGNALING|STAGE_OUT|REQUEUE)' <<<"$sa"; then
+            echo ACTIVE; return
+        fi
+        if grep -qE '^(CANCELLED|COMPLETED|FAILED|TIMEOUT|NODE_FAIL|OUT_OF_ME|BOOT_FAIL|DEADLINE|PREEMPTED|SPECIAL_E)' <<<"$sa"; then
+            echo TERMINAL; return
+        fi
+        [ "$attempt" -lt 3 ] && sleep 2   # squeue 與 sacct 皆空 = 暫態抖動 → 重試(末輪不睡)
     done
-    echo UNKNOWN   # retry 後仍無法確認 → caller 須 fail-safe(視為 active, 絕不重投)
+    echo UNKNOWN   # retry 後仍無法確認 → caller fail-safe(視為 active, 絕不重投)
 }
 
 # ─────────────────────────────────────────────────────────────────────────
 # Helper: 本 chain 是否已有 active job 在 queue (running/pending)
 #   - 同時檢查 chain_jobid 與 HEAD.lockdir owner(single-head 權威記錄); 任何路徑
-#     續投(含 jobscript Layer 2 自投)都會更新 lock, chain_jobid 可能落後。
+#     續投(含 jobscript Layer 2 自投)都會更新 lock, chain_jobid 可能落後。dedup 同 id。
 #   - 用 _job_liveness 權威判定: 任一 ACTIVE → 有 active(並把 chain_jobid 同步到該 job)
 #   - 任一 UNKNOWN(SLURM 抖動查不到) → fail-safe 視為 active, 絕不幻影重投
 #   - 只有「所有 id 都確認 TERMINAL」才回報「無 active job」(才會進到 pick_cluster 重投)
+#   - [嚴謹強化] 連續 UNKNOWN 超門檻(疑孤兒/purged id 或 dbd 長中斷, 非暫態) → 升級
+#     告警到 tracked chain_code/health_watchdog_alerts.log, 避免靜默永久 stall。
 # ─────────────────────────────────────────────────────────────────────────
 chain_has_active_job() {
-    local cur_id lock_id id live saw_unknown=0 unknown_id=
+    local cur_id lock_id id live saw_unknown=0 unknown_id= seen=" "
     cur_id="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
     lock_id="$(grep '^jobid=' restart/HEAD.lockdir/owner 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
     for id in "$cur_id" "$lock_id"; do
         [ -z "$id" ] && continue
         [[ "$id" =~ ^[0-9]+$ ]] || continue
+        case "$seen" in *" $id "*) continue ;; esac   # dedup: 同一 id 不重複查(省 SLURM 壓力/延遲)
+        seen="$seen$id "
         live="$(_job_liveness "$id")"
         case "$live" in
             ACTIVE)
                 if [ "$id" != "$cur_id" ]; then
                     printf '%s\n' "$id" > restart/chain_jobid.tmp 2>/dev/null && mv -f restart/chain_jobid.tmp restart/chain_jobid 2>/dev/null
                 fi
+                _liveness_unknown_since=; _liveness_alert_slot=
                 return 0 ;;
             UNKNOWN)
                 saw_unknown=1; unknown_id="$id" ;;
         esac
     done
     if [ "$saw_unknown" -eq 1 ]; then
-        log "[liveness] WARN: job $unknown_id squeue+sacct 皆無法確認狀態(SLURM 抖動?) → fail-safe 視為 active, 本輪不重投" 2>/dev/null || true
+        local _now _elapsed _slot
+        _now="$(date +%s)"
+        [ -z "${_liveness_unknown_since:-}" ] && _liveness_unknown_since="$_now"
+        _elapsed=$(( _now - _liveness_unknown_since ))
+        log "[liveness] WARN: job $unknown_id squeue+sacct 皆無法確認狀態(SLURM 抖動?) 已 ${_elapsed}s → fail-safe 視為 active, 本輪不重投" 2>/dev/null || true
+        # 持續 UNKNOWN 超門檻(預設 20 分; 用 wall-clock 而非輪數 — 中斷時每輪 block 較久, 輪數不可靠)
+        # = 幾乎確定孤兒/purged id 或 dbd 長中斷(非暫態) → 升級告警(每 ~10 分一次, 避免洗版);
+        # 不自動重投(避免在真中斷時誤投), 交人工/監控(/loop /edit11 + Route B watchdog)處理。
+        if [ "$_elapsed" -ge "${LIVENESS_UNKNOWN_ESCALATE_SEC:-1200}" ]; then
+            _slot=$(( _elapsed / 600 ))
+            if [ "${_liveness_alert_slot:-x}" != "$_slot" ]; then
+                _liveness_alert_slot="$_slot"
+                printf '%s [edit11][liveness-STALL] chain id=%s 已連續 %ds squeue+sacct 皆查不到(疑孤兒/purged id 或 dbd 長中斷); dispatcher fail-safe 卡住不重投, 需人工確認 restart/chain_jobid 是否有效\n' \
+                    "$(date '+%Y-%m-%d %H:%M:%S')" "$unknown_id" "$_elapsed" \
+                    >> chain_code/health_watchdog_alerts.log 2>/dev/null || true
+            fi
+        fi
         return 0
     fi
+    _liveness_unknown_since=; _liveness_alert_slot=
     return 1
 }
 
-# 取得本 chain 最後一輪 job 的 exit code (若已結束)
+# 取得本 chain 最後一輪 head 的 exit code (若已結束)
 chain_last_exit_code() {
-    local cur_id state ec
+    local cur_id lock_id head_id state ec
     cur_id="$(cat restart/chain_jobid 2>/dev/null | tr -d '[:space:]')"
-    [ -z "$cur_id" ] && { echo ""; return; }
+    lock_id="$(grep '^jobid=' restart/HEAD.lockdir/owner 2>/dev/null | cut -d= -f2 | tr -d '[:space:]')"
+    # [2026-07-01 嚴謹強化] 權威「最後一輪 head」= HEAD.lockdir owner(每次投遞 / jobscript
+    # Layer-2 自投都更新它); chain_jobid 可能落後 → 優先用 lock_id 讀 exit code, 否則才
+    # chain_jobid。避免「chain_jobid 落後 + 新 head 在 poll 空檔內 RC=42 秒崩」時讀到舊 job
+    # 的 exit 0 而漏掉新 head 的 RC=42 unavoidable-stop → 不該續投卻續投。
+    if [[ "$lock_id" =~ ^[0-9]+$ ]]; then head_id="$lock_id"; else head_id="$cur_id"; fi
+    [[ "$head_id" =~ ^[0-9]+$ ]] || { echo ""; return; }
 
-    # [2026-07-01 防禦] 先確認 job 已達終態才回報 exit code。RUNNING job 的 sacct
-    # ExitCode 是 "0:0" → 舊版會把還在跑的 head 誤判為「乾淨退出 exit 0」→ 幻影重投。
-    # State 仍 active 或查不到 → 回空字串, caller 跳過 exit-code 判定, 不會誤觸續投。
-    state="$(sacct -X -n -j "$cur_id" -o State 2>/dev/null | head -1 | tr -d '[:space:]')"
-    case "$state" in
-        ''|RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|REQUEUED)
-            echo ""; return ;;
-    esac
-
-    # [BUGFIX] sacct ExitCode 格式是 "<exit_code>:<signal>" (例如 "1:0" = exit 1, signal 0).
-    # 舊版註解寫反了 ("<signal>:<exit_code>"), 所以 "${ec##*:}" 取冒號"後"段, 其實取到 signal.
-    # 結果 jobscript 的 "exit 1" (FATAL) 被回報成 "exit 0" (自然停止) → dispatcher 不停鏈.
-    # 正確: 用 "${ec%%:*}" 取冒號"前"段才是真實 exit code.
-    ec="$(sacct -X -n -j "$cur_id" -o ExitCode 2>/dev/null | head -1 | tr -d '[:space:]')"
-    echo "${ec%%:*}"
+    # [2026-07-01 防禦+retry] 先確認 head 已達終態才回報 exit code。RUNNING job 的 ExitCode
+    # 是 "0:0" → 舊版會把還在跑的 head 誤判為「乾淨退出 exit 0」→ 幻影重投。State%30 防欄寬
+    # 截斷; tail -1 取 requeue 最新一列。★numeric head 但 SLURM 抖動「查不到/仍 active」→ 回
+    # "UNKNOWN"(非空字串) → caller 本輪不重投: 避免「單次 sacct 空讀」就漏掉 RC=42 unavoidable
+    # -stop 而誤續投(舊版回 "" 會被 caller 當綠燈直接投)。空字串只保留給 cold-start(無 head)。
+    local attempt
+    for attempt in 1 2 3; do
+        state="$(timeout 20 sacct -X -n -j "$head_id" -o State%30 2>/dev/null | tr -d ' \t' | tail -1)"
+        case "$state" in
+            RUNNING*|PENDING*|CONFIGURI*|COMPLETING*|RESIZING*|SUSPENDED*|STOPPED*|SIGNALING*|STAGE_OUT*|REQUEUE*)
+                echo "UNKNOWN"; return ;;                 # 理論上不該到(已過 active gate)→ 保守不投
+            ?*)                                            # 非空且非 active = 終態 → 讀 exit code
+                # [BUGFIX] ExitCode 格式 "<exit_code>:<signal>"; "${ec%%:*}" 取前段才是真 exit code
+                ec="$(timeout 20 sacct -X -n -j "$head_id" -o ExitCode 2>/dev/null | tail -1 | tr -d '[:space:]')"
+                [ -z "$ec" ] && { echo "UNKNOWN"; return; } # ExitCode 也讀不到 → 保守不投
+                echo "${ec%%:*}"; return ;;
+        esac
+        [ "$attempt" -lt 3 ] && sleep 2                    # state 空 = SLURM 抖動 → 重試(末輪不睡)
+    done
+    echo "UNKNOWN"                                         # 3 次仍空 → 不確定 → 本輪不重投
 }
 
 # ─────────────────────────────────────────────────────────────────────────
@@ -700,6 +744,12 @@ while true; do
     # ── 進到「該投下一輪」的分支 ──
     # 先查上一輪 exit code
     LAST_EC="$(chain_last_exit_code)"
+    # [2026-07-01] numeric head 但 SLURM 抖動無法確認 exit code → chain_last_exit_code 回 "UNKNOWN"
+    # → 本輪不重投(避免漏判 RC=42 unavoidable-stop 而誤續投), 下輪 SLURM 恢復再判。
+    if [ "$LAST_EC" = "UNKNOWN" ]; then
+        log "[liveness] 無法確認上一輪 head exit code(SLURM 抖動?) → 本輪不重投, ${POLL_INTERVAL}s 後再判"
+        sleep "$POLL_INTERVAL"; continue
+    fi
     if [ -n "$LAST_EC" ]; then
         log "上一輪 job exit code = $LAST_EC"
         # RC=42: unavoidable, 不重投

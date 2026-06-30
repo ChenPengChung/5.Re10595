@@ -50,6 +50,48 @@ _head_squeue_state() {
     squeue -h -j "$jid" -o '%T' 2>/dev/null | tr -d '[:space:]'
 }
 
+# 內部: 單一 jobid 的「權威」存活判定 → 印出 ACTIVE / TERMINAL / UNKNOWN
+# [2026-07-01 根因修復, 對抗驗證所得] 舊版 stale 判定只靠單次 `_head_squeue_state`(squeue);
+# NCHC 控制器 failover / federation 抖動時 squeue「瞬間回空」→ 把『還活著的 head 的 lock』
+# 誤判 stale → rm -rf 清鎖 + 重投 → 雙投(160542/160600 同 bug class, 只是在 lock library)。
+# 改為 squeue(快) → 回空才用 sacct State(權威, State%30 防欄寬截斷, 掃全列 prefer-active)
+# 交叉確認 + retry; 兩者皆空 → UNKNOWN。caller 一律「ACTIVE 或 UNKNOWN 都不清鎖」(fail-safe:
+# 寧可不奪鎖也不雙投; 真 catastrophic 是兩 head 同寫 checkpoint)。
+_head_liveness() {
+    local jid="$1" attempt sq sa
+    [ -z "$jid" ] || [ "$jid" = "TBD" ] && { echo UNKNOWN; return; }
+    printf '%s' "$jid" | grep -qE '^[0-9]+$' || { echo UNKNOWN; return; }
+    if ! command -v squeue >/dev/null 2>&1; then
+        # 測試環境: 用 mock(若有), 單次判定
+        if command -v mock_squeue >/dev/null 2>&1; then
+            sq="$(mock_squeue -h -j "$jid" -o '%T' 2>/dev/null | tr -d '[:space:]')"
+            case "$sq" in
+                RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|STOPPED|REQUEUED) echo ACTIVE; return ;;
+                "") echo UNKNOWN; return ;;
+                *) echo TERMINAL; return ;;
+            esac
+        fi
+        echo UNKNOWN; return
+    fi
+    for attempt in 1 2 3; do
+        sq="$(timeout 10 squeue -h -j "$jid" -o '%T' 2>/dev/null | head -1 | tr -d '[:space:]')"
+        case "$sq" in
+            RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED|STOPPED|REQUEUED) echo ACTIVE; return ;;
+        esac
+        sa="$(timeout 20 sacct -X -n -j "$jid" -o State%30 2>/dev/null | tr -d ' \t')"
+        # active 列優先(requeue/federation: 任一列 active 即視為活著); REVOKED 不列 terminal
+        # (federation 上 sibling-cluster 的 REVOKED 可能對應另一叢集仍 RUNNING → 交給 UNKNOWN fail-safe)
+        if grep -qE '^(RUNNING|PENDING|CONFIGURI|COMPLETING|RESIZING|SUSPENDED|STOPPED|SIGNALING|STAGE_OUT|REQUEUE)' <<<"$sa"; then
+            echo ACTIVE; return
+        fi
+        if grep -qE '^(CANCELLED|COMPLETED|FAILED|TIMEOUT|NODE_FAIL|OUT_OF_ME|BOOT_FAIL|DEADLINE|PREEMPTED|SPECIAL_E)' <<<"$sa"; then
+            echo TERMINAL; return
+        fi
+        [ "$attempt" -lt 3 ] && sleep 2
+    done
+    echo UNKNOWN
+}
+
 # 內部: 寫 staging owner
 _head_write_stage_owner() {
     local stage="$1" tag="$2"
@@ -94,11 +136,10 @@ acquire_head_lock() {
             [ "$age" -gt "$HEAD_REPART_TIMEOUT" ] && stale=1
             ;;
         PENDING|RUNNING)
-            local live; live="$(_head_squeue_state "$cur_jid")"
-            case "$live" in
-                RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED) stale=0 ;;
-                *) stale=1 ;;
-            esac
+            # [2026-07-01 fail-safe] 只有「確認 TERMINAL」才清鎖; ACTIVE 或 UNKNOWN(SLURM
+            # 抖動 squeue+sacct 皆查不到)一律不清 → 防誤刪『還活著的 head 的 lock』→ 雙投。
+            local live; live="$(_head_liveness "$cur_jid")"
+            [ "$live" = "TERMINAL" ] && stale=1 || stale=0
             ;;
         *)
             # unknown / empty → 若老化夠久就清
@@ -287,19 +328,19 @@ verify_am_head() {
         return $?
     fi
 
-    # Case (c): head_jid != my_jid → 查 squeue. 若對方已死就 heal, 還活就退出.
-    local other_state; other_state="$(_head_squeue_state "$head_jid")"
+    # Case (c): head_jid != my_jid → 權威判定對方存活. 確認 TERMINAL 才 heal 奪鎖; 還活
+    # 或無法確認(UNKNOWN, SLURM 抖動)一律不奪鎖 → return 11(fail-safe 防雙 head 同寫 checkpoint).
+    local other_state; other_state="$(_head_liveness "$head_jid")"
     case "$other_state" in
-        RUNNING|PENDING|CONFIGURING|COMPLETING|RESIZING|SUSPENDED)
-            # 對方還活著 → 真的衝突, 我不是合法 head
-            printf '[head_lock] verify: owner jobid=%s 仍在 squeue (state=%s), 我 jobid=%s 非 head\n' \
+        ACTIVE|UNKNOWN)
+            printf '[head_lock] verify: owner jobid=%s liveness=%s (fail-safe 不奪鎖), 我 jobid=%s 非 head\n' \
                    "$head_jid" "$other_state" "$my_jid" >&2
             return 11
             ;;
         *)
-            # 對方在 squeue 查不到 → 上輪 jobscript crash 前沒清 lock, heal it
+            # 確認 TERMINAL → 上輪 jobscript crash 前沒清 lock, heal it
             _head_self_heal_and_take "$my_jid" "$my_cluster" \
-                "stale-owner-jobid=${head_jid}-squeue-state=${other_state:-unknown}"
+                "stale-owner-jobid=${head_jid}-liveness=${other_state:-unknown}"
             return $?
             ;;
     esac
