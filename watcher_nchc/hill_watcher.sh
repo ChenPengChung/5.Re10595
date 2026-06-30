@@ -346,14 +346,17 @@ while :; do
                 #   (使用者要求 2026-06-30; 原本每個新 VTK=每 0.5 FTT, 改為每 2 FTT → 推送量約 1/4)。
                 #   重啟後第一個新 VTK 會先跑一次(桶號空), 之後對齊偶數整數 FTT (52,54,56,…)。
                 cur_bucket=$(awk -v f="$ftt" 'BEGIN{printf "%d", int(f/2)}')
+                # 桶號以「檔案」為唯一真相, 每輪重讀 → 即使 churn 重啟/重複實例競態, 也只在新桶觸發一次。
+                fbk="$(cat "$LIVE_DIR/.last_bench_bucket" 2>/dev/null || true)"; [[ -n "$fbk" ]] && last_bench_bucket="$fbk"
                 if [[ "$last_bench_step" != "$step" ]] && { [[ -z "$last_bench_bucket" ]] || [ "$cur_bucket" -gt "$last_bench_bucket" ]; }; then
+                    # ★先搶占桶號(跑 benchmark 之前就寫檔)→ 縮小與其他實例的競態窗口, 避免兩個實例都跑一次。
+                    echo "$cur_bucket" > "$LIVE_DIR/.last_bench_bucket" 2>/dev/null || true
+                    last_bench_bucket="$cur_bucket"
                     log "BENCH trigger: FTT=$ftt >= G2=$bench_gate (bucket=$cur_bucket ×2FTT, accu=$accu)"
                     run_benchmark "$step" || true
                     run_tauwall "$step" || true
                     push_benchmark_figs "$ftt" "$step" || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe; commit 訊息含 FTT)
                     last_bench_step="$step"
-                    last_bench_bucket="$cur_bucket"
-                    echo "$cur_bucket" > "$LIVE_DIR/.last_bench_bucket" 2>/dev/null || true   # 持久化桶號(跨重啟/多實例仍節流)
                 else
                     log "BENCH throttled: FTT=$ftt bucket=$cur_bucket (每2FTT節流, 等下一個偶數整數 FTT)"
                 fi
