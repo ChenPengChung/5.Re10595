@@ -304,7 +304,9 @@ log "=========================================="
 
 last_processed=""
 last_bench_step=""
-last_bench_bucket=""          # ★每 2 FTT 節流: 上次 benchmark 的 floor(FTT/2) 桶號 (使用者要求 2026-06-30)
+# ★每 2 FTT 節流: 桶號持久化到檔案 → 跨 watcher 重啟/多實例仍記得上次桶號, 不會「每次重啟就在同一桶重觸發」
+#   而失去節流 (修 2026-06-30: 原本只存記憶體, 頻繁重啟/重複實例 defeat 了節流 → 退化成每 0.5 FTT)。
+last_bench_bucket="$(cat "$LIVE_DIR/.last_bench_bucket" 2>/dev/null || echo "")"
 
 while :; do
     _write_hb                      # 刷新跨節點心跳(維持本節點對 watcher 鎖的擁有權)
@@ -351,6 +353,7 @@ while :; do
                     push_benchmark_figs "$ftt" "$step" || true   # [auto-push] benchmark 更新後推遠端+fetch (fail-safe; commit 訊息含 FTT)
                     last_bench_step="$step"
                     last_bench_bucket="$cur_bucket"
+                    echo "$cur_bucket" > "$LIVE_DIR/.last_bench_bucket" 2>/dev/null || true   # 持久化桶號(跨重啟/多實例仍節流)
                 else
                     log "BENCH throttled: FTT=$ftt bucket=$cur_bucket (每2FTT節流, 等下一個偶數整數 FTT)"
                 fi
