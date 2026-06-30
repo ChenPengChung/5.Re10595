@@ -236,6 +236,28 @@ fi
 # ===== 3.5 節點健康預檢 (走 blacklist_lib: TTL + NCHC sync) =====
 # 合併三來源 (local TTL-valid + global + NCHC live) 後, 檢查本 job 被分到的
 # SLURM_NODELIST 是否踩到其中任一節點. 踩到就立刻 requeue, 不執行 mpirun.
+
+# ★[2026-06-30] filter_valid_nodes: 過濾 CSV 節點清單,只保留 SLURM 仍存在的有效節點名。
+#   根因(2026-06-30 斷鏈事故):PRE_BAD_ALL 於 job 啟動時算一次並快取 ~24h,內含當時
+#   bl_live(NCHC drained) 節點;NCHC 維護後這些節點被移出叢集→名稱失效,~24h 後 walltime
+#   自投時 sbatch --exclude 報「Invalid node name specified」5/5 全失敗→斷鏈(只剩 dispatcher
+#   兜底救回, 並損失最後一段未 checkpoint 的進度)。與 live 有效節點取交集→過期/無效名自動濾除。
+#   sinfo 失效(timeout)→ 回傳原清單不過濾(安全 fallback, 不誤清有效 exclude)。
+filter_valid_nodes() {
+    local _csv="$1" _valid _out="" _n
+    [ -z "$_csv" ] && return 0
+    _valid=$(sinfo -h -N -o '%N' 2>/dev/null | sort -u)
+    [ -z "$_valid" ] && { printf '%s' "$_csv"; return 0; }
+    for _n in $(printf '%s\n' "$_csv" | tr ',' '\n' | grep -v '^[[:space:]]*$'); do
+        if printf '%s\n' "$_valid" | grep -qxF "$_n"; then
+            _out="${_out:+$_out,}$_n"
+        else
+            log "exclude 丟棄無效節點名 $_n (SLURM 已無此節點, stale live-drained)"
+        fi
+    done
+    printf '%s' "$_out"
+}
+
 PRE_BAD_ALL=$(
     {
         printf '%s\n' "$(bl_local_list)"  | tr ',' '\n'
@@ -262,6 +284,7 @@ if [ -n "$MATCHED_BAD" ]; then
     PRE_BAD_CSV=$(printf '%s\n' "$PRE_BAD_ALL" | grep -v '^[[:space:]]*$' | paste -sd,)
     EX_LIST=$( { printf '%s\n' "$EX_LIST_BL"; printf '%s\n' "$PRE_BAD_CSV"; } \
                | tr ',' '\n' | grep -v '^[[:space:]]*$' | sort -u | paste -sd, )
+    EX_LIST=$(filter_valid_nodes "$EX_LIST")   # ★過濾過期/無效節點名, 防 sbatch「Invalid node name」
     EXCLUDE_ARG=""
     [ -n "$EX_LIST" ] && EXCLUDE_ARG="--exclude=$EX_LIST"
     log "Pre-flight requeue exclude (merged PRE_BAD_ALL+bl): ${EX_LIST:-(empty)}"
@@ -720,10 +743,12 @@ if [ "${WATCHDOG_HANG:-0}" -eq 1 ] && [ -n "${WATCHDOG_HANG_NODE:-}" ]; then
     fi
 fi
 
+EX_LIST=$(filter_valid_nodes "$EX_LIST")   # ★[2026-06-30] 自投前過濾過期/無效節點名(防斷鏈)
+
 EXCLUDE_ARG=""
 if [ -n "$EX_LIST" ]; then
     EXCLUDE_ARG="--exclude=$EX_LIST"
-    log "Resubmit exclude (bl+PRE_BAD_ALL+watchdog merged): $EX_LIST"
+    log "Resubmit exclude (bl+PRE_BAD_ALL+watchdog merged, 已過濾無效節點): $EX_LIST"
 else
     log "Resubmit exclude: (empty — cluster healthy)"
 fi
