@@ -138,8 +138,15 @@ acquire_head_lock() {
         PENDING|RUNNING)
             # [2026-07-01 fail-safe] 只有「確認 TERMINAL」才清鎖; ACTIVE 或 UNKNOWN(SLURM
             # 抖動 squeue+sacct 皆查不到)一律不清 → 防誤刪『還活著的 head 的 lock』→ 雙投。
-            local live; live="$(_head_liveness "$cur_jid")"
-            [ "$live" = "TERMINAL" ] && stale=1 || stale=0
+            # ★但若 owner.jobid 損毀(空/非數字/TBD, 例如 NFS 半寫): _head_liveness 必回 UNKNOWN
+            #   → stale=0 永遠卡死無法回收(state 仍是 PENDING/RUNNING, age 預設分支也救不到) →
+            #   改用 age 規則回收(對齊舊版「查不到就老化清」, 避免 lock 永久 wedge)。
+            if [ -z "$cur_jid" ] || [ "$cur_jid" = "TBD" ] || ! printf '%s' "$cur_jid" | grep -qE '^[0-9]+$'; then
+                [ "$age" -gt "$HEAD_STALE_TIMEOUT" ] && stale=1 || stale=0
+            else
+                local live; live="$(_head_liveness "$cur_jid")"
+                [ "$live" = "TERMINAL" ] && stale=1 || stale=0
+            fi
             ;;
         *)
             # unknown / empty → 若老化夠久就清

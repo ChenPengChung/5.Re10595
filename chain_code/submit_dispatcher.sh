@@ -363,6 +363,8 @@ chain_last_exit_code() {
         case "$state" in
             RUNNING*|PENDING*|CONFIGURI*|COMPLETING*|RESIZING*|SUSPENDED*|STOPPED*|SIGNALING*|STAGE_OUT*|REQUEUE*)
                 echo "UNKNOWN"; return ;;                 # 理論上不該到(已過 active gate)→ 保守不投
+            REVOKED*|RESV_DEL_HOLD*)
+                echo "UNKNOWN"; return ;;                 # federation REVOKED 可能對應另叢集仍 RUNNING → 與 _job_liveness 同 fail-safe
             ?*)                                            # 非空且非 active = 終態 → 讀 exit code
                 # [BUGFIX] ExitCode 格式 "<exit_code>:<signal>"; "${ec%%:*}" 取前段才是真 exit code
                 ec="$(timeout 20 sacct -X -n -j "$head_id" -o ExitCode 2>/dev/null | tail -1 | tr -d '[:space:]')"
